@@ -1,9 +1,12 @@
-import { useGetList, useTranslate } from 'ra-core';
+import { useGetList } from 'ra-core';
+import { T } from '@digit-ui/datagrid';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { useNavigate } from 'react-router-dom';
 import { getDedicatedResources } from '@/providers/bridge';
-import { useResourceLabel } from '@/providers/useResourceLabel';
+import { ResourceLabel } from '@/providers/ResourceLabel';
+import { resourceLabelKey, useResourceLabel } from '@/providers/useResourceLabel';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
+import { WorkspaceLinksCard } from './WorkspaceLinksCard';
 import { AVAILABLE_LOCALES } from '@/providers/i18nProvider';
 import {
   Building2,
@@ -51,9 +54,8 @@ function ResourceCard({ resource }: { resource: string }) {
   });
 
   const navigate = useNavigate();
-  const resourceLabel = useResourceLabel();
-  const label = resourceLabel(resource);
   const Icon = ICONS[resource] ?? Briefcase;
+  const label = useResourceLabel()(resource);
 
   return (
     <button
@@ -75,8 +77,12 @@ function ResourceCard({ resource }: { resource: string }) {
                 {error instanceof Error ? error.message : 'Error loading data'}
               </p>
             ) : null}
-            <p className="text-xs text-muted-foreground mt-1 truncate" title={label}>
-              {label}
+            <p
+              className="text-xs text-muted-foreground mt-1 truncate"
+              title={label}
+              data-i18n-key-title={resourceLabelKey(resource)}
+            >
+              <ResourceLabel resource={resource} />
             </p>
           </div>
         </div>
@@ -86,7 +92,6 @@ function ResourceCard({ resource }: { resource: string }) {
 }
 
 export function DigitDashboard() {
-  const translate = useTranslate();
   const { canViewResource } = useMastersCapability();
   const dedicatedMap = getDedicatedResources();
   const resources = Object.keys(dedicatedMap).filter(
@@ -96,8 +101,9 @@ export function DigitDashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-        {translate('app.header.title')}
+        <T i18nKey="app.header.studio_title" />
       </h1>
+      <WorkspaceLinksCard />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
         {resources.map((resource) => (
           <ResourceCard key={resource} resource={resource} />

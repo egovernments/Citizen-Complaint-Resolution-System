@@ -142,6 +142,100 @@ class Choose(unittest.TestCase):
         self.assertIsNone(official.choose([gadm, self.make('geoboundaries', 1, 1)]))
 
 
+class Agreement(unittest.TestCase):
+    def checked(self, ds):
+        report = official.check_levels(ds, 0.9, 0.02)
+        return ds, report
+
+    def test_identical_sources_match_everywhere(self):
+        best, report = self.checked(nested_country('cod'))
+        other, _ = self.checked(nested_country('geoboundaries'))
+        official.add_agreement(best, [best, other], {'cod': report})
+        self.assertEqual([(r['level'], r['other_areas'], r['matched']) for r in report[1:]],
+                         [('ADM1', 4, 100.0), ('ADM2', 16, 100.0)])
+        self.assertNotIn('matched', report[0])  # the country row is not compared
+
+    def test_a_redrawn_area_is_unmatched_and_named(self):
+        best, report = self.checked(nested_country('cod'))
+        other = nested_country('geoboundaries')
+        # The other source draws cell A0-0 shifted by half its width: overlap 1/3 of the combined area.
+        cells = other.levels[2].gdf
+        cells.loc[0, 'geometry'] = box(0.05, 0.0, 0.15, 0.1)
+        other, _ = self.checked(other)
+        official.add_agreement(best, [best, other], {'cod': report})
+        adm2 = report[2]
+        self.assertEqual(adm2['matched'], round(100 * 15 / 16, 1))
+        self.assertEqual(adm2['unmatched'], ['A0-0'])
+        self.assertEqual(report[1]['matched'], 100.0)
+
+    def test_many_mismatches_are_counted_but_not_named(self):
+        best, report = self.checked(nested_country('cod'))
+        other = official.Dataset('geoboundaries', 'TST')
+        # Same outline, but split into 4 vertical strips instead of 4 quarters.
+        strips = [box(x * 0.1, 0, (x + 1) * 0.1, 0.4) for x in range(4)]
+        other.levels = [square(0, 0, 0, 4, 'TST'), official.Level(1, gpd.GeoDataFrame(
+            {'name': list('WXYZ'), 'code': list('WXYZ'), 'parent_code': ['TST'] * 4},
+            geometry=strips, crs='EPSG:4326'), 'CC BY')]
+        other, _ = self.checked(other)
+        official.add_agreement(best, [best, other], {'cod': report})
+        self.assertEqual(report[1]['matched'], 0.0)
+        self.assertEqual(report[1]['unmatched'], [])  # 4 off > MAX_NAMED_MISMATCHES
+        # The other source stops at ADM1: ADM2 has no second source.
+        self.assertEqual((report[2]['other_areas'], report[2]['matched']), (0, None))
+
+    def test_no_usable_second_source(self):
+        best, report = self.checked(nested_country('cod'))
+        gadm = official.Dataset('geoboundaries', 'TST', usable=False, absent=True)  # e.g. GADM licence
+        official.add_agreement(best, [best, gadm], {'cod': report})
+        self.assertEqual({(r['other_areas'], r['matched']) for r in report[1:]}, {(0, None)})
+
+
+    def test_a_source_that_failed_to_load_is_not_measured_rather_than_absent(self):
+        best, report = self.checked(nested_country('cod'))
+        down = official.Dataset('geoboundaries', 'TST', usable=False, note='failed: URLError: timed out')
+        official.add_agreement(best, [best, down], {'cod': report})
+        self.assertEqual({(r['other_areas'], r['matched']) for r in report[1:]}, {(None, None)})
+
+    def test_a_crash_in_the_comparison_is_recorded_not_hidden(self):
+        best, report = self.checked(nested_country('cod'))
+        other, _ = self.checked(nested_country('geoboundaries'))
+        real = official.agreement
+        official.agreement = lambda *a: (_ for _ in ()).throw(ValueError('GEOS'))
+        try:
+            official.record_agreement(best, [best, other], {'cod': report}, 'TST')
+        finally:
+            official.agreement = real
+        self.assertEqual({(r['other_areas'], r.get('agreement_failed')) for r in report[1:]}, {(None, True)})
+        self.assertNotIn('agreement_failed', report[0])
+
+    def test_a_source_that_loaded_but_is_unusable_is_not_measured(self):
+        best, report = self.checked(nested_country('cod'))
+        no_outline = official.Dataset('geoboundaries', 'TST', usable=False, note='no country outline (ADM0)')
+        official.add_agreement(best, [best, no_outline], {'cod': report})
+        self.assertEqual({(r['other_areas'], r['matched']) for r in report[1:]}, {(None, None)})
+
+    def test_levels_never_downloaded_are_not_measured(self):
+        # geoBoundaries stops downloading at ADM2 (> MAX_LEVEL_FEATURES): ADM1 compares, ADM2 is unknown.
+        best, report = self.checked(nested_country('cod'))
+        other = nested_country('geoboundaries')
+        other.levels = other.levels[:2]
+        other.unloaded_from = 2
+        other, other_report = self.checked(other)
+        official.add_agreement(best, [best, other], {'cod': report, 'geoboundaries': other_report})
+        self.assertEqual(report[1]['matched'], 100.0)
+        self.assertEqual((report[2]['other_areas'], report[2]['matched']), (None, None))
+
+    def test_a_level_the_other_source_dropped_is_not_measured(self):
+        best, report = self.checked(nested_country('cod'))
+        other = nested_country('geoboundaries')
+        other.levels[2] = official.Level(2, other.levels[2].gdf.iloc[:4].reset_index(drop=True), 'CC BY')  # truncated
+        other, other_report = self.checked(other)
+        self.assertFalse(other_report[2]['kept'])
+        official.add_agreement(best, [best, other], {'cod': report, 'geoboundaries': other_report})
+        self.assertEqual(report[1]['matched'], 100.0)
+        self.assertEqual((report[2]['other_areas'], report[2]['matched']), (None, None))
+
+
 class CodFiles(unittest.TestCase):
     def test_level_files_skip_lines_points_and_labels(self):
         with tempfile.TemporaryDirectory() as d:
@@ -157,6 +251,26 @@ class CodFiles(unittest.TestCase):
                      {'adm2_name': ['x'], 'adm2_pcode': ['K1'], 'adm1_pcode': ['K']}):
             f = official.cod_frame(gpd.GeoDataFrame(cols, geometry=[box(0, 0, 1, 1)], crs='EPSG:4326'), 2)
             self.assertEqual(f.iloc[0][['name', 'code', 'parent_code']].tolist(), ['x', 'K1', 'K'])
+
+    def test_language_suffixed_name_columns(self):
+        # Brazil's COD names areas in ADM2_PT only; ADM2_REF is not a language.
+        cols = {'ADM2_PT': ['Acrelândia'], 'ADM2_REF': ['r'], 'ADM2_PCODE': ['BR1200013'], 'ADM1_PCODE': ['BR12']}
+        f = official.cod_frame(gpd.GeoDataFrame(cols, geometry=[box(0, 0, 1, 1)], crs='EPSG:4326'), 2)
+        self.assertEqual(f.iloc[0]['name'], 'Acrelândia')
+
+    def test_an_id_column_is_never_taken_for_names(self):
+        # ADM1_ID is numeric; "id" is also Indonesian's ISO code, so the values decide.
+        cols = {'ADM1_ID': ['12'], 'ADM1_AR': ['جيبوتي'], 'ADM1_PCODE': ['DJ01']}
+        f = official.cod_frame(gpd.GeoDataFrame(cols, geometry=[box(0, 0, 1, 1)], crs='EPSG:4326'), 1)
+        self.assertEqual(f.iloc[0]['name'], 'جيبوتي')
+        cols = {'ADM1_ID': ['12'], 'ADM1_REF': ['x'], 'ADM1_PCODE': ['DJ01']}
+        f = official.cod_frame(gpd.GeoDataFrame(cols, geometry=[box(0, 0, 1, 1)], crs='EPSG:4326'), 1)
+        self.assertTrue(pd.isna(f.iloc[0]['name']))
+
+    def test_a_latin_script_language_wins_over_alphabetical_order(self):
+        cols = {'ADM1_AR': ['جيبوتي'], 'ADM1_FR': ['Djibouti'], 'ADM1_PCODE': ['DJ01'], 'ADM0_PCODE': ['DJ']}
+        f = official.cod_frame(gpd.GeoDataFrame(cols, geometry=[box(0, 0, 1, 1)], crs='EPSG:4326'), 1)
+        self.assertEqual(f.iloc[0]['name'], 'Djibouti')
 
 
 class Download(unittest.TestCase):
@@ -202,6 +316,20 @@ class Download(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             dest = official.download(url, os.path.join(d, 'x.geojson'))
             self.assertEqual(open(dest, 'rb').read(), body)
+
+
+class Polygonal(unittest.TestCase):
+    def test_stray_lines_are_dropped_from_a_repaired_area(self):
+        from shapely.geometry import GeometryCollection, LineString
+        area = box(0, 0, 1, 1)
+        out = official.polygonal([GeometryCollection([area, LineString([(2, 2), (3, 3)])]), area, None])
+        self.assertEqual([g.geom_type if g is not None else None for g in out], ['Polygon', 'Polygon', None])
+        self.assertTrue(out[0].equals(area))
+
+    def test_several_polygon_parts_stay_together(self):
+        from shapely.geometry import GeometryCollection, LineString
+        out = official.polygonal([GeometryCollection([box(0, 0, 1, 1), box(5, 5, 6, 6), LineString([(2, 2), (3, 3)])])])
+        self.assertEqual(out[0].geom_type, 'MultiPolygon')
 
 
 class Rows(unittest.TestCase):
@@ -273,6 +401,38 @@ class VerifyDb(unittest.TestCase):
         r = self.run_verify({'KE': True, 'XX': False})
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn('WARNING: XX: no official set, Overture only', r.stdout)
+
+    def test_unnamed_or_non_polygon_official_rows_are_warnings(self):
+        import sqlite3
+        import subprocess
+        import sys
+        # run_verify's DB has no official rows, so this one builds its own.
+        d = tempfile.mkdtemp()
+        path = os.path.join(d, 'b.sqlite')
+        c = sqlite3.connect(path)
+        c.execute('CREATE TABLE boundaries (id VARCHAR PRIMARY KEY, division_id VARCHAR, subtype VARCHAR, class VARCHAR, '
+                  'country VARCHAR, name VARCHAR, admin_level INTEGER, bbox JSON, geometry JSON, parent_id VARCHAR, '
+                  'source VARCHAR, licence VARCHAR, pcode VARCHAR, official INTEGER)')
+        c.execute('CREATE TABLE official_datasets (country VARCHAR, source VARCHAR, chosen INTEGER, usable INTEGER, '
+                  'licence VARCHAR, dataset_date VARCHAR, quality VARCHAR, url VARCHAR, levels JSON, note VARCHAR)')
+        poly = '{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}'
+        rows = [('ov-BR', 'country', 'Brasil', 0, poly, None, 'overture', 0),
+                ('ov-BR-r', 'region', 'Acre', 1, poly, 'ov-BR', 'overture', 0),
+                ('cod:BRA:BR', 'country', 'Brasil', 0, poly, None, 'cod', 1),
+                ('cod:BRA:BR12', 'ADM1', None, 1, poly, 'cod:BRA:BR', 'cod', 1),
+                ('cod:BRA:BR13', 'ADM1', 'Amazonas', 1, '{"type":"GeometryCollection","geometries":[]}', 'cod:BRA:BR', 'cod', 1)]
+        for i, sub, name, lvl, geom, parent, src, off in rows:
+            c.execute("INSERT INTO boundaries VALUES (?, ?, ?, 'land', 'BR', ?, ?, NULL, ?, ?, ?, NULL, NULL, ?)",
+                      (i, i, sub, name, lvl, geom, parent, src, off))
+        c.execute("INSERT INTO official_datasets VALUES ('BR', 'cod', 1, 1, 'CC BY-IGO', '2020', '', '', '[]', '')")
+        c.commit()
+        c.close()
+        env = dict(os.environ, OVERTURE_DB_PATH=path, COUNTRIES='BR')
+        here = os.path.dirname(os.path.abspath(__file__))
+        r = subprocess.run([sys.executable, os.path.join(here, 'verify_db.py')], env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn('WARNING: BR: 1 cod row(s) have no name', r.stdout)
+        self.assertIn('WARNING: BR: 1 cod row(s) are not polygons', r.stdout)
 
     def test_no_official_set_anywhere_fails(self):
         r = self.run_verify({'KE': False, 'XX': False})

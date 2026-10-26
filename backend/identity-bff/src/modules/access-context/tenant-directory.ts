@@ -9,7 +9,7 @@ import {
 import { DigitUnavailableError, type DigitAccount } from "../managed-accounts/digit-user-client.js";
 
 export interface TenantOption {
-  code?: "DIGIT_ACCOUNT_INACTIVE";
+  code?: "DIGIT_ACCOUNT_INACTIVE" | "WORKSPACE_TRIAL_EXPIRED";
   organizationId: string;
   organizationAlias: string;
   tenantId: string;

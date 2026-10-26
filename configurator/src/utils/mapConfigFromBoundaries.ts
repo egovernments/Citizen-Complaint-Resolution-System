@@ -152,3 +152,24 @@ export function deriveMapPosition(boundaries: Boundary[]): DerivedMapPosition | 
 
   return position;
 }
+
+/**
+ * `position`, widened to also cover `saved` (the search box already written for
+ * areas saved earlier), so adding or retrying some areas doesn't shrink the map
+ * and the address search to them.
+ */
+export function widenMapPosition(position: DerivedMapPosition, saved: BoundingBox | undefined): DerivedMapPosition {
+  const box = position.searchViewbox;
+  if (!box || !saved) return position;
+  const union: BoundingBox = {
+    minLon: Math.min(box.minLon, saved.minLon),
+    minLat: Math.min(box.minLat, saved.minLat),
+    maxLon: Math.max(box.maxLon, saved.maxLon),
+    maxLat: Math.max(box.maxLat, saved.maxLat),
+  };
+  return {
+    center: { lat: (union.minLat + union.maxLat) / 2, lng: (union.minLon + union.maxLon) / 2 },
+    defaultZoom: zoomForBounds(union),
+    searchViewbox: union,
+  };
+}

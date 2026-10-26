@@ -100,7 +100,8 @@ securityContext:
 #   identity-session-introspection-token, identity-onboarding-token,
 #   pgr-onboarding-worker-token, identity-citizen-otp-secret,
 #   identity-credential-keys, identity-credential-key-current,
-#   digit-provisioner-password, identity-surfaces-json
+#   digit-provisioner-password, identity-surfaces-json,
+#   novu-bridge-send-token (novu-bridge's internal-send-token, for trial reminder emails)
 secret:
   existingSecret: ""
   values: {}
@@ -173,11 +174,28 @@ config:
   # in ANY citizen number: development only.
   CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: "false"
   CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: "123456"
+  # "true": an employee's own number signs in as them on the citizen portal
+  # (#2595). Off until #2631.
+  IDENTITY_STAFF_PHONE_JOIN: "false"
 
   # Revocation poller and reconciliation.
   IDENTITY_POLLER_MAX_LAG_SECONDS: "60"
   IDENTITY_RECONCILE_ON_STARTUP: "true"
   IDENTITY_RECONCILIATION_INTERVAL_SECONDS: "900"
+  # Workspace trial: days a self-serve workspace may sign in before approval;
+  # "30" for self-serve SaaS. "0" = trials off: no new trial, and no workspace
+  # locks whatever its end date. The notice texts are optional (empty
+  # = BFF built-in text); the link shows only when label and URL are both set.
+  IDENTITY_WORKSPACE_TRIAL_DAYS: "0"
+  IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE: ""
+  IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE: ""
+  IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL: ""
+  IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL: ""
+  # Trial reminder emails, in days before the end (BFF default 14,7,3,2,1), sent through
+  # novu-bridge's messages/_dispatch: e.g. http://novu-bridge:8080/novu-bridge, with the
+  # novu-bridge-send-token Secret key. Empty URL = no reminder emails.
+  IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS: ""
+  IDENTITY_NOVU_BRIDGE_URL: ""
   IDENTITY_RECONCILIATION_LEASE_SECONDS: ""  # BFF default: 300
   # Give each active ROOT tenant listed here (default: DIGIT_ADMIN_TENANT_ID's
   # root) without an Organization one whose URL slug is the tenant id.
@@ -206,10 +224,10 @@ config:
   DIGIT_ADMIN_USER_TYPE: "EMPLOYEE"
   DIGIT_MANAGED_BASE_ROLES: "EMPLOYEE"
   DIGIT_MANAGED_ROLE_ALLOWLIST: "EMPLOYEE,GRO,PGR_LME,DGRO,CSR,SUPERVISOR,AUTO_ESCALATE,PGR_VIEWER,TICKET_REPORT_VIEWER,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER"
+  DIGIT_CONFIGURATOR_ROLES: ""            # BFF default: SUPERUSER,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,HRMS_ADMIN,WORKFLOW_ADMIN (#2599)
   DIGIT_ROLE_CLIENT_ID: "digit-ui"
   DIGIT_CITIZEN_OTP_IDENTITY: "mobileNumber"
   DIGIT_CITIZEN_ROLES: "CITIZEN"
-  DIGIT_FOUNDATION_SOURCE_TENANT: "pg"
   DIGIT_TIMEOUT_MS: ""                    # BFF default: 10000
   DIGIT_TOKEN_REFRESH_SKEW_SECONDS: ""    # BFF default: 60
   DIGIT_USER_LEASE_SECONDS: ""            # BFF default: 30

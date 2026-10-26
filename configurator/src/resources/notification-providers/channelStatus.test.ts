@@ -32,6 +32,8 @@ describe('deriveChannelStatus', () => {
     expect(s.effective).toBe(false);
     expect(s.providerState).toBe('none');
     expect(s.verdict).toBe('no-provider');
+    // novu-bridge records these SKIPPED, never a false SENT (field finding 2026-10-07): say so.
+    expect(s.summary).toMatch(/recorded SKIPPED \/ NB_PROVIDER_UNAVAILABLE and nothing is delivered/);
     expect(s.reasons).toContain('no active Novu integration for this channel');
     expect(s.reasons).toContain('Novu workflow complaints-whatsapp not found');
   });

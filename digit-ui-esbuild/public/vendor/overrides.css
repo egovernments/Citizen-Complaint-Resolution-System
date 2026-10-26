@@ -954,7 +954,10 @@ html .header-dropdown-option:hover * {
  * sidebar-icon white via background-color, so it works on the yellow
  * selected indicator and the dark green non-selected items alike. */
 .digit-sidebar-item .icon:empty {
-  background-color: var(--color-sidebar-selected-text, #FFFFFF);
+  /* Idle rows take the idle icon colour; the selected row's own rule below
+   * takes the selected text colour. The selected colour here made the idle
+   * glyphs vanish once a theme paired a light selected row with dark text (#2635). */
+  background-color: var(--color-sidebar-icon-default, var(--color-sidebar-text-default, #D1D5DB));
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'/></svg>");
   mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'/></svg>");
   -webkit-mask-size: 20px 20px;
@@ -2291,6 +2294,12 @@ button[class*="toast-close"] svg,
   background-color: var(--color-sidebar-selected-bg, var(--color-primary-1, #c84c0e)) !important;
   color: var(--color-sidebar-selected-text, #FFFFFF) !important;
 }
+/* The vendored stylesheet paints the selected row's label #FFFFFF directly,
+ * so the row's colour above never reached it: on a light selected fill (Green
+ * and Gold's gold) the label stayed white. Hover already follows the token. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:not(:hover) .item-label {
+  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+}
 /* SVG icon colours follow the row's foreground via the fallback
  * chain. Hover state matches the dark hover text; idle/selected
  * matches the white selected text. */
@@ -2314,7 +2323,9 @@ button[class*="toast-close"] svg,
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container,
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container input {
   background: rgba(255, 255, 255, 0.06) !important;
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  /* Text on the rail itself, not on the selected row: selected-text is chosen
+   * against the selected fill (dark on a gold row), which vanishes here. */
+  color: var(--color-sidebar-text-active, #FFFFFF) !important;
   border-color: rgba(255, 255, 255, 0.18) !important;
 }
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container ::placeholder {
@@ -6127,7 +6138,9 @@ button[role="combobox"],
 .digit-multiselectdropdown-wrap,
 .digit-multi-dropdown-wrap,
 .digit-select {
-  border: 1px solid var(--color-border, #d6d5d4) !important;
+  /* A field's edge is how people find it (WCAG 1.4.11, 3:1); applyTheme
+   * holds --color-input-border to that. The card border is decoration. */
+  border: 1px solid var(--color-input-border, var(--color-border, #d6d5d4)) !important;
   border-radius: 6px !important;
   background-color: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
   box-shadow: none !important;
@@ -6892,6 +6905,11 @@ header.digit-header .digit-dropdown-master {
   font-size: 1rem !important;
   font-weight: 600 !important;
   line-height: 1.4 !important;
+  /* The vendored title is one line with "…": on a phone "Citizen Complaint
+   * Resolution System" read "Citizen Complaint Resolution Sy…". Wrap it. */
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  text-overflow: clip !important;
 }
 
 .employee .digit-landing-page-card .digit-landingpage-divider {
@@ -7050,6 +7068,18 @@ header.digit-header .digit-dropdown-master {
   border-right: 0 !important;
   font-size: 0.875rem !important;
   color: var(--color-table-row-text, #363636) !important;
+}
+/* The table library cuts a plain-text cell to one line with "…", and there is
+ * no tooltip, so a long locality, a translated status ("En attente
+ * d'attribution…") or an owner's full name could not be read anywhere. Wrap
+ * them, as the complaint number column already does. Desktop only: phones get
+ * the cards below. */
+@media (min-width: 48rem) {
+  .employee .v2-pgr-inbox .rdt_TableCell > div[data-tag="allowRowEvents"] {
+    white-space: normal;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
 }
 .employee .v2-pgr-inbox .rdt_TableRow {
   border-bottom: 1px solid var(--color-table-border, #E5E7EB) !important;
@@ -7873,9 +7903,12 @@ html :is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"
     width: 100% !important;
     justify-content: flex-start !important;
   }
-  .employee .digit-action-bar-wrap.mc_back .digit-button,
-  .employee .mc_back .digit-button {
-    margin-left: 0 !important;
+  /* The button element itself: its classes are `digit-button-primary large`,
+     so a `.digit-button` selector never matched and the 6rem indent stayed.
+     0.5rem matches its inline right margin, so with the bar's own 0.5rem
+     padding it spans the same 16px edges as the link above. */
+  .employee .mc_back button {
+    margin-left: 0.5rem !important;
     min-width: 0 !important;
     width: 100% !important;
   }
@@ -8883,14 +8916,14 @@ html .header-dropdown-option:focus-visible {
  * the same as the rows above it. */
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary {
   border-color: rgba(255, 255, 255, 0.5) !important;
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  color: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary .digit-button-label {
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  color: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg,
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg path {
-  fill: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  fill: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary:hover {
   background-color: rgba(255, 255, 255, 0.08) !important;
@@ -10645,10 +10678,14 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
 .cms-complaints-table tbody tr:hover td {
   background: var(--color-table-hover, #F9FAFB);
 }
+/* A number carries its workspace's code (IN-CHANDIGARH-DEMO-PGR-2026-10-23-…),
+ * so it can be wider than its column. Wrap it, after a hyphen where one fits,
+ * rather than letting it run into Concern or cutting off the part that tells
+ * complaints apart. */
 .cms-complaints-number {
   color: var(--cms-accent);
   font-weight: 500;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
   text-underline-offset: 3px;
@@ -10665,6 +10702,16 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* In the table the Concern column narrows on a laptop (about 230px at
+ * 1024px), where one line cut real categories ("YOUTH PROGRAMME COMPL…").
+ * Two lines, then "…", with the full text in the title. */
+.cms-complaints-table .cms-complaints-concern {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .cms-complaints-desc {
   display: block;
@@ -10689,6 +10736,9 @@ svg.cms-complaints-go {
   width: 18px;
   height: 18px;
   vertical-align: middle;
+  /* In a phone row the chevron is a flex item next to the text; it shrank to
+   * 3px beside a long status or number. */
+  flex: none;
 }
 
 /* Status, in the theme's status colours, toned by where the complaint is. */
@@ -10698,13 +10748,17 @@ svg.cms-complaints-go {
   gap: 6px;
   max-width: 100%;
   padding: 3px 10px;
-  border-radius: 999px;
+  /* Half a one-line pill's height, so it still reads as a pill, and a
+   * two-line one stays a rounded box. */
+  border-radius: 12px;
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* A translated status can outgrow the column ("En attente d'attribution à
+   * un agent de terrain"). The text is a bare flex item, so an ellipsis never
+   * applied and it was cut mid-word with no way to read the rest. Wrap it. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .cms-status-pill::before {
   content: "";
@@ -10806,27 +10860,7 @@ svg.cms-complaints-go {
 }
 .cms-complaints-pager-buttons {
   display: inline-flex;
-  gap: 6px;
-}
-.cms-complaints-pager button {
-  display: inline-grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid var(--color-table-border, var(--cms-line));
-  border-radius: 6px;
-  background: #FFFFFF;
-  color: var(--cms-ink-2);
-  cursor: pointer;
-}
-.cms-complaints-pager button:disabled {
-  color: #C5C5C5;
-  cursor: default;
-}
-.cms-complaints-pager button svg {
-  width: 16px;
-  height: 16px;
+  gap: 8px;
 }
 
 @container cms-complaints (max-width: 47.99rem) {
@@ -10850,5 +10884,167 @@ svg.cms-complaints-go {
   }
   .cms-complaints-search {
     max-width: none;
+  }
+}
+
+/* ----------------------------------------------------------------------
+ * Citizen home banner (#2358)
+ *
+ * The photo an admin sets in the Configurator's Branding step, darkened
+ * behind a welcome and the File a Complaint / My Complaints links, above All
+ * Services. Rendered only when globalConfigs CITIZEN_BANNER_ENABLED is on
+ * and StateInfo.bannerUrl is set (CitizenHomeBanner.js).
+ *
+ * Colours come from the theme: the scrim is its dark (--color-primary-1),
+ * the accent its brand colour (--color-primary-2) lightened to read on the
+ * scrim, and the buttons its primary-button and link colours, so a yellow
+ * brand (naipepea) gets dark text where a blue one (Bomet) gets white.
+ *
+ * The title and links carry an extra class of specificity: vendor
+ * `h2[class*="title"]` and `a:not(.digit-button):not(.button)` would
+ * otherwise recolour them for a light page.
+ * -------------------------------------------------------------------- */
+.cms-citizen-home {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+/* All Services sits one level down inside the banner's column, past the
+ * `citizen-home-container > .v2-scope` rules that put it straight on the
+ * page's ground (block 66) and give it the full width on a phone. */
+.citizen .center-container.citizen-home-container > .cms-citizen-home > .v2-scope {
+  background-color: transparent !important;
+}
+@media (max-width: 47.99rem) {
+  .citizen-home-container > .cms-citizen-home {
+    flex: 1 1 100%;
+  }
+}
+.cms-home-banner {
+  position: relative;
+  isolation: isolate;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  min-height: 13.5rem;
+  margin: 1rem 1.5rem 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: var(--color-primary-1, #0B1F3A);
+  color: #FFFFFF;
+}
+.cms-home-banner__image {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cms-home-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  /* Darkest under the words, lighter towards the right so the photo shows. */
+  background: linear-gradient(90deg, rgba(11, 31, 58, 0.92) 0%, rgba(11, 31, 58, 0.75) 50%, rgba(11, 31, 58, 0.4) 100%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-primary-1, #0B1F3A) 92%, transparent) 0%,
+    color-mix(in srgb, var(--color-primary-1, #0B1F3A) 75%, transparent) 50%,
+    color-mix(in srgb, var(--color-primary-1, #0B1F3A) 40%, transparent) 100%
+  );
+}
+.cms-home-banner__content {
+  max-width: 40rem;
+  padding: 1.75rem 2rem;
+}
+.cms-home-banner__eyebrow,
+.cms-home-banner__product {
+  color: #FFFFFF;
+  color: color-mix(in srgb, var(--color-primary-2, #2563EB) 55%, #FFFFFF);
+}
+.cms-home-banner__eyebrow {
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.cms-home-banner h2.cms-home-banner__title {
+  margin: 0;
+  font-family: "Roboto Condensed", Roboto, sans-serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: normal;
+  color: #FFFFFF;
+}
+.cms-home-banner__name,
+.cms-home-banner__product {
+  display: block;
+}
+.cms-home-banner__tagline {
+  max-width: 32rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.88);
+}
+.cms-home-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+.cms-home-banner .cms-home-banner__actions a.cms-home-banner__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border: 1px solid #FFFFFF;
+  border-radius: 4px;
+  background-color: #FFFFFF;
+  color: var(--color-link-normal, var(--color-primary-2, #2563EB));
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: filter 0.15s ease-out;
+}
+.cms-home-banner .cms-home-banner__actions a.cms-home-banner__button--primary {
+  border-color: var(--color-primary-2, var(--color-primary-main, #2563EB));
+  background-color: var(--color-primary-2, var(--color-primary-main, #2563EB));
+  color: var(--color-button-primary-text, #FFFFFF);
+}
+.cms-home-banner .cms-home-banner__actions a.cms-home-banner__button:hover {
+  filter: brightness(0.94);
+  text-decoration: none;
+}
+.cms-home-banner .cms-home-banner__actions a.cms-home-banner__button:focus-visible {
+  outline: 2px solid #FFFFFF;
+  outline-offset: 2px;
+}
+@media (max-width: 47.99rem) {
+  .cms-home-banner {
+    min-height: 0;
+    margin: 1rem 1rem 0;
+  }
+  .cms-home-banner::after {
+    /* The words span the whole width on a phone, so the scrim does too. */
+    background: rgba(11, 31, 58, 0.8);
+    background: color-mix(in srgb, var(--color-primary-1, #0B1F3A) 80%, transparent);
+  }
+  .cms-home-banner__content {
+    padding: 1.25rem;
+  }
+  .cms-home-banner h2.cms-home-banner__title {
+    font-size: 1.375rem;
+  }
+  .cms-home-banner .cms-home-banner__actions a.cms-home-banner__button {
+    flex: 1 1 auto;
   }
 }

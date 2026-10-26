@@ -15,6 +15,7 @@
 import { FormComposerV2, Toast } from "@egovernments/digit-ui-components";
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { trackComplaintText } from "../../../utils/trackComplaintText";
 import { useHistory } from "react-router-dom";
 import { formPayloadToCreateComplaint } from "../../../utils";
 import { isPostalCodeValid, getPostalCodeErrorMessage } from "../../../utils/postalCode";
@@ -510,7 +511,7 @@ const CreateComplaintForm = ({
           }
           sendDataToResponsePage(
             "CS_COMMON_COMPLAINT_SUBMITTED",
-            "CS_COMMON_TRACK_COMPLAINT_TEXT",
+            trackComplaintText(t),
             "CS_PGR_COMPLAINT_NUMBER",
             responseData?.ServiceWrappers?.[0]?.service?.serviceRequestId
           );

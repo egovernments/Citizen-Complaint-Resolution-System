@@ -25,13 +25,14 @@
  * ACTOR needs credentials, and those come from env.
  */
 import { getDigitToken } from './auth';
+import { isContextRefusal, KeycloakSignInError } from './identity-bff';
 import { ROOT_TENANT, TENANT, DEFAULT_PASSWORD } from './env';
 import { fetchEmployees, type DiscoveredEmployee } from './probes';
 import { getProfile, type DeploymentProfile, type PersonaSummary } from './profile';
 
-export type PersonaKey = 'employee' | 'gro' | 'gro-with-department' | 'lme' | 'ward-scoped-csr' | 'inbox-viewer';
+export type PersonaKey = 'employee' | 'gro' | 'gro-with-department' | 'lme' | 'csr' | 'ward-scoped-csr' | 'inbox-viewer';
 
-export const PERSONA_KEYS: PersonaKey[] = ['employee', 'gro', 'gro-with-department', 'lme', 'ward-scoped-csr', 'inbox-viewer'];
+export const PERSONA_KEYS: PersonaKey[] = ['employee', 'gro', 'gro-with-department', 'lme', 'csr', 'ward-scoped-csr', 'inbox-viewer'];
 
 /**
  * The tenant pair every lookup here is relative to.
@@ -237,10 +238,11 @@ async function adminToken(tenants: TenantPair): Promise<string> {
       return r.access_token;
     } catch (err: any) {
       adminTokenErrors.set(root, `${user}@${root}: ${err?.message?.slice(0, 160) ?? err}`);
+      if (err instanceof KeycloakSignInError) break; // a refused password is never retried
       if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2_000));
     }
   }
-  console.log(`[personas] admin token unavailable after 3 attempts — ${adminTokenErrors.get(root)}`);
+  console.log(`[personas] admin token unavailable — ${adminTokenErrors.get(root)}`);
   adminTokenCache.set(root, '');
   return '';
 }
@@ -282,6 +284,11 @@ async function login(c: Candidate): Promise<Principal | null> {
   if (hit !== undefined) return hit;
 
   let result: Principal | null = null;
+  // Only a Keycloak refusal is a verdict about the credential. Anything else (a
+  // 5xx, a timeout, an ended Keycloak session) says nothing about it: caching it
+  // as "no" would let the persona resolve to the next candidate (often the
+  // admin) for the worker's life, so the run fails loudly instead.
+  let failure: unknown;
   for (const authTenant of c.authTenants) {
     try {
       const resp = await getDigitToken({ tenant: authTenant, authTenant, username: c.username, password: c.password });
@@ -295,8 +302,10 @@ async function login(c: Candidate): Promise<Principal | null> {
         };
         break;
       }
-    } catch {
-      // Try the next tenant; a guessed password failing everywhere is normal.
+    } catch (err) {
+      // Try the next tenant; a guessed password failing everywhere is normal, and
+      // so is a password that works for someone with no context here (_select).
+      if (!(err instanceof KeycloakSignInError || isContextRefusal(err))) failure ??= err;
     }
   }
   // R6: every attempt is logged, so a lockout can be traced to this suite —
@@ -304,6 +313,9 @@ async function login(c: Candidate): Promise<Principal | null> {
   console.log(
     `[personas] login ${c.username} (${c.source}) -> ${result ? `ok @ ${result.authTenant}` : `no (tried ${c.authTenants.join(', ')})`}`,
   );
+  if (!result && failure) {
+    throw new Error(`Sign-in for ${c.username} (${c.source}) failed for a reason other than a refusal: ${(failure as Error)?.message?.slice(0, 200) ?? failure}`);
+  }
   loginCache.set(key, result);
   return result;
 }
@@ -359,6 +371,10 @@ async function matches(key: PersonaKey, p: ResolvedPersona, profile: DeploymentP
       return p.roles.includes('GRO') && p.departments.length > 0;
     case 'lme':
       return p.roles.includes('PGR_LME');
+    case 'csr':
+      // Files a complaint on a citizen's behalf: APPLY's roles past CITIZEN,
+      // which is CSR on the shipped workflows.
+      return (profile.workflow.pgr.actionRoles.APPLY ?? []).some((r) => r !== 'CITIZEN' && p.roles.includes(r));
     case 'ward-scoped-csr':
       return isWardScopedCsr(p, hrms, profile);
     case 'inbox-viewer': {
@@ -416,6 +432,7 @@ function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[], profile?: Depl
     gro: 'the GRO role',
     'gro-with-department': 'the GRO role AND an HRMS department assignment',
     lme: 'the PGR_LME role',
+    csr: 'a PGR APPLY role other than CITIZEN (CSR), to file a complaint on a citizen\'s behalf',
     'ward-scoped-csr': 'the CSR role AND an HRMS jurisdiction below the hierarchy root',
     // Must state exactly what matches() checks, or the reader onboards the
     // wrong thing: it said "GRO (or PGR_LME)" when PGR_LME alone never

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { searchWorkspace, type WorkspaceStep } from '@/identity/workspace';
 import { stepRequirement } from './errors';
+import { englishT, type OnboardingT } from './i18n';
 
 /**
  * The server's check for one setup step (Probes[step] from workspaces/_search),
@@ -43,12 +44,13 @@ export function probeGate(
   step: WorkspaceStep,
   local: { ready: boolean; hint?: string },
   probe: StepProbe,
+  t: OnboardingT = englishT,
 ): { disabled: boolean; hint?: string; canRecheck: boolean } {
   if (!local.ready) return { disabled: true, hint: local.hint, canRecheck: false };
-  if (probe.status === 'checking') return { disabled: true, hint: 'Checking this step…', canRecheck: false };
+  if (probe.status === 'checking') return { disabled: true, hint: t('probe.checking', 'Checking this step…'), canRecheck: false };
   if (probe.legacy || probe.passed === true) return { disabled: false, canRecheck: false };
   if (probe.passed === false) {
-    return { disabled: true, hint: `Not complete yet. ${stepRequirement(step) ?? ''}`.trim(), canRecheck: true };
+    return { disabled: true, hint: `${t('probe.not_complete', 'Not complete yet.')} ${stepRequirement(step, t) ?? ''}`.trim(), canRecheck: true };
   }
-  return { disabled: true, hint: 'Couldn’t check this step just now.', canRecheck: true };
+  return { disabled: true, hint: t('probe.check_failed', 'Couldn’t check this step just now.'), canRecheck: true };
 }

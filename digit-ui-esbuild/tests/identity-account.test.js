@@ -81,8 +81,23 @@ test("accept invitation sends its exact version and employee cookie selector, th
   assert.throws(() => api.acceptIdentityInvitation({ tenant, invitation: { ...invitation, tenantId: "ke.other" }, fetchImpl }));
 });
 
+test("decline invitation sends its exact version and employee cookie selector for this workspace only", async () => {
+  const invitation = { tenantId: tenant.tenantId, invitationVersion: 4 };
+  const result = await api.declineIdentityInvitation({ tenant, invitation, fetchImpl: async (url, init) => {
+    assert.equal(url, "/identity/v1/workspace-invitations/_decline?surface=employee");
+    assert.deepEqual(JSON.parse(init.body), invitation);
+    assert.equal(init.credentials, "include");
+    return json(200, { declined: true });
+  } });
+  assert.deepEqual(result, { declined: true });
+  assert.throws(() => api.declineIdentityInvitation({ tenant, invitation: { ...invitation, tenantId: "ke.other" },
+    fetchImpl: () => assert.fail("must not call the BFF") }));
+});
+
 test("stale invitations remain failed and expose a recoverable message", async () => {
   await assert.rejects(api.acceptIdentityInvitation({ tenant, invitation: { tenantId: tenant.tenantId, invitationVersion: 1 },
+    fetchImpl: async () => json(409, { code: "INVITATION_STALE" }) }), (error) => error.code === "INVITATION_STALE");
+  await assert.rejects(api.declineIdentityInvitation({ tenant, invitation: { tenantId: tenant.tenantId, invitationVersion: 1 },
     fetchImpl: async () => json(409, { code: "INVITATION_STALE" }) }), (error) => error.code === "INVITATION_STALE");
   assert.match(api.identityMessage("INVITATION_STALE").message, /new invitation/);
 });

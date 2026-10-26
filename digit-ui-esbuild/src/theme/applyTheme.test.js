@@ -32,6 +32,18 @@ function stubDocument() {
   return { props, head, restore: () => { console.warn = origWarn; console.log = origLog; } };
 }
 
+// WCAG contrast ratio, for asserting the legibility floors.
+function contrast(a, b) {
+  const lum = (hex) => {
+    const h = hex.replace("#", "");
+    const c = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
 function freshApply() {
   delete require.cache[require.resolve("./applyTheme.js")];
   return require("./applyTheme.js").applyTheme;
@@ -157,7 +169,11 @@ test("v2: `border` collapses both border and input-border", () => {
     const applyTheme = freshApply();
     applyTheme({ version: "2", colors: { brand: "#FEC931", border: "#D6D5D4" } });
     assert.equal(props["--color-border"], "#D6D5D4");
-    assert.equal(props["--color-input-border"], "#D6D5D4");
+    // The field edge is held to 3:1 (WCAG 1.4.11); #D6D5D4 is 1.4:1, so it
+    // comes out as a darker shade of the same grey. Card borders are decoration
+    // and keep the stated colour.
+    assert.ok(contrast(props["--color-input-border"], "#FFFFFF") >= 3);
+    assert.notEqual(props["--color-input-border"], "#D6D5D4");
   } finally { restore(); }
 });
 
@@ -166,8 +182,10 @@ test("v2: `error` writes both --color-error and --color-error-dark (semantics co
   try {
     const applyTheme = freshApply();
     applyTheme({ version: "2", colors: { brand: "#FEC931", error: "#E02D3A" } });
-    assert.equal(props["--color-error"], "#E02D3A");
     assert.equal(props["--color-error-dark"], "#E02D3A");
+    // Error text is held to 4.5:1 on the page grey too, where #E02D3A is
+    // 4.4:1, so it is nudged a shade darker.
+    assert.ok(contrast(props["--color-error"], "#FAFAFA") >= 4.5);
   } finally { restore(); }
 });
 
@@ -202,7 +220,7 @@ test("v1 record (no `brand` key): legacy flatten only, no semantic expansion sid
       version: "1",
       colors: { error: "#E02D3A", primary: { main: "#FEC931" } },
     });
-    assert.equal(props["--color-error"], "#E02D3A");
+    assert.ok(contrast(props["--color-error"], "#FAFAFA") >= 4.5);
     assert.equal(props["--color-primary-main"], "#FEC931");
     // Crucially: error-dark is NOT touched (no v2 opt-in).
     assert.equal(props["--color-error-dark"], undefined);
@@ -391,7 +409,7 @@ test("hexToHslTriplet: known conversions + invalid input", () => {
 });
 
 test("v2 bridge: primary.main drives .v2-scope --v2-primary HSL triplet", () => {
-  const { head, restore } = stubDocument();
+  const { props, head, restore } = stubDocument();
   try {
     const applyTheme = freshApply();
     applyTheme({
@@ -402,7 +420,10 @@ test("v2 bridge: primary.main drives .v2-scope --v2-primary HSL triplet", () => 
     assert.ok(bridge, "bridge <style> should be appended to head");
     assert.match(bridge.textContent, /\.v2-scope \{/);
     assert.match(bridge.textContent, /--v2-primary: 184 86% 46%/);
-    assert.match(bridge.textContent, /--v2-ring: 184 86% 46%/);
+    // #10cdda is a fill colour; as a ring on white it is 1.9:1, so the ring is
+    // the derived focus colour instead (WCAG 1.4.11).
+    const { hexToHslTriplet } = require("./applyTheme.js");
+    assert.match(bridge.textContent, new RegExp(`--v2-ring: ${hexToHslTriplet(props["--color-focus-ring"])}`));
   } finally { restore(); }
 });
 
@@ -464,6 +485,33 @@ test("v3 backfill: v1 record feeds button + primary-N tokens from palette", () =
     assert.equal(props["--color-button-primary-bg-pressed"], "#204F37");
     assert.equal(props["--color-primary-1"], "#204F37");
     assert.equal(props["--color-primary-2"], "#FEC931");
+  } finally { restore(); }
+});
+
+test("v3 backfill: a primary.dark lighter than main isn't the hover; DIGIT Orange keeps white labels", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    // DIGIT Orange, the built-in default and an onboarding preset. Its "dark"
+    // #C8602B is lighter than main; as the hover, white failed on it (4.07:1)
+    // and the label went near-black on every state.
+    applyTheme(require("./default.json"));
+    const hover = props["--color-button-primary-bg-hover"];
+    assert.equal(props["--color-button-primary-bg-default"], "#c84c0e");
+    assert.equal(hover, "#B4440D");
+    assert.equal(props["--color-button-primary-bg-pressed"], hover);
+    assert.equal(props["--color-button-primary-text"], "#FFFFFF");
+    for (const bg of ["#c84c0e", hover]) assert.ok(contrast("#FFFFFF", bg) >= 4.5, `white on ${bg}`);
+  } finally { restore(); }
+});
+
+test("v3 backfill: no primary.dark keeps the flat hover", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({ version: "1", colors: { primary: { main: "#2563EB" } } });
+    assert.equal(props["--color-button-primary-bg-hover"], "#2563EB");
+    assert.equal(props["--color-button-primary-bg-pressed"], "#2563EB");
   } finally { restore(); }
 });
 
@@ -660,11 +708,11 @@ test("text ramp: secondary seeds muted when the record names no muted tone", () 
     const applyTheme = freshApply();
     applyTheme({
       version: "3",
-      colors: { "primary-1": "#0B1F3A", "text-primary": "#1D2433", "text-secondary": "#6B7280" },
+      colors: { "primary-1": "#0B1F3A", "text-primary": "#1D2433", "text-secondary": "#5A606B" },
     });
     assert.equal(props["--color-text-primary"], "#1D2433");
-    assert.equal(props["--color-text-secondary"], "#6B7280");
-    assert.equal(props["--color-text-muted"], "#6B7280");
+    assert.equal(props["--color-text-secondary"], "#5A606B");
+    assert.equal(props["--color-text-muted"], "#5A606B");
   } finally { restore(); }
 });
 
@@ -678,11 +726,11 @@ test("text ramp: an explicit text-muted wins over the secondary seed", () => {
         "primary-1": "#0B1F3A",
         "text-primary": "#1D2433",
         "text-secondary": "#4B5563",
-        "text-muted": "#9CA3AF",
+        "text-muted": "#5A606B",
       },
     });
     assert.equal(props["--color-text-secondary"], "#4B5563");
-    assert.equal(props["--color-text-muted"], "#9CA3AF");
+    assert.equal(props["--color-text-muted"], "#5A606B");
   } finally { restore(); }
 });
 
@@ -698,11 +746,203 @@ test("text ramp: a flat v3 key wins over the nested v1 block of the same record"
       version: "3",
       colors: {
         "primary-1": "#0B1F3A",
-        "text-secondary": "#6B7280",
+        "text-secondary": "#5A606B",
         text: { secondary: "#1D2433", muted: "#1D2433" },
       },
     });
-    assert.equal(props["--color-text-secondary"], "#6B7280");
-    assert.equal(props["--color-text-muted"], "#6B7280");
+    assert.equal(props["--color-text-secondary"], "#5A606B");
+    assert.equal(props["--color-text-muted"], "#5A606B");
+  } finally { restore(); }
+});
+
+// ── Legibility floors (Pass 6) ─────────────────────────────────────────────
+
+const GREEN_AND_GOLD_V1 = {
+  version: "1",
+  colors: {
+    "input-border": "#E1E6EF",
+    link: { hover: "#204F37", normal: "#204F37" },
+    primary: { accent: "#204F37", dark: "#204F37", light: "#FFF4D6", main: "#FEC931" },
+    success: "#128F21",
+    text: { heading: "#204F37", muted: "#787878", primary: "#1D2433", secondary: "#5F5C62" },
+  },
+};
+
+test("legibility: a light brand stays the fill but never becomes text or the focus ring", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()(GREEN_AND_GOLD_V1);
+    // Buttons keep the tenant's gold, with a dark label.
+    assert.equal(props["--color-primary-2"], "#FEC931");
+    assert.equal(props["--color-button-primary-bg-default"], "#FEC931");
+    assert.equal(props["--color-button-primary-text"], "#0B0C0C");
+    // Brand-coloured text falls back to the green, which reads.
+    assert.equal(props["--color-brand-text"], "#204F37");
+    assert.ok(contrast(props["--color-focus-ring"], "#FFFFFF") >= 3);
+  } finally { restore(); }
+});
+
+test("legibility: secondary buttons take the brand text, not the vendored orange, unless the record states them", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()(GREEN_AND_GOLD_V1);
+    assert.equal(props["--color-button-secondary-text"], "#204F37");
+    assert.equal(props["--color-button-secondary-border"], "#204F37");
+  } finally { restore(); }
+  const blue = stubDocument();
+  try {
+    freshApply()(require("./cms-blue.json"));
+    assert.equal(blue.props["--color-button-secondary-border"], "#2563EB");
+  } finally { blue.restore(); }
+});
+
+test("legibility: captions, success text and field borders reach their floors", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()(GREEN_AND_GOLD_V1);
+    for (const bg of ["#FFFFFF", "#FAFAFA", "#EEEEEE"]) {
+      assert.ok(contrast(props["--color-text-muted"], bg) >= 4.5, `muted on ${bg}`);
+      assert.ok(contrast(props["--color-success"], bg) >= 4.5, `success on ${bg}`);
+      assert.ok(contrast(props["--color-input-border"], bg) >= 3, `border on ${bg}`);
+    }
+    // Just far enough: the caption grey moves a few shades, not to black.
+    assert.equal(props["--color-text-muted"], "#6C6C6C");
+  } finally { restore(); }
+});
+
+test("legibility: colours that already read are left exactly as stated", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()({
+      version: "3",
+      colors: {
+        "primary-1": "#0B1F3A",
+        "primary-2": "#2563EB",
+        "text-primary": "#1D2433",
+        "text-secondary": "#4B5563",
+        "text-muted": "#5A606B",
+        "input-border-default": "#5A606B",
+      },
+    });
+    assert.equal(props["--color-text-primary"], "#1D2433");
+    assert.equal(props["--color-text-secondary"], "#4B5563");
+    assert.equal(props["--color-text-muted"], "#5A606B");
+    assert.equal(props["--color-input-border"], "#5A606B");
+    // The blue reads on white and the page grey but is 4.4:1 on the mid grey,
+    // so link text is the same blue a shade darker; the ring is untouched.
+    assert.ok(contrast(props["--color-brand-text"], "#EEEEEE") >= 4.5);
+    assert.match(props["--color-brand-text"], /^#2[0-4][0-9A-F]{4}$/);
+    assert.equal(props["--color-focus-ring"], "#0B1F3A");
+  } finally { restore(); }
+});
+
+test("legibility: a stated label that vanishes on its fill is swapped for one that reads", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()({
+      version: "3",
+      colors: {
+        "primary-1": "#204F37",
+        "sidebar-selected-bg": "#FEC931",
+        "sidebar-selected-text": "#FFFFFF",
+      },
+    });
+    assert.equal(props["--color-sidebar-selected-text"], "#0B0C0C");
+  } finally { restore(); }
+});
+
+test("legibility: a status pill's text is darkened along its own hue to read on its tint", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()({
+      version: "3",
+      colors: {
+        "primary-1": "#0B1F3A",
+        "status-error-text": "#D4351C",
+        "status-error-bg": "#EFC7C1",
+      },
+    });
+    assert.equal(props["--color-status-error-bg"], "#EFC7C1");
+    assert.ok(contrast(props["--color-status-error-text"], "#EFC7C1") >= 4.5);
+    assert.notEqual(props["--color-status-error-text"], "#0B0C0C");
+  } finally { restore(); }
+});
+
+// #2635: a v1 record (onboarding's "Green and Gold") never reached the shell's
+// own tokens, which the vendored :root hard-defines, so the header stayed navy,
+// the sidebar teal and the selected item orange.
+const GREEN_AND_GOLD = {
+  version: "1",
+  colors: {
+    primary: { dark: "#204F37", main: "#FEC931", light: "#FFF4D6", accent: "#204F37", "selected-bg": "#FFF4D6" },
+    secondary: "#1D2433",
+    text: { heading: "#204F37", primary: "#1D2433" },
+    digitv2: { "header-sidenav": "#204F37", "primary-bg": "#FFF4D6" },
+  },
+};
+
+test("v1 shell: header and sidebar take the record's header-sidenav colour", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()(GREEN_AND_GOLD);
+    assert.equal(props["--color-header-bg"], "#204F37");
+    assert.equal(props["--color-sidebar-bg"], "#204F37");
+  } finally { restore(); }
+});
+
+test("v1 shell: the selected item takes the main brand colour, with text that reads on it", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()(GREEN_AND_GOLD);
+    assert.equal(props["--color-sidebar-selected-bg"], "#FEC931");
+    assert.equal(props["--color-sidebar-selected-text"], "#0B0C0C");
+  } finally { restore(); }
+});
+
+test("v1 shell: a main colour that would vanish on the sidebar gives way to one that stands out in lightness", () => {
+  // Kenya Green: main = sidebar green. The red accent has the same lightness as
+  // that green, so it would not stand out for anyone who can't tell red from
+  // green; the light tone does.
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()({
+      version: "1",
+      colors: {
+        primary: { dark: "#004D2C", main: "#006B3F", light: "#4DA87A", accent: "#BB0000" },
+        digitv2: { "header-sidenav": "#006B3F" },
+      },
+    });
+    assert.equal(props["--color-sidebar-bg"], "#006B3F");
+    assert.equal(props["--color-sidebar-selected-bg"], "#4DA87A");
+    assert.equal(props["--color-sidebar-selected-text"], "#0B0C0C");
+  } finally { restore(); }
+});
+
+test("v1 shell: digit-ui's own palette (the default theme, DIGIT Orange) keeps today's shell", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()(require("./default.json"));
+    for (const name of ["--color-header-bg", "--color-sidebar-bg", "--color-sidebar-selected-bg", "--color-sidebar-selected-text"]) {
+      assert.equal(props[name], undefined, `${name} must stay the vendored value`);
+    }
+  } finally { restore(); }
+});
+
+test("v1 shell: a v3 record states its own shell and is left alone", () => {
+  const { props, restore } = stubDocument();
+  try {
+    freshApply()(require("./cms-blue.json"));
+    assert.equal(props["--color-header-bg"], "#0B1F3A");
+    assert.equal(props["--color-sidebar-bg"], "#0B1F3A");
+    assert.equal(props["--color-sidebar-selected-bg"], "#2563EB");
+    assert.equal(props["--color-sidebar-selected-text"], "#FFFFFF");
+  } finally { restore(); }
+});
+
+test("v1 shell: the header reads as dark, so the white logo variant is used", () => {
+  const { restore } = stubDocument();
+  try {
+    freshApply()(GREEN_AND_GOLD);
+    assert.equal(global.document.documentElement.dataset.headerTone, "dark");
   } finally { restore(); }
 });

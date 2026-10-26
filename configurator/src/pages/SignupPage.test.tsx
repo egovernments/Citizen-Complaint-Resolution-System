@@ -25,7 +25,7 @@ vi.mock('@/api/onboarding', async () => {
     updateSignup: vi.fn(),
     checkIdentifier: vi.fn(),
     submitSignup: vi.fn(),
-    findOperation: vi.fn(),
+    searchOperation: vi.fn(),
     selectContext: vi.fn(),
     startSignIn: vi.fn(),
     requestMagicLinkSignup: vi.fn(),
@@ -37,9 +37,16 @@ import * as api from '@/api/onboarding';
 
 const signedIn = { authenticated: true, user: { id: 'u', email: 'f@x.test', name: 'F', preferredUsername: 'f' } };
 
+/** `searchOperation`, by what it is asked for: the run's own id (the poll) or its signup's id (after a reload). */
+const findOperation = vi.fn();
+const findSignupOperation = vi.fn();
+
 beforeEach(() => {
   vi.mocked(api.checkIdentifier).mockResolvedValue({ type: 'URL_SLUG', value: 'x', available: true });
   vi.mocked(api.findSignup).mockResolvedValue(null);
+  findSignupOperation.mockResolvedValue(null);
+  vi.mocked(api.searchOperation).mockImplementation(async (criteria, signal) =>
+    'signupId' in criteria ? findSignupOperation(criteria.signupId) : findOperation(criteria.id, signal));
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -218,7 +225,7 @@ describe('wizard', () => {
     await completeAccountStep();
     fireEvent.change(screen.getByLabelText(/account url/i), { target: { value: 'kd4' } });
 
-    expect(await screen.findByText(/maps to tenant ID “kd”.*already in use/i)).toBeInTheDocument();
+    expect(await screen.findByText(/clashes with an existing workspace \(“kd”\)/i)).toBeInTheDocument();
   });
 
   it('creates the draft once Preferences is complete, not before', async () => {
@@ -242,8 +249,7 @@ describe('wizard', () => {
     expect(key).toBeTruthy();
   });
 
-  it('leaves terms out of the payload until the operator agrees', async () => {
-    // A blank value is rejected where an absent field is accepted.
+  it('records the terms version without a checkbox: continuing past sign-in is the agreement', async () => {
     vi.mocked(api.createSignup).mockResolvedValue({ id: 'signup-1', status: 'DRAFT' } as never);
     render(<SignupPage />);
     await completeAccountStep();
@@ -253,7 +259,7 @@ describe('wizard', () => {
 
     await waitFor(() => expect(api.createSignup).toHaveBeenCalledTimes(1));
     const [draft] = vi.mocked(api.createSignup).mock.calls[0];
-    expect('acceptedTermsVersion' in draft).toBe(false);
+    expect(draft.acceptedTermsVersion).toBe('2026-09');
   });
 
   it('resumes an existing draft rather than starting a second', async () => {
@@ -370,10 +376,16 @@ describe('expired session', () => {
 });
 
 describe('provisioning', () => {
-  it('shows the worker steps and offers a retry only when the failure is retryable', async () => {
+  /** Walks the wizard to "Create account" and submits, the run coming back as `operation`. */
+  async function submitWith(
+    operation: Record<string, unknown>,
+    afterRun: 'DRAFT' | 'FAILED' = 'DRAFT',
+    draftFields: Record<string, unknown> = {},
+    firstReadAfterRunFails = false
+  ) {
     vi.mocked(api.session).mockResolvedValue(signedIn);
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
-    vi.mocked(api.findSignup).mockResolvedValue({
+    const draft = {
       id: 'signup-1',
       status: 'DRAFT',
       accountName: 'Bomet County',
@@ -384,20 +396,16 @@ describe('provisioning', () => {
       timeZone: 'Africa/Nairobi',
       financialYearPolicy: 'JUL_JUN',
       tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '+254700000199' } },
-    } as never);
+      ...draftFields,
+    };
+    // The first read is the resume; later ones are the signup after the run, which a
+    // user-correctable failure hands back as a DRAFT.
+    vi.mocked(api.findSignup).mockResolvedValueOnce(draft as never).mockResolvedValue({ ...draft, status: afterRun } as never);
+    if (firstReadAfterRunFails) vi.mocked(api.findSignup).mockRejectedValueOnce(new Error('offline'));
     vi.mocked(api.updateSignup).mockResolvedValue({ id: 'signup-1' } as never);
-    vi.mocked(api.submitSignup).mockResolvedValue({
-      id: 'op-1',
-      signupId: 'signup-1',
-      status: 'RETRYABLE_FAILED',
-      currentStep: 'ORGANIZATION',
-      completedSteps: ['TENANT_FOUNDATION'],
-      errorCode: 'ONBOARDING_VALIDATION_ERROR',
-      errorMessage: 'Could not create the organization.',
-      attempt: 1,
-      createdAt: 0,
-      updatedAt: 0,
-    } as never);
+    const run = { id: 'op-1', signupId: 'signup-1', errorCode: null, errorMessage: null, attempt: 1, createdAt: 0, updatedAt: 0, ...operation };
+    vi.mocked(api.submitSignup).mockResolvedValue(run as never);
+    vi.mocked(findOperation).mockResolvedValue(run as never);
 
     render(<SignupPage />);
 
@@ -406,11 +414,243 @@ describe('provisioning', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
     await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
-    fireEvent.click(await screen.findByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /create account/i }));
+  }
 
-    expect(await screen.findByText(/could not create the organization/i)).toBeInTheDocument();
+  const spinning = (label: RegExp) => !!screen.getByText(label).closest('li')?.querySelector('.animate-spin');
+
+  it('shows the worker steps and offers a retry only when the failure is retryable', async () => {
+    await submitWith({
+      status: 'RETRYABLE_FAILED',
+      currentStep: 'ORGANIZATION',
+      completedSteps: ['TENANT_FOUNDATION'],
+      errorCode: 'ONBOARDING_VALIDATION_ERROR',
+      errorMessage: 'Could not create the organization.',
+    });
+
+    // In words, with the code kept as a reference; never the run's own message.
+    expect(await screen.findByText(/usually temporary/i)).toBeInTheDocument();
+    expect(screen.getByText('Reference: ONBOARDING_VALIDATION_ERROR')).toBeInTheDocument();
+    expect(screen.queryByText(/could not create the organization/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it('hands a rejected founder number back to be corrected, rather than closing the signup (#2353)', async () => {
+    await submitWith({
+      status: 'TERMINAL_FAILED',
+      currentStep: 'FOUNDER_HRMS',
+      completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'],
+      errorCode: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+      errorMessage: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+    });
+
+    expect(await screen.findByText(/usually the mobile number/i)).toBeInTheDocument();
+    const change = await screen.findByRole('button', { name: /change my details/i });
+    expect(screen.queryByText(/cannot be retried/i)).not.toBeInTheDocument();
+
+    fireEvent.click(change);
+    expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('+254700000199');
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn’t be created with it/);
+  });
+
+  it('keeps the account code of a reopened draft when its name changes (#2353)', async () => {
+    await submitWith(
+      {
+        status: 'TERMINAL_FAILED',
+        currentStep: 'FOUNDER_HRMS',
+        completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'],
+        errorCode: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+        errorMessage: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+      },
+      'DRAFT',
+      // What the name and country derive, so only the reopened run keeps it from following them.
+      { accountCode: 'KE-BOMET-COUNTY' }
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    await screen.findByLabelText(/mobile number/i);
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    fireEvent.change(await screen.findByLabelText(/account name/i), { target: { value: 'Bomet County Government' } });
+    expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET-COUNTY');
+  });
+
+  /** A reload onto a draft whose run failed on the founder's own details and handed it back. */
+  function reloadOntoReopened(errorCode: string, countryCode: string, signupFields: Record<string, unknown> = {}) {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue({
+      id: 'signup-1',
+      status: 'DRAFT',
+      accountName: 'Bomet County',
+      // What the name and country derive, so only the reopened run keeps it from following them.
+      accountCode: `${countryCode}-BOMET-COUNTY`,
+      urlSlug: 'bomet-county',
+      countryCode,
+      languages: ['en'],
+      timeZone: 'Africa/Nairobi',
+      financialYearPolicy: 'JUL_JUN',
+      tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '700000199' } },
+      ...signupFields,
+    } as never);
+    vi.mocked(findSignupOperation).mockResolvedValue({
+      id: 'op-1', signupId: 'signup-1', status: 'TERMINAL_FAILED', currentStep: 'FOUNDER_HRMS',
+      completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'], errorCode, errorMessage: errorCode,
+      attempt: 1, createdAt: 0, updatedAt: 0,
+    } as never);
+    render(<SignupPage />);
+  }
+
+  it('explains a reopened draft after a reload instead of dropping into the wizard (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+
+    expect(await screen.findByText(/usually the mobile number/i)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('700000199');
+    expect(findSignupOperation).toHaveBeenCalledWith('signup-1');
+  });
+
+  it('lets a run refused for its country change the country, keeping the account code (#2353)', async () => {
+    reloadOntoReopened('COUNTRY_NOT_SUPPORTED', 'FR');
+    vi.mocked(api.updateSignup).mockResolvedValue({ id: 'signup-1' } as never);
+
+    expect(await screen.findByText(/can’t be set up in this country/i)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/base country/i)).toHaveValue('');
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    await waitFor(() => expect(api.updateSignup).toHaveBeenCalledWith(
+      'signup-1', expect.objectContaining({ countryCode: 'KE', accountCode: 'FR-BOMET-COUNTY' })));
+  });
+
+  it('keeps a country corrected and saved before a reload (#2353)', async () => {
+    // Saved after the run failed (the run's updatedAt is 0).
+    reloadOntoReopened('COUNTRY_NOT_SUPPORTED', 'KE', { updatedAt: 5 });
+
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/base country/i)).toHaveValue('KE');
+  });
+
+  it('does not flag a number corrected and saved before a reload (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE', { updatedAt: 5 });
+
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('700000199');
+    expect(screen.queryByText(/couldn’t be created with it/)).not.toBeInTheDocument();
+  });
+
+  it('recognises the country refusal whatever its case (#2353)', async () => {
+    reloadOntoReopened('country_not_supported', 'FR');
+
+    fireEvent.click(await screen.findByRole('button', { name: /change my details/i }));
+    expect(await screen.findByLabelText(/base country/i)).toHaveValue('');
+  });
+
+  it('shows a reloaded draft as correctable at once, without asking for the signup again (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+
+    expect(await screen.findByText(/usually the mobile number/i)).toBeInTheDocument();
+    // Never the closed-signup wording, not even until a second read of the signup answers.
+    expect(screen.queryByText(/cannot be retried/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /change my details/i })).toBeInTheDocument();
+    expect(api.findSignup).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a failed look-up of the run as an error to try again, not the wizard (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+    findSignupOperation.mockRejectedValue(new api.OnboardingError(503, null, 'Service unavailable'));
+
+    expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/account name/i)).not.toBeInTheDocument();
+  });
+
+  it('resumes the wizard when pgr-services is too old to find a run by its signup (#2353)', async () => {
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+    // What a pgr-services from before #2515 answers to { signupId }.
+    findSignupOperation.mockRejectedValue(
+      new api.OnboardingError(400, 'ONBOARDING_VALIDATION_ERROR', 'Operation.id is required'));
+
+    expect(await screen.findByLabelText(/account name/i)).toHaveValue('Bomet County');
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+  });
+
+  it('sends an expired sign-in during the run look-up back to sign-in (#2353)', async () => {
+    vi.mocked(api.authMethods).mockResolvedValue({ methods: [{ id: 'password', label: 'Email and password', type: 'password' }] });
+    reloadOntoReopened('TENANT_ADMIN_ACCOUNT_REJECTED', 'KE');
+    findSignupOperation.mockRejectedValue(
+      new api.OnboardingError(401, 'ONBOARDING_IDENTITY_REQUIRED', 'A valid identity session is required'));
+
+    expect(await screen.findByText(/sign-in expired/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /email and password/i })).toBeInTheDocument();
+  });
+
+  it('offers the check again when it cannot tell whether the run handed the draft back (#2353)', async () => {
+    // The read after the run fails once; the next one answers.
+    await submitWith(
+      {
+        status: 'TERMINAL_FAILED',
+        currentStep: 'FOUNDER_HRMS',
+        completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'],
+        errorCode: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+        errorMessage: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+      },
+      'DRAFT',
+      {},
+      true
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }));
+    expect(screen.queryByText(/cannot be retried/i)).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /change my details/i })).toBeInTheDocument();
+  });
+
+  it('keeps the closed-signup wording when the run did not hand the draft back', async () => {
+    await submitWith(
+      { status: 'TERMINAL_FAILED', currentStep: 'BINDING', completedSteps: [], errorCode: 'BINDING_CONFLICT', errorMessage: 'BINDING_CONFLICT' },
+      'FAILED',
+    );
+
+    expect(await screen.findByText(/cannot be retried/i)).toBeInTheDocument();
+    expect(screen.getByText('The setup could not be completed.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /change my details/i })).not.toBeInTheDocument();
+  });
+
+  it("follows PGR's steps, so the step the run is on is the one that spins", async () => {
+    await submitWith({ status: 'RUNNING', currentStep: 'PLATFORM_BASELINE', completedSteps: ['TENANT_FOUNDATION'] });
+
+    expect(await screen.findByText('Setting up the basics')).toBeInTheDocument();
+    expect(spinning(/setting up the basics/i)).toBe(true);
+    expect(spinning(/creating your workspace/i)).toBe(false);
+    expect(screen.getByText('Connecting your sign-in')).toBeInTheDocument();
+  });
+
+  it('spins on the first step not done after a resubmit, not on the stale currentStep', async () => {
+    // OnboardingRepository.resubmit clears completed_steps and leaves current_step alone.
+    await submitWith({ status: 'PENDING', currentStep: 'ORGANIZATION', completedSteps: [] });
+
+    expect(await screen.findByText('Creating your workspace')).toBeInTheDocument();
+    expect(spinning(/creating your workspace/i)).toBe(true);
+    expect(spinning(/setting up your account/i)).toBe(false);
+  });
+
+  it('spins nothing once the run has succeeded, even on a step code it does not know', async () => {
+    await submitWith({
+      status: 'SUCCEEDED',
+      currentStep: null,
+      completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE', 'FOUNDER_EMPLOYEE', 'ORGANIZATION', 'MEMBERSHIP', 'BINDING'],
+      lifecyclePublishedAt: null,
+    });
+
+    expect(await screen.findByText('Creating your employee record')).toBeInTheDocument();
+    expect(document.querySelector('li .animate-spin')).toBeNull();
+  });
+
+  it('still shows progress on a step code it does not know', async () => {
+    await submitWith({ status: 'RUNNING', currentStep: 'SOME_NEW_STEP', completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'] });
+
+    expect(await screen.findByText('Creating your employee record')).toBeInTheDocument();
+    expect(spinning(/creating your employee record/i)).toBe(true);
   });
 });
 
@@ -468,6 +708,82 @@ describe('preferences follow the selected country (CCRS#2098)', () => {
     // international, so copying its shape produced a validation failure.
     expect(mobile).toHaveAttribute('placeholder', '9876543210');
     expect(mobile.getAttribute('placeholder')).not.toMatch(/^\+/);
+  });
+
+  it('says what a mobile number looks like in the selected country (#2353)', async () => {
+    render(<SignupPage />);
+    await reachPreferences();
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'MZ' } });
+    expect(screen.getByText('+258')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Mobile numbers in Mozambique have 9 digits and start with 82 to 87, for example 841234567\./),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/mobile number/i)).toHaveAttribute('placeholder', '841234567');
+  });
+});
+
+describe('a mobile number the rules refuse (#2353)', () => {
+  beforeEach(() => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+  });
+
+  const preferencesWith = async (country: string, zone: string, mobile: string) => {
+    render(<SignupPage />);
+    await completeAccountStep();
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: country } });
+    fireEvent.change(screen.getByLabelText(/timezone/i), { target: { value: zone } });
+    fireEvent.change(screen.getByLabelText(/financial year/i), { target: { value: 'JAN_DEC' } });
+    fireEvent.change(screen.getByLabelText(/mobile number/i), { target: { value: mobile } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+  };
+
+  it('is caught under the field before anything is saved', async () => {
+    // The number from the issue's screenshot.
+    await preferencesWith('MZ', 'Africa/Maputo', '77777777777');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That isn’t a valid mobile number in Mozambique.');
+    expect(screen.getByLabelText(/mobile number/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(api.createSignup).not.toHaveBeenCalled();
+  });
+
+  it('clears the complaint once the number is edited', async () => {
+    await preferencesWith('MZ', 'Africa/Maputo', '77777777777');
+    await screen.findByRole('alert');
+    fireEvent.change(screen.getByLabelText(/mobile number/i), { target: { value: '841234567' } });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows a server refusal under the field, never the field path', async () => {
+    vi.mocked(api.createSignup).mockRejectedValue(
+      new api.OnboardingError(400, 'ONBOARDING_VALIDATION_ERROR', 'Signup.tenantMetadata.tenantAdmin.mobileNumber is invalid'),
+    );
+    // Passes the egov-user rule, so it is the server's parser that refuses it.
+    await preferencesWith('KE', 'Africa/Nairobi', '199999999');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That isn’t a valid mobile number in Kenya.');
+    expect(screen.queryByText(/Signup\.tenantMetadata/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not continue/i)).not.toBeInTheDocument();
+  });
+
+  it('saves the bare national number, however it was typed', async () => {
+    vi.mocked(api.createSignup).mockResolvedValue({ id: 'signup-1', status: 'DRAFT' } as never);
+    await preferencesWith('KE', 'Africa/Nairobi', '+254 712 345 678');
+
+    await waitFor(() => expect(api.createSignup).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createSignup).mock.calls[0][0].tenantMetadata?.tenantAdmin.mobileNumber).toBe('712345678');
+  });
+
+  it('puts other refusals in words in the banner', async () => {
+    vi.mocked(api.createSignup).mockRejectedValue(
+      new api.OnboardingError(409, 'ONBOARDING_IDENTIFIER_TAKEN', 'URL_SLUG is already reserved'),
+    );
+    await preferencesWith('KE', 'Africa/Nairobi', '712345678');
+
+    expect(await screen.findByText('That account URL is already taken. Choose a different one.')).toBeInTheDocument();
+    expect(screen.queryByText(/URL_SLUG/)).not.toBeInTheDocument();
   });
 
 });
@@ -592,6 +908,37 @@ describe('workspace readiness gate', () => {
   });
 });
 
+describe('expired trial workspace', () => {
+  // A locked founder lands here from a magic link, which returns to /configurator/signup.
+  const notice = { title: 'Your trial has ended', message: 'Talk to us to continue.' };
+  const locked = { organizationAlias: 'demo', tenantId: 'ke.demo', name: 'Demo Workspace', roles: [], code: 'WORKSPACE_TRIAL_EXPIRED' as const };
+  const open = { organizationAlias: 'kisumu-county', tenantId: 'kisumucounty', name: 'Kisumu County', roles: ['MDMS_ADMIN'] };
+
+  it('opens the dialog on load when every workspace is locked, and starts no signup', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [locked], selectionRequired: false, onboardingRequired: false, notice });
+    render(<SignupPage />);
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText(notice.title)).toBeInTheDocument();
+    expect(screen.getByText(notice.message)).toBeInTheDocument();
+    expect(api.selectContext).not.toHaveBeenCalled();
+    expect(api.findSignup).not.toHaveBeenCalled();
+  });
+
+  it('opens the dialog when _select answers 403 WORKSPACE_TRIAL_EXPIRED', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [open], selectionRequired: false, onboardingRequired: false });
+    vi.mocked(api.selectContext).mockRejectedValue(new api.OnboardingError(403, 'WORKSPACE_TRIAL_EXPIRED', 'Trial ended', { notice }));
+    render(<SignupPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /kisumu county/i }));
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText(notice.title)).toBeInTheDocument();
+    expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument();
+  });
+});
+
 describe('resuming a run that was already going', () => {
   const resumable = (status: 'SUBMITTED' | 'PROVISIONING') => ({
     id: 's1',
@@ -653,7 +1000,7 @@ describe('resuming a run that was already going', () => {
 
     await waitFor(() => expect(api.submitSignup).toHaveBeenCalledWith('s1', expect.any(String)));
     // Real progress, read from the operation rather than invented.
-    expect(await screen.findByText(/creating your account/i)).toBeInTheDocument();
+    expect(await screen.findByText(/creating your workspace/i)).toBeInTheDocument();
   });
 
   it('surfaces the retry on a resumed retryable failure', async () => {
@@ -671,7 +1018,8 @@ describe('resuming a run that was already going', () => {
     render(<SignupPage />);
 
     expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
-    expect(screen.getByText(/DIGIT is not answering/)).toBeInTheDocument();
+    expect(screen.getByText(/usually temporary/)).toBeInTheDocument();
+    expect(screen.getByText('Reference: DIGIT_UNAVAILABLE')).toBeInTheDocument();
   });
 
   it('invents no step detail when the operation cannot be recovered', async () => {
@@ -681,8 +1029,8 @@ describe('resuming a run that was already going', () => {
     render(<SignupPage />);
     await screen.findByText(/setting up kisumu county/i);
 
-    expect(screen.queryByText(/creating your account/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/granting your permissions/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/creating your workspace/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/connecting your sign-in/i)).not.toBeInTheDocument();
   });
 
   it('does not reopen the wizard for an ACTIVE signup whose tenant has not surfaced', async () => {
@@ -717,7 +1065,7 @@ describe('a success that is not yet published', () => {
     signupId: 's1',
     status: 'SUCCEEDED' as const,
     currentStep: null,
-    completedSteps: ['TENANT_FOUNDATION', 'ORGANIZATION', 'TENANT_ADMIN_MEMBERSHIP', 'TENANT_ADMIN_ROLES', 'DIGIT_ACCOUNT'],
+    completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE', 'FOUNDER_HRMS', 'ORGANIZATION', 'MEMBERSHIP', 'BINDING'],
     errorCode: null,
     errorMessage: null,
     attempt: 1,
@@ -740,21 +1088,76 @@ describe('a success that is not yet published', () => {
 
   it('keeps polling instead of reading a tenant list that is not there yet', async () => {
     // A fresh object per read, as the network gives; the poll re-arms on change.
-    vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
 
     render(<SignupPage />);
     expect(await screen.findByText(/finishing setup/i)).toBeInTheDocument();
     await tick(3000);
     await tick(3000);
 
-    expect(api.findOperation).toHaveBeenCalledTimes(2);
+    expect(findOperation).toHaveBeenCalledTimes(2);
     // Only bootstrap's own read; nothing treated SUCCEEDED as ready.
     expect(api.tenants).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
   });
 
   it('opens the workspace once the outcome is published', async () => {
-    vi.mocked(api.findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(api.selectContext).mockResolvedValue({
+      access_token: 't',
+      token_type: 'bearer',
+      expires_in: 3600,
+      scope: '',
+      UserRequest: { uuid: 'u', userName: 'kcbff', name: 'Founder', emailId: 'f@x.test', tenantId: 'kisumucounty', roles: [] },
+    });
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+
+    // Single workspace enters directly without showing choose a workspace picker
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
+    expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the workspace picker when multiple workspaces exist after publishing', async () => {
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    const otherTenant = { organizationAlias: 'nairobi', tenantId: 'nairobi', name: 'Nairobi City', roles: [] };
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu, otherTenant], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+
+    expect(await screen.findByText(/choose a workspace/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /kisumu county/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /nairobi city/i })).toBeInTheDocument();
+  });
+
+  it('opens the trial dialog, not the workspace, when the only published workspace is locked', async () => {
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    const locked = { ...kisumu, code: 'WORKSPACE_TRIAL_EXPIRED' as const };
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    // A fresh notice per read, as the network gives.
+    vi.mocked(api.tenants).mockImplementation(async () => ({
+      tenants: [locked], selectionRequired: false, onboardingRequired: false,
+      notice: { title: 'Your trial has ended', message: 'Talk to us to continue.' },
+    }));
+    await tick(3000);
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    await tick(3000);
+    // Bootstrap's read and the one after publication, and no more.
+    expect(api.tenants).toHaveBeenCalledTimes(2);
+    expect(api.selectContext).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the workspace picker if automatic entry fails for a single workspace', async () => {
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    vi.mocked(api.selectContext).mockRejectedValue(new Error('Network failure'));
 
     render(<SignupPage />);
     await screen.findByText(/finishing setup/i);
@@ -767,16 +1170,148 @@ describe('a success that is not yet published', () => {
 
   it('says it is almost ready after a long wait, and slows down without giving up', async () => {
     // A fresh object per read, as the network gives; the poll re-arms on change.
-    vi.mocked(api.findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...succeeded }) as never);
 
     render(<SignupPage />);
     await screen.findByText(/finishing setup/i);
     await tick(120_000);
 
     expect(await screen.findByText(/almost ready/i)).toBeInTheDocument();
-    const calls = vi.mocked(api.findOperation).mock.calls.length;
+    const calls = vi.mocked(findOperation).mock.calls.length;
     await tick(15_000);
-    expect(api.findOperation).toHaveBeenCalledTimes(calls + 1);
+    expect(findOperation).toHaveBeenCalledTimes(calls + 1);
     expect(screen.queryByText(/choose a workspace/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The checklist reads the operation the worker checkpoints, so the poll must
+ * outlive answers that change nothing, come back empty or never return, and a
+ * single failed check is a blip rather than an error.
+ */
+describe('polling while the worker runs', () => {
+  const provisioning = {
+    id: 's1',
+    status: 'PROVISIONING' as const,
+    accountName: 'Kisumu County',
+    urlSlug: 'kisumu-county',
+    countryCode: 'KE',
+    languages: ['en'],
+    version: 4,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+  const running = {
+    id: 'op1',
+    signupId: 's1',
+    status: 'RUNNING' as const,
+    currentStep: 'ORGANIZATION',
+    completedSteps: ['TENANT_FOUNDATION'],
+    errorCode: null,
+    errorMessage: null,
+    attempt: 1,
+    lifecyclePublishedAt: null,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue(provisioning as never);
+    vi.mocked(api.submitSignup).mockResolvedValue(running as never);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  const start = async () => {
+    render(<SignupPage />);
+    expect(await screen.findByText(/setting up kisumu county/i)).toBeInTheDocument();
+  };
+
+  it('keeps polling when an answer changes nothing or comes back empty', async () => {
+    // The same object every time: a poll re-armed only on change would stop after the first.
+    vi.mocked(findOperation).mockResolvedValueOnce(null).mockResolvedValue(running as never);
+    await start();
+    await tick(3000);
+    await tick(3000);
+    await tick(3000);
+    expect(findOperation).toHaveBeenCalledTimes(3);
+  });
+
+  it('abandons a check that never answers and asks again', async () => {
+    vi.mocked(findOperation).mockImplementationOnce(
+      (_id: string, signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => signal?.addEventListener('abort', () => reject(new Error('aborted')))) as never,
+    ).mockResolvedValue(running as never);
+    await start();
+    await tick(3000);
+    expect(findOperation).toHaveBeenCalledTimes(1);
+    await tick(10_000);
+    await tick(3000);
+    expect(findOperation).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(/aborted/i)).not.toBeInTheDocument();
+  });
+
+  it('shows an error only after three failed checks in a row, and clears it once one succeeds', async () => {
+    vi.mocked(findOperation)
+      .mockRejectedValueOnce(new Error('Status check failed'))
+      .mockRejectedValueOnce(new Error('Status check failed'))
+      .mockRejectedValueOnce(new Error('Status check failed'))
+      .mockResolvedValue(running as never);
+    await start();
+    await tick(3000);
+    await tick(3000);
+    expect(screen.queryByText(/status check failed/i)).not.toBeInTheDocument();
+    await tick(3000);
+    expect(await screen.findByText(/status check failed/i)).toBeInTheDocument();
+    await tick(3000);
+    await waitFor(() => expect(screen.queryByText(/status check failed/i)).not.toBeInTheDocument());
+    expect(findOperation).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('required marks', () => {
+  /** The control a label names, and whether that label carries the red asterisk. */
+  const field = (label: RegExp) => {
+    const control = screen.getByLabelText(label);
+    const tag = document.querySelector(`label[for="${control.id}"]`);
+    return { control, marked: !!tag?.querySelector('[data-required-mark]') };
+  };
+
+  it('marks the identity a sign-up link needs', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'magic-link', label: 'Email me a sign-in link', type: 'magic_link' }],
+    });
+    render(<SignupPage />);
+    await screen.findByLabelText(/first name/i);
+    for (const label of [/first name/i, /last name/i, /email address/i]) {
+      const { control, marked } = field(label);
+      expect(marked, String(label)).toBe(true);
+      expect(control, String(label)).toBeRequired();
+    }
+  });
+
+  it('marks every account and preference field, each one required to continue', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    render(<SignupPage />);
+    await screen.findByLabelText(/account name/i);
+    for (const label of [/account name/i, /account code/i]) {
+      const { control, marked } = field(label);
+      expect(marked, String(label)).toBe(true);
+      expect(control, String(label)).toHaveAttribute('aria-required', 'true');
+    }
+
+    await completeAccountStep();
+    for (const label of [/base country/i, /timezone/i, /financial year/i, /account url/i, /mobile number/i]) {
+      const { control, marked } = field(label);
+      expect(marked, String(label)).toBe(true);
+      expect(control, String(label)).toHaveAttribute('aria-required', 'true');
+    }
+    // Languages is a row of toggles under a heading, not a labelled control.
+    expect(screen.getByText('Languages').querySelector('[data-required-mark]')).not.toBeNull();
   });
 });

@@ -158,8 +158,11 @@ twilio_whatsapp_from: "whatsapp:+14155238886"
 # needs enable_novu). Off keeps the kong.yml mock; the fixed OTP 123456 then also
 # needs `identity_dev_fixed_otp: true` (off by default, development only).
 enable_otp_services: false
-# Turbopass (OSM location autocomplete) — standalone on-box container.
+# Turbopass (Phase 2 boundary search and fetch, preconfigured boundaries) —
+# standalone on-box container. When on, the deploy builds its boundary DB for
+# turbopass_countries on the first run.
 enable_turbopass: false
+# turbopass_countries: [KE]
 
 # ── digit-integration-tests dashboards (off — not used on this box) ──
 enable_integration_tests: false
@@ -188,9 +191,8 @@ nginx_features:
   integration_tests_runner: false  # pair with enable_integration_tests_runner above
 
 # ── auth (Keycloak) ──
-# REQUIRED: every sign-in goes through Keycloak and the Identity BFF since
-# D26, and the deploy refuses `false`.
-enable_keycloak: true
+# Always deployed: every sign-in goes through Keycloak and the Identity BFF
+# since D26.
 # auth_provider and keycloak_client_id are retired (D26): leave them unset.
 digit_ui_esbuild_branch: feat/keycloak-auth-adapter
 keycloak_google_client_id: ''      # kit: CHANGE_ME — blank skips Google IdP wiring

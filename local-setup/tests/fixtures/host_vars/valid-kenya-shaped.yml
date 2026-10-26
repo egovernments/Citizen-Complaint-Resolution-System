@@ -8,7 +8,6 @@ db_fast_path_ack_data_wipe: true
 digit_ui_mode: static
 run_ci_tests: true
 auth_provider: digit
-enable_keycloak: true
 core_mobile_configs:
   countryCode: '+254'
   mobileNumberRegex: ^0?[17][0-9]{8}$

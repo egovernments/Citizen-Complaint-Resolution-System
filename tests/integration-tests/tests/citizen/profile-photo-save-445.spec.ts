@@ -6,10 +6,9 @@
  */
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
-import { BASE_URL, FIXED_OTP, generateCitizenPhone } from '../utils/env';
-
-const CITIZEN_LOGIN_URL = '/digit-ui/citizen/login';
-const CITIZEN_PROFILE_URL = '/digit-ui/citizen/user/profile';
+import { BASE_URL, generateCitizenPhone } from '../utils/env';
+import { citizenOtpLogin } from '../utils/citizen-login';
+import { surfacePath } from '../utils/identity-bff';
 
 test.describe('citizen profile — photo save round-trip #445 (JPEG)', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -38,30 +37,11 @@ test.describe('citizen profile — photo save round-trip #445 (JPEG)', () => {
       }
     });
 
-    // ============ OTP login ============
-    await page.goto(`${BASE_URL}${CITIZEN_LOGIN_URL}?cb=${Date.now()}`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2_500);
-
-    await page
-      .locator('input[type="tel"], input[type="number"]')
-      .first()
-      .pressSequentially(mobile, { delay: 80 });
-    await page.getByRole('button', { name: /get otp|continue|next/i }).first().click();
-    await page.waitForTimeout(2_500);
-
-    const otpDigits = page.locator('input[autocomplete="one-time-code" i], input[maxlength="1"]');
-    if ((await otpDigits.count()) >= 6) {
-      for (let i = 0; i < 6; i++) await otpDigits.nth(i).fill(FIXED_OTP[i]);
-    } else {
-      await page.getByRole('textbox').first().fill(FIXED_OTP);
-    }
-    await page.getByRole('button', { name: /verify|login|submit|continue/i }).first().click();
-    await page.waitForURL(/\/digit-ui\/citizen(?!\/login)/, { timeout: 25_000 });
-    await page.waitForTimeout(3_000);
+    // ============ OTP login (BFF phone OTP, tenant from the slug) ============
+    await citizenOtpLogin(page, mobile);
 
     // ============ Open Edit Profile ============
-    await page.goto(`${BASE_URL}${CITIZEN_PROFILE_URL}?cb=${Date.now()}`);
+    await page.goto(`${BASE_URL}${surfacePath('citizen', 'user/profile')}?cb=${Date.now()}`);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_500);
 

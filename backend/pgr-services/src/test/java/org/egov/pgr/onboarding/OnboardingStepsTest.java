@@ -17,6 +17,9 @@ public class OnboardingStepsTest {
     private List<Object> workflows=new ArrayList<>();
     private OnboardingFailure createFailure;
     private int lagReads; private final Map<String,Integer> lagging=new HashMap<>();
+    /** Inline mocks keep every call they record, platform-baseline payloads included, until cleared:
+     *  without this the onboarding package outgrows a 512 MB test heap. */
+    @After public void releaseMocks() { framework().clearInlineMocks(); }
     @Before @SuppressWarnings("unchecked") public void setup() throws Exception {
         client=mock(OnboardingProvisionerClient.class);when(client.mdmsSchemaSearchPath()).thenReturn("/egov-mdms-service/schema/v1/_search");when(client.mdmsSearchPath()).thenReturn("/egov-mdms-service/v2/_search");steps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
         signup=OnboardingSignup.builder().id(UUID.randomUUID()).requestedTenantId("newtown").accountName("New Town").accountCode("NEW-TOWN").urlSlug("newtown").countryCode("IN").timeZone("Asia/Kolkata").financialYearPolicy("APRIL_MARCH")
@@ -41,11 +44,17 @@ public class OnboardingStepsTest {
                 Map<String,Object> row=(Map<String,Object>)body.get("Mdms");String key=row.get("tenantId")+"|"+row.get("schemaCode")+"|"+row.get("uniqueIdentifier");rows.put(key,mapper.valueToTree(row));if(path.contains("/v2/_create/"))lagging.put(key,lagReads);writes.add("record:"+row.get("schemaCode"));return mapper.createObjectNode();
             }
             if(service.equals("hrms")) {
-                if(path.contains("_search")) { assertTrue("stock HRMS requires explicit offset",path.contains("&offset=0")); assertTrue("founder uniqueness search needs two results",path.contains("&limit=2")); return mapper.valueToTree(Map.of("Employees",employees)); }
+                if(path.contains("_search")) {
+                    assertTrue("stock HRMS requires explicit offset",path.contains("&offset="));
+                    assertFalse("HRMS drops its tenant filter for a codes search",path.contains("codes="));
+                    var page=java.util.regex.Pattern.compile("tenantId=newtown&offset=(\\d+)&limit=(\\d+)$").matcher(path);assertTrue(path,page.find());
+                    int from=Math.min(employees.size(),Integer.parseInt(page.group(1))),to=Math.min(employees.size(),from+Integer.parseInt(page.group(2)));
+                    return mapper.valueToTree(Map.of("Employees",employees.subList(from,to)));
+                }
                 assertTrue("platform prerequisites before HRMS",rows.containsKey("newtown|common-masters.Department|ONBOARDING_ADMIN"));
                 if(createFailure!=null)throw createFailure;
                 Map<String,Object> employee=((List<Map<String,Object>>)body.get("Employees")).get(0);createdUser=(Map<String,Object>)employee.get("user");
-                createdUser=new LinkedHashMap<>(createdUser);createdUser.put("uuid","founder-uuid");employees.add(mapper.valueToTree(Map.of("user",createdUser)));writes.add("hrms:create");return mapper.valueToTree(Map.of("Employees",employees));
+                createdUser=new LinkedHashMap<>(createdUser);createdUser.put("uuid","founder-uuid");var stored=new LinkedHashMap<>(employee);stored.put("user",createdUser);employees.add(mapper.valueToTree(stored));writes.add("hrms:create");return mapper.valueToTree(Map.of("Employees",employees));
             }
             writes.add(service+":"+path);
             if(service.equals("workflow")) {
@@ -79,14 +88,103 @@ public class OnboardingStepsTest {
         assertEquals("founder-uuid",op.getFounderDigitUuid());assertEquals("9876543210",createdUser.get("mobileNumber"));assertEquals("+91",createdUser.get("countryCode"));
         assertFalse(createdUser.containsKey("emailId"));assertFalse(createdUser.containsKey("password"));
         assertTrue(mapper.valueToTree(createdUser.get("roles")).toString().contains("SUPERUSER"));
+        boolean csr=false;for(var r:mapper.valueToTree(createdUser.get("roles")))csr|="CSR".equals(r.path("code").asText())&&"newtown".equals(r.path("tenantId").asText());
+        assertTrue("every employee files complaints (#2239)",csr);
         assertEquals("New Town",rows.get("newtown|tenant.tenants|newtown").path("data").path("name").asText());
         assertEquals(2,rows.get("newtown|common-masters.StateInfo|newtown").path("data").path("languages").size());
         assertEquals(336,rows.get("newtown|identity.invitationPolicy|default").path("data").path("invitationExpiryHours").asInt());
-        // Only en_IN carries the whole rainmaker-common pack, so only en_IN gets the tenant-name key.
+        // hi_IN carries no rainmaker-common pack, so of en and hi only en_IN gets the tenant-name key.
         verify(client,times(1)).write(any(),eq("localization"),eq("/localization/messages/v1/_upsert"),argThat(b->b.toString().contains("New Town")));
         verify(client,never()).read(eq("mdms"),anyString(),argThat(b->!b.toString().contains("tenantId=newtown")));
         var order=inOrder(client);order.verify(client).read(eq("hrms"),contains("_search"),anyMap());order.verify(client).write(any(),eq("hrms"),contains("_create"),anyMap());
         steps.perform("FOUNDER_HRMS",signup,op,progress);verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
+    }
+    /** #2456: the founder's row reads like any employee's: the first EMP_ code, which HRMS also makes their username. */
+    @Test public void founderGetsTheFirstEmployeeCodeAsCodeAndUsername(){
+        signup.setFounderName("Anita  Wanjiru-Otieno ");prerequisites();steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("EMP_0001",createdUser.get("userName"));assertEquals("EMP_0001",employees.get(0).path("code").asText());
+        verify(client,atLeastOnce()).read(eq("hrms"),eq("/egov-hrms/employees/_search?tenantId=newtown&offset=0&limit=100"),anyMap());
+        verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
+    }
+    /** A taken EMP_0001 username is the step's own founder whose employee row HRMS hasn't saved yet: retried, then adopted. */
+    @Test public void aTakenFounderUsernameIsRetriedUntilTheFoundersRowIsSaved(){
+        prerequisites();createFailure=new OnboardingFailure("ERR_HRMS_USER_EXIST_USERNAME",false);
+        OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress));
+        assertEquals("FOUNDER_NOT_VISIBLE",failure.getCode());assertTrue(failure.isRetryable());assertNull(op.getFounderDigitUuid());
+        createFailure=null;employees.add(employee("newtown","EMP_0001",OnboardingSteps.FOUNDER_DESIGNATION,"founder-uuid"));
+        steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("founder-uuid",op.getFounderDigitUuid());verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
+    }
+    /** HRMS lists the taken mobile and username in either order; any taken username is the founder in flight. A taken mobile alone is not. */
+    @Test public void aTakenUsernameAfterATakenMobileIsStillRetried(){
+        prerequisites();createFailure=new OnboardingFailure("ERR_HRMS_USER_EXIST_MOB",false,400,List.of("ERR_HRMS_USER_EXIST_MOB","ERR_HRMS_USER_EXIST_USERNAME"));
+        OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress));
+        assertEquals("FOUNDER_NOT_VISIBLE",failure.getCode());assertTrue(failure.isRetryable());
+        createFailure=new OnboardingFailure("ERR_HRMS_USER_EXIST_MOB",false,400,List.of("ERR_HRMS_USER_EXIST_MOB"));
+        failure=assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress));
+        assertEquals("TENANT_ADMIN_ACCOUNT_REJECTED",failure.getCode());assertFalse(failure.isRetryable());
+    }
+    /** Once the step has its founder, the uuid identifies them, so a designation they changed later doesn't matter. */
+    @Test public void aKnownFounderWhoChangedTheirDesignationIsStillTheFounder(){
+        prerequisites();op.setFounderDigitUuid("founder-uuid");
+        employees.add(employee("newtown","EMP_0001","CLERK","founder-uuid"));
+        steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("founder-uuid",op.getFounderDigitUuid());verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
+    }
+    /** A founder made under the old FOUNDER_ code is found, not made again; an EMP_0001 that isn't the founder is never adopted. */
+    @Test public void founderSearchFindsTheOldCodeAndRefusesSomeoneElse(){
+        prerequisites();
+        employees.add(employee("newtown",OnboardingSteps.legacyFounderCode(signup.getId()),"CLERK","legacy-uuid"));
+        steps.perform("FOUNDER_HRMS",signup,op,progress);assertEquals("legacy-uuid",op.getFounderDigitUuid());
+        employees.clear();op.setFounderDigitUuid(null);
+        employees.add(employee("newtown","EMP_0001","CLERK","someone-else"));
+        assertEquals("FOUNDER_AMBIGUOUS",assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress)).getCode());
+        assertNull(op.getFounderDigitUuid());verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
+    }
+    private JsonNode employee(String tenant,String code,String designation,String uuid){
+        return mapper.valueToTree(Map.of("tenantId",tenant,"code",code,"assignments",List.of(Map.of("designation",designation)),"user",Map.of("uuid",uuid)));
+    }
+    /**
+     * HRMS answers a codes search in a tenant with no matching username with every tenant's row for the code,
+     * so other workspaces' founders (an inactive one too) and rows that name no tenant are never adopted
+     * and never make the founder ambiguous.
+     */
+    @Test public void anotherWorkspacesFounderIsNeverAdoptedOrCounted(){
+        prerequisites();
+        employees.add(employee("othertown","EMP_0001",OnboardingSteps.FOUNDER_DESIGNATION,"foreign-founder"));
+        employees.add(mapper.valueToTree(Map.of("code","EMP_0001","assignments",List.of(Map.of("designation",OnboardingSteps.FOUNDER_DESIGNATION)),"user",Map.of("uuid","no-tenant"))));
+        steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("founder-uuid",op.getFounderDigitUuid());verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
+        employees.removeIf(e->"founder-uuid".equals(e.path("user").path("uuid").asText()));op.setFounderDigitUuid(null);
+        employees.add(employee("thirdtown","EMP_0001",OnboardingSteps.FOUNDER_DESIGNATION,"other-founder"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode)employees.get(employees.size()-1)).put("isActive",false);
+        employees.add(employee("fourthtown","EMP_0001",OnboardingSteps.FOUNDER_DESIGNATION,"fourth-founder"));
+        steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("founder-uuid",op.getFounderDigitUuid());verify(client,times(2)).write(any(),eq("hrms"),contains("_create"),anyMap());
+        verify(client,never()).read(eq("hrms"),contains("codes="),anyMap());
+    }
+    /** A workspace from before #2456 can hold its old FOUNDER_ row and an EMP_0001 its admin added: the founder's row wins, not ambiguity. */
+    @Test public void theBoundOrOldFounderRowWinsOverAnAdminAddedEmp0001(){
+        prerequisites();
+        employees.add(employee("newtown","EMP_0001","CLERK","admin-added"));
+        employees.add(employee("newtown",OnboardingSteps.legacyFounderCode(signup.getId()),"CLERK","legacy-uuid"));
+        steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("legacy-uuid",op.getFounderDigitUuid());
+        employees.add(0,employee("newtown","EMP_0001",OnboardingSteps.FOUNDER_DESIGNATION,"bound-uuid"));op.setFounderDigitUuid("bound-uuid");
+        steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("bound-uuid",op.getFounderDigitUuid());verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
+        employees.removeIf(e->"legacy-uuid".equals(e.path("user").path("uuid").asText())||"bound-uuid".equals(e.path("user").path("uuid").asText()));
+        employees.add(employee("newtown","EMP_0001","CLERK","second-admin-added"));op.setFounderDigitUuid(null);
+        assertEquals("two rows and neither the founder's","FOUNDER_AMBIGUOUS",assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress)).getCode());
+    }
+    /** The workspace's employees are read a page at a time, so a founder past the first page is still found. */
+    @Test public void theFoundersRowIsFoundOnALaterPage(){
+        prerequisites();
+        for(int i=2;i<=101;i++)employees.add(employee("newtown",String.format("EMP_%04d",i),"CLERK","staff-"+i));
+        employees.add(employee("newtown","EMP_0001",OnboardingSteps.FOUNDER_DESIGNATION,"own-founder"));
+        steps.perform("FOUNDER_HRMS",signup,op,progress);
+        assertEquals("own-founder",op.getFounderDigitUuid());verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
+        verify(client).read(eq("hrms"),eq("/egov-hrms/employees/_search?tenantId=newtown&offset=100&limit=100"),anyMap());
     }
     @Test public void baselineCreatesTenantPgrWorkflowOnceWithSeededRoles(){
         prerequisites();assertEquals(1,workflows.size());JsonNode bs=mapper.valueToTree(workflows.get(0));
@@ -114,6 +212,7 @@ public class OnboardingStepsTest {
         assertEquals("Asia/Kolkata",rows.get("newtown|dss.DashboardConfig|default").path("data").path("timeZone").asText());
         JsonNode tenantRecord=rows.get("newtown|tenant.tenants|newtown").path("data");
         assertEquals("Asia/Kolkata",tenantRecord.path("timeZone").asText());assertEquals("APRIL_MARCH",tenantRecord.path("financialYearPolicy").asText());
+        assertEquals("IN",tenantRecord.path("country").asText());
         assertEquals("NEW-TOWN-PGR-[cy:yyyy-MM-dd]-[SEQ_EG_PGR_ID]",rows.get("newtown|common-masters.IdFormat|pgr.servicerequestid").path("data").path("format").asText());
         assertTrue(rows.keySet().stream().allMatch(key->key.startsWith("newtown|")));
     }
@@ -297,15 +396,16 @@ public class OnboardingStepsTest {
         // Kenya: en is en_IN, not en_KE; Swahili has no pack, keeps the country code and is served from default.
         assertEquals(Map.of("stateInfo",List.of("en_IN=en","sw_KE=sw"),"packs",Set.of("en_IN"),"names",Set.of("en_IN")),localeOutcome("KE",List.of("en","sw")));
         // Mozambique: pt is pt_BR (the committed pack), not pt_MZ; en_IN still leads although pt was chosen first.
-        assertEquals(Map.of("stateInfo",List.of("en_IN=en","pt_BR=pt"),"packs",Set.of("en_IN","pt_BR"),"names",Set.of("en_IN")),localeOutcome("MZ",List.of("pt","en")));
-        // Ethiopia without English: en_IN is still added first; fr_FR gets its configurator pack but no name key.
-        assertEquals(Map.of("stateInfo",List.of("en_IN=en","fr_FR=fr","am_ET=am"),"packs",Set.of("en_IN","fr_FR"),"names",Set.of("en_IN")),localeOutcome("ET",List.of("fr","am")));
+        // pt_BR carries the whole rainmaker-common pack, so it gets the name key too.
+        assertEquals(Map.of("stateInfo",List.of("en_IN=en","pt_BR=pt"),"packs",Set.of("en_IN","pt_BR"),"names",Set.of("en_IN","pt_BR")),localeOutcome("MZ",List.of("pt","en")));
+        // Ethiopia without English: en_IN is still added first; fr_FR gets its packs and the name key, Amharic neither.
+        assertEquals(Map.of("stateInfo",List.of("en_IN=en","fr_FR=fr","am_ET=am"),"packs",Set.of("en_IN","fr_FR"),"names",Set.of("en_IN","fr_FR")),localeOutcome("ET",List.of("fr","am")));
     }
     @Test public void explicitRegionIsKeptAndNormalized() {
         assertEquals("pt_BR",steps.locale("pt-br","MZ"));assertEquals("en_KE",steps.locale("en-ke","KE"));
         assertEquals("en_IN",steps.locale("en","KE"));assertEquals("sw_KE",steps.locale("sw","ke"));
-        assertTrue(steps.seedsTenantNameModule("en_IN"));
-        for(String locale:List.of("hi_IN","fr_FR","pt_BR","en_KE","sw_KE"))assertFalse(locale,steps.seedsTenantNameModule(locale));
+        for(String locale:List.of("en_IN","fr_FR","pt_BR"))assertTrue(locale,steps.seedsTenantNameModule(locale));
+        for(String locale:List.of("hi_IN","en_KE","sw_KE"))assertFalse(locale,steps.seedsTenantNameModule(locale));
     }
     @Test public void localizationPacksAreTenantNeutral() throws Exception {
         var forbidden=java.util.regex.Pattern.compile("(^|_)(PG|PB|STATEA|CITYA)(_|$)|^TENANT_TENANTS_|^CS_SELECT_CITY_(?!CHOOSE_CITY$)|^SUN\\d+_|^DDR_",java.util.regex.Pattern.CASE_INSENSITIVE);
@@ -320,6 +420,8 @@ public class OnboardingStepsTest {
                 assertTrue("duplicate "+code,codes.add(code));
             }
         }
-        assertEquals(7,new PlatformBaseline(mapper).localizationPacks("en_IN").get("rainmaker-common").findValuesAsText("code").stream().filter(c->c.startsWith("CORE_IDENTITY_OTP_")).count());
+        // Every OTP message the sign-in screens use (identityMessages.js; digit-ui-esbuild/tests/localizationPacks.test.js
+        // holds the packs to the UI): the 7 the deployment used to upsert at its root only, and 5 added by #2445.
+        assertEquals(12,new PlatformBaseline(mapper).localizationPacks("en_IN").get("rainmaker-common").findValuesAsText("code").stream().filter(c->c.startsWith("CORE_IDENTITY_OTP_")).count());
     }
 }

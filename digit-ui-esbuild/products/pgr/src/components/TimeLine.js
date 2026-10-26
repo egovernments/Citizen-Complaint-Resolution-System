@@ -2,6 +2,9 @@ import { Card, CardSubHeader, CheckPoint, ConnectingCheckPoints, GreyOutText, Lo
 import React, { Fragment, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { LOCALIZATION_KEY } from "../constants/Localization";
+import { formatLocaleDate } from "../utils/localeDate";
+import { complainantFiler } from "../utils/filedBy";
+import { translateOr } from "../utils/selectPlaceholder";
 import PendingAtLME from "./timelineInstances/pendingAtLme";
 import PendingForAssignment from "./timelineInstances/PendingForAssignment";
 import PendingForReassignment from "./timelineInstances/PendingForReassignment";
@@ -90,6 +93,14 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
     });
   }, [timeline]);
 
+  // When the account that filed is not the complainant (the WhatsApp bot's service
+  // account, an employee filing for a citizen), the "Complaint filed" row shows the
+  // complainant instead (#2503). The APPLY row itself (PENDINGFORASSIGNMENT) shows no person.
+  const filingRowPerson = (status, assigner) =>
+    (status === "COMPLAINT_FILED" &&
+      complainantFiler(complaintDetails?.service, assigner, translateOr(t, "ACCESSCONTROL_ROLES_ROLES_CITIZEN", "Citizen"))) ||
+    assigner;
+
   const getCommentsInCustomChildComponent = ({ comment, thumbnailsToShow, auditDetails, assigner, status }) => {
     const captionDetails = {
       date: auditDetails?.lastModified,
@@ -138,7 +149,7 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
             ComplainMaxIdleTime={ComplainMaxIdleTime}
             rating={index === 0 ? rating : undefined}
             serviceRequestId={serviceRequestId}
-            reopenDate={Digit.DateUtils.ConvertTimestampToDate(auditDetails.lastModifiedTime)}
+            reopenDate={formatLocaleDate(auditDetails.lastModifiedTime)}
             customChild={getCommentsInCustomChildComponent({ comment, thumbnailsToShow, auditDetails, assigner })}
           />
         );
@@ -153,7 +164,7 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
             ComplainMaxIdleTime={ComplainMaxIdleTime}
             rating={index === 0 ? rating : undefined}
             serviceRequestId={serviceRequestId}
-            reopenDate={Digit.DateUtils.ConvertTimestampToDate(auditDetails.lastModifiedTime)}
+            reopenDate={formatLocaleDate(auditDetails.lastModifiedTime)}
             customChild={getCommentsInCustomChildComponent({ comment, thumbnailsToShow, auditDetails, assigner })}
           />
         );
@@ -188,6 +199,7 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
       {timeline && totalTimelineLength > 0 ? (
         <ConnectingCheckPoints>
           {timeline.map(({ status, caption, auditDetails, timeLineActions, performedAction, wfComment: comment, thumbnailsToShow, assigner }, index, array) => {
+            assigner = filingRowPerson(status, assigner);
             return getCheckPoint({ status, caption, auditDetails, timeLineActions, index, array, performedAction, comment, thumbnailsToShow, assigner, totalTimelineLength });
           })}
         </ConnectingCheckPoints>

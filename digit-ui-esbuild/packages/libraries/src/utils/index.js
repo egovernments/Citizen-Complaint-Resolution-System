@@ -14,6 +14,7 @@ import { iconRender } from "./iconRender";
 import {getFieldIdName} from "./field";
 import { DEFAULT_MOBILE_PATTERN } from "../constants/mobileValidation";
 import { legacyMultiRootTenantEnabled, mdmsAppId, rebaseAppUrl } from "../services/tenant/tenantRoute";
+import { clearLocalStorage } from "../services/atoms/Utils/deviceStorage";
 
 const GetParamFromUrl = (key, fallback, search) => {
   if (typeof window !== "undefined") {
@@ -577,5 +578,6 @@ export default {
   transformURL,
   mdmsAppId,
   rebaseAppUrl,
-  getFieldIdName
+  getFieldIdName,
+  clearLocalStorage
 };

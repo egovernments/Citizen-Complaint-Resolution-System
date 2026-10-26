@@ -7,7 +7,9 @@ country-level root, when too few rows got a parent (MIN_PARENT_LINKED, default
 Official sets (skipped when OFFICIAL_SOURCES=none): a country with no usable
 official set is a WARNING and stays Overture-only; exits 1 when no requested
 country got one (an outage, not one weak dataset) or when an official row below
-the country points at a parent that isn't there. Prints a summary either way.
+the country points at a parent that isn't there. Official rows without a name,
+or whose geometry isn't a polygon, are a WARNING: the configurator skips both.
+Prints a summary either way.
 """
 import json
 import os
@@ -80,6 +82,18 @@ if official_wanted:
             ).fetchone()[0]
             if broken:
                 problems.append(f'{c}: {broken} {src} row(s) point at a missing parent')
+            unnamed, not_polygon = conn.execute(
+                "SELECT COALESCE(SUM(name IS NULL OR TRIM(name) = ''), 0), "
+                "COALESCE(SUM(geometry NOT LIKE '{\"type\":\"Polygon\"%' AND geometry NOT LIKE '{\"type\":\"MultiPolygon\"%'), 0) "
+                'FROM boundaries WHERE country = ? AND source = ? AND official = 1',
+                (c, src),
+            ).fetchone()
+            # The configurator skips unnamed areas and drops non-polygon ones, so
+            # either quietly shrinks what an operator can onboard.
+            if unnamed:
+                warnings.append(f'{c}: {unnamed:,} {src} row(s) have no name; the configurator skips them')
+            if not_polygon:
+                warnings.append(f'{c}: {not_polygon:,} {src} row(s) are not polygons; the configurator drops them')
         if not with_official:
             # Nothing at all: an outage (HDX / geoBoundaries unreachable), not one weak dataset.
             problems.append('no requested country got an official set')

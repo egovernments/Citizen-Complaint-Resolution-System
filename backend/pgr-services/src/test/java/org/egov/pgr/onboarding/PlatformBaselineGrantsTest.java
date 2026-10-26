@@ -15,7 +15,8 @@ public class PlatformBaselineGrantsTest {
     // (configurator/src/api/config.ts) + "/" + schema code, as used by mdmsService.create/update/
     // setActive/upsertMapConfig from configurator/src/onboarding/** (brandingApi.ts,
     // complaints/complaintsApi.ts, departments/mastersApi.ts, geography/BoundaryImport.tsx).
-    // configurator/src/identity/workspace.ts (workspace settings) writes identity.invitationPolicy.
+    // configurator/src/identity/workspace.ts (workspace settings) writes identity.invitationPolicy;
+    // the Public Dashboard screen (mdmsService.upsertDashboardConfig) writes dss.DashboardConfig.
     // Keep in sync when a setup step writes a new master.
     private static final List<String> WORKSPACE_SETUP_MDMS_WRITES = List.of(
             "/mdms-v2/v2/_update/tenant.tenants",
@@ -26,7 +27,8 @@ public class PlatformBaselineGrantsTest {
             "/mdms-v2/v2/_create/common-masters.Designation", "/mdms-v2/v2/_update/common-masters.Designation",
             "/mdms-v2/v2/_create/RAINMAKER-PGR.MapConfig", "/mdms-v2/v2/_update/RAINMAKER-PGR.MapConfig",
             "/mdms-v2/v2/_create/CMS-BOUNDARY.HierarchySchema",
-            "/mdms-v2/v2/_create/identity.invitationPolicy", "/mdms-v2/v2/_update/identity.invitationPolicy");
+            "/mdms-v2/v2/_create/identity.invitationPolicy", "/mdms-v2/v2/_update/identity.invitationPolicy",
+            "/mdms-v2/v2/_create/dss.DashboardConfig", "/mdms-v2/v2/_update/dss.DashboardConfig");
 
     @Test public void everyWorkspaceSetupMdmsWriteIsGrantedToAFounderRole() throws Exception {
         var seed = new PlatformBaseline(new ObjectMapper());
@@ -78,8 +80,10 @@ public class PlatformBaselineGrantsTest {
     private static final Pattern PATH = Pattern.compile("['\"`](/(?:user|mdms-v2|egov-[a-z-]+|boundary-service|localization|filestore|pgr-services|access|inbox)(?:/[A-Za-z0-9_.-]+)+)['\"`]");
 
     @Test public void everyConfiguratorCallIsOpenAtKongOrGrantedToAFounderRole() throws Exception {
-        Path repo = Paths.get("").toAbsolutePath().getParent().getParent();
-        org.junit.Assume.assumeTrue("configurator sources not present", Files.isDirectory(repo.resolve("configurator/src")));
+        // In the image build (build/maven/Dockerfile) the module sits at /app, which has no grandparent.
+        Path module = Paths.get("").toAbsolutePath();
+        Path repo = module.getParent() == null ? null : module.getParent().getParent();
+        org.junit.Assume.assumeTrue("configurator sources not present", repo != null && Files.isDirectory(repo.resolve("configurator/src")));
         String kong = Files.readString(repo.resolve("local-setup/kong/kong.yml"));
         Set<String> open = new HashSet<>(); Matcher m = Pattern.compile("\\[\"(/[^\"]+)\"\\]=true").matcher(kong); while (m.find()) open.add(m.group(1));
         Matcher ex = Pattern.compile("p == \"(/[^\"]+)\"").matcher(kong.substring(kong.indexOf("local RBAC_EXEMPT"), kong.indexOf("local RBAC_EXEMPT") + 4000)); while (ex.find()) open.add(ex.group(1));

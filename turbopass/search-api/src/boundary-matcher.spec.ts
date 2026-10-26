@@ -108,6 +108,22 @@ describe('BoundaryIndex.search ranking', () => {
   it('honours limit', () => {
     expect(ids('Delhi', 'substring', 2)).toEqual(['dl', 'nb-dl-1']);
   });
+
+  it('keeps one country before applying the limit', () => {
+    // "i" ranks India first; with limit 1 and no country, no Mozambican place
+    // makes the window, so filtering afterwards would leave nothing.
+    const top = index.search('i', 'substring', 1);
+    expect(top.map((h) => h.country)).toEqual(['IN']);
+    expect(index.search('i', 'substring', 1, 0, 'MZ').map((h) => h.id)).toEqual(
+      ['mz'],
+    );
+    expect(
+      index
+        .search('i', 'substring', 10, 0, 'MZ')
+        .every((h) => h.country === 'MZ'),
+    ).toBe(true);
+    expect(index.search('Delhi', 'substring', 10, 0, 'MZ')).toEqual([]);
+  });
 });
 
 describe('BoundaryIndex.search fuzzy', () => {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useOnboardingT } from './i18n';
 
 type Icon = ComponentType<{ className?: string }>;
 
@@ -39,6 +40,7 @@ export function OptionCard({
   /** Why the option can't be used on this deployment; shown instead of the action. */
   disabledReason?: string;
 }) {
+  const t = useOnboardingT();
   const soon = action === null;
   return (
     <div className={`flex flex-col rounded-lg border border-border bg-card p-4 ${soon || disabledReason ? 'opacity-75' : ''}`}>
@@ -51,7 +53,7 @@ export function OptionCard({
         {disabledReason ? (
           <p className="text-xs leading-5 text-muted-foreground" data-testid="option-unavailable">{disabledReason}</p>
         ) : soon ? (
-          <span className="inline-flex h-9 items-center px-3 text-sm font-medium text-primary/70">Coming soon</span>
+          <span className="inline-flex h-9 items-center px-3 text-sm font-medium text-primary/70">{t('step.coming_soon', 'Coming soon')}</span>
         ) : (
           <Button variant="outline" size="sm" onClick={onClick} className="h-9 gap-1.5 px-3">
             {action}
@@ -70,7 +72,7 @@ export function OptionCard({
 export function StepActions({
   onBack,
   onContinue,
-  continueLabel = 'Save and continue',
+  continueLabel,
   busy = false,
   disabled = false,
   hint,
@@ -82,18 +84,19 @@ export function StepActions({
   disabled?: boolean;
   hint?: string;
 }) {
+  const t = useOnboardingT();
   const [pending, setPending] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-3 pt-2">
       {onBack && (
         <Button variant="ghost" onClick={onBack} className="h-10 gap-1.5 px-3 text-primary hover:text-primary">
           <ArrowLeft className="w-4 h-4" />
-          Back
+          {t('step.back', 'Back')}
         </Button>
       )}
       <Button onClick={async () => { setPending(true); try { await onContinue(); } finally { setPending(false); } }} disabled={busy || pending || disabled} className="h-10 gap-2 px-5">
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-        {continueLabel}
+        {continueLabel ?? t('step.save_continue', 'Save and continue')}
       </Button>
       {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
     </div>

@@ -2,6 +2,7 @@ import { expect, type BrowserContext, type CDPSession, type Page, type Request, 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getDigitToken } from '../utils/auth';
+import { ADMIN_USER, ADMIN_PASS } from '../utils/env';
 
 export type Principal = 'full' | 'department' | 'public';
 
@@ -88,8 +89,11 @@ export async function installSession(context: BrowserContext, principal: Princip
 
   const baseURL = required('BASE_URL');
   const tenant = required('DIGIT_TENANT');
-  const username = required('DIGIT_USERNAME');
-  const password = required('DIGIT_PASSWORD');
+  // Fall back to env.ts defaults only for the 'full' principal (ADMIN-capable).
+  // Department benchmarks need a real employee account — silently logging in as
+  // ADMIN and labelling results "department" corrupts benchmark data.
+  const username = process.env.DIGIT_USERNAME ?? (principal === 'full' ? ADMIN_USER : required('DIGIT_USERNAME'));
+  const password = process.env.DIGIT_PASSWORD ?? (principal === 'full' ? ADMIN_PASS : required('DIGIT_PASSWORD'));
   const authTenant = process.env.DASHBOARD_AUTH_TENANT || rootTenant(tenant);
   const token = await getDigitToken({
     baseURL,
@@ -263,7 +267,7 @@ export class NetworkRecorder {
     const request = response.request();
     const call = this.ensureCall(request);
     call.status = response.status();
-    const length = Number((await response.allHeaders().catch(() => ({})))['content-length'] || 0);
+    const length = Number((await response.allHeaders().catch((): Record<string, string> => ({})))['content-length'] || 0);
     if (Number.isFinite(length)) call.responseBytes = length;
     if (response.ok() && /\/analytics(?:\/public)?\/packs(?:\?|$)/.test(response.url())) {
       response.json().then((payload) => this.packPayloads.push(payload)).catch(() => {});

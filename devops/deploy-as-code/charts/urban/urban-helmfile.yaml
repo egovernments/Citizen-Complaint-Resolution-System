@@ -27,8 +27,12 @@ releases:
     installed: true
     <<: *default
 
+  # Boundary management (bulk boundary upload/generation from Excel): not used
+  # by this deployment, so it is disabled. Re-enable by setting installed: true
+  # here and gatus.checks.boundaryManagement: true in
+  # monitoring/gatus/values.yaml.
   - name: egov-bndry-mgmnt # Replace with your desired namespace
-    installed: true
+    installed: false
     <<: *default
 
   - name: configurator # DIGIT Studio tenant onboarding/management SPA

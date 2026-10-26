@@ -14,7 +14,7 @@ const EventDetails = () => {
   const { data: EventsData, isLoading: EventsDataLoading } = Digit.Hooks.useEvents({ tenantId, variant: "events" });
 
   if (!Digit.UserService?.getUser()?.access_token) {
-    localStorage.clear();
+    Digit.Utils.clearLocalStorage();
     sessionStorage.clear();
     return <Redirect to={{ pathname: `/${window?.contextPath}/citizen/login`, state: { from: location.pathname + location.search } }} />;
   }

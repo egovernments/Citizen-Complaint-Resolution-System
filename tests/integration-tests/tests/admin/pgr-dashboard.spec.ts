@@ -5,7 +5,8 @@
  * flag is baked on, the retained Chart.js dashboard surface.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { loginConfigurator, CONFIGURATOR_BASE } from '../utils/configurator-auth';
+import { CONFIGURATOR_BASE } from '../utils/configurator-auth';
+import { hookOr } from '../utils/configurator-hooks';
 
 type CcrsBuildFlags = {
   legacyPgrDashboardEnabled: boolean;
@@ -45,11 +46,10 @@ async function openEnabledLegacyDashboard(page: Page): Promise<void> {
   test.skip(!flags.legacyPgrDashboardEnabled, 'Legacy PGR dashboard is disabled in this build');
 }
 
+// The chromium project's storageState (auth.setup) already holds the
+// Configurator session. A per-test loginConfigurator timed out: the Keycloak
+// SSO cookie skips the sign-in form it waits for.
 test.describe('PGR Dashboard', () => {
-  test.beforeEach(async ({ page }) => {
-    await loginConfigurator(page);
-  });
-
   test('route and navigation follow the baked feature flag', {
     annotation: {
       type: 'description',
@@ -76,7 +76,7 @@ test.describe('PGR Dashboard', () => {
       description: `Smoke check that /manage/pgr-dashboard renders with the expected H1 heading. If the route is misconfigured or the lazy-loaded chunk fails, the page wouldn't have an H1 at all — this catches that wide failure mode.
 
 Steps:
-1. loginConfigurator (beforeEach).
+1. Configurator session from the setup project's storageState.
 2. Navigate to /manage/pgr-dashboard, wait for networkidle.
 3. Locate h1; assert visible within 10s.
 4. Assert the heading contains "PGR Dashboard".
@@ -97,7 +97,7 @@ First test in a series of seven that walk the dashboard's UI surface.`,
       description: `Asserts the dashboard overview card surfaces the three core PGR KPIs: Total Complaints, Closed Complaints, Completion Rate. Catches a regression where a metric gets dropped from the layout (or its label gets renamed without updating the test alongside).
 
 Steps:
-1. loginConfigurator (beforeEach).
+1. Configurator session from the setup project's storageState.
 2. Navigate to /manage/pgr-dashboard, wait for networkidle.
 3. For each KPI label in ['Total Complaints', 'Closed Complaints', 'Completion Rate'], assert text=label is visible within 5s.
 
@@ -123,7 +123,7 @@ Pairs with the "KPI values show numbers" test below — together they confirm th
       description: `Asserts Chart.js renders all 8 expected canvases on the dashboard: Cumulative Closed (line), By Source (line), Complaints Status (stacked bar), By Status (doughnut), By Channel (doughnut), By Department (doughnut), Citizens (line), Top Complaints (horizontal bar). Catches the case where a chart fails to render (data fetch error, Chart.js init throws, etc).
 
 Steps:
-1. loginConfigurator (beforeEach).
+1. Configurator session from the setup project's storageState.
 2. Navigate to /manage/pgr-dashboard, wait for networkidle.
 3. Wait for any 'canvas' element within 10s, then 1s for Chart.js animation to settle.
 4. Assert canvas locator has count === 8 within 10s.
@@ -156,7 +156,7 @@ If the canvas count drifts, update both the dashboard layout and this test with 
       description: `Companion to the canvas-count test: each of the 9 expected section titles (DSS Overview + 8 chart titles) must be visible. Catches a regression where a chart canvas renders but its surrounding section/heading gets dropped (or vice versa — title without canvas).
 
 Steps:
-1. loginConfigurator (beforeEach).
+1. Configurator session from the setup project's storageState.
 2. Navigate to /manage/pgr-dashboard, wait for networkidle.
 3. For each title in ['DSS Overview','Cumulative Closed Complaints','Complaints by Source','Complaints Status','By Status','By Channel','By Department','Citizens','Top Complaints'], assert text=title is visible within 5s.
 
@@ -188,7 +188,7 @@ Note 9 titles vs 8 canvases — DSS Overview is a section header without its own
       description: `Asserts the sidebar has a button labelled "PGR Dashboard" AND that it carries the active styling (the bg-primary class) when the user is on the dashboard route. Catches a regression where the route-active highlight stops firing — the link still renders but doesn't visually indicate the current page.
 
 Steps:
-1. loginConfigurator (beforeEach).
+1. Configurator session from the setup project's storageState.
 2. Navigate to /manage/pgr-dashboard, wait for networkidle.
 3. Locate button:hasText("PGR Dashboard"); assert visible within 5s.
 4. Assert the button has a class matching /bg-primary/ (active styling).
@@ -212,7 +212,7 @@ Loose regex on the class lets the design system rename specific Tailwind variant
       description: `Asserts each of the three KPI value tiles renders a number-shaped value (digits, optionally with commas/decimals/percentage symbol). Catches regressions where the value placeholder is "N/A", "—", or empty because the underlying analytics endpoint failed silently.
 
 Steps:
-1. loginConfigurator (beforeEach).
+1. Configurator session from the setup project's storageState.
 2. Navigate to /manage/pgr-dashboard, wait for networkidle.
 3. Locate .text-3xl.font-bold elements (the KPI value tiles).
 4. Assert count >= 3.
@@ -237,15 +237,15 @@ Loose regex tolerates "1,234", "0", "12.5%" — anything that's actually numeric
   test('breakdown table with 4 tabs', {
     annotation: {
       type: 'description',
-      description: `Asserts the "Status by Tenant" breakdown panel renders with all four tab triggers (Boundary, Department, Complaint Type, Channel), the Boundary tab is selected by default with a visible table, and switching to Department also renders a table inside the active tabpanel.
+      description: `Asserts the "Status by Tenant" breakdown panel renders with all four tab triggers (Boundary, Department, Complaint Category — "Complaint Type" before #2243 — and Channel), the Boundary tab is selected by default with a visible table, and switching to Department also renders a table inside the active tabpanel.
 
 Steps:
-1. loginConfigurator (beforeEach).
+1. Configurator session from the setup project's storageState.
 2. Navigate to /manage/pgr-dashboard, wait for networkidle.
 3. Assert "Status by Tenant" text is visible within 5s.
-4. For each tab in ['Boundary','Department','Complaint Type','Channel'], assert [role="tab"]:has-text(<tab>) is visible.
+4. For each tab (boundary, department, type, channel), assert its pgr-breakdown-tab-<value> hook is visible; builds without the hook fall back to a [role="tab"] with that label (Boundary, Department, Complaint Category|Type, Channel).
 5. Assert the first <table> element is visible (the Boundary tab is the default).
-6. Click the Department tab.
+6. Click the Department tab (same hook-or-label lookup).
 7. Assert a [role="tabpanel"] table is visible within 5s.
 
 Confirms tab-switching actually swaps the rendered table — not just the tab indicator.`,
@@ -256,17 +256,27 @@ Confirms tab-switching actually swaps the rendered table — not just the tab in
     // Should show "Status by Tenant" section
     await expect(page.locator('text=Status by Tenant').first()).toBeVisible({ timeout: 5_000 });
 
-    // 4 tab triggers should be present
-    const tabs = ['Boundary', 'Department', 'Complaint Type', 'Channel'];
-    for (const tab of tabs) {
-      await expect(page.locator(`[role="tab"]:has-text("${tab}")`)).toBeVisible({ timeout: 5_000 });
+    // 4 tab triggers should be present. Each is found by its
+    // pgr-breakdown-tab-<value> hook (#2352), keyed by the tab value; builds
+    // without it fall back to the label. #2243 renamed "Complaint Type" →
+    // "Complaint Category", so that fallback accepts both.
+    const tab = (value: string, label: RegExp) =>
+      hookOr(page, `pgr-breakdown-tab-${value}`, page.locator('[role="tab"]', { hasText: label }));
+    const tabs: Array<[string, RegExp]> = [
+      ['boundary', /Boundary/i],
+      ['department', /Department/i],
+      ['type', /Complaint (Type|Category)/i],
+      ['channel', /Channel/i],
+    ];
+    for (const [value, label] of tabs) {
+      await expect(tab(value, label)).toBeVisible({ timeout: 5_000 });
     }
 
     // Default tab (Boundary) should show a table
     await expect(page.locator('table').first()).toBeVisible({ timeout: 5_000 });
 
     // Click Department tab and verify table updates
-    await page.locator('[role="tab"]:has-text("Department")').click();
+    await tab('department', /Department/i).click();
     await expect(page.locator('[role="tabpanel"] table').first()).toBeVisible({ timeout: 5_000 });
   });
 });

@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, LayoutGrid, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Check, ChevronRight, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useApp } from '../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
-import { ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
 import { NavRow, SectionLabel, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
 import { railClasses } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
-import { AccountMenu, HelpButton, ThemeSwitcher } from '@/components/layout/HeaderControls';
-import { ONBOARDING_STEPS } from './steps';
-import { completedCount, resumePath, stepForPath, stepStatus, type StepStatus } from './progress';
+import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
+import { HOME_PATH, ONBOARDING_STEPS } from './steps';
+import { completedCount, resumePath, resumeStep, stepForPath, stepStatus, type StepStatus } from './progress';
 import { initialsOf, useOrganisation } from './organisation';
-import { trackEvent } from '@/lib/telemetry';
+import { track } from '@/lib/analytics';
+import { useOnboardingT } from './i18n';
+import { DocsButton, DocsRail } from './docs/DocsRail';
+import type { DocsSection } from './docs/docsLinks';
 
 /**
  * The step marks in place of icons: a tick once a step is done, a filled dot
@@ -36,10 +38,15 @@ function StepMark({ status }: { status: StepStatus }) {
   return <span className="w-4 h-4 rounded-full border-2 border-muted-foreground/40 flex-shrink-0" />;
 }
 
-const STATUS_WORD: Record<StepStatus, string> = { done: 'done', 'in-progress': 'to do', locked: 'locked' };
 
 export default function OnboardingLayout() {
-  const { state, logout, setMode, toggleHelp } = useApp();
+  const { state, logout, toggleHelp } = useApp();
+  const t = useOnboardingT();
+  const statusWord: Record<StepStatus, string> = {
+    done: t('layout.status.done', 'done'),
+    'in-progress': t('layout.status.to_do', 'to do'),
+    locked: t('layout.status.locked', 'locked'),
+  };
   const navigate = useNavigate();
   const location = useLocation();
   const { canEditResource } = useMastersCapability();
@@ -58,23 +65,21 @@ export default function OnboardingLayout() {
   // than from a failed submit deep in the step.
   const currentStepEditable = !currentStep || canEditResource(currentStep.master);
   const groups = [...new Set(ONBOARDING_STEPS.map((step) => step.group))];
+  const nextStep = resumeStep(completed);
 
   // A step opened, from the rail, a Back or continue, or a resume.
   const openedStep = currentStepLocked ? undefined : currentStep;
+  const docsSection: DocsSection | undefined = location.pathname === HOME_PATH ? 'home' : openedStep?.id;
   useEffect(() => {
-    if (openedStep) trackEvent('phase_start', { phase: openedStep.number, step: openedStep.id, tenant: state.tenant });
+    if (openedStep) track('onboarding:step_view', { step: openedStep.id });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per step opened, not per tenant re-render
   }, [openedStep?.id]);
 
   const handleLogout = async () => {
     try { await logout(); navigate('/login'); }
-    catch (error) { window.alert(error instanceof Error ? error.message : 'Sign-out failed. Please retry.'); }
+    catch (error) { window.alert(error instanceof Error ? error.message : t('layout.sign_out_failed', 'Sign-out failed. Please retry.')); }
   };
 
-  const handleGoToManagement = () => {
-    setMode('management');
-    navigate('/manage');
-  };
 
   const openMobileNav = () => {
     setCollapsed(false);
@@ -100,65 +105,84 @@ export default function OnboardingLayout() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-5 text-foreground truncate" title={orgName}>{orgName}</p>
-                  <p className="text-xs leading-4 text-muted-foreground truncate">Complaints Management</p>
+                  <p className="text-xs leading-4 text-muted-foreground break-words">{t('app.header.product_name', 'Complaint Management System')}</p>
                 </div>
               </>
             )}
-            <RailCloseButton label="Close menu" onClick={drawer.closeDrawer} />
+            <RailCloseButton label={t('app.nav.close_menu', 'Close menu')} onClick={drawer.closeDrawer} />
             <button
               type="button"
               onClick={() => setCollapsed((value) => !value)}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={collapsed ? t('app.nav.expand_sidebar', 'Expand sidebar') : t('app.nav.collapse_sidebar', 'Collapse sidebar')}
               className="hidden md:inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-secondary hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
             </button>
           </div>
 
+          {/* Where setup stands, as one compact card (the #2358 mock-up): what to do
+              next, how far along, and a click anywhere into that step. The title button
+              stretches over the card, so the progressbar stays outside it and keeps its role. */}
           {!collapsed && (
-            <button
-              type="button"
-              onClick={() => navigate(resumePath(completed))}
-              className="w-full text-left rounded border border-border bg-card p-3 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            <section
+              aria-labelledby="setup-card-next"
+              className="relative rounded-lg border border-primary/20 bg-primary/5 p-3 transition-colors hover:bg-primary/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
             >
-              <span className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-foreground">Let's set up your organisation</span>
-                <ChevronRight aria-hidden="true" className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              </span>
+              <button
+                type="button"
+                onClick={() => navigate(nextStep.path)}
+                className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none before:absolute before:inset-0 before:rounded-lg"
+              >
+                <span id="setup-card-next" className="text-sm font-semibold text-primary">
+                  {done === 0
+                    ? t('layout.setup_account', 'Let’s set up your account')
+                    : t('layout.card.next', 'Next step: %{step}', { step: t(`steps.${nextStep.id}`, nextStep.label) })}
+                </span>
+                <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
+              </button>
               <span
                 role="progressbar"
-                aria-label="Setup progress"
+                aria-label={t('layout.setup_progress', 'Setup progress')}
                 aria-valuemin={0}
                 aria-valuemax={total}
                 aria-valuenow={done}
-                className="mt-2.5 block h-1.5 rounded-full bg-muted overflow-hidden"
+                className="mt-3 block h-1.5 overflow-hidden rounded-full bg-primary/15"
               >
                 <span className="block h-full rounded-full bg-primary transition-all" style={{ width: `${(done / total) * 100}%` }} />
               </span>
-              <span className="mt-2 block text-xs text-muted-foreground">
-                {done} of {total} completed
+              <span className="mt-2 block text-xs text-primary/80">
+                {t('layout.completed_count', '%{done} of %{total} completed', { done, total })}
               </span>
-            </button>
+            </section>
           )}
         </div>
 
         {/* Steps */}
-        <nav aria-label="Setup steps" className="flex-1 py-2 overflow-y-auto">
+        <nav aria-label={t('layout.setup_steps', 'Setup steps')} className="flex-1 py-2 overflow-y-auto">
+          <div className="pb-2">
+            <NavRow
+              icon={House}
+              label={t('layout.home', 'Home')}
+              active={location.pathname === HOME_PATH}
+              collapsed={collapsed}
+              onClick={() => navigate(HOME_PATH)}
+            />
+          </div>
           {groups.map((group) => (
             <div key={group} className="pb-4">
-              {!collapsed && <SectionLabel>{group}</SectionLabel>}
+              {!collapsed && <SectionLabel>{t(`groups.${group.toLowerCase()}`, group)}</SectionLabel>}
               {ONBOARDING_STEPS.filter((step) => step.group === group).map((step) => {
                 const status = stepStatus(step, completed);
                 return (
                   <NavRow
                     key={step.id}
                     leading={<StepMark status={status} />}
-                    label={step.label}
+                    label={t(`steps.${step.id}`, step.label)}
                     active={currentStep?.id === step.id}
                     collapsed={collapsed}
                     disabled={status === 'locked'}
                     onClick={() => navigate(step.path)}
-                    trailing={<span className="sr-only">, {STATUS_WORD[status]}</span>}
+                    trailing={<span className="sr-only">, {statusWord[status]}</span>}
                   />
                 );
               })}
@@ -166,32 +190,29 @@ export default function OnboardingLayout() {
           ))}
         </nav>
 
-        {/* Footer: the way out while switching is allowed, then "Powered by DIGIT" */}
-        {!ONBOARDING_GATE_ENABLED && (
-          <div className="border-t border-border py-2">
-            <NavRow icon={LayoutGrid} label="Go to Management" active={false} collapsed={collapsed} onClick={handleGoToManagement} />
-          </div>
-        )}
         <RailPoweredBy collapsed={collapsed} />
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="sticky top-0 z-30 h-14 flex-shrink-0 bg-card border-b border-border pl-4 pr-4 sm:pr-6 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <RailMenuButton open={drawer.open} label="Open menu" onClick={openMobileNav} />
+            <RailMenuButton open={drawer.open} label={t('app.nav.open_menu', 'Open menu')} onClick={openMobileNav} />
             <h1 className="text-base font-semibold text-foreground truncate">
-              <span className="hidden sm:inline">Complaint Management System </span>Onboarding
+              <span className="hidden sm:inline">{t('layout.title_prefix', 'Complaint Management System')} </span>
+              {t('layout.title', 'Onboarding')}
             </h1>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-            <HelpButton label="Help" onClick={toggleHelp} />
+            {docsSection && <DocsButton section={docsSection} />}
+            <HelpButton label={t('app.header.help', 'Help')} onClick={toggleHelp} />
+            <LocaleSwitcher />
             <ThemeSwitcher />
             <AccountMenu
               name={state.user?.name}
               tenant={state.tenant}
-              accountLabel="Account"
-              docsLabel="Open DIGIT Docs"
-              signOutLabel="Sign out"
+              accountLabel={t('app.header.account', 'Account')}
+              docsLabel={t('app.nav.open_digit_docs', 'Open DIGIT Docs')}
+              signOutLabel={t('app.header.sign_out', 'Sign out')}
               onSignOut={handleLogout}
             />
           </div>
@@ -202,8 +223,11 @@ export default function OnboardingLayout() {
             {!currentStepEditable && (
               <Alert className="mb-4">
                 <AlertDescription>
-                  Your role has view-only access to {currentStep?.label}. You can review this step, but creating or
-                  editing records here is restricted to roles with write access (e.g. MDMS_ADMIN).
+                  {t(
+                    'layout.view_only',
+                    'Your role has view-only access to %{step}. You can review this step, but creating or editing records here is restricted to roles with write access (e.g. MDMS_ADMIN).',
+                    { step: currentStep ? t(`steps.${currentStep.id}`, currentStep.label) : '' },
+                  )}
                 </AlertDescription>
               </Alert>
             )}
@@ -212,6 +236,8 @@ export default function OnboardingLayout() {
         </main>
 
       </div>
+
+      {docsSection && <DocsRail section={docsSection} />}
     </div>
   );
 }

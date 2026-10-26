@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -107,13 +108,112 @@ class ProviderAvailabilityUnpinnedTest {
         assertEquals(ProviderAvailability.Status.AVAILABLE, availability.checkUnpinned("SMS").status());
     }
 
+    /**
+     * #2203 + #2342: in a workspace's own Novu organization the deployment-wide WhatsApp pin is never
+     * sent (it names a shared-account integration), so the check must not judge by it either: an
+     * integration of the workspace that happens to carry the same identifier is not what Novu uses.
+     */
     @Test
-    void withTheFlagOn_itNeverAsksNovu() {
+    void inAWorkspacesOwnAccount_theSharedWhatsappEnvPinIsNotApplied() {
+        config.setWhatsappIntegrationId("jasmin-aa");
+        integration("jasmin-aa", "jasmin", "sms", true, false);
+        integration("twilio-whatsapp-acme", "twilio", "sms", true, true);
+        org.egov.novubridge.service.account.NovuAccount acme =
+                new org.egov.novubridge.service.account.NovuAccount("acme", "org-acme", "env-acme", "key-acme");
+        when(novuClient.listIntegrations(acme)).thenAnswer(inv -> NovuClient.NovuResponse.builder()
+                .statusCode(200).response(Map.of("data", integrations)).build());
+
+        // The shared account: the pin names a worker provider the worker lacks.
+        assertEquals(ProviderAvailability.Status.WORKER_PROVIDER_MISSING, availability.checkUnpinned("WHATSAPP").status());
+        // The workspace: Novu sends through its primary WhatsApp integration, which is fine.
+        ProviderAvailability workspace = new ProviderAvailability(novuClient, config, acme);
+        assertEquals(ProviderAvailability.Status.AVAILABLE, workspace.checkUnpinned("WHATSAPP").status());
+        verify(novuClient).listIntegrations(acme);
+    }
+
+    @Test
+    void withTheFlagOn_aWorkerPrimaryIsFine_andNovuIsListedOncePerTtl() {
         config.setDigitWorkerProviders(true);
         integration("jasmin-aa", "jasmin", "sms", true, true);
 
+        for (int i = 0; i < 5; i++) {
+            assertEquals(ProviderAvailability.Status.AVAILABLE, availability.checkUnpinned("SMS").status());
+        }
+        verify(novuClient, times(1)).listIntegrations();
+    }
+
+    // Field finding (dev deployment, 2026-10-07): SMS switched on with no provider selected and no
+    // Novu integration at all. With the stock flag (true) every message was recorded SENT while
+    // Novu failed each job with "Subscriber does not have an active integration".
+    @Test
+    void withTheFlagOn_anUnpinnedChannelWithNoNovuIntegration_isRefused() {
+        config.setDigitWorkerProviders(true);
+
+        ProviderAvailability.Result result = availability.checkUnpinned("SMS");
+
+        assertEquals(ProviderAvailability.Status.NO_ACTIVE_INTEGRATION, result.status());
+        assertFalse(result.usable(), "nothing can deliver it, so it must not be triggered");
+        assertTrue(result.message().contains("no provider selected"), result.message());
+        assertTrue(result.message().contains("no active integration"), result.message());
+        assertNull(result.identifier());
+    }
+
+    @Test
+    void anInactiveIntegration_orOneOnAnotherNovuChannel_doesNotCount() {
+        config.setDigitWorkerProviders(true);
+        integration("twilio-sms-aa", "twilio", "sms", false, true);       // disabled: Novu never picks it
+        integration("smtp-bb", "nodemailer", "email", true, true);         // delivers email only
+
+        assertEquals(ProviderAvailability.Status.NO_ACTIVE_INTEGRATION, availability.checkUnpinned("SMS").status());
+        assertEquals(ProviderAvailability.Status.AVAILABLE, availability.checkUnpinned("EMAIL").status());
+        assertEquals(ProviderAvailability.Status.NO_ACTIVE_INTEGRATION, availability.checkUnpinned("WHATSAPP").status());
+    }
+
+    @Test
+    void anIntegrationKnownToDeliverAnotherDigitChannel_doesNotStandIn() {
+        config.setDigitWorkerProviders(true);
+        // Both on Novu's sms channel, each positively one DIGIT channel by its catalog marker.
+        integration("twilio-whatsapp-aa", "twilio", "sms", true, true);
+        integration("smscountry-bb", "smscountry", "sms", true, false);
+
         assertEquals(ProviderAvailability.Status.AVAILABLE, availability.checkUnpinned("SMS").status());
-        verify(novuClient, never()).listIntegrations();
+        assertEquals(ProviderAvailability.Status.AVAILABLE, availability.checkUnpinned("WHATSAPP").status());
+
+        integrations.clear();
+        availability.invalidate();
+        integration("twilio-whatsapp-aa", "twilio", "sms", true, true);
+        ProviderAvailability.Result sms = availability.checkUnpinned("SMS");
+        assertEquals(ProviderAvailability.Status.NO_ACTIVE_INTEGRATION, sms.status());
+        assertTrue(sms.message().contains("deliver another channel"), sms.message());
+        assertEquals(ProviderAvailability.Status.AVAILABLE, availability.checkUnpinned("WHATSAPP").status());
+
+        integrations.clear();
+        availability.invalidate();
+        integration("jasmin-aa", "jasmin", "sms", true, true);   // SMS-only provider
+        assertEquals(ProviderAvailability.Status.NO_ACTIVE_INTEGRATION, availability.checkUnpinned("WHATSAPP").status());
+    }
+
+    @Test
+    void anIntegrationTheBridgeCannotIdentify_isGivenTheBenefitOfTheDoubt() {
+        config.setDigitWorkerProviders(true);
+        integration("generic-sms-aa", "generic-sms", "sms", true, false);   // hand-made in Novu, no marker
+
+        assertEquals(ProviderAvailability.Status.AVAILABLE, availability.checkUnpinned("SMS").status());
+        assertEquals(ProviderAvailability.Status.AVAILABLE, availability.checkUnpinned("WHATSAPP").status());
+    }
+
+    @Test
+    void anEnvPinNovuCannotUse_isJudgedLikeNoPin() {
+        config.setDigitWorkerProviders(true);
+        config.setWhatsappIntegrationId("whatsapp-gone");
+
+        assertEquals(ProviderAvailability.Status.NO_ACTIVE_INTEGRATION, availability.checkUnpinned("WHATSAPP").status(),
+                "the env var names nothing Novu has and nothing else delivers WhatsApp");
+
+        integrations.clear();
+        availability.invalidate();
+        integration("whatsapp-gone", "twilio", "sms", true, false);
+        assertEquals(ProviderAvailability.Status.AVAILABLE, availability.checkUnpinned("WHATSAPP").status());
     }
 
     @Test

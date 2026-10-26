@@ -28,33 +28,33 @@ public class WorkspaceServiceTest {
         assertNull(result.get("Probes"));assertNull(result.get("Rename"));
         Map<?,?> workspace=(Map<?,?>)result.get("Workspace");assertEquals(true,workspace.get("legacy"));
         assertEquals("DONE",workspace.get("status"));assertNull(workspace.get("updatedAt"));
-        verify(gateway,never()).probes(any());verify(repository,never()).materializeLegacy(any());
+        verify(gateway,never()).probes(any(),any());verify(repository,never()).materializeLegacy(any());
     }
     @Test public void doneRequiresProbeAndOnlyBrandingCanSkip(){
         when(repository.find("test",true)).thenReturn(Optional.of(row));
-        when(gateway.probe("test","DEPARTMENTS")).thenReturn(false);
+        when(gateway.probe("test","DEPARTMENTS",null)).thenReturn(false);
         assertEquals("WORKSPACE_PROBE_INCOMPLETE",assertThrows(ResponseStatusException.class,()->service.update(request("DEPARTMENTS","DONE",1))).getReason());
         assertEquals("WORKSPACE_INVALID_STATE",assertThrows(ResponseStatusException.class,()->service.update(request("DEPARTMENTS","SKIPPED",1))).getReason());
-        verify(repository,never()).update(any(),anyLong(),any());verify(gateway,never()).probes(any());
-        verify(gateway,never()).probe(eq("test"),argThat(step->!"DEPARTMENTS".equals(step)));
+        verify(repository,never()).update(any(),anyLong(),any());verify(gateway,never()).probes(any(),any());
+        verify(gateway,never()).probe(eq("test"),argThat(step->!"DEPARTMENTS".equals(step)),any());
     }
     @Test public void doneProbesOnlyItsOwnStep(){
-        when(repository.find("test",true)).thenReturn(Optional.of(row));when(gateway.probe("test","GEOGRAPHY")).thenReturn(true);
+        when(repository.find("test",true)).thenReturn(Optional.of(row));when(gateway.probe("test","GEOGRAPHY",null)).thenReturn(true);
         Map<String,Object> result=service.update(request("GEOGRAPHY","DONE",1));
         assertEquals(Map.of("GEOGRAPHY",true),result.get("Probes"));
-        verify(gateway).probe("test","GEOGRAPHY");verify(gateway,never()).probes(any());
+        verify(gateway).probe("test","GEOGRAPHY",null);verify(gateway,never()).probes(any(),any());
     }
     @Test public void inProgressAndSkippedWritesNeverProbeSoDependencyOutagesCannotBlockThem(){
         when(repository.find("test",true)).thenReturn(Optional.of(row));
-        when(gateway.probe(any(),any())).thenThrow(new OnboardingFailure("HRMS_DOWN",true));when(gateway.probes(any())).thenThrow(new OnboardingFailure("HRMS_DOWN",true));
+        when(gateway.probe(any(),any(),any())).thenThrow(new OnboardingFailure("HRMS_DOWN",true));when(gateway.probes(any(),any())).thenThrow(new OnboardingFailure("HRMS_DOWN",true));
         assertNull(service.update(request("EMPLOYEES","IN_PROGRESS",1)).get("Probes"));
         assertNull(service.update(request("BRANDING","SKIPPED",1)).get("Probes"));
-        verify(gateway,never()).probe(any(),any());verify(gateway,never()).probes(any());
+        verify(gateway,never()).probe(any(),any(),any());verify(gateway,never()).probes(any(),any());
     }
     @Test public void staleVersionCannotWriteOrProbe(){
         when(repository.find("test",true)).thenReturn(Optional.of(row));
         assertEquals("WORKSPACE_VERSION_CONFLICT",assertThrows(ResponseStatusException.class,()->service.update(request("BRANDING","SKIPPED",0))).getReason());
-        verify(gateway,never()).probes(any());
+        verify(gateway,never()).probes(any(),any());
     }
     @Test public void overallDoneRequiresEveryStepDoneOrBrandingSkipped(){
         row.put("steps",WorkspaceRepository.initialSteps("DONE",1L,"admin"));

@@ -9,10 +9,10 @@ Read this before deploying 2.20 over a 2.12 deployment. First-time setup is
 |---|---|---|
 | Configuration masters | `RAINMAKER-PGR.NotificationRouting` / `.NotificationTemplate` / `.NotificationProviderTemplate` / `.NotificationChannel`, keyed `(businessService, action, toState)`, bare audiences | `NOTIFICATIONS.EventCatalogue` / `.Routing` / `.Template` / `.ProviderTemplate` / `.Channel` at the state tenant, keyed on `eventName`, audiences `ACTOR:` / `ROLE:` / `EVENT_RECIPIENTS` / `A\|B` |
 | What pgr-services publishes | Pre-rendered envelopes, one per recipient × channel, behind `pgr.notification.config.driven` | One thin event per workflow transition on `complaints.domain.events`; novu-bridge routes, resolves and renders. No flag |
-| Login OTP SMS | `egov-notification-sms` (or `otp-publisher`) | novu-bridge consumes `egov.core.notification.sms`; same channel policy, provider and log as other SMS |
+| Login OTP SMS | `egov-notification-sms` (or `otp-publisher`) | Citizen sign-in moved to the Identity BFF, whose codes do not go through notifications yet ([§4](#4-digits-older-otp-service-sends-through-novu-bridge)). Where a deployment still uses DIGIT's older OTP service, novu-bridge consumes `egov.core.notification.sms`: same channel policy, provider and log as other SMS |
 | Providers | Novu dashboard / deploy-time env | Configurator → Notifications → Providers (credentials stored in Novu) |
 | Channel on/off | `novu_bridge_channels_enabled` | Channel rows (Configurator → Notifications → Channels). The env list is a fallback for a tenant with no rows; the upgrade turns it into rows ([step 3](#channel-rows-what-happens-to-an-existing-tenant)) |
-| Images | pgr-services and novu-bridge pinned separately | pgr-services, pgr-services-db, novu-bridge and novu-bridge-db share one tag ([step 1](#1-take-all-four-images-from-one-build)) |
+| Images | pgr-services and novu-bridge pinned separately | pgr-services, pgr-services-db, novu-bridge and novu-bridge-db share one tag, and digit-user-preferences-service with its -db image follows it ([step 1](#1-take-all-four-images-from-one-build)) |
 
 ## Before you upgrade
 
@@ -24,8 +24,10 @@ Read this before deploying 2.20 over a 2.12 deployment. First-time setup is
 - [ ] Remove the flags and properties listed under [Removed settings](#removed-settings) from
       your host_vars, Compose overlays and Helm values. Move any bridge setting you added to
       `/opt/digit/.env` by hand into host_vars ([step 5](#5-bridge-settings-now-come-from-host_vars)).
-- [ ] If you use real OTP login, confirm `enable_novu: true` (the deploy refuses
-      `enable_otp_services: true` without it).
+- [ ] If the deployment still uses DIGIT's older OTP service (`enable_otp_services: true`),
+      confirm `enable_novu: true` (the deploy refuses it without).
+- [ ] If the Novu admin's password was ever changed by hand (in the Novu dashboard), pin it
+      before upgrading: see [Per-tenant notification accounts](#per-tenant-notification-accounts).
 - [ ] Kubernetes: keep `deploymentStrategy.type: Recreate` on `pgr-services` and upgrade
       novu-bridge first ([step 2](#2-new-novu-bridge-before-new-pgr-services)).
 - [ ] Book a quiet period per tenant for moving its notification configuration
@@ -46,24 +48,31 @@ with **one** tag:
 | Helm | `global.notificationStackTag` in `devops/deploy-as-code/charts/environments/env.yaml` | empty → the charts' own defaults, `nightly-develop` |
 | `enable-notifications.sh` | `NOTIFICATION_STACK_TAG` | `nightly-develop` |
 
-`nightly-develop` is the rolling tag the develop nightly publishes for all four
+`digit-user-preferences-service` and `digit-user-preferences-service-db` follow the same tag.
+Every 2.12 tag of that image is the retired Go service, which 2.20's compose and Helm
+definitions cannot start, so a deployment that pins the stack to an immutable tag must not leave
+them on a rolling default of their own. The tag therefore has to exist for all six.
+
+`nightly-develop` is the rolling tag the develop nightly publishes for all six
 (`egovio/<image>:nightly-develop`, plus an immutable `develop-<sha8>`; see
 `build/NIGHTLY-BUILDS.md`). It is the default only until the first release after this stack
 merges pins an immutable `develop-<sha8>` in its place ([Release
 step](../../../../build/NIGHTLY-BUILDS.md#release-step-pin-the-notification-stack)). It moves **per
 image**: when one image's build fails, or two runs overlap, it points at different commits for
-different images. **On a live deployment pin an immutable tag that exists for all four** — a
+different images. **On a live deployment pin an immutable tag that exists for all six** — a
 release tag, or a `develop-<sha8>` you have checked on Docker Hub for `pgr-services`,
-`pgr-services-db`, `novu-bridge` and `novu-bridge-db`. The Ansible deploy warns while any image it
+`pgr-services-db`, `novu-bridge`, `novu-bridge-db`, `digit-user-preferences-service` and
+`digit-user-preferences-service-db`. The Ansible deploy warns while any image it
 runs resolves to a rolling tag; Helm pulls a rolling tag `Always` and an immutable one
 `IfNotPresent`.
 
 A per-image override (`pgr_services_image`, `pgr_services_db_image`, `novu_bridge_image`,
-`novu_bridge_db_image`; Helm `<chart>.image.tag` / `<chart>.initContainers.dbMigration.image.tag`)
-wins over the shared tag for that one image, so pin all four to the same build or none. The
-deploy warns when host_vars pin only some of the images it runs: `pgr_services_image` +
-`pgr_services_db_image` on every box (they run with notifications off too), all four when
-`enable_novu` is on.
+`novu_bridge_db_image`, `digit_user_preferences_service_image`,
+`digit_user_preferences_service_db_image`; Helm `<chart>.image.tag` /
+`<chart>.initContainers.dbMigration.image.tag`) wins over the shared tag for that one image, so
+pin all six to the same build or none. The deploy warns when host_vars pin only some of the
+images it runs: `pgr_services_image` + `pgr_services_db_image` on every box (they run with
+notifications off too), all six when `enable_novu` is on.
 
 ## 2. New novu-bridge before new pgr-services
 
@@ -117,7 +126,8 @@ the same as a fresh install. The deploy tells them apart by the complaints filed
 counted in the database: with any (or when they cannot be counted) it writes nothing, reports
 `NOTIFICATIONS-STATE: … state=none` and `notif-seed — ACTION: this tenant has no notification
 configuration`, and **the tenant sends no complaint notifications** (`SKIPPED / NB_NO_ROUTING`;
-login OTPs are not affected) until you review and install the defaults:
+codes from DIGIT's older OTP service, where a deployment still uses it, are not affected) until you
+review and install the defaults:
 
 ```bash
 python3 migrate-notifications.py plan  --tenant mycity --adopt-defaults
@@ -183,6 +193,15 @@ python3 migrate-notifications.py apply --tenant mycity --yes --report apply-myci
 
 ### Who logs in
 
+An admin with no DIGIT password — a self-serve workspace's founder signs in through Keycloak
+only — authenticates with a token instead: `export DIGIT_ACCESS_TOKEN=<that admin's DIGIT access
+token>` (where to find it: [setup-guide §8.6](./setup-guide.md#86-new-workspaces)), and
+`DIGIT_USERNAME` / `DIGIT_PASSWORD` are then ignored. The token is checked with egov-user's own
+introspection (`/user/_details`) before anything else — `REFUSED: the supplied DIGIT_ACCESS_TOKEN was
+refused (HTTP 401)` when it has expired, or `(HTTP 200 without a user)` — and never printed. Keep
+`DIGIT_LOGIN_TENANT` (or `--login-tenant`) at that admin's root: it still decides who may create a
+provider, below.
+
 Log in **at the root you migrate** (`DIGIT_LOGIN_TENANT=<root>`, default: the first root): its
 MDMS rows are written with that admin's roles, and novu-bridge previews a tenant's events
 (`_resolve`, `_dry-run` without `send`) for an admin of the event tenant's own state root. That is
@@ -236,6 +255,20 @@ Read every `customised` and `partial` tenant. The copy is the tenant's own rows 
 conversion the bridge already applies to them (`notifications_convert.py` mirrors
 `LegacyMasterAdapter`), so what it sends today is what it sends after. Inactive rows stay
 inactive. Default rows it never had are not added.
+
+The shipped default **wording** changed in 2.20: no `EGOVS` / `ई-गव फाउंडेशन` signature, no
+`DIGIT:` subject prefix, the assignee addressed as "Dear {emp_name}" instead of "Shri …", and no
+`{ao_designation} - {ulb}` line (it shipped as literal `{ulb}` on a tenant without districts). A
+2.12 tenant still on the 2.12 default wording therefore plans as `customised`, its only
+differences being `body` / `subject` against the new defaults. That is expected: `apply` copies
+the tenant's own rows, old wording included — nothing is rewritten. Edit the templates on
+**Configure** afterwards if you want the new wording.
+
+**India (DLT):** a tenant that gets the new default wording — a fresh install, a self-serve
+workspace, `--adopt-defaults`, or templates edited to it — sends text that no longer matches SMS
+templates registered against the 2.12 wording. DLT matches on content and drops an unregistered
+message after accepting it, so re-register those templates first
+([setup-guide §8.4](./setup-guide.md#84-sms-india-dlt-registration)).
 
 ### Apply
 
@@ -334,6 +367,93 @@ Run `plan --all` again: every tenant you applied is `migrated` with nothing to c
 `/config/source` ([below](#where-is-a-tenant)) reports `NOTIFICATIONS.Routing` for it. Then send
 one real complaint transition per migrated tenant and check Logs.
 
+### Access-control actions
+
+The deploy's access phase gives the Notifications screens and the provider, `/config/source` and
+`/dispatch/_resolve` endpoints their 17 access-control actions (`NOTIF_ACTIONS` in
+`local-setup/scripts/seed-notifications.py`) and grants them to the roles the tenant has. On a
+fresh or `full-dump.sql` install they are actions 4623–4639. The seed matches each one **by URL**:
+
+- an action that already has the URL is reused, whatever its id, so a re-run creates nothing and
+  restarts nothing. A deactivated one stays deactivated: its grants are written, but requests to it
+  stay refused, and the seed says so (`ACL-ACTION-INACTIVE`). The deploy goes on, unless its own
+  data phase needs that action, in which case it stops with a 403 (exit 3) naming it;
+- before creating one, the seed looks its URL up in MDMS exactly, so an action it already has (say,
+  one an operator switched off) is found and never created a second time;
+- a missing one is created at its usual id when that id is free;
+- when the usual id is already another endpoint's at the tenant (a 2.12 tenant whose own actions
+  table outgrew the dump), it is created at the next free id above 9000000 and the deploy prints
+  `ACL-ID-COLLISION: action 4630 is <that endpoint> at <state>, not /mdms-v2/v2/_create/NOTIFICATIONS.Routing
+  — creating it as action 9000008`. This is not a failure; the role-actions go to the new id. No seed
+  that creates actions by a fixed id uses ids above 9000000 (the platform baseline uses
+  900000–901017). If MDMS answers "duplicate" for an id the seed thought was free, the seed looks
+  that id up: it is used if it holds the same URL, and otherwise the next id is tried.
+
+egov-accesscontrol only sees new or changed role-actions after a restart. The deploy restarts it
+whenever the seed prints `ACL-CHANGED`; by hand, see [setup-guide.md §8.2](./setup-guide.md#82-whatsapp-server-side).
+
+The queries below use `<state>` for the state tenant the seed ran at (`ke`, `mz`, `pg`, ...).
+Replace it before running them; a query left with another deployment's tenant returns no rows and
+looks like a clean result.
+
+**Lines that fail the step at that root:**
+
+- `ACL-ID-TAKEN: no free action id for <url> at <state> after 5 attempts` (exit 2). Every id tried
+  was held by another URL that the seed's read did not show. Nothing was granted for that URL. Look
+  at what holds the ids the line before it names:
+
+  ```sql
+  select uniqueidentifier, isactive, data->>'url' from eg_mdms_data
+  where tenantid = '<state>' and schemacode = 'ACCESSCONTROL-ACTIONS-TEST.actions-test'
+    and data->>'id' = '<id>';
+  ```
+
+  Then create the notification action yourself (an `ACCESSCONTROL-ACTIONS-TEST.actions-test` row
+  with that `url` at an unused id above 9000000) and re-run `--tags notifications`: the seed finds
+  it by URL and grants it.
+- `ACL-ACTION-INACTIVE` followed by a 403 in the data phase (exit 3): the data phase needs that
+  action, and it is switched off. Reactivate it to let the deploy finish.
+
+**Lines to review** (the deploy shows them under `notif-seed — WARNING: access-control rows to review`):
+
+- `ACL-STALE-GRANT: <role> is granted action 4635 at <state>, which is <another endpoint>, not
+  <notification url>`. That id holds another endpoint, and the grant has exactly the shape this
+  seed writes. A 2.20 build older than
+  [#2603](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/2603) wrote such
+  grants: it created the 17 actions at 4623–4639 regardless, counted "already present" where an id
+  was another endpoint's, and granted `MDMS_ADMIN` / `ACCOUNT_ADMIN` / `SUPERUSER` (plus `CSR` /
+  `GRO` / `PGR_LME` on 4625 and 4638) to that endpoint. The step then failed with a 403 on
+  `RAINMAKER-PGR.NotificationChannel`. The seed never removes a grant, because the tenant may have
+  made the same one itself. If the role should not reach that endpoint, deactivate the grant
+  (`isActive: false` through `/mdms-v2/v2/_update/ACCESSCONTROL-ROLEACTIONS.roleactions`), then
+  restart egov-accesscontrol. To see every grant on those ids with the URL it opens:
+
+  ```sql
+  select r.data->>'rolecode' as role, r.data->>'actionid' as action, a.data->>'url' as url,
+         r.isactive, to_timestamp(r.createdtime / 1000) as created
+  from eg_mdms_data r
+  left join eg_mdms_data a on a.tenantid = r.tenantid
+    and a.schemacode = 'ACCESSCONTROL-ACTIONS-TEST.actions-test' and a.data->>'id' = r.data->>'actionid'
+  where r.tenantid = '<state>' and r.schemacode = 'ACCESSCONTROL-ROLEACTIONS.roleactions'
+    and r.data->>'actionid' in (select generate_series(4623, 4639)::text)
+  order by r.createdtime desc;
+  ```
+
+- `ACL-BASELINE-ID-RETURNED: action 901001 at <state> is /localization/messages/cache-bust again`.
+  One of the 17 actions sat on an id the platform baseline defines for another endpoint. The
+  baseline is `backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json`, which
+  digit-mcp's tenant bootstrap applies at `state_root` on every deploy. It skips an id that is
+  already taken and grants its roles to whatever holds it. The first build of this change put a
+  tenant's actions on 901001–901017 that way. The seed moves the action above 9000000, keeps every
+  role that reached it, and hands the id back in an order that never widens access: it deactivates
+  the grants on that id that the baseline does not make, rewrites the row to the baseline's own
+  action, and makes the baseline's grants on it active.
+- `ACL-BASELINE-ID-KEPT`: the same, but a step was refused or failed (it needs
+  `/mdms-v2/v2/_update/ACCESSCONTROL-ACTIONS-TEST.actions-test` and
+  `.../ACCESSCONTROL-ROLEACTIONS.roleactions`, which `MDMS_ADMIN` holds). The notification
+  action already works from its new id. Re-run `--tags notifications` as a user that holds them, or
+  make the same changes by hand in that order.
+
 ### Channel rows: what happens to an existing tenant
 
 Channel rows switch delivery on and off the moment they exist: a tenant with **any** active
@@ -375,7 +495,15 @@ There is no setting that chooses old or new — the data does. Check with any of
   filter on Logs): `PRERENDERED` = a finished envelope from a producer, `RESOLVED` = a thin event
   resolved by the bridge. After the cutover, complaint rows should read `RESOLVED`.
 
-## 4. OTP moves to novu-bridge
+## 4. DIGIT's older OTP service sends through novu-bridge
+
+Citizen sign-in in 2.20 goes through the Identity BFF: the deploy refuses `enable_keycloak: false`,
+and Kong answers 404 for the older OTP endpoints (`/user-otp/v1/_send` and the rest) unless
+`identity_legacy_user_endpoints` reopens them. The BFF sends its codes with its own sender (`http`
+or `log`), not through notifications; sending them through novu-bridge
+([`messages/_send`](./tenant-accounts.md#sending-a-code-messages_send)) is a follow-up. This
+section is about **DIGIT's older OTP service** (`egov-otp` + `user-otp`), where a deployment still
+uses it: its SMS moves from the retired senders to novu-bridge.
 
 - `egov-notification-sms`, `otp-publisher` and `novu-bridge-endpoint` are gone from Compose.
   `up -d` does not stop containers of services it no longer knows, and a leftover
@@ -408,6 +536,11 @@ There is no setting that chooses old or new — the data does. Check with any of
   subscribed (above), so none published meanwhile is lost. An OTP whose
   `expiryTime` has passed is dropped with an INFO log (no phone, no text) — no ledger row, no
   DLQ message.
+- An OTP's national number now gets the country code of the OTP's tenant
+  (`common-masters.MobileNumberValidation`), which outranks `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE`; the
+  latter applies only at a tenant with no rule. A tenant whose seeded rule differs from the
+  deployment code — `pg`'s `+91` on a Kenyan box — sends its OTPs with the rule's code: fix the
+  rule, not the setting ([setup-guide §7](./setup-guide.md#phone-numbers)).
 - The tenant an OTP is checked against is `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` when the
   message carries none: Compose rewrites it to `state_root` right after it copies the compose
   file, before the bridge-first recreate or any other container starts, so `novu-bridge` never
@@ -415,7 +548,7 @@ There is no setting that chooses old or new — the data does. Check with any of
   under `pg` and drop it as `SKIPPED / NB_NO_PROVIDER`, with the old sender already gone). The
   deploy fails at the end if the running bridge has anything other than `state_root`. Helm reads
   `state-level-tenant-id` from the `egov-config` ConfigMap. **SMS must be switched on, with a provider, at that tenant**
-  or every OTP is `SKIPPED / NB_NO_PROVIDER` and phone login stops.
+  or every OTP is `SKIPPED / NB_NO_PROVIDER` and phone login through this service stops.
 
 ## 5. Bridge settings now come from host_vars
 
@@ -428,7 +561,7 @@ on the next deploy:
 | `novu_bridge_receipts_secret` | `NOVU_BRIDGE_RECEIPTS_SECRET` |
 | `novu_bridge_preference_enabled` / `novu_bridge_preference_fail_open` | `NOVU_BRIDGE_PREFERENCE_ENABLED` / `_FAIL_OPEN` |
 | `novu_bridge_core_sms_country_code` | `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` |
-| `notification_stack_tag`, `pgr_services_db_image`, `novu_bridge_db_image` | `NOTIFICATION_STACK_TAG`, `PGR_SERVICES_DB_IMAGE`, `NOVU_BRIDGE_DB_IMAGE` |
+| `notification_stack_tag`, `pgr_services_db_image`, `novu_bridge_db_image`, `digit_user_preferences_service_db_image` | `NOTIFICATION_STACK_TAG`, `PGR_SERVICES_DB_IMAGE`, `NOVU_BRIDGE_DB_IMAGE`, `DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE` |
 
 ## Rollback
 
@@ -462,6 +595,29 @@ Changed defaults worth checking: `NOVU_BRIDGE_CHANNEL_POLICY_SCHEMA` is `NOTIFIC
 `notifications.events`; `NOVU_BRIDGE_PROXY_ALLOWED_ROLES` adds `MDMS_ADMIN`; the new
 `NOVU_BRIDGE_PROXY_ADMIN_ROLES` gates provider create/rotate/delete.
 
+## Per-tenant notification accounts
+
+New in this release ([tenant-accounts.md](./tenant-accounts.md)): each signup workspace gets its
+own Novu organization at tenant creation. On a box with `enable_novu` it is
+on by default (Helm: off unless `tenant-accounts.enabled: true`); the upgrade deploy then
+generates its secrets into OpenBao and moves the Novu admin off its old password (dashboard login
+included: read the new one with `bao kv get -field=novu_admin_password <secrets_path>`). Nothing
+moves by itself: every existing tenant, migrated or not, keeps the shared account until you list
+it in `novu_tenant_accounts_backfill` (then add its providers in its own organization). To stay
+exactly as before, set `novu_tenant_accounts: false`.
+
+**A Novu admin with a custom password: pin it before upgrading.** The deploy can move the admin
+only off a password it knows (`novu_admin_password_legacy`, default the published `Digit@12345`),
+and it signs in with the result before novu-bridge gets it. If your admin's password was changed
+by hand, put the current one in host_vars as `novu_admin_password_legacy` (the deploy moves it to
+a generated one) or as `novu_admin_password` (kept as it is), plus `novu_admin_email` if the admin
+is another account. Unpinned, Novu refuses the sign-in and the deploy switches per-tenant accounts
+**off for that deploy** and continues on the shared account, printing
+`novu tenant accounts — ACTION: per-tenant notification accounts are OFF on this box for this deploy`
+with what to pin; the next deploy checks again. It stops instead when host_vars sets
+`novu_tenant_accounts: true` or when workspaces already have their own organization
+([tenant-accounts.md](./tenant-accounts.md#when-the-admin-sign-in-is-refused)).
+
 ## After the upgrade
 
 - [ ] `docker ps` (or `kubectl get pods -o wide`) shows pgr-services and novu-bridge on the tag
@@ -479,6 +635,7 @@ Changed defaults worth checking: `NOVU_BRIDGE_CHANNEL_POLICY_SCHEMA` is `NOTIFIC
 - [ ] Each channel you use is on with a provider selected (**Notifications → Channels**).
 - [ ] **Validate** on Configure reports zero errors.
 - [ ] One real complaint transition produced `RESOLVED` rows on Logs and arrived on a handset.
-- [ ] With OTP login: a phone login works and left a `CORE.SMS.OTP` row.
+- [ ] Where DIGIT's older OTP service is still used: a phone login through it works and left a
+      `CORE.SMS.OTP` row.
 - [ ] `novu-bridge.dlq` has no new messages
       (`rpk topic consume novu-bridge.dlq -o start`; see [kafka-events.md](./kafka-events.md#verify-delivery)).

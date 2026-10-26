@@ -13,8 +13,34 @@ public class PlatformBaselineSeedTest {
     private final PlatformBaseline seed;
     public PlatformBaselineSeedTest() throws Exception { seed = new PlatformBaseline(new ObjectMapper()); }
 
-    /** Version 2: content fixes after v1 (pack locales, inbox/_count). Recorded per workspace as seed_version. */
-    @Test public void seedVersionIsBumpedForContentFixes() { assertEquals("2", seed.version()); }
+    /** Recorded per workspace as seed_version; the JSON is the only place it is set. v1 workspaces exist, so it is past 1. */
+    @Test public void seedVersionIsAnIntegerPastTheFirstRelease() { assertTrue(seed.versionNumber() >= 2); assertEquals(String.valueOf(seed.versionNumber()), seed.version()); }
+
+    /**
+     * Existing workspaces are upgraded (BaselineUpgrader) only when the seed's version rises, so a content change
+     * under an unchanged version never reaches them. v2 changed in place until #2269 merged; from then on, changing
+     * the seed means bumping "version" and recording both here. v3 carries the onboarding Geography step's labels;
+     * v4 drops the TRANSGENDER and OTHERS genders (#2397); v5 the docs rail, tour and next-step card labels (#2439);
+     * v6 lets the founder save the dashboard settings (dss.DashboardConfig writes, #2221);
+     * v7 drops CSR's /user/users/_createnovalidate grant, which BaselineUpgrader also deactivates (#2239);
+     * v8 the fr_FR and pt_BR citizen and employee packs, and the en_IN keys those screens ask for;
+     * v9 the dashboard's workspace links card and complaint-desk link in the hi_IN, fr_FR and pt_BR packs (#2589);
+     * v10 the employee email sign-in strings, under new keys, in the en_IN, hi_IN, fr_FR and pt_BR configurator-ui packs (#2646);
+     * v11 the employee home's Dashboard card title in the en_IN, fr_FR and pt_BR rainmaker-common packs;
+     * v12 the bulk-upload CSR-role note (en_IN configurator-ui) and the channel-neutral complaint success text (en_IN rainmaker-pgr);
+     * v13 the console Dashboard heading "DIGIT Complaint Management Studio", under the new key app.header.studio_title, in the en_IN, hi_IN, fr_FR and pt_BR configurator-ui packs;
+     * v14 the onboarding tour's Complaints Template text, under the new key app.onboarding.home.tour.complaints.body_choice (en_IN configurator-ui).
+     */
+    private static final String VERSION = "14";
+    private static final String SHA256 = "15673da7a5a7d1e42f39de90473519d190dfde2b7a7f1366a2af05e8f647dba7";
+    @Test public void contentChangesComeWithAVersionBump() throws Exception {
+        byte[] bytes;
+        try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }
+        String sha = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        if (VERSION.equals(seed.version()))
+            assertEquals("platform-baseline-v1.json changed but \"version\" did not: bump it so existing workspaces get the change, then record the new version and SHA-256 here", SHA256, sha);
+        else fail("seed version is now " + seed.version() + ": record VERSION=\"" + seed.version() + "\" and SHA256=\"" + sha + "\" in this test");
+    }
 
     private Set<String> codes(String schema, String field) {
         Set<String> out = new HashSet<>();

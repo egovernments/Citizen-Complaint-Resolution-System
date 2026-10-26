@@ -34,6 +34,23 @@ npm run dev
 
 The app will be available at `http://localhost:5173`.
 
+### Against a remote dev tenant
+
+```bash
+PROXY_TARGET=https://<dev-tenant-domain> \
+VITE_ONBOARDING_API_ORIGIN=https://<dev-tenant-domain> npm run dev
+```
+
+`PROXY_TARGET` sends the app's DIGIT calls (and `/turbopass`, which nginx
+serves outside Kong) through the Vite proxy to the tenant, so no SSH tunnel is
+needed. Sign-in and onboarding go cross-site to `VITE_ONBOARDING_API_ORIGIN`
+with the identity session cookie. For those, the tenant must allow
+`http://localhost:5173` as a credentialed origin (`kong_cors_origins`,
+`kong_cors_credentials`, `identity_allowed_origins`,
+`identity_cookie_same_site: "None"` in its host_vars; see `_example.yml`).
+Without that, the browser blocks the calls and the app shows "Could not reach
+the server".
+
 ## Production Build & Deploy
 
 Use the setup script from the repo root:
@@ -90,5 +107,4 @@ src/
 | `npm run build` | TypeScript check + Vite production build |
 | `npm run preview` | Preview production build locally |
 | `npm run test` | Run unit tests (vitest) |
-| `npm run test:e2e` | Run end-to-end tests (Playwright) |
 | `npm run lint` | Run ESLint |

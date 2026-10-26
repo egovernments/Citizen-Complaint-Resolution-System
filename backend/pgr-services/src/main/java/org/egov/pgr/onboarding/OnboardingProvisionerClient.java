@@ -27,6 +27,7 @@ public class OnboardingProvisionerClient {
     private final Environment env;
     private final Set<String> signupSchemas, signupWorkflows;
     private final PlatformBaseline baselinePacks;
+    private final NotificationDefaults notificationDefaults;
     private Map<String, Object> login;
     private long expiresAt;
     /** Set by the first successful login: a later 400/401 then means the password really changed. */
@@ -41,7 +42,7 @@ public class OnboardingProvisionerClient {
         this.mapper = mapper;
         this.env = env;
         var schemas = new HashSet<String>(); var workflows = new HashSet<String>();
-        try { baselinePacks = new PlatformBaseline(mapper); }
+        try { baselinePacks = new PlatformBaseline(mapper); notificationDefaults = new NotificationDefaults(mapper); }
         catch (java.io.IOException e) { throw new IllegalStateException("Onboarding baseline unavailable", e); }
         baselinePacks.schemas().forEach(schema -> schemas.add(schema.path("code").asText()));
         baselinePacks.workflows().forEach(workflow -> workflows.add(workflow.path("businessService").asText()));
@@ -95,7 +96,7 @@ public class OnboardingProvisionerClient {
         Set<String> reads = Set.of("mdms:" + mdmsSchemaSearchPath(), "mdms:" + mdmsSearchPath(),
                 "hrms:/egov-hrms/employees/_search", "boundary:/boundary-service/boundary/_search",
                 "boundary:/boundary-service/boundary-hierarchy-definition/_search", "boundary:/boundary-service/boundary-relationships/_search",
-                "workflow:/egov-workflow-v2/egov-wf/businessservice/_search");
+                "workflow:/egov-workflow-v2/egov-wf/businessservice/_search", "localization:/localization/messages/v1/_search");
         if (!reads.contains(service + ":" + endpoint) || path.contains("#")) denied();
         var request = new LinkedHashMap<>(body); request.put("RequestInfo", requestInfo());
         return exchange(base(service) + path, request, null);
@@ -145,8 +146,25 @@ public class OnboardingProvisionerClient {
     private void validateSignupWrite(OnboardingProgress.WriteScope scope, String service, String path, JsonNode body) {
         String tenant = scope.tenant(), step = scope.step();
         if (tenant == null || !tenant.matches("[a-z][a-z0-9]*") || path == null) denied();
-        boolean foundation = "TENANT_FOUNDATION".equals(step), baseline = "PLATFORM_BASELINE".equals(step);
+        // A seed upgrade (BaselineUpgrader) may make the baseline's MDMS, workflow and localization writes, never its boundary ones.
+        boolean foundation = "TENANT_FOUNDATION".equals(step), upgrade = BaselineUpgrader.STEP.equals(step),
+                baseline = "PLATFORM_BASELINE".equals(step) || upgrade;
         JsonNode payload;
+        if (NotificationDefaultsStep.STEP.equals(step)) {
+            // MDMS creates only: the notification schemas and the packaged seed rows, both verbatim (never an update).
+            if (!"mdms".equals(service)) denied();
+            if ("/egov-mdms-service/schema/v1/_create".equals(path)) {
+                payload = body.path("SchemaDefinition"); requireTenant(payload, tenant);
+                if (!notificationDefaults.isSeedSchema(payload.path("code").asText(), payload.path("definition"))) denied();
+                return; // JSON schema property definitions are not tenant-bearing request data.
+            }
+            payload = body.path("Mdms"); String schema = payload.path("schemaCode").asText();
+            if (!path.equals("/egov-mdms-service/v2/_create/" + schema)) denied();
+            requireTenant(payload, tenant);
+            if (!notificationDefaults.isSeedRecord(schema, payload.path("data"), tenant)) denied();
+            requireNestedTenants(body, tenant);
+            return;
+        }
         if ("mdms".equals(service) && "/egov-mdms-service/schema/v1/_create".equals(path) && (foundation || baseline)) {
             payload = body.path("SchemaDefinition"); requireTenant(payload, tenant);
             if (!signupSchemas.contains(payload.path("code").asText()) || foundation && !"tenant.tenants".equals(payload.path("code").asText())) denied();
@@ -157,7 +175,8 @@ public class OnboardingProvisionerClient {
             if (!schema.matches("[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+")
                     || !(path.equals("/egov-mdms-service/v2/_create/" + schema) || path.equals("/egov-mdms-service/v2/_update/" + schema))) denied();
             if (!signupSchemas.contains(schema) || foundation && !"tenant.tenants".equals(schema)) denied();
-            if (path.contains("/_update/") && !Set.of("tenant.tenants", "common-masters.StateInfo").contains(schema)) denied();
+            if (path.contains("/_update/") && !Set.of("tenant.tenants", "common-masters.StateInfo").contains(schema)
+                    && !(upgrade && revokesGrant(schema, payload))) denied();
             requireTenant(payload, tenant);
             if ("tenant.tenants".equals(schema) && (!tenant.equals(payload.path("uniqueIdentifier").asText()) || !tenant.equals(payload.path("data").path("code").asText()))) denied();
         } else if ("enc".equals(service) && foundation && "/egov-enc-service/crypto/v1/_generatekey".equals(path)) {
@@ -167,7 +186,14 @@ public class OnboardingProvisionerClient {
             if (!body.path("messages").isArray() || body.path("messages").isEmpty()) denied();
             for (JsonNode message : body.path("messages")) if (!("TENANT_TENANTS_" + tenant.toUpperCase(Locale.ROOT)).equals(message.path("code").asText())
                     && !baselinePacks.isPackMessage(message)) denied(); // only the committed tenant-neutral packs, verbatim
-        } else if ("boundary".equals(service) && baseline) {
+        } else if ("localization".equals(service) && upgrade && "/localization/messages/v1/_delete".equals(path)) {
+            requireTenant(body, tenant); // only the tenant's own name key, which v1 wrote into locales without a pack
+            if (!body.path("messages").isArray() || body.path("messages").isEmpty()) denied();
+            for (JsonNode message : body.path("messages")) if (!("TENANT_TENANTS_" + tenant.toUpperCase(Locale.ROOT)).equals(message.path("code").asText())
+                    || !OnboardingSteps.TENANT_NAME_MODULE.equals(message.path("module").asText())) denied();
+        } else if ("localization".equals(service) && upgrade && "/localization/messages/cache-bust".equals(path)) {
+            if (!body.isEmpty()) denied();
+        } else if ("boundary".equals(service) && baseline && !upgrade) {
             if ("/boundary-service/boundary-hierarchy-definition/_create".equals(path)) {
                 payload = body.path("BoundaryHierarchy"); requireTenant(payload, tenant);
                 if (!OnboardingSteps.WORKSPACE_HIERARCHY.equals(payload.path("hierarchyType").asText())) denied();
@@ -183,10 +209,19 @@ public class OnboardingProvisionerClient {
             if (!signupWorkflows.contains(payload.path("businessService").asText())) denied();
         } else if ("hrms".equals(service) && "FOUNDER_HRMS".equals(step) && "/egov-hrms/employees/_create".equals(path)) {
             payload = only(body.path("Employees")); requireTenant(payload, tenant); requireTenant(payload.path("user"), tenant);
-            String founder = "FOUNDER_" + scope.signupId().toString().replace("-", "");
-            if (!founder.equals(payload.path("code").asText()) || !founder.equals(payload.path("user").path("userName").asText())) denied();
+            // Only the founder's own code (HRMS keeps codes unique per tenant), with that code as username, as HRMS stores it.
+            if (!OnboardingSteps.FOUNDER_CODE.equals(payload.path("code").asText()) || !OnboardingSteps.FOUNDER_CODE.equals(payload.path("user").path("userName").asText())) denied();
         } else denied();
         requireNestedTenants(body, tenant);
+    }
+
+    /** The upgrader's one role-action write: deactivating a grant a later seed removed (BaselineUpgrader.REVOKED_GRANTS). */
+    private static boolean revokesGrant(String schema, JsonNode payload) {
+        JsonNode data = payload.path("data");
+        Integer action = BaselineUpgrader.REVOKED_GRANTS.get(data.path("rolecode").asText());
+        return BaselineUpgrader.ROLE_ACTIONS.equals(schema) && action != null && data.path("actionid").canConvertToInt()
+                && action == data.path("actionid").asInt() && (data.path("rolecode").asText() + "." + action).equals(payload.path("uniqueIdentifier").asText())
+                && payload.path("isActive").isBoolean() && !payload.path("isActive").booleanValue();
     }
 
     private JsonNode only(JsonNode array) { if (!array.isArray() || array.size() != 1) denied(); return array.path(0); }
@@ -222,14 +257,17 @@ public class OnboardingProvisionerClient {
             return response;
         } catch (RestClientResponseException e) {
             String code = "PROVISIONING_HTTP_" + e.getStatusCode().value();
+            List<String> codes = new ArrayList<>();
             try {
                 JsonNode error = mapper.readTree(e.getResponseBodyAsString());
                 code = error.path("code").asText(error.path("Errors").path(0).path("code").asText(code));
+                // DIGIT lists several errors in no fixed order (HRMS builds them from a HashMap), so keep them all.
+                for (JsonNode item : error.path("Errors")) if (item.hasNonNull("code")) codes.add(item.path("code").asText());
             }
             catch (Exception ignored) { /* Preserve status classification without storing remote PII. */ }
             int status = e.getStatusCode().value();
             if (status == 401) { synchronized (this) { login = null; } }
-            throw new OnboardingFailure(code, status >= 500 || status == 401 || status == 403 || status == 429, status);
+            throw new OnboardingFailure(code, status >= 500 || status == 401 || status == 403 || status == 429, status, codes);
         } catch (RestClientException e) { throw new OnboardingFailure("PROVISIONING_UNAVAILABLE", true); }
     }
 }

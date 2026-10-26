@@ -341,6 +341,9 @@ export function parseBoundaryExcel(workbook: XLSX.WorkBook): {
 
   // Track seen boundary types for hierarchy
   const seenTypes = new Set<string>();
+  // The sheet rows each code is on. boundary-service keeps one boundary per code, so a repeated
+  // code would become one boundary, named by whichever row's label was written last (#2456).
+  const rowsByCode = new Map<string, number[]>();
 
   jsonData.forEach((row, index) => {
     const code = String(row['code'] || row['Code'] || row['boundaryCode'] || '').trim();
@@ -365,6 +368,9 @@ export function parseBoundaryExcel(workbook: XLSX.WorkBook): {
       });
       return;
     }
+    // Blank rows aren't in jsonData, so the sheet's own row number comes from xlsx.
+    const sheetRow = ((row as { __rowNum__?: number }).__rowNum__ ?? index + 1) + 1;
+    rowsByCode.set(code, [...(rowsByCode.get(code) ?? []), sheetRow]);
 
     if (!name) {
       errors.push({
@@ -399,8 +405,21 @@ export function parseBoundaryExcel(workbook: XLSX.WorkBook): {
       parentCode,
       latitude,
       longitude,
+      row: sheetRow,
     });
   });
+
+  for (const [code, rows] of rowsByCode) {
+    if (rows.length < 2) continue;
+    errors.push({
+      row: rows[0],
+      rows,
+      field: 'code',
+      value: code,
+      message: `The code "${code}" is used on rows ${rows.join(', ')}. Each boundary needs its own code.`,
+      code: 'DUPLICATE_CODE',
+    });
+  }
 
   return {
     data: boundaries,
@@ -747,15 +766,8 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
       dateOfAppointment = String(doaRaw ?? '').trim() || undefined;
     }
 
-    if (!employeeCode) {
-      errors.push({
-        row: index + 2,
-        field: 'employeeCode',
-        message: 'Employee code is required',
-        code: 'REQUIRED_FIELD',
-      });
-      return;
-    }
+    // employeeCode is optional: the bulk imports give a blank one the next free
+    // EMP_ code (planEmployeeCodes, #2456).
 
     if (!name) {
       errors.push({
@@ -767,9 +779,9 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
       return;
     }
 
-    // userName is optional at parse time — callers (Phase 4, bulk import) derive
-    // `firstname.lastname` from `name` when the Excel cell is blank. Keeping it
-    // required here forced operators to duplicate the name column unnecessarily.
+    // userName is not used: HRMS makes every employee's username their code
+    // (#2456), so the templates no longer have the column and an older sheet's
+    // value is ignored.
 
     if (!mobileNumber) {
       errors.push({
@@ -927,12 +939,37 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
  * uses it too, so types built by hand and from a sheet get the same codes.
  */
 export const toPascal = (s: string): string =>
-  s
-    .replace(/[&/'’().,]+/g, ' ')
-    .split(/[\s_-]+/)
-    .filter(Boolean)
+  words(s.replace(/[&/'’().,]+/g, ' '))
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join('');
+
+/** Split on whitespace, underscore and hyphen; shared by toPascal and levelLabel. */
+const words = (s: string): string[] => s.split(/[\s_-]+/).filter(Boolean);
+
+/** Display labels of the two levels the typed-in Complaints step creates; the sheet route uses the same captions. */
+export const KNOWN_LEVEL_LABELS: Record<string, string> = {
+  COMPLAINT_TYPE: 'Complaint Category',
+  SUB_TYPE: 'Complaint Subcategory',
+};
+
+// Short all-caps words that are ordinary words, not acronyms.
+const PLAIN_SHORT_WORDS = new Set(['SUB', 'NO', 'OF', 'AND', 'THE', 'TO', 'BY', 'IN', 'ON', 'FOR', 'ARE', 'NEW', 'OLD']);
+
+/**
+ * A readable label from a level code, for a hierarchy definition's
+ * `levels[].label`: AUTHORITY_TYPE gives "Authority Type". digit-ui shows it
+ * when the level has no localized name, so a raw code there reads as a bug.
+ * The two levels the Complaints step creates keep its captions; camelCase is
+ * split ("subType" gives "Sub Type") and all-caps words of up to 3 letters are
+ * kept as acronyms (ULB_TYPE gives "ULB Type").
+ */
+export const levelLabel = (code: string): string =>
+  KNOWN_LEVEL_LABELS[code] ??
+  words(code.replace(/([a-z])([A-Z])/g, '$1 $2'))
+    .map((w) =>
+      /^[A-Z]{1,3}$/.test(w) && !PLAIN_SHORT_WORDS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+    )
+    .join(' ');
 
 // One row of the single 2-master ComplaintHierarchy adjacency list. Interior
 // nodes and leaves share this shape; LEAF rows ALSO carry the leaf fields

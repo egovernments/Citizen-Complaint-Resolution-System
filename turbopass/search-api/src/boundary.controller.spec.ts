@@ -53,6 +53,17 @@ describe('BoundaryController /boundary/search', () => {
     ]);
   });
 
+  it('passes an ISO alpha-2 country through and rejects anything else with 400', async () => {
+    const { calls, controller } = controllerWithSpy();
+    await controller.search('San', 'official', 'substring', '10', '1', ' lr ');
+    expect(calls[0]).toEqual(['San', 'official', 'substring', 10, 1, 'LR']);
+    await controller.search('San', 'official', 'substring', '10', '1', '');
+    expect(calls[1][5]).toBeUndefined();
+    await expect(
+      controller.search('San', 'official', 'substring', '10', '1', 'LBR'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('defaults to the offline overture source', async () => {
     const { calls, controller } = controllerWithSpy();
     await controller.search('Delhi');

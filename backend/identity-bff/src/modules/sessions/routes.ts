@@ -1,6 +1,7 @@
 import { pendingInvitationsFor } from "../bindings/invitations.js";
 import type express from "express";
 import { accountMetadata, unlinkProvider } from "../authentication/account-service.js";
+import { readUser } from "../../integrations/keycloak/admin-api.js";
 import { privateRef } from "../citizen-otp/otp-store.js";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
@@ -41,15 +42,37 @@ async function pendingInvitationsOrEmpty(subject: string): Promise<Awaited<Retur
   }
 }
 
+/**
+ * Keycloak's current email for the account view: the token's claim lags a
+ * verified change until refresh (#2645). An address Keycloak no longer has
+ * is dropped; a failed read keeps the claim rather than failing the session.
+ */
+async function currentEmailOrClaim(subject: string, claim: string | undefined): Promise<string | undefined> {
+  try {
+    return (await readUser(subject)).email || undefined;
+  } catch (error) {
+    console.warn("Current email unavailable:", (error as Error).message);
+    return claim;
+  }
+}
+
 export function registerSessionRoutes(app: express.Application): void {
   app.get("/identity/v1/session", asyncRoute(async (request, response) => {
     const surface = parseSurface(request.query.surface);
     if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface", code: "UNSUPPORTED_SURFACE" });
     const current = await currentSession(request.headers.cookie, surface);
-    if (!current) return response.status(401).json({ authenticated: false, code: "SESSION_REQUIRED", error: "A signed-in session is required" });
+    if (!current) {
+      // The cookie outlives an idle session; drop a dead one so the browser stops sending it.
+      if (sessionIdFromCookie(request.headers.cookie, surface)) response.setHeader("Set-Cookie", clearedSessionCookie(surface));
+      return response.status(401).json({ authenticated: false, code: "SESSION_REQUIRED", error: "A signed-in session is required" });
+    }
     const { claims, boundTenant } = current.session;
     const context = await getSelectedIdentityContext(current.sessionId);
-    const account = request.query.include === "account" ? await accountMetadata(current.session, surface) : undefined;
+    const withAccount = request.query.include === "account";
+    const [account, email] = await Promise.all([
+      withAccount ? accountMetadata(current.session, surface) : undefined,
+      withAccount && current.session.authMethod !== "phone_otp" ? currentEmailOrClaim(claims.sub, claims.email) : claims.email,
+    ]);
     const sessions = account ? (await listPersonSessions(claims.sub)).map(session => ({
       id: privateRef("session", session.sessionId), current: session.sessionId === current.sessionId,
       surface: session.surface, createdAt: session.createdAt, lastSeenAt: session.lastSeenAt,
@@ -60,7 +83,7 @@ export function registerSessionRoutes(app: express.Application): void {
       pendingInvitations: surfaceContextKind(surface) === "citizen" ? [] : await pendingInvitationsOrEmpty(claims.sub),
       user: {
         id: claims.sub,
-        email: claims.email,
+        email,
         name: claims.name,
         preferredUsername: claims.preferred_username,
         ...(surfaceContextKind(surface) === "citizen" && {

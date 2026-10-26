@@ -239,6 +239,12 @@ public class OnboardingRepository {
                 "SELECT " + OPERATION_COLUMNS + " FROM eg_pgr_onboarding_operation WHERE id = ?", operationMapper(), id));
     }
 
+    /** The signup that onboarded a workspace tenant. */
+    public Optional<OnboardingSignup> findActiveSignupByTenant(String tenant) {
+        return first(jdbcTemplate.query("SELECT " + SIGNUP_COLUMNS + " FROM eg_pgr_onboarding_signup WHERE requested_tenant_id = ? AND status = 'ACTIVE'",
+                signupMapper(), tenant));
+    }
+
     public Optional<OnboardingSignup> findSignup(UUID id) {
         return first(jdbcTemplate.query(
                 "SELECT " + SIGNUP_COLUMNS + " FROM eg_pgr_onboarding_signup WHERE id = ?", signupMapper(), id));

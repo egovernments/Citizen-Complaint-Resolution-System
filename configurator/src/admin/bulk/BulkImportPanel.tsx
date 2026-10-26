@@ -62,8 +62,8 @@ export interface BulkImportPanelProps<Row extends BulkRow = BulkRow> {
   templateFilename: string;
   /** Parses an uploaded workbook into row objects + optional parser-level error. */
   parseWorkbook: (wb: XLSX.WorkBook) => { data: Row[]; parseError?: string };
-  /** Runs per-row validation against live reference data. */
-  validateRow: (row: Row) => string[];
+  /** Runs per-row validation against live reference data, with the whole sheet for checks across rows. */
+  validateRow: (row: Row, rows: Row[]) => string[];
   /** Columns to render in the preview + completion tables. */
   columns: BulkColumn<Row>[];
   /** Called once per valid row. Throw to mark the row failed. */
@@ -143,7 +143,7 @@ export function BulkImportPanel<Row extends BulkRow>({
           return;
         }
         const validated = parsed.data.map((row) => {
-          const errs = validateRow(row);
+          const errs = validateRow(row, parsed.data);
           return {
             ...row,
             status: errs.length === 0 ? 'valid' : 'error',

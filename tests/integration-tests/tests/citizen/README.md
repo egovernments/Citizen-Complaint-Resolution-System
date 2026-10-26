@@ -22,6 +22,7 @@ End-to-end and API-driven tests that exercise the **citizen** surface of the dig
 | `complaint-create-payload-contract.spec.ts` | API-only contract check for the `_create` payload shape (AddressOne/Two, Kenya 5-digit pincode) |
 | `complaint-attachment.spec.ts` | Attachment upload during filing + attachment `<img>` on detail page (CCRS #555) |
 | `track-my-complaint.spec.ts` | My Complaints list + detail page + plural `/complaints/:id` URL |
+| `complaint-filed-for-citizen-2640.spec.ts` | A complaint the `csr` persona files for a citizen's phone reaches that citizen's My Complaints, filed after their first OTP sign-in (#2640) or before it. Needs `personas.csr` |
 | `complaint-detail-page.spec.ts` | Detail page renders without error fallback |
 | `complaint-timeline-and-rating-display.spec.ts` | PGR `_search` returns `service.rating` + `workflow.action=RATE` for rated complaints; localization keys seeded |
 | `rate-resolved-complaint.spec.ts` | Citizen rates a resolved complaint (5 stars + feedback checkboxes) |

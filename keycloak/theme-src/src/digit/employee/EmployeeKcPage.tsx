@@ -5,6 +5,7 @@ import { useI18n } from "../../login/i18n";
 import { BrandingProvider } from "../branding/BrandingContext";
 import { digitClasses } from "../shared/kc";
 import { ErrorPage, Info, LoginPageExpired } from "../shared/MessagePages";
+import { employeeSignInUrl } from "../shared/passwordHelp";
 import Template from "./EmployeeTemplate";
 import Login from "./pages/Login";
 import { LoginResetPassword, LoginUpdatePassword } from "./pages/PasswordPages";
@@ -51,9 +52,9 @@ export default function EmployeeKcPage(props: { kcContext: KcContext }) {
                         case "login-page-expired.ftl":
                             return <LoginPageExpired {...pageProps} kcContext={kcContext} />;
                         case "info.ftl":
-                            return <Info {...pageProps} kcContext={kcContext} />;
+                            return <Info {...pageProps} kcContext={kcContext} signInUrl={employeeSignInUrl} />;
                         case "error.ftl":
-                            return <ErrorPage {...pageProps} kcContext={kcContext} />;
+                            return <ErrorPage {...pageProps} kcContext={kcContext} signInUrl={employeeSignInUrl} />;
                         default:
                             return (
                                 <DefaultPage

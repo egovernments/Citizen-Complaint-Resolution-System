@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import java.util.*;
 
+@lombok.extern.slf4j.Slf4j
 @Component
 public class OnboardingSteps {
     /**
@@ -17,6 +18,14 @@ public class OnboardingSteps {
      * hierarchy update), so it blocked that step (#2260).
      */
     public static final String WORKSPACE_HIERARCHY = "WORKSPACE";
+    /**
+     * The founder is the workspace's first employee, so they get the code the configurator's
+     * Employees step gives a first employee (#2456). One per tenant, so a retried step finds it.
+     * Founders made before this keep {@link #legacyFounderCode}.
+     */
+    public static final String FOUNDER_CODE = "EMP_0001";
+    /** The designation the step gives the founder; the configurator offers it to nobody else. */
+    public static final String FOUNDER_DESIGNATION = "ONBOARDING_FOUNDER";
     private final OnboardingProvisionerClient client;
     private final PlatformBaseline seed;
     private final ObjectMapper mapper;
@@ -41,6 +50,11 @@ public class OnboardingSteps {
     @org.springframework.beans.factory.annotation.Value("${pgr.onboarding.mdms-visibility-waits-ms:150,300,600,1200}")
     void setVisibilityWaitsMs(long[] waits) { this.visibilityWaitsMs = waits == null ? new long[0] : waits.clone(); }
 
+    /** Null only for directly constructed instances (tests): the step is then a no-op. */
+    private NotificationDefaultsStep notificationDefaults;
+    @Autowired(required = false)
+    void setNotificationDefaults(NotificationDefaultsStep step) { this.notificationDefaults = step; }
+
     /** Reads until {@code visible} holds or the configured pauses run out; returns the last read. */
     private JsonNode awaitVisible(java.util.function.Supplier<JsonNode> read, java.util.function.Predicate<JsonNode> visible) {
         JsonNode result = read.get();
@@ -62,6 +76,7 @@ public class OnboardingSteps {
         switch (step) {
             case "TENANT_FOUNDATION" -> foundation(signup, operation, progress, scope);
             case "PLATFORM_BASELINE" -> baseline(signup, progress, scope);
+            case NotificationDefaultsStep.STEP -> { if (notificationDefaults != null) notificationDefaults.run(this, signup, progress, scope); }
             case "FOUNDER_HRMS" -> founder(signup, operation, progress, scope);
             case "ORGANIZATION" -> {
                 operation.setOrganizationEnsureStarted(true);
@@ -74,8 +89,51 @@ public class OnboardingSteps {
                 body.put("digitUuid", operation.getFounderDigitUuid());
                 client.identity("bindings/_ensure", body);
             }
+            case NOTIFICATION_ACCOUNT -> notificationAccount(signup, operation, progress);
             default -> throw new IllegalArgumentException("Unknown step " + step);
         }
+    }
+
+    /** Saga step (#2203): the workspace's own Novu account, through novu-bridge. Never fails the signup. */
+    public static final String NOTIFICATION_ACCOUNT = "NOTIFICATION_ACCOUNT";
+    /**
+     * record_progress key of the step's outcome: {@value #NOTIFICATION_ACCOUNT_DONE} once the bridge
+     * reports the account PROVISIONED, {@value #NOTIFICATION_ACCOUNT_DEFERRED} when it could not
+     * (NotificationAccountReconciler retries those), absent when the feature is not configured here.
+     */
+    public static final String NOTIFICATION_ACCOUNT_PROGRESS = "notification-account";
+    public static final String NOTIFICATION_ACCOUNT_DONE = "DONE";
+    public static final String NOTIFICATION_ACCOUNT_DEFERRED = "DEFERRED";
+    private NotificationAccountClient notificationAccounts;
+
+    /** Optional: absent (tests, deployments without per-tenant notification accounts) = the step is a no-op. */
+    @Autowired(required = false)
+    void setNotificationAccounts(NotificationAccountClient notificationAccounts) {
+        this.notificationAccounts = notificationAccounts;
+    }
+
+    /**
+     * Gives the new workspace its own Novu organization (novu-bridge, idempotent: a resumed or
+     * retried run never creates a second one). NON-FATAL by design: Novu being down must not stop a
+     * tenant from being created, so a failure is recorded as DEFERRED and the workspace starts
+     * without its own messaging; NotificationAccountReconciler (and the bridge's backfill API)
+     * provision it later. Kept a separate step from the platform baseline: it writes nothing to
+     * DIGIT, only to the notification service.
+     */
+    private void notificationAccount(OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress) {
+        if (notificationAccounts == null || !notificationAccounts.configured()) return;
+        if (NOTIFICATION_ACCOUNT_DONE.equals(operation.getRecordProgress().get(NOTIFICATION_ACCOUNT_PROGRESS))) return;
+        String tenant = signup.getRequestedTenantId();
+        NotificationAccountClient.Outcome outcome = notificationAccounts.provision(tenant);
+        if (outcome.ok()) {
+            log.info("Workspace {}: notification account provisioned (organization created: {})", tenant, outcome.organizationCreated());
+        } else {
+            log.warn("Workspace {}: notification account NOT provisioned ({}); the workspace is created without its own "
+                    + "messaging and will be retried in the background", tenant, outcome.code());
+        }
+        operation.getRecordProgress().put(NOTIFICATION_ACCOUNT_PROGRESS,
+                outcome.ok() ? NOTIFICATION_ACCOUNT_DONE : NOTIFICATION_ACCOUNT_DEFERRED);
+        progress.save();
     }
 
     public void ensureOrganization(OnboardingSignup signup, OnboardingOperation operation) {
@@ -112,6 +170,9 @@ public class OnboardingSteps {
             data.put("emailId", ""); data.put("address", ""); data.put("contactNumber", "");
             // Signup choices are materialized on the authoritative tenant record (its schema allows extra fields).
             data.put("timeZone", signup.getTimeZone()); data.put("financialYearPolicy", signup.getFinancialYearPolicy());
+            // The signup country (ISO 3166-1 alpha-2): the configurator offers that country's official boundaries.
+            String country = signup.getCountryCode() == null ? "" : signup.getCountryCode().trim().toUpperCase(Locale.ROOT);
+            if (country.matches("[A-Z]{2}")) data.put("country", country);
             data.put("OfficeTimings", Map.of("Mon - Fri", ""));
             data.put("city", Map.of("code", tenant, "name", signup.getAccountName(), "districtName", "",
                     "districtTenantCode", tenant, "ulbGrade", ""));
@@ -129,39 +190,17 @@ public class OnboardingSteps {
             String code = row.path("schemaCode").asText(), id = row.path("uniqueIdentifier").asText();
             progress.record("mdms:" + code + ":" + id, () -> ensureRecord(scope, tenant, code, id, substitute(row.path("data"), tenant)));
         }
-        progress.record("id-format", () -> {
-            // Complaint IDs carry the workspace's own code; SEQ_EG_PGR_ID stays one shared sequence.
-            // idgen only interprets [..] tokens, so the literal prefix is kept to A-Z, 0-9 and '-'.
-            String prefix = Objects.toString(signup.getAccountCode(), "").toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9-]", "");
-            if (prefix.isEmpty()) throw new OnboardingFailure("ACCOUNT_CODE_INVALID", false);
-            ensureRecord(scope, tenant, "common-masters.IdFormat", "pgr.servicerequestid", Map.of("idname", "pgr.servicerequestid",
-                    "format", prefix + "-PGR-[cy:yyyy-MM-dd]-[SEQ_EG_PGR_ID]"));
-        });
+        progress.record("id-format", () -> ensureIdFormat(scope, signup));
         for (JsonNode workflow : seed.workflows()) {
-            String code = workflow.path("businessService").asText();
-            progress.record("workflow:" + code, () -> {
-                JsonNode found = client.read("workflow", "/egov-workflow-v2/egov-wf/businessservice/_search?tenantId=" + tenant + "&businessServices=" + code, Map.of()).path("BusinessServices");
-                if (!found.isArray()) throw new OnboardingFailure("WORKFLOW_INVALID_RESPONSE", true);
-                // workflow-v2 caches searches in-JVM: re-searching before its persister lands would pin an
-                // empty result, so an accepted create is the checkpoint and a replay searches again.
-                if (found.isEmpty()) createProjectedRecord(scope, "workflow", "/egov-workflow-v2/egov-wf/businessservice/_create",
-                        Map.of("BusinessServices", List.of(substitute(workflow, tenant))));
-            });
+            progress.record("workflow:" + workflow.path("businessService").asText(), () -> ensureWorkflow(scope, tenant, workflow));
         }
-        progress.record("mobile", () -> {
-            // The seed is the only source: onboarding never reads a country rule from another tenant.
-            JsonNode rule = seed.countryMobileRule(signup.getCountryCode());
-            if (rule.isMissingNode()) throw new OnboardingFailure("COUNTRY_NOT_SUPPORTED", false);
-            validateMobileRule(rule);
-            ensureRecord(scope, tenant, "common-masters.MobileNumberValidation", rule.path("countryCode").asText(), asMap(rule));
-        });
+        progress.record("mobile", () -> ensureMobileRule(scope, signup));
         var locales = locales(signup);
         progress.record("state-info", () -> {
             var data = new LinkedHashMap<String, Object>(); data.put("code", tenant); data.put("name", signup.getAccountName());
             for (String k : List.of("qrCodeURL", "bannerUrl", "logoUrl", "logoUrlWhite", "statelogo")) data.put(k, "");
             data.put("hasLocalisation", true); data.put("defaultUrl", Map.of("citizen", "", "employee", ""));
-            // digit-ui defaults to the first entry, so en_IN (the one locale with full packs) leads.
-            data.put("languages", locales.entrySet().stream().map(e -> Map.of("label", e.getValue(), "value", e.getKey())).toList());
+            data.put("languages", stateInfoLanguages(signup));
             data.put("localizationModules", List.of(Map.of("label", "common", "value", "rainmaker-common")));
             ensureRecord(scope, tenant, "common-masters.StateInfo", tenant, data, true);
         });
@@ -183,10 +222,39 @@ public class OnboardingSteps {
                 "/localization/messages/v1/_upsert", Map.of("tenantId", tenant, "messages", List.of(Map.of(
                         "code", "TENANT_TENANTS_" + tenant.toUpperCase(Locale.ROOT), "message", signup.getAccountName(),
                         "module", TENANT_NAME_MODULE, "locale", language.getKey())))));
-        // The dashboard (digit-ui and KpiCatalogService) reads its zone from the tenant's own "default" record.
-        progress.record("dashboard-config", () -> ensureRecord(scope, tenant, "dss.DashboardConfig", "default",
-                Map.of("id", "default", "timeZone", signup.getTimeZone())));
+        progress.record("dashboard-config", () -> ensureDashboardConfig(scope, signup));
         rootBoundary(scope, tenant, progress);
+    }
+
+    // Create-if-absent baseline records shared with BaselineUpgrader.
+    void ensureIdFormat(OnboardingProgress.WriteScope scope, OnboardingSignup signup) {
+        // Complaint IDs carry the workspace's own code; SEQ_EG_PGR_ID stays one shared sequence.
+        // idgen only interprets [..] tokens, so the literal prefix is kept to A-Z, 0-9 and '-'.
+        String prefix = Objects.toString(signup.getAccountCode(), "").toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9-]", "");
+        if (prefix.isEmpty()) throw new OnboardingFailure("ACCOUNT_CODE_INVALID", false);
+        ensureRecord(scope, signup.getRequestedTenantId(), "common-masters.IdFormat", "pgr.servicerequestid", Map.of("idname", "pgr.servicerequestid",
+                "format", prefix + "-PGR-[cy:yyyy-MM-dd]-[SEQ_EG_PGR_ID]"));
+    }
+    void ensureWorkflow(OnboardingProgress.WriteScope scope, String tenant, JsonNode workflow) {
+        String code = workflow.path("businessService").asText();
+        JsonNode found = client.read("workflow", "/egov-workflow-v2/egov-wf/businessservice/_search?tenantId=" + tenant + "&businessServices=" + code, Map.of()).path("BusinessServices");
+        if (!found.isArray()) throw new OnboardingFailure("WORKFLOW_INVALID_RESPONSE", true);
+        // workflow-v2 caches searches in-JVM: re-searching before its persister lands would pin an
+        // empty result, so an accepted create is the checkpoint and a replay searches again.
+        if (found.isEmpty()) createProjectedRecord(scope, "workflow", "/egov-workflow-v2/egov-wf/businessservice/_create",
+                Map.of("BusinessServices", List.of(substitute(workflow, tenant))));
+    }
+    void ensureMobileRule(OnboardingProgress.WriteScope scope, OnboardingSignup signup) {
+        // The seed is the only source: onboarding never reads a country rule from another tenant.
+        JsonNode rule = seed.countryMobileRule(signup.getCountryCode());
+        if (rule.isMissingNode()) throw new OnboardingFailure("COUNTRY_NOT_SUPPORTED", false);
+        validateMobileRule(rule);
+        ensureRecord(scope, signup.getRequestedTenantId(), "common-masters.MobileNumberValidation", rule.path("countryCode").asText(), asMap(rule));
+    }
+    void ensureDashboardConfig(OnboardingProgress.WriteScope scope, OnboardingSignup signup) {
+        // The dashboard (digit-ui and KpiCatalogService) reads its zone from the tenant's own "default" record.
+        ensureRecord(scope, signup.getRequestedTenantId(), "dss.DashboardConfig", "default",
+                Map.of("id", "default", "timeZone", signup.getTimeZone()));
     }
 
     private void rootBoundary(OnboardingProgress.WriteScope scope, String tenant, OnboardingProgress progress) {
@@ -266,17 +334,26 @@ public class OnboardingSteps {
     }
 
     private void founder(OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress, OnboardingProgress.WriteScope scope) {
-        String tenant = signup.getRequestedTenantId(), code = "FOUNDER_" + signup.getId().toString().replace("-", "");
-        JsonNode employees = client.read("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code + "&offset=0&limit=2", Map.of()).path("Employees");
-        if (!employees.isArray()) throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
-        if (employees.size() > 1) throw new OnboardingFailure("FOUNDER_AMBIGUOUS", false);
+        String tenant = signup.getRequestedTenantId();
+        // The old code too, so a run that created its founder under it before an upgrade finds them. If that
+        // founder's HRMS row is still not visible after the upgrade, the create below is refused for the
+        // taken mobile and the signup goes back to its founder; by their resubmit the row is visible.
+        JsonNode employees = preferFounder(ownEmployees(tenant, FOUNDER_CODE, legacyFounderCode(signup.getId())),
+                operation.getFounderDigitUuid(), legacyFounderCode(signup.getId()));
+        // Until the step has seen its founder nobody else can edit the row it made; after that the uuid decides (below).
+        if (employees.size() > 1 || employees.size() == 1 && operation.getFounderDigitUuid() == null && !isFounder(employees.get(0)))
+            throw new OnboardingFailure("FOUNDER_AMBIGUOUS", false);
         if (employees.isEmpty()) {
             if (operation.getFounderDigitUuid() != null) throw new OnboardingFailure("FOUNDER_NOT_FOUND", true);
             JsonNode contact = mapper.valueToTree(signup.getTenantMetadata().get("tenantAdmin"));
             List<Map<String, String>> roles = new ArrayList<>();
             seed.founderRoles().forEach(r -> roles.add(Map.of("code", r.asText(), "name", r.asText(), "tenantId", tenant)));
+            // Every employee can file a complaint on a citizen's behalf (#2239). CSR is added here, not to the seed's
+            // founderRoles: BaselineUpgrader cannot change an existing founder's roles, so a seed bump would claim it did.
+            if (roles.stream().noneMatch(r -> "CSR".equals(r.get("code")))) roles.add(Map.of("code", "CSR", "name", "Complainant", "tenantId", tenant));
             var user = new LinkedHashMap<String, Object>();
-            user.put("name", signup.getFounderName()); user.put("userName", code);
+            // HRMS gives every employee their code as username (enrichUser), whatever is sent, so send that.
+            user.put("name", signup.getFounderName()); user.put("userName", FOUNDER_CODE);
             String phone = contact.path("mobileNumber").asText().replaceAll("[\\s()-]", "");
             String countryCode = contact.path("countryCode").asText().trim();
             if (!countryCode.isBlank() && phone.startsWith(countryCode)) phone = phone.substring(countryCode.length());
@@ -286,10 +363,10 @@ public class OnboardingSteps {
             user.put("type", "EMPLOYEE"); user.put("active", true); user.put("tenantId", tenant); user.put("roles", roles);
             if (signup.isFounderEmailVerified()) user.put("emailId", signup.getFounderEmail());
             var employee = new LinkedHashMap<String,Object>();
-            employee.put("tenantId", tenant); employee.put("code", code); employee.put("employeeStatus", "EMPLOYED");
+            employee.put("tenantId", tenant); employee.put("code", FOUNDER_CODE); employee.put("employeeStatus", "EMPLOYED");
             employee.put("employeeType", "PERMANENT"); employee.put("dateOfAppointment", signup.getCreatedAt());
             employee.put("user", user); employee.put("isActive", true);
-            employee.put("assignments", List.of(Map.of("department", "ONBOARDING_ADMIN", "designation", "ONBOARDING_FOUNDER",
+            employee.put("assignments", List.of(Map.of("department", "ONBOARDING_ADMIN", "designation", FOUNDER_DESIGNATION,
                     "fromDate", signup.getCreatedAt(), "isCurrentAssignment", true)));
             employee.put("jurisdictions", List.of(Map.of("tenantId", tenant, "hierarchy", WORKSPACE_HIERARCHY, "boundaryType", "ROOT", "boundary", tenant, "roles", roles)));
             try {
@@ -299,12 +376,16 @@ public class OnboardingSteps {
                 // a different founder to work around an asynchronous HRMS projection.
                 if (failure.isRetryable()) throw failure;
                 String error = failure.getCode().toUpperCase(Locale.ROOT);
-                if (error.contains("DUPLICATE") || error.contains("ALREADY_EXIST") || error.equals("PROVISIONING_HTTP_409"))
+                // HRMS refuses a code that some user in the tenant already has as username. In a new workspace that is
+                // this step's own founder, whose user HRMS made at once while the employee row is still being saved.
+                // That founder's mobile is taken too, and HRMS lists the two errors in either order, so look at all of them.
+                if (error.contains("DUPLICATE") || error.contains("ALREADY_EXIST") || error.equals("PROVISIONING_HTTP_409")
+                        || failure.getCodes().contains("ERR_HRMS_USER_EXIST_USERNAME"))
                     throw new OnboardingFailure("FOUNDER_NOT_VISIBLE", true);
                 throw new OnboardingFailure("TENANT_ADMIN_ACCOUNT_REJECTED", false);
             }
             // HRMS/egov-user persist asynchronously. A later claim searches again before create.
-            employees = client.read("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code + "&offset=0&limit=2", Map.of()).path("Employees");
+            employees = ownEmployees(tenant, FOUNDER_CODE);
         }
         String uuid = employees.path(0).path("user").path("uuid").asText();
         if (uuid.isBlank()) throw new OnboardingFailure("FOUNDER_NOT_VISIBLE", true);
@@ -313,11 +394,58 @@ public class OnboardingSteps {
         operation.setFounderDigitUuid(uuid); progress.save();
     }
 
+    private static final int HRMS_PAGE = 100;
+
+    /**
+     * The tenant's employees holding one of these codes. HRMS can't be asked by code: a `codes` search
+     * looks the first code up as a username in the tenant and then drops the tenant filter, so where no
+     * user has that username (a new workspace has no users at all) it answers with every tenant's row
+     * for the code. So the tenant's own employees are read, a page at a time, and matched here.
+     */
+    private JsonNode ownEmployees(String tenant, String... codes) {
+        com.fasterxml.jackson.databind.node.ArrayNode matches = mapper.createArrayNode();
+        // A new workspace has a handful of employees here; the bound only stops an HRMS that ignores offset.
+        for (int offset = 0; offset < 100 * HRMS_PAGE; offset += HRMS_PAGE) {
+            JsonNode page = client.read("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant
+                    + "&offset=" + offset + "&limit=" + HRMS_PAGE, Map.of()).path("Employees");
+            if (!page.isArray()) throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
+            for (JsonNode employee : page) {
+                // Only a row HRMS says is this tenant's counts: another tenant's founder, even an
+                // inactive one with the founder designation, is never this workspace's.
+                if (!tenant.equals(employee.path("tenantId").asText())) continue;
+                for (String code : codes) if (code.equalsIgnoreCase(employee.path("code").asText())) { matches.add(employee); break; }
+            }
+            if (page.size() < HRMS_PAGE) return matches;
+        }
+        throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
+    }
+
+    /**
+     * Where several rows match, the founder's own: the row with the uuid the step already bound, else the
+     * old FOUNDER_ row. A workspace from before #2456 can hold both that row and an EMP_0001 its admin added.
+     */
+    private JsonNode preferFounder(JsonNode rows, String founderUuid, String legacyCode) {
+        if (rows.size() < 2) return rows;
+        for (JsonNode row : rows) if (founderUuid != null && founderUuid.equals(row.path("user").path("uuid").asText())) return mapper.createArrayNode().add(row);
+        for (JsonNode row : rows) if (legacyCode.equalsIgnoreCase(row.path("code").asText())) return mapper.createArrayNode().add(row);
+        return rows;
+    }
+
+    /** The code founders had before #2456. */
+    static String legacyFounderCode(UUID signupId) { return "FOUNDER_" + signupId.toString().replace("-", ""); }
+
+    /** A row this step made: the old FOUNDER_ code, or the founder designation (only trusted before anyone could edit it). */
+    private static boolean isFounder(JsonNode employee) {
+        if (employee.path("code").asText().startsWith("FOUNDER_")) return true;
+        for (JsonNode assignment : employee.path("assignments")) if (FOUNDER_DESIGNATION.equals(assignment.path("designation").asText())) return true;
+        return false;
+    }
+
     private JsonNode schema(String code) {
         for (JsonNode s : seed.schemas()) if (code.equals(s.path("code").asText())) return s;
         throw new IllegalArgumentException(code);
     }
-    private void ensureSchema(OnboardingProgress.WriteScope scope, String tenant, JsonNode schema) {
+    void ensureSchema(OnboardingProgress.WriteScope scope, String tenant, JsonNode schema) {
         String code = schema.path("code").asText();
         JsonNode found = client.read("mdms", client.mdmsSchemaSearchPath(), Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions");
         if (!found.isArray()) throw new OnboardingFailure("MDMS_INVALID_RESPONSE", true);
@@ -335,7 +463,7 @@ public class OnboardingSteps {
         if (!rows.isArray()) throw new OnboardingFailure("MDMS_INVALID_RESPONSE", true);
         return rows;
     }
-    private void ensureRecord(OnboardingProgress.WriteScope scope, String tenant, String schema, String id, Map<String,Object> data) {
+    void ensureRecord(OnboardingProgress.WriteScope scope, String tenant, String schema, String id, Map<String,Object> data) {
         ensureRecord(scope, tenant, schema, id, data, false);
     }
     private void ensureRecord(OnboardingProgress.WriteScope scope, String tenant, String schema, String id, Map<String,Object> data, boolean refresh) {
@@ -366,16 +494,21 @@ public class OnboardingSteps {
             throw failure;
         }
     }
-    private Map<String,Object> substitute(JsonNode node, String tenant) {
+    Map<String,Object> substitute(JsonNode node, String tenant) {
         try { return asMap(mapper.readTree(mapper.writeValueAsString(node).replace("{tenantid}", tenant))); }
         catch (Exception e) { throw new IllegalStateException("Invalid baseline", e); }
     }
-    private Map<String,Object> asMap(JsonNode node) { return mapper.convertValue(node, new TypeReference<LinkedHashMap<String,Object>>() {}); }
+    Map<String,Object> asMap(JsonNode node) { return mapper.convertValue(node, new TypeReference<LinkedHashMap<String,Object>>() {}); }
 
     /** Module holding TENANT_TENANTS_&lt;T&gt;. */
     static final String TENANT_NAME_MODULE = "rainmaker-common";
     /** True when the baseline seeds the whole tenant-name module in this locale, so T may hold its name key there. */
     public boolean seedsTenantNameModule(String locale) { return seed.localizationPacks(locale).containsKey(TENANT_NAME_MODULE); }
+
+    /** StateInfo.languages: digit-ui defaults to the first entry, so en_IN (the one locale with full packs) leads. */
+    List<Map<String, String>> stateInfoLanguages(OnboardingSignup signup) {
+        return locales(signup).entrySet().stream().map(e -> Map.of("label", e.getValue(), "value", e.getKey())).toList();
+    }
 
     /** StateInfo locales, in order, mapped to their label (the signup language): en_IN first, then each signup language. */
     LinkedHashMap<String, String> locales(OnboardingSignup signup) {

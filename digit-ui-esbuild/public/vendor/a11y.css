@@ -1,0 +1,83 @@
+/* ======================================================================
+ * Contrast layer (WCAG 2.2 AA, 1.4.3 and 1.4.11). Loaded last so it can
+ * correct the vendored and override styles without editing them. Colours
+ * come from the tokens applyTheme derives (--color-brand-text,
+ * --color-focus-ring), so the fixes follow whichever theme a tenant picks.
+ * ====================================================================== */
+
+/* Focus ring (2.4.7, 1.4.11): the theme's ring colour, which applyTheme
+ * guarantees reaches 3:1 on the page. A light brand used as the ring was
+ * invisible. */
+*:focus-visible:not(input):not(textarea):not(select) {
+  outline-color: var(--color-focus-ring, var(--color-primary-1, #c84c0e));
+}
+
+/* On the dark header and menu the page ring would vanish into the surface;
+ * use the light text colour those surfaces are already read in. */
+:is(.employee, .citizen) .digit-sidebar *:focus-visible,
+:is(.employee, .citizen) .digit-sidebar:focus-visible,
+.digit-topbar *:focus-visible,
+.v2-citizen-sidebar *:focus-visible {
+  outline: 2px solid var(--color-sidebar-text-default, #FFFFFF) !important;
+  outline-offset: -2px !important;
+}
+.digit-topbar *:focus-visible {
+  outline-color: var(--color-header-text, #FFFFFF) !important;
+}
+
+/* Sidebar section headings ("COMPLAINTS"): 0.7 opacity put them at 4.0:1
+ * on the green and teal rails; 0.85 keeps them quieter than the items and
+ * clears 4.5:1 on all three built-in themes. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section-label {
+  opacity: 0.85;
+}
+
+/* Citizen complaint screens (.cms-*): the accent fell back to the accent
+ * brand, which is the gold on Green and Gold, and the muted grey was 4.2:1 on
+ * the #EEEEEE page these screens sit on. */
+.cms-file,
+.cms-receipt,
+.cms-details,
+.cms-complaints {
+  --cms-accent: var(--color-button-secondary-text, var(--color-brand-text, var(--color-primary-2, #2563EB)));
+  --cms-muted: #656B78;
+}
+
+/* The map's Navigate button rendered 20px tall under the details layout;
+ * 44px is the comfortable phone target and clears 2.5.8's 24px floor. */
+.cms-map-navigate {
+  min-height: 44px !important;
+  min-width: 44px;
+  box-sizing: border-box;
+}
+
+/* The Back link's text was the vendored #1D70B8 (4.45:1 on the grey page);
+ * it now takes the link's own colour like its chevron. */
+.back-btn2 p,
+.back-wrapper p {
+  color: inherit !important;
+}
+
+/* Field labels on a complaint's page, upcoming step names on File a
+ * Complaint and the live voice preview were #8A93A2/#9CA3AF, 2.5 to 3.1:1 on
+ * white. They are text people read, so they take the muted token. */
+.cms-details-item dt,
+.cms-step:not(.current):not(.done) .cms-step-label,
+.cms-step:not(.current):not(.done) .cms-step-dot,
+.cms-voice-interim {
+  color: var(--cms-muted, #656B78);
+}
+
+/* Secondary buttons (the phone inbox's Filter, Search and Sort) painted their
+ * label in the accent brand: gold on the grey page, 1.3:1. */
+.digit-button-secondary:not(.disabled) .digit-button-label {
+  color: var(--color-button-secondary-text, var(--color-brand-text, var(--color-primary-main, #c84c0e))) !important;
+}
+
+/* "1 department · 1 role": the counts sit back at 0.78 opacity, which on the
+ * phone's white strip came out #838084, 3.9:1. On the dark header bar the
+ * same fade still reads, so only the phone strip drops it. */
+.employee .digit-working-context-mobile .digit-working-context-summary .digit-working-context-count,
+.employee .digit-working-context-mobile .digit-working-context-summary .digit-working-context-sep {
+  opacity: 1;
+}

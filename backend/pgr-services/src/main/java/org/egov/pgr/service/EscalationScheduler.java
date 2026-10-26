@@ -1,5 +1,9 @@
 package org.egov.pgr.service;
 
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
@@ -40,6 +44,14 @@ public class EscalationScheduler {
 
     @Value("${state.level.tenant.id:${egov.state.level.tenant.id:ke}}")
     private String stateLevelTenantId;
+
+    /**
+     * Each complaint is checked in its own root span. Under the OTEL javaagent the whole
+     * {@code @Scheduled} pass is otherwise one trace, and a scan touching thousands of
+     * complaints grew past Tempo's trace size limit and crash-looped it. Without the agent
+     * this is a no-op tracer.
+     */
+    private Tracer tracer = GlobalOpenTelemetry.getTracer("pgr-services.escalation");
 
     @Autowired
     public EscalationScheduler(PGRConfiguration config,
@@ -118,7 +130,12 @@ public class EscalationScheduler {
             for (ServiceWrapper wrapper : complaints) {
                 result.scanned++;
                 Service complaint = wrapper.getService();
-                try {
+                Span complaintSpan = tracer.spanBuilder("pgr.escalation.complaint")
+                        .setNoParent()
+                        .setAttribute("pgr.complaint.id", String.valueOf(complaint.getServiceRequestId()))
+                        .setAttribute("pgr.complaint.tenant", String.valueOf(complaint.getTenantId()))
+                        .startSpan();
+                try (Scope ignored = complaintSpan.makeCurrent()) {
                     EscalationConfigurationService.ResolvedEscalationConfig escalationConfig =
                             policyFor(complaint.getTenantId(), systemRequestInfo, policyCache);
                     if (complaint.getApplicationStatus() == null
@@ -181,8 +198,11 @@ public class EscalationScheduler {
                     result.escalated++;
                 } catch (Exception e) {
                     result.skipped++;
+                    complaintSpan.recordException(e);
                     log.warn("Complaint {} was due but could not be escalated: {}",
                             complaint.getServiceRequestId(), e.getMessage());
+                } finally {
+                    complaintSpan.end();
                 }
             }
 

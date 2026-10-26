@@ -2,6 +2,8 @@ import { ensureActive, remove as removeBinding } from "../../src/modules/binding
 import { mirrorPerson } from "../../src/modules/sync/mirror.js";
 import * as syncMirror from "../../src/modules/sync/mirror.js";
 import * as sessionStore from "../../src/modules/sessions/session-store.js";
+import * as bindingStore from "../../src/modules/bindings/store.js";
+import * as digitUserClient from "../../src/modules/managed-accounts/digit-user-client.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { staffAccess } from "../../src/modules/bindings/predicate.js";
 import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
@@ -9,7 +11,7 @@ import { drainRevocationJobs, holdToken, recordToken } from "../../src/modules/r
 import { applyKeycloakEvent } from "../../src/modules/revocation/event-effects.js";
 import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
 import { tokenKey, tokenHoldersKey, personTokensKey, accountId } from "../../src/modules/revocation/inventory.js";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
 import { getIssuer } from "../helpers.js";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
@@ -174,6 +176,8 @@ beforeAll(async () => {
     digitAdminTenantId: "ke",
     digitManagedBaseRoles: ["EMPLOYEE"],
     digitManagedRoleAllowlist: ["EMPLOYEE", "GRO", "PGR_VIEWER"],
+    // The legacy managed-account fixtures open the configurator as GRO, their only Organization role.
+    digitConfiguratorRoles: [...config.digitConfiguratorRoles, "GRO"],
     digitRoleClientId: "digit-ui",
     identityOrganizationAdminRoles: ["TENANT_ADMIN"],
     identityOrganizationMemberGroup: "employees",
@@ -1557,7 +1561,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     })).status).toBe(401);
   });
 
-  it.each([false, true])("preserves a managed rotate token after public logout-others (alias: %s)", async (alias) => {
+  it.each([false, true])("#2592: public logout-others revokes the shared managed rotate token; the current session re-selects (alias: %s)", async (alias) => {
     const subject = `managed-logout-${alias}`;
     const tenantId = "ke.bomet";
     const identity = managedIdentity(config.keycloakIssuer, subject, tenantId);
@@ -1617,25 +1621,32 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
       });
       expect((await details()).status).toBe(200);
-      const logouts = digit.stats.logouts;
+      const logouts = digit.stats.logouts, logoutCalls = digit.stats.logoutCalls;
       expect((await logout("others")).status).toBe(204);
       expect(await getIdentitySession(other.sessionId)).toBeNull();
       expect(await getIdentitySession(current.sessionId)).not.toBeNull();
       expect((await fetch(`${app()}/identity/v1/session?surface=employee`, { headers: { Cookie: current.cookie } })).status).toBe(200);
       expect((await fetch(`${app()}/identity/v1/session?surface=employee`, { headers: { Cookie: other.cookie } })).status).toBe(401);
-      // Validate the original token before any new selection could mint a replacement.
-      expect((await details()).status).toBe(200);
-      expect(digit.stats.logouts).toBe(logouts);
-      expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([sessionTokenRef(current.sessionId)]);
+      // The other device's copy (its localStorage) no longer reaches DIGIT, and an alias is revoked only once.
+      expect((await details()).status).toBe(401);
+      expect(digit.stats.logouts).toBe(logouts + 1);
+      expect(digit.stats.logoutCalls).toBe(logoutCalls + 1);
+      expect(await getRedis().get(tokenKey(account))).toBeNull();
       if (alias) expect(await getRedis().get(tokenKey(aliasRef))).toBeNull();
       const adminLog = await (await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)).json();
       const ended = `DELETE /admin/realms/${config.keycloakOrganizationRealm}/sessions/${subject}-`;
       expect(adminLog).toContain(`${ended}other`);
       expect(adminLog).not.toContain(`${ended}current`);
+      // The current session keeps working with a fresh token.
+      const reselected = await select(current.cookie);
+      expect(reselected.status).toBe(200);
+      const fresh = (await reselected.json()).access_token;
+      expect(fresh).not.toBe(selected.access_token);
+      expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([sessionTokenRef(current.sessionId)]);
+      expect((await select(other.cookie)).status).toBe(401);
       expect((await logout("all")).status).toBe(204);
       expect(await getIdentitySession(current.sessionId)).toBeNull();
-      expect((await details()).status).toBe(401);
-      expect(digit.stats.logouts).toBe(logouts + 1);
+      expect(digit.stats.logouts).toBe(logouts + 2);
     } finally {
       config.identityStaffCredentialMode = previousMode;
     }
@@ -3078,6 +3089,208 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(digit.stats.creates).toBe(creates);
     });
 
+    describe("an employee's registered mobile on the citizen portal (#2595)", () => {
+      const staff = "identity-user-unlinked";
+      const otp = (path: "_send" | "_verify", body: object) => fetch(`${app()}/identity/v1/citizen/otp/${path}`, {
+        method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantSlug: "bomet-county", ...body }),
+      });
+      const signInByOtp = async (mobileNumber: string) => {
+        const { challengeId } = await (await otp("_send", { mobileNumber })).json();
+        const verified = await otp("_verify", { challengeId, code: sent[sent.length - 1].code });
+        expect(verified.status).toBe(200);
+        return cookieFrom(verified, "digit_identity_session_citizen")!;
+      };
+      const sessionOf = async (cookie: string, surface: string) => (await fetch(
+        `${app()}/identity/v1/session?surface=${surface}&include=account`, { headers: { Cookie: cookie } },
+      ));
+      const employee = (mobileNumber: string) => digit.addAccount({
+        userName: `EMP-${mobileNumber}`, name: "Garry", mobileNumber, emailId: "garry@example.com", gender: "MALE",
+        tenantId: "ke.bomet", type: "EMPLOYEE", active: true, identificationMark: null,
+        roles: [{ code: "EMPLOYEE", tenantId: "ke.bomet" }, { code: "GRO", tenantId: "ke.bomet" }], password: "Legacy@123",
+      });
+      let bound = "";
+      const bindStaff = async (mobileNumber: string, attributes: Record<string, string[]> = {}) => {
+        bound = employee(mobileNumber).uuid;
+        await bindLegacyEmployeeFixture(bound);
+        const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${staff}`)).json();
+        await kcUpdate(`/users/${staff}`, { attributes: { ...user.attributes, ...attributes } });
+      };
+      afterEach(async () => {
+        if (bound) await removeLegacyEmployeeFixture(bound);
+        bound = "";
+        const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${staff}`)).json();
+        const attributes = { ...user.attributes };
+        for (const name of ["phoneNumber", "phoneNumberVerified", "digit.citizenRegistrations", "digit.accounts"]) delete attributes[name];
+        await kcUpdate(`/users/${staff}`, { enabled: true, attributes });
+      });
+      // The join is opt-in until #2631.
+      beforeAll(() => { config.identityStaffPhoneJoin = true; });
+      afterAll(() => { config.identityStaffPhoneJoin = false; });
+
+      it("keeps a separate phone identity, without an employee lookup, when IDENTITY_STAFF_PHONE_JOIN is off", async () => {
+        await bindStaff("799002608");
+        const before = (await kcUser(staff)).attributes;
+        const searches = vi.spyOn(digitUserClient, "searchAccounts");
+        config.identityStaffPhoneJoin = false;
+        try {
+          const cookie = await signInByOtp("799002608");
+          expect(searches).not.toHaveBeenCalled();
+          const citizen = await (await sessionOf(cookie, "citizen")).json();
+          expect(citizen.user.id).not.toBe(staff);
+          expect(citizen.user).toMatchObject({ phoneNumber: "+254799002608", phoneNumberVerified: true });
+          expect((await auditRecords()).filter((r) => r.event === "SESSION_CREATE" && r.subject === citizen.user.id).at(-1))
+            .toMatchObject({ outcome: "SUCCESS", reason: "IDENTITY_CREATED" });
+        } finally { config.identityStaffPhoneJoin = true; searches.mockRestore(); }
+        expect((await kcUser(staff)).attributes).toEqual(before);
+      });
+
+      it("signs in as the employee: one person, one session list, and a citizen profile from the employee record", async () => {
+        await bindStaff("799002595");
+        const staffCookie = await signIn("employee", "unlinked");
+        const citizenCookie = await signInByOtp("799002595");
+
+        const citizen = await (await sessionOf(citizenCookie, "citizen")).json();
+        expect(citizen.user).toMatchObject({ id: staff, name: "Garry", phoneNumber: "+254799002595", phoneNumberVerified: true });
+        const surfaces = (body: { sessions: Array<{ surface: string; current: boolean }> }) =>
+          body.sessions.map((s) => `${s.surface}${s.current ? " (current)" : ""}`);
+        expect(surfaces(citizen)).toEqual(expect.arrayContaining(["citizen (current)", "employee"]));
+        expect(surfaces(await (await sessionOf(staffCookie, "employee")).json()))
+          .toEqual(expect.arrayContaining(["citizen", "employee (current)"]));
+        expect((await auditRecords()).filter((r) => r.event === "SESSION_CREATE" && r.subject === staff).at(-1))
+          .toMatchObject({ outcome: "SUCCESS", reason: "STAFF_PHONE_PROVED" });
+
+        const selected = await citizenSelect(citizenCookie);
+        expect(selected.status).toBe(200);
+        const { UserRequest } = await selected.json();
+        expect(UserRequest).toMatchObject({ type: "CITIZEN", tenantId: "ke", mobileNumber: "799002595" });
+        expect(digit.accounts.get(UserRequest.uuid)).toMatchObject({ name: "Garry", gender: "MALE", emailId: "garry@example.com" });
+
+        // "Sign out everywhere" from the citizen portal reaches the employee portal too.
+        const logout = await fetch(`${app()}/identity/v1/logout`, {
+          method: "POST",
+          headers: { Cookie: citizenCookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+          body: JSON.stringify({ surface: "citizen", scope: "all" }),
+        });
+        expect(logout.status).toBe(204);
+        expect((await sessionOf(staffCookie, "employee")).status).toBe(401);
+      });
+
+      it("keeps a separate phone identity when the employee record is ambiguous or the employee proved another number", async () => {
+        await bindStaff("799002596");
+        employee("799002596");
+        const ambiguous = await (await sessionOf(await signInByOtp("799002596"), "citizen")).json();
+        expect(ambiguous.user.id).not.toBe(staff);
+        await removeLegacyEmployeeFixture(bound);
+
+        await bindStaff("799002597", { phoneNumber: ["+254799002598"], phoneNumberVerified: ["true"] });
+        const proved = await (await sessionOf(await signInByOtp("799002597"), "citizen")).json();
+        expect(proved.user.id).not.toBe(staff);
+        const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${staff}`)).json();
+        expect(user.attributes.phoneNumber).toEqual(["+254799002598"]);
+      });
+
+      const kcUser = async (id: string) => (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${id}`)).json();
+
+      it("signs in as the employee even when the phone write is not visible to the owner search yet", async () => {
+        await bindStaff("799002603");
+        // The write "succeeds" but does not land, as when an admin-console save races it.
+        await fetch(`${config.keycloakAdminUrl}/__test/faults`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ method: "PUT", path: `/users/${staff}`, status: 204, count: 1 }),
+        });
+        const signedIn = await (await sessionOf(await signInByOtp("799002603"), "citizen")).json();
+        expect(signedIn.user.id).toBe(staff);
+      });
+
+      it("keeps a separate phone identity when two people are bound to the employee record", async () => {
+        await bindStaff("799002601");
+        const second = "identity-user-second-binding";
+        const { attributes } = await kcUser(staff);
+        await kcAdmin("/users", {
+          id: second, username: "second.binding", enabled: true,
+          attributes: { "digit.bindings": attributes["digit.bindings"], "digit.boundUuids": attributes["digit.boundUuids"] },
+        });
+        await ensureOrganizationMembership({ organizationId: "org-bomet-id", userId: second });
+        try {
+          const signedIn = await (await sessionOf(await signInByOtp("799002601"), "citizen")).json();
+          expect([staff, second]).not.toContain(signedIn.user.id);
+          expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        } finally {
+          await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/organizations/org-bomet-id/members/${second}`, { method: "DELETE" });
+          await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${second}`, { method: "DELETE" });
+        }
+      });
+
+      it("keeps a separate phone identity when the bound person may not use the tenant or is bound to another record", async () => {
+        await bindStaff("799002602");
+        await kcUpdate(`/users/${staff}`, { enabled: false });
+        const disabled = await (await sessionOf(await signInByOtp("799002602"), "citizen")).json();
+        expect(disabled.user.id).not.toBe(staff);
+        expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        await kcUpdate(`/users/${staff}`, { enabled: true });
+        await removeLegacyEmployeeFixture(bound);
+
+        // The owner lookup names the staff person for a record their binding no longer points at.
+        await bindStaff("799002603");
+        const other = employee("799002604");
+        const original = bindingStore.ownersOf;
+        const spy = vi.spyOn(bindingStore, "ownersOf").mockImplementation(async (tenantId, uuid) =>
+          uuid === other.uuid ? [staff] : original(tenantId, uuid));
+        try {
+          const moved = await (await sessionOf(await signInByOtp("799002604"), "citizen")).json();
+          expect(spy).toHaveBeenCalledWith("ke.bomet", other.uuid);
+          expect(moved.user.id).not.toBe(staff);
+          expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        } finally { spy.mockRestore(); }
+      });
+
+      it("re-checks the employee record under the phone lock", async () => {
+        await bindStaff("799002605");
+        // The record loses the number between the first read and the one under the lock.
+        const original = digitUserClient.searchAccounts;
+        let searches = 0;
+        const spy = vi.spyOn(digitUserClient, "searchAccounts").mockImplementation(async (token, criteria) =>
+          criteria.userType === "EMPLOYEE" && criteria.mobileNumber === "799002605" && ++searches === 2 ? [] : original(token, criteria));
+        try {
+          const signedIn = await (await sessionOf(await signInByOtp("799002605"), "citizen")).json();
+          expect(signedIn.user.id).not.toBe(staff);
+          expect(searches).toBe(2);
+          expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        } finally { spy.mockRestore(); }
+      });
+
+      // An outage is IDENTITY_UNAVAILABLE, never a new identity: that would split the person for good.
+      it.each([
+        ["egov-user is down", "799002606", () => vi.spyOn(digitUserClient, "searchAccounts")
+          .mockRejectedValue(new digitUserClient.DigitUnavailableError("Injected egov-user outage"))],
+        ["the binding cannot be read", "799002607", () => vi.spyOn(bindingStore, "ownersOf")
+          .mockRejectedValue(new BindingError("IDENTITY_UNAVAILABLE", "Injected binding failure"))],
+      ])("answers IDENTITY_UNAVAILABLE and keeps the code when %s", async (_, mobileNumber, fail) => {
+        await bindStaff(mobileNumber);
+        const { challengeId } = await (await otp("_send", { mobileNumber })).json();
+        const code = sent[sent.length - 1].code;
+        const spy = fail();
+        try {
+          const failed = await otp("_verify", { challengeId, code });
+          expect([failed.status, (await failed.json()).code]).toEqual([503, "IDENTITY_UNAVAILABLE"]);
+        } finally { spy.mockRestore(); }
+        const holders = await (await fetch(
+          `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users?q=phoneNumber:%2B254${mobileNumber}`,
+          { headers: { Authorization: "Bearer mock-kc-admin-token" } },
+        )).json();
+        expect(holders).toEqual([]);
+        expect((await kcUser(staff)).attributes.phoneNumber).toBeUndefined();
+        expect((await auditRecords()).find((r) => r.event === "SESSION_CREATE" && r.challengeId === challengeId))
+          .toMatchObject({ outcome: "FAILED", reason: "IDENTITY_UNAVAILABLE" });
+
+        const retried = await otp("_verify", { challengeId, code });
+        expect(retried.status).toBe(200);
+        const citizen = await (await sessionOf(cookieFrom(retried, "digit_identity_session_citizen")!, "citizen")).json();
+        expect(citizen.user).toMatchObject({ id: staff, phoneNumber: `+254${mobileNumber}`, phoneNumberVerified: true });
+      });
+    });
+
     it("trusts a phone OTP session only for the number it proved, not a later Keycloak phone", async () => {
       // Vinoth/Dhruv: a phone_otp session proved one number; if Keycloak's
       // phoneNumber now says another (user-editable profile, or an admin edit),
@@ -3097,9 +3310,14 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       const subject = (await getIdentitySession(cookie.split("=")[1]))!.claims.sub;
       const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
       await kcUpdate(`/users/${subject}`, { attributes: { ...user.attributes, phoneNumber: ["+254799000776"], phoneNumberVerified: ["true"] } });
+      const creates = digit.stats.creates;
       const selected = await citizenSelect(cookie);
-      if (selected.status === 200) expect((await selected.json()).UserRequest.uuid).not.toBe(victim.uuid);
-      else expect(selected.status).toBeGreaterThanOrEqual(400);
+      // Nor may that number reach a DIGIT citizen account (#2640).
+      expect(selected.status).toBe(403);
+      expect((await selected.json()).code).toBe("PHONE_NOT_VERIFIED");
+      expect(digit.stats.creates).toBe(creates);
+      expect([...digit.accounts.values()].filter((account) => account.mobileNumber === "799000776")
+        .map((account) => account.uuid)).toEqual([victim.uuid]);
     });
 
     it("trusts a Keycloak-verified phone only when users cannot edit it", async () => {
@@ -3119,16 +3337,22 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
 
       const a = legacy({ userName: "799000881", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000881", roles: ["CITIZEN"] });
       const b = legacy({ userName: "799000882", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000882", roles: ["CITIZEN"] });
-      // Users can edit their phone: the claim proves nothing, so no link.
+      // Users can edit their phone: the claim proves nothing, so no link, and
+      // no DIGIT account carries the number either (#2640).
       await setProfile({ unmanagedAttributePolicy: "ENABLED", attributes: [] });
+      const creates = digit.stats.creates;
       const untrusted = await citizenSelect(await signIn("citizen", "legacya"));
-      expect(untrusted.status).toBe(200);
-      expect((await untrusted.json()).UserRequest.uuid).not.toBe(a.uuid);
+      expect(untrusted.status).toBe(403);
+      expect((await untrusted.json()).code).toBe("PHONE_NOT_VERIFIED");
+      expect(digit.stats.creates).toBe(creates);
       // Admin-only phone: the verified claim links the existing account.
       await setProfile({ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [] });
       const trusted = await citizenSelect(await signIn("citizen", "legacyb"));
       expect(trusted.status).toBe(200);
       expect((await trusted.json()).UserRequest.uuid).toBe(b.uuid);
+      // The refusal left nothing behind: with the phone trusted, a links.
+      const retried = await citizenSelect(await signIn("citizen", "legacya"));
+      expect((await retried.json()).UserRequest.uuid).toBe(a.uuid);
     });
 
     it("answers 503 when the phone-trust check fails, and links on the retry instead of splitting the citizen", async () => {
@@ -3277,6 +3501,7 @@ describe("binding workspace public routes", () => {
     expect(linked.status).toBe(201);
     const result = await linked.json();
     expect(result).toMatchObject({ identityUserCreated: true, activationEmailSent: true, binding: { state: "active" } });
+    account.roles.push({ code: "HRMS_ADMIN", tenantId: "ug" }); // the configurator needs an admin role (#2599)
     const cookie = await cookieFor(result.binding.subject);
     expect(await (await read("/session", cookie)).json()).toMatchObject({ pendingInvitations: [] });
     expect(await (await read("/tenants", cookie)).json()).toMatchObject({ onboardingRequired: false, selectionRequired: false,
@@ -3292,6 +3517,21 @@ describe("binding workspace public routes", () => {
     expect((await post("/contexts/_select", cookie, { tenantId: "ug" })).status).toBe(200);
   });
 
+  it("refuses the configurator to staff without a Configurator role at the tenant, but not the employee app (#2599)", async () => {
+    const account = employee("BINDING-CSR");
+    account.roles.push({ code: "CSR", tenantId: "ug" });
+    const { binding } = await (await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: "binding-csr@example.test" })).json();
+    account.roles.push({ code: "MDMS_ADMIN", tenantId: "ke.bomet" });
+    const refused = await post("/contexts/_select", await cookieFor(binding.subject), { tenantId: "ug" });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: "CONFIGURATOR_ROLE_REQUIRED" });
+    expect([...digit.tokens.values()].some(token => token.uuid === account.uuid)).toBe(false);
+    const employeeApp = await post("/contexts/_select", await cookieFor(binding.subject, "employee"), { tenantId: "ug", surface: "employee" });
+    expect(employeeApp.status).toBe(200);
+    account.roles.push({ code: "HRMS_ADMIN", tenantId: "ug" });
+    expect((await post("/contexts/_select", await cookieFor(binding.subject), { tenantId: "ug" })).status).toBe(200);
+  });
+
   it.each(["configurator", "employee"] as const)("shows and accepts an existing person's invitation on %s, then selects its DIGIT account", async (surface) => {
     const subject = `binding-existing-${surface}`;
     await kcAdmin("/users", { id: subject, username: subject, email: `${subject}@example.test`, emailVerified: true, enabled: true });
@@ -3300,6 +3540,7 @@ describe("binding workspace public routes", () => {
     expect(response.status).toBe(200);
     const invite = await response.json();
     expect(invite).toMatchObject({ identityUserCreated: false, binding: { state: "pending" } });
+    account.roles.push({ code: "HRMS_ADMIN", tenantId: "ug" }); // the configurator needs an admin role (#2599)
     const cookie = await cookieFor(subject, surface);
     expect(await (await read(`/session?surface=${surface}`, cookie)).json()).toMatchObject({ pendingInvitations: [{ tenantId: "ug", invitationVersion: invite.binding.invitationVersion }] });
     expect(await (await post("/contexts/_select", cookie, { tenantId: "ug", surface })).json()).toMatchObject({ code: "PENDING_INVITATION" });
@@ -3351,6 +3592,7 @@ describe("binding workspace public routes", () => {
     const account = employee("BINDING-CLEANUP");
     const linked = await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: "binding-cleanup@example.test" });
     const { binding } = await linked.json();
+    account.roles.push({ code: "HRMS_ADMIN", tenantId: "ug" }); // the configurator needs an admin role (#2599)
     const cookie = await cookieFor(binding.subject);
     const spy = vi.spyOn(syncMirror, "mirrorPerson").mockRejectedValueOnce(new BindingError("IDENTITY_UNAVAILABLE", "Injected mirror failure"));
     try {

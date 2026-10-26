@@ -4,6 +4,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
+import org.egov.novubridge.service.account.NovuAccount;
+import org.egov.novubridge.service.account.TenantAccountService;
 import org.egov.novubridge.service.core.CoreSmsTranslator;
 import org.egov.novubridge.service.delivery.DeliveryProvider;
 import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
@@ -11,11 +13,13 @@ import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
 import org.egov.novubridge.service.delivery.DeliveryResult;
 import org.egov.novubridge.service.delivery.Dispatch;
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailabilities;
 import org.egov.novubridge.service.provider.ProviderAvailability;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.util.Values;
 import org.egov.novubridge.web.models.*;
 import org.egov.tracer.model.CustomException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -41,7 +45,9 @@ public class DispatchPipelineService {
     private final DispatchLogRepository dispatchLogRepository;
     private final NovuBridgeConfiguration config;
     private final ProviderAvailability providerAvailability;
+    private final TenantPhoneNumbers phoneNumbers;
 
+    /** Phones are completed with the deployment's country code only (no tenant rule is read). */
     public DispatchPipelineService(EnvelopeValidator envelopeValidator,
                                    PreferenceServiceClient preferenceServiceClient,
                                    DeliveryProviderRegistry providers,
@@ -49,6 +55,19 @@ public class DispatchPipelineService {
                                    DispatchLogRepository dispatchLogRepository,
                                    NovuBridgeConfiguration config,
                                    ProviderAvailability providerAvailability) {
+        this(envelopeValidator, preferenceServiceClient, providers, channelPolicy, dispatchLogRepository, config,
+                providerAvailability, new TenantPhoneNumbers(config));
+    }
+
+    @Autowired
+    public DispatchPipelineService(EnvelopeValidator envelopeValidator,
+                                   PreferenceServiceClient preferenceServiceClient,
+                                   DeliveryProviderRegistry providers,
+                                   ChannelPolicyClient channelPolicy,
+                                   DispatchLogRepository dispatchLogRepository,
+                                   NovuBridgeConfiguration config,
+                                   ProviderAvailability providerAvailability,
+                                   TenantPhoneNumbers phoneNumbers) {
         this.envelopeValidator = envelopeValidator;
         this.preferenceServiceClient = preferenceServiceClient;
         this.providers = providers;
@@ -56,6 +75,17 @@ public class DispatchPipelineService {
         this.dispatchLogRepository = dispatchLogRepository;
         this.config = config;
         this.providerAvailability = providerAvailability;
+        this.phoneNumbers = phoneNumbers;
+    }
+
+    private TenantAccountService tenantAccounts;
+    private ProviderAvailabilities availabilities;
+
+    /** Per-tenant Novu accounts (#2203). Absent (tests, feature wiring off) = everything uses the shared account. */
+    @Autowired(required = false)
+    public void setTenantAccounts(TenantAccountService tenantAccounts, ProviderAvailabilities availabilities) {
+        this.tenantAccounts = tenantAccounts;
+        this.availabilities = availabilities;
     }
 
     public DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo) {
@@ -65,7 +95,7 @@ public class DispatchPipelineService {
     /** @param sourcePath {@link DispatchLogEntry#SOURCE_PATH_RESOLVED}, or null for pre-rendered */
     public DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo,
                                   String sourcePath) {
-        return process(event, send, requestInfo, sourcePath, false);
+        return process(event, send, requestInfo, sourcePath, false, false);
     }
 
     /**
@@ -75,13 +105,25 @@ public class DispatchPipelineService {
      * topics, or a {@code /dispatch/_dry-run} caller, can write.
      */
     public DispatchResult processCoreSms(NotificationEvent event) {
-        return process(event, true, null, null, true);
+        return process(event, true, null, null, true, false);
+    }
+
+    /**
+     * A workspace-trial email from {@code POST /messages/_dispatch}, sent now. Its caller holds the
+     * internal send token (the Identity BFF), the trust {@code messages/_send} already has, and it is a
+     * platform notice to a workspace's own admins. So the consent gate is skipped, and so is the
+     * tenant's channel policy: enabling EMAIL at the platform root would also start that root's
+     * complaint emails. It still needs a usable Novu integration for the channel. Like the core-SMS
+     * exemption this is an in-process fact (the authenticated route), never an envelope field.
+     */
+    public DispatchResult processInternal(NotificationEvent event) {
+        return process(event, true, null, null, false, true);
     }
 
     private DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo,
-                                   String sourcePath, boolean coreSms) {
+                                   String sourcePath, boolean coreSms, boolean internal) {
         log.info("Processing {} envelope: eventId={}, eventName={}, tenant={}, channel={}, send={}",
-                sourcePath != null ? "resolved" : coreSms ? "core-SMS" : "pre-rendered",
+                sourcePath != null ? "resolved" : coreSms ? "core-SMS" : internal ? "internal" : "pre-rendered",
                 event.getEventId(), event.getEventName(), event.getTenantId(), event.getChannel(), send);
 
         // Rejections are written down BEFORE they are thrown; the consumer still DLQs the event.
@@ -114,7 +156,7 @@ public class DispatchPipelineService {
                     .build();
         }
 
-        if (!(coreSms && CoreSmsTranslator.isConsentExempt(event))
+        if (!internal && !(coreSms && CoreSmsTranslator.isConsentExempt(event))
                 && !preferenceServiceClient.isChannelAllowed(event.getTenantId(), context.getRecipientUserId(),
                         context.getRecipientMobile(), context.getChannel())) {
             persist(event, context, "SKIPPED", "NB_PREFERENCE_DENIED", context.getChannel() + " preference denied");
@@ -132,7 +174,7 @@ public class DispatchPipelineService {
             return skip(event, context, "NB_UNSUPPORTED_CHANNEL", "Unknown channel: " + channel,
                     "Unsupported channel " + channel + " skipped");
         }
-        if (!channelPolicy.isEnabled(event.getTenantId(), channel)) {
+        if (!internal && !channelPolicy.isEnabled(event.getTenantId(), channel)) {
             return skip(event, context, "NB_NO_PROVIDER",
                     "Channel " + channel + " is not enabled for tenant " + event.getTenantId(),
                     "Channel " + channel + " has no enabled provider; skipped");
@@ -147,6 +189,29 @@ public class DispatchPipelineService {
                     "Recipient has no " + (email ? "email" : "phone") + " for channel " + channel,
                     "Missing contact for channel " + channel);
         }
+        if (!email) {
+            // DIGIT stores numbers nationally; the provider needs E.164. Completed with the
+            // tenant's own country code, never sent as a bare "+" + national number. A rule MDMS
+            // could not answer for is not "no rule" (that would fall to the deployment's code,
+            // another country's on a multi-country box): FAILED, and the consumer DLQs it.
+            String e164;
+            try {
+                e164 = phoneNumbers.toE164(contact.getPhone(), event.getTenantId());
+            } catch (TenantPhoneNumbers.RuleUnavailable unavailable) {
+                persist(event, context, "FAILED", unavailable.getCode(), unavailable.getMessage());
+                throw unavailable;
+            }
+            if (e164 == null) {
+                return skip(event, context, "NB_CONTACT_INVALID", "Recipient phone "
+                                + PiiMask.mask(contact.getPhone()) + " has no country code, and none is known for "
+                                + "tenant " + event.getTenantId() + " (" + phoneNumbers.describeSources(event.getTenantId())
+                                + "). Nothing was sent.",
+                        "Phone without a country code for channel " + channel);
+            }
+            if (!e164.equals(contact.getPhone())) {
+                contact = contact.toBuilder().phone(e164).build();
+            }
+        }
         // Business-initiated WhatsApp must use an approved template; the provider rejects free-form.
         if ("WHATSAPP".equalsIgnoreCase(channel) && !StringUtils.hasText(event.getTemplateId())) {
             return skip(event, context, "NB_TEMPLATE_NOT_APPROVED",
@@ -155,8 +220,25 @@ public class DispatchPipelineService {
                     "WhatsApp event has no approved provider template; skipped");
         }
 
+        // #2203: a tenant whose root has its own Novu account sends through it; null = the shared
+        // account. Fails closed: an unreadable account is a FAILED row, never the shared account.
+        NovuAccount account;
+        try {
+            account = tenantAccounts == null ? null : tenantAccounts.accountFor(event.getTenantId());
+        } catch (CustomException ce) {
+            persist(event, context, "FAILED", ce.getCode(), ce.getMessage());
+            throw ce;
+        }
         String pinned = channelPolicy.provider(event.getTenantId(), channel);
         DeliveryProvider provider = providers.select(event.getTenantId(), channel);
+        if (account != null && !NovuDeliveryProvider.ID.equals(provider.id())) {
+            // A direct gateway sends with the deployment's own credentials, never a tenant's.
+            log.warn("Tenant {} has its own notification account; ignoring the direct '{}' gateway for {}",
+                    event.getTenantId(), provider.id(), channel);
+            provider = providers.novu();
+        }
+        ProviderAvailability providerAvailability = account == null
+                ? this.providerAvailability : availabilities.forAccount(account);
         // Novu ACCEPTS a trigger naming a deleted/disabled/wrong-channel integration and fails it
         // internally, so without this check the row would read SENT for a message that never left.
         // Nothing pinned and through Novu: Novu's default could be a worker provider the worker lacks.
@@ -182,6 +264,7 @@ public class DispatchPipelineService {
                 .templateId(event.getTemplateId())
                 .contentVariables(event.getContentVariables())
                 .integrationIdentifier(integrationIdentifier)
+                .novuAccount(account)
                 .build();
 
         DeliveryResult result;

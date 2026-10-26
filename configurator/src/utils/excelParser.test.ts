@@ -7,6 +7,7 @@ import {
   parseBoundaryExcel,
   parseTenantExcel,
   parseEmployeeExcel,
+  levelLabel,
 } from './excelParser';
 
 // LibreOffice / Google Sheets convert TRUE / FALSE cells to JS booleans
@@ -88,6 +89,43 @@ describe('Boundary coordinate parsing', () => {
   });
 });
 
+describe('Boundary codes repeated in a sheet (#2456)', () => {
+  it('refuses the sheet and names each repeated code with its rows', () => {
+    const wb = makeWorkbook('Boundary', [
+      { code: 'COUNTRY_001', name: 'UAE', boundaryType: 'Country' },
+      { code: 'EMIRATE_001', name: 'Dubai', boundaryType: 'Emirate', parentCode: 'COUNTRY_001' },
+      { code: 'DISTRICT_001', name: 'Deira', boundaryType: 'District', parentCode: 'EMIRATE_001' },
+      { code: 'COMMUNITY_001', name: 'Al Murar', boundaryType: 'Community', parentCode: 'DISTRICT_001' },
+      { code: 'EMIRATE_001', name: 'Abudhabi', boundaryType: 'Emirate', parentCode: 'COUNTRY_001' },
+      { code: 'COMMUNITY_002', name: 'Bur Dubai', boundaryType: 'Community', parentCode: 'DISTRICT_001' },
+    ]);
+    const { validation } = parseBoundaryExcel(wb);
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toEqual([
+      {
+        row: 3,
+        rows: [3, 6],
+        field: 'code',
+        value: 'EMIRATE_001',
+        message: 'The code "EMIRATE_001" is used on rows 3, 6. Each boundary needs its own code.',
+        code: 'DUPLICATE_CODE',
+      },
+    ]);
+  });
+
+  it('counts rows as the sheet does, blank rows included', () => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['code', 'name', 'boundaryType'],
+      ['WARD_1', 'Ward 1', 'Ward'],
+      [],
+      [' WARD_1 ', 'Ward 1 again', 'Ward'],
+    ]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Boundary');
+    expect(parseBoundaryExcel(wb).validation.errors.map((e) => e.rows)).toEqual([[2, 4]]);
+  });
+});
+
 describe('Tenant code validation (egovernments/CCRS#1847)', () => {
   // egov-user enforces `Pattern.createUserRequest.user.tenantId` =
   // `^[a-zA-Z. ]*$` server-side (letters, dots, spaces — no digits). A
@@ -158,6 +196,14 @@ describe('Employee dob is optional (egovernments/CCRS#1949)', () => {
     expect(data.map((e) => e.dob)).toEqual([undefined, undefined]);
   });
 
+  it('keeps a row without an employeeCode: the bulk imports number it (#2456)', () => {
+    const noCode: Record<string, unknown> = { ...baseRow };
+    delete noCode.employeeCode;
+    const { data, validation } = parseEmployeeExcel(makeWorkbook('Employee', [noCode]));
+    expect(validation.errors).toEqual([]);
+    expect(data.map((e) => e.employeeCode)).toEqual(['']);
+  });
+
   it('still parses a supplied dob', () => {
     const { data, validation } = parseEmployeeExcel(
       makeWorkbook('Employee', [{ ...baseRow, dob: '1990-05-14' }])
@@ -186,5 +232,19 @@ describe('Employee dob is optional (egovernments/CCRS#1949)', () => {
     expect(validation.errors).toContainEqual(
       expect.objectContaining({ field: 'dob', code: 'INVALID_FORMAT' })
     );
+  });
+});
+
+describe('levelLabel', () => {
+  it('prettifies level codes, keeping acronyms and splitting camelCase', () => {
+    expect(levelLabel('AUTHORITY_TYPE')).toBe('Authority Type');
+    expect(levelLabel('ULB_TYPE')).toBe('ULB Type');
+    expect(levelLabel('PGR_SECTOR')).toBe('PGR Sector');
+    expect(levelLabel('subType')).toBe('Sub Type');
+    expect(levelLabel('SUB_AREA')).toBe('Sub Area');
+  });
+  it('uses the typed route captions for its two levels', () => {
+    expect(levelLabel('COMPLAINT_TYPE')).toBe('Complaint Category');
+    expect(levelLabel('SUB_TYPE')).toBe('Complaint Subcategory');
   });
 });

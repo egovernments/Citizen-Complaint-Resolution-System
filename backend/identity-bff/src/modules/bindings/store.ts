@@ -87,7 +87,7 @@ export async function readBindings(subject: string, snapshot?: BindingUser): Pro
 }
 
 /** Exact uuid search, with full pagination and client-side attribute checks. */
-async function ownersOf(tenantId: string, uuid: string): Promise<string[]> {
+export async function ownersOf(tenantId: string, uuid: string): Promise<string[]> {
   const value = `${tenantId}|${uuid}`;
   const query = new URLSearchParams({ q: `digit.boundUuids:${value}`, briefRepresentation: "false" });
   return (await paged<BindingUser>(`/users?${query}`)).flatMap((user) =>

@@ -74,6 +74,44 @@ class DatabaseClient {
     const result = await this.queryValue<string>(`SELECT COUNT(*) FROM ${tableName}`);
     return parseInt(result || '0', 10);
   }
+
+  /**
+   * A seeded leaf of the tenant's ADMIN boundary tree. PGR's create checks the
+   * complaint locality against boundary-service, so a made-up code such as
+   * LOC_CITYA_1 is refused with INVALID_BOUNDARY_CODE.
+   */
+  async leafBoundaryCode(tenantId: string): Promise<string> {
+    const code = await this.queryValue<string>(
+      `SELECT r.code FROM boundary_relationship r
+         JOIN boundary b ON b.tenantid = r.tenantid AND b.code = r.code
+        WHERE r.tenantid = $1 AND r.hierarchytype = 'ADMIN'
+          AND NOT EXISTS (SELECT 1 FROM boundary_relationship c
+                           WHERE c.tenantid = r.tenantid AND c.hierarchytype = r.hierarchytype AND c.parent = r.code)
+        ORDER BY r.code LIMIT 1`,
+      [tenantId]
+    );
+    if (!code) throw new Error(`No ADMIN boundary seeded for ${tenantId}`);
+    return code;
+  }
+
+  /**
+   * Root of the ADMIN tree that `leafCode` sits in, for an employee's HRMS jurisdiction.
+   * PGR scopes an employee's search to the descendants of their jurisdiction boundaries,
+   * so the root of the complaint's own tree covers it. Derived from the leaf's
+   * materialized path, not picked separately: a tenant can have several ADMIN roots.
+   * The tenant id itself (e.g. 'pg.citya') is not a boundary code and matches nothing.
+   */
+  async rootBoundaryOf(tenantId: string, leafCode: string): Promise<{ code: string; boundaryType: string }> {
+    const row = await this.queryOne<{ code: string; boundarytype: string }>(
+      `SELECT r.code, r.boundarytype FROM boundary_relationship l
+         JOIN boundary_relationship r ON r.tenantid = l.tenantid AND r.hierarchytype = l.hierarchytype
+                                     AND r.code = split_part(l.ancestralmaterializedpath, '|', 1)
+        WHERE l.tenantid = $1 AND l.hierarchytype = 'ADMIN' AND l.code = $2`,
+      [tenantId, leafCode]
+    );
+    if (!row) throw new Error(`No ADMIN root found above ${leafCode} on ${tenantId}`);
+    return { code: row.code, boundaryType: row.boundarytype };
+  }
 }
 
 export const db = new DatabaseClient();

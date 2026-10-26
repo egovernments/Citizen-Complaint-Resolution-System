@@ -299,6 +299,8 @@ The playbook deploys `docker-compose.egov-digit.yaml` plus overlays — **not**
 [-f docker-compose.fast-path.yml]          # when db_fast_path is set
 -f docker-compose.migrations.yml
 -f docker-compose.monitoring.yml
+-f docker-compose.matomo.yml               # services start only with enable_matomo
+-f docker-compose.opensre.yml              # service starts only with enable_opensre
 [-f docker-compose.<tenant>.yml]           # when a per-tenant overlay exists
 ```
 
@@ -306,7 +308,7 @@ Between them these include:
 
 | Category | Services |
 |----------|----------|
-| **Observability** | Prometheus + node-exporter (metrics), Loki + Promtail (logs), OpenTelemetry Collector + Tempo (traces), Grafana (dashboards), Gatus (uptime). All of it deploys by default. Set **`observability_level`** in `host_vars` to deploy less — `metrics`, `logs` or `traces` (the default), each level including the ones before it. `gatus` and `otel-collector` are ungated and run at every level. See [Enabling monitoring](../../operations/monitoring/enabling-monitoring.md). |
+| **Observability** | Prometheus + node-exporter + container-stats (metrics), Loki + Promtail (logs), OpenTelemetry Collector + Tempo (traces), Grafana (dashboards), Gatus (uptime). All of it deploys by default. Set **`observability_level`** in `host_vars` to deploy less — `metrics`, `logs` or `traces` (the default), each level including the ones before it. `gatus` and `otel-collector` are ungated and run at every level. See [Enabling monitoring](../../operations/monitoring/enabling-monitoring.md). |
 | **Infrastructure** | PostgreSQL 16, PgBouncer, Redis, Redpanda (Kafka), MinIO, Elasticsearch |
 | **Core DIGIT** | MDMS v2, User, Workflow v2, Localization, Boundary, Access Control, IDGEN, Encryption, Persister, Filestore, HRMS, Indexer, Inbox |
 | **Application** | PGR Services, URL Shortening, Default Data Handler, Boundary Management |
@@ -389,8 +391,9 @@ local-setup/
 │                                   # deploy — that uses docker-compose.egov-digit.yaml)
 ├── docker-compose.deploy.yaml      # Deploy variant (no resource limits)
 ├── docker-compose.db-migrations.yml # DB migrations variant
-├── docker-compose.tilt.yml         # Overlay: points pgr-services/digit-ui at Tilt's locally built images
-├── Tiltfile                        # Tilt with hot reload (requires Maven/Yarn)
+├── docker-compose.tilt.yml         # Overlay: points pgr-services and its migration job at Tilt's locally built images
+├── docker-compose.tilt-restart.yml # Overlay (every Tiltfile): restart policies, since Tilt skips depends_on gates
+├── Tiltfile                        # Tilt with PGR hot reload + ui-dev server (requires Maven, Node)
 ├── Tiltfile.db-dump                # Tilt with pre-built images (recommended)
 ├── ansible/                        # Config-driven remote deploy — see ansible/README.md
 │   ├── deploy.sh                   # Entrypoint: ./deploy.sh <tenant> [flags]
@@ -446,6 +449,6 @@ local-setup/
     └── …                           # Local/hybrid/remote setup guides
 
 ../backend/pgr-services/            # PGR Java source (hot reload target)
-../frontend/micro-ui/               # DIGIT UI React source (hot reload target)
+../digit-ui-esbuild/                # DIGIT UI source (Tilt ui-dev live-reload target)
 ../configs/assets/                  # Runtime configs (globalConfigs.js)
 ```

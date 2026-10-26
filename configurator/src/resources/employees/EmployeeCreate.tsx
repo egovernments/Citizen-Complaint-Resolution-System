@@ -5,12 +5,8 @@ import { useApp } from '../../App';
 import { RolesEditor } from './RolesEditor';
 import { JurisdictionEditor } from './JurisdictionEditor';
 import { AssignmentEditor } from './AssignmentEditor';
-
-const GENDER_CHOICES = [
-  { value: 'MALE', label: 'Male' },
-  { value: 'FEMALE', label: 'Female' },
-  { value: 'TRANSGENDER', label: 'Transgender' },
-];
+import { useGenderChoices } from '../useGenderChoices';
+import { useOnboardingT } from '../../onboarding/i18n';
 
 const STATUS_CHOICES = [
   { value: 'EMPLOYED', label: 'Employed' },
@@ -38,6 +34,8 @@ export function EmployeeCreate() {
   const { state } = useApp();
   const tenantId = state.tenant;
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
+  const genderChoices = useGenderChoices();
+  const t = useOnboardingT();
 
   const defaults = {
     tenantId,
@@ -52,6 +50,12 @@ export function EmployeeCreate() {
     },
     jurisdictions: [],
     assignments: [],
+  };
+
+  // Employees sign in with their email (the Keycloak username), not the employee code.
+  const describeCreated = (data: Record<string, unknown>): string | undefined => {
+    const email = (data.user as { emailId?: string } | undefined)?.emailId;
+    return email ? t('employees.signs_in_with_email', 'They sign in with %{email}.', { email }) : undefined;
   };
 
   const transform = (data: Record<string, unknown>): Record<string, unknown> => {
@@ -95,7 +99,7 @@ export function EmployeeCreate() {
   };
 
   return (
-    <DigitCreate title="Create Employee" record={defaults} transform={transform}>
+    <DigitCreate title="Create Employee" record={defaults} transform={transform} describeCreated={describeCreated}>
       <FieldSection title="Tenant">
         <DigitFormSelect
           source="tenantId"
@@ -138,7 +142,7 @@ export function EmployeeCreate() {
           <DigitFormSelect
             source="user.gender"
             label="Gender"
-            choices={GENDER_CHOICES}
+            choices={genderChoices}
             placeholder="Select gender..."
           />
           <DigitFormInput source="dateOfAppointment" label="Date of Appointment" type="date" />

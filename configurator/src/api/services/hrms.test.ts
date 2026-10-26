@@ -31,6 +31,33 @@ describe('hrmsService.searchEmployees', () => {
     const [url] = postSpy.mock.calls[0];
     expect(url).toContain('codes=EMP1%2CEMP2');
   });
+
+  // egov-hrms drops its tenant filter on a code search unless someone in the tenant has the code as username (#2456).
+  it('keeps only this tenant\'s rows (and its cities\') from a code search, reading every page', async () => {
+    const row = (tenantId: string) => ({ code: 'EMP_0002', tenantId });
+    const postSpy = vi.spyOn(apiClient, 'post')
+      .mockResolvedValueOnce({ Employees: [...Array(98).fill(row('other')), row('acme.city'), row('acmeco')] } as never)
+      .mockResolvedValueOnce({ Employees: [row('acme')] } as never);
+
+    const rows = await hrmsService.searchEmployees('acme', { codes: ['EMP_0002'] });
+
+    expect(rows.map((r) => r.tenantId)).toEqual(['acme.city', 'acme']);
+    expect(postSpy).toHaveBeenCalledTimes(2);
+    expect(postSpy.mock.calls[1][0]).toContain('offset=100');
+  });
+
+  it('a code search\'s limit caps the rows kept, not the page size', async () => {
+    const postSpy = vi.spyOn(apiClient, 'post')
+      .mockResolvedValue({ Employees: [{ code: 'EMP_0002', tenantId: 'other' }, { code: 'EMP_0002', tenantId: 'acme' }] } as never);
+    expect(await hrmsService.searchEmployees('acme', { codes: ['EMP_0002'], limit: 1 })).toEqual([{ code: 'EMP_0002', tenantId: 'acme' }]);
+    expect(postSpy.mock.calls[0][0]).toContain('limit=100');
+  });
+
+  it('reads one page when there is no code', async () => {
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue({ Employees: [{ code: 'A', tenantId: 'other' }] } as never);
+    expect(await hrmsService.searchEmployees('acme', { limit: 1 })).toHaveLength(1);
+    expect(postSpy).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('hrmsService.buildEmployee — dob / dateOfAppointment are optional (egovernments/CCRS#1949)', () => {
@@ -86,5 +113,35 @@ describe('hrmsService.buildEmployee — dob / dateOfAppointment are optional (eg
 
     expect(emp.dateOfAppointment).toBeUndefined();
     expect(emp.assignments).toHaveLength(2);
+  });
+});
+
+describe('hrmsService.createEmployeeRecord — every new employee can file complaints (egovernments/CCRS#2239)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const employee = (roles: Array<{ code: string; name: string; tenantId?: string }>) =>
+    ({ tenantId: 'ke', code: 'EMP_001', user: { name: 'Jane Kamau', tenantId: 'ke', roles } }) as never;
+
+  const sentRoles = async (roles: Array<{ code: string; name: string; tenantId?: string }>) => {
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue({ Employees: [{}] } as never);
+    await hrmsService.createEmployeeRecord(employee(roles));
+    const [, body] = postSpy.mock.calls[0];
+    return (body as { Employees: Array<{ user: { roles: Array<{ code: string; tenantId?: string }> } }> }).Employees[0].user.roles;
+  };
+
+  it('adds CSR to the roles the admin picked', async () => {
+    const roles = await sentRoles([{ code: 'GRO', name: 'Complaint Assessor', tenantId: 'ke' }]);
+    expect(roles.map((r) => r.code)).toEqual(['GRO', 'CSR']);
+    expect(roles[1].tenantId).toBe('ke');
+  });
+
+  it('does not add CSR twice', async () => {
+    const roles = await sentRoles([{ code: 'CSR', name: 'Complainant', tenantId: 'ke' }]);
+    expect(roles.map((r) => r.code)).toEqual(['CSR']);
+  });
+
+  it('adds CSR on each tenant the roles use, matching code and tenant', async () => {
+    const roles = await sentRoles([{ code: 'CSR', name: 'Complainant', tenantId: 'ke.cityb' }, { code: 'GRO', name: 'GRO', tenantId: 'ke.citya' }]);
+    expect(roles.map((r) => `${r.code}@${r.tenantId}`)).toEqual(['CSR@ke.cityb', 'GRO@ke.citya', 'CSR@ke.citya']);
   });
 });

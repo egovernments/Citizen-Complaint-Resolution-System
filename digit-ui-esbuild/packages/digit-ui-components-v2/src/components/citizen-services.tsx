@@ -33,7 +33,9 @@ import { Card } from "./ui/card";
 // #2563EB on CMS Blue) while headings stay in --color-primary-1. Employee
 // module cards already follow this; the citizen rows rendered their labels
 // in the heading colour, which is what made the two surfaces diverge.
-const LINK_COLOR = "var(--color-primary-2, var(--color-primary-main, #c84c0e))";
+// --color-brand-text is that colour when it reads on the page, and the
+// dominant brand when it doesn't (Green and Gold's gold is 1.5:1 on white).
+const LINK_COLOR = "var(--color-brand-text, var(--color-primary-2, var(--color-primary-main, #c84c0e)))";
 
 interface ServiceLink {
   link?: string;
@@ -267,7 +269,7 @@ export function CitizenServices({ modules, renderIcon, title }: CitizenServicesP
       >
         {codes.length === 0 ? (
           <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary, #6B7280)" }}>
-            {t("CS_HOME_NO_SERVICES_AVAILABLE") || "No services available."}
+            {t("CS_HOME_NO_SERVICES_AVAILABLE") !== "CS_HOME_NO_SERVICES_AVAILABLE" ? t("CS_HOME_NO_SERVICES_AVAILABLE") : "No services available."}
           </p>
         ) : (
           <div

@@ -20,22 +20,24 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { RequiredMark } from '@/components/ui/required-mark';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Header, SubHeader } from '@/components/digit/Header';
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { SubmitBar } from '@/components/digit/SubmitBar';
-import { Banner } from '@/components/digit/Banner';
-import { apiClient, boundaryService, localizationService, mdmsService, ApiClientError } from '@/api';
-import { WORKSPACE_HIERARCHY_TYPE } from '@/api/services/boundary';
-import { reportStepError, trackStepAction } from '../telemetry';
-import { labelLocales } from '../labelLocales';
+import { boundaryService, mdmsService, ApiClientError } from '@/api';
+import { WORKSPACE_HIERARCHY_TYPE, getConfiguredHierarchyType } from '@/api/services/boundary';
+import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
+import { reportStepError, trackTemplateDownload, trackUploadRefused, type OnboardingMethod } from '../telemetry';
+import { track } from '@/lib/analytics';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
-import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
+import { downloadBoundaryList, downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
+import { compareWithExisting } from '@/utils/boundaryReconcile';
 import { TURBOPASS_BASE } from '@/hooks/useTurbopassSources';
-import { buildOsmBoundaries, computeContainingParents, groupFetchedLevels, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
+import { boundaryPathRows, buildOsmBoundaries, computeContainingParents, groupFetchedLevels, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
 import {
   deadEndMessage,
   formatSuggestionLabel,
@@ -51,24 +53,24 @@ import {
   tooFewLevelsMessage,
   turbopassErrorMessage,
   turbopassSearchUrl,
+  type SuggestionFeature,
 } from '@/utils/turbopassSuggestions';
 import { summarizeBoundaryQuality } from '@/utils/boundaryQuality';
 import { validateGoogleMapsKey, type GoogleKeyCheck } from '@/utils/googleMaps';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMapProviderConfig } from '@/hooks/useMapProviderConfig';
 import { BoundaryMap } from '@/components/ui/BoundaryMap';
-import { deriveMapPosition } from '@/utils/mapConfigFromBoundaries';
+import { countryName, datasetName, fetchOfficialSet, statusDetail, type OfficialSet } from '@/utils/officialBoundaries';
+import { levelsMismatch, type ImportResume, type ListHierarchy, type NewSelection, type SavedArea } from './boundaryDraft';
+import { LevelStatusBadge, OfficialSetSummary } from './OfficialConfidence';
+import { englishT, useOnboardingT, withNodes, type OnboardingT } from '../i18n';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
 
 type Step =
-  // shared
-  | 'complete'
   // Excel path (develop's original flow)
   | 'excel-landing' | 'create-hierarchy' | 'select-hierarchy' | 'template' | 'upload' | 'verify'
   // OSM path
-  | 'osm-search' | 'map-levels' | 'osm-review' | 'creating';
-
-type BoundaryPath = 'osm' | 'excel' | null;
+  | 'osm-search' | 'map-levels' | 'osm-review';
 
 // The included levels, ascending by OSM admin_level.
 function getSelectedLevels(levels: OsmAdminLevel[]): OsmAdminLevel[] {
@@ -79,11 +81,12 @@ function getSelectedLevels(levels: OsmAdminLevel[]): OsmAdminLevel[] {
 // each named. Contiguous because the hierarchy is a strict parent→child chain:
 // a gap would reparent a deep level's features onto the level above, silently
 // collapsing the skipped tier.
-function validateLevelSelection(levels: OsmAdminLevel[]): { valid: boolean; error: string | null } {
+function validateLevelSelection(levels: OsmAdminLevel[], t: OnboardingT = englishT): { valid: boolean; error: string | null } {
   const allSorted = [...levels].sort((a, b) => a.level - b.level);
   const selected = getSelectedLevels(levels);
+  const levelName = (l: OsmAdminLevel) => t('geography.levels.level_n', 'Level %{n}', { n: l.level });
   if (selected.length < 2) {
-    return { valid: false, error: 'Select at least two levels to form a hierarchy.' };
+    return { valid: false, error: t('geography.levels.at_least_two', 'Select at least two levels to form a hierarchy.') };
   }
   const idx = selected.map(l => allSorted.findIndex(x => x.level === l.level));
   const contiguous = idx[idx.length - 1] - idx[0] === idx.length - 1;
@@ -91,18 +94,22 @@ function validateLevelSelection(levels: OsmAdminLevel[]): { valid: boolean; erro
     const gaps = allSorted
       .slice(idx[0], idx[idx.length - 1] + 1)
       .filter(l => !l.selected)
-      .map(l => `Level ${l.level}`);
+      .map(levelName);
     return {
       valid: false,
-      error:
-        `Selected levels must be contiguous — you can't skip a level in between, ` +
-        `the hierarchy is a strict parent→child chain. Re-include ${gaps.join(', ')}, ` +
-        `or trim from the top/bottom of the range instead.`,
+      error: t(
+        'geography.levels.contiguous',
+        'Selected levels must be contiguous — you can\'t skip a level in between, the hierarchy is a strict parent→child chain. Re-include %{gaps}, or trim from the top/bottom of the range instead.',
+        { gaps: gaps.join(', ') },
+      ),
     };
   }
   const unnamed = selected.filter(l => !l.mappedName.trim());
   if (unnamed.length) {
-    return { valid: false, error: `Name every selected level (missing: ${unnamed.map(l => `Level ${l.level}`).join(', ')}).` };
+    return {
+      valid: false,
+      error: t('geography.levels.unnamed', 'Name every selected level (missing: %{levels}).', { levels: unnamed.map(levelName).join(', ') }),
+    };
   }
   return { valid: true, error: null };
 }
@@ -129,148 +136,27 @@ async function serverMessage(res: Response): Promise<string | undefined> {
   return typeof m === 'string' ? m : Array.isArray(m) ? m.join('; ') : undefined;
 }
 
-// Hierarchy type the OSM onboarding path writes. Deployment-agnostic: reads the
-// configured HIERARCHY_TYPE from the served globalConfigs (ansible renders it
-// from host_vars `hierarchy_type`) so the hierarchy created here matches what
-// the citizen/PGR UI later resolves boundaries against — otherwise the citizen
-// complaint form's boundary picker 400s (HIERARCHY_DEFINITION_DOES_NOT_EXIST).
-// Falls back to DIGIT's default 'ADMIN' when globalConfigs isn't present, so a
-// deployment that doesn't override HIERARCHY_TYPE keeps the previous behaviour.
-// globalConfigs.js is injected as a <script> before this bundle, so the read
-// resolves at module-eval time in the built app.
-function getConfiguredHierarchyType(): string {
-  if (typeof window !== 'undefined') {
-    const gc = (
-      window as unknown as { globalConfigs?: { getConfig?: (k: string) => unknown } }
-    ).globalConfigs?.getConfig?.('HIERARCHY_TYPE');
-    if (typeof gc === 'string' && gc) return gc;
-  }
-  return 'ADMIN';
-}
+// Hierarchy type the OSM onboarding path writes: the deployment's configured
+// HIERARCHY_TYPE, so the hierarchy created here matches what the citizen/PGR UI
+// later resolves boundaries against (see getConfiguredHierarchyType).
 const OSM_HIERARCHY_TYPE = getConfiguredHierarchyType();
-
-// Post-create pipeline shared by BOTH paths after createBoundaries succeeds:
-// localizations (boundary names are required for the citizen UI; the rest is
-// best-effort), localization cache-bust, and the boundary-path repair tool.
-// Returns a message for the operator when the hierarchy record didn't save.
-async function runPostCreatePipeline(
-  tenantId: string,
-  created: Boundary[],
-  hierarchyType: string,
-  levels: { boundaryType: string }[],
-): Promise<string | null> {
-  // Make this the tenant's PGR hierarchy (CMS-BOUNDARY.HierarchySchema) when it
-  // has none yet: digit-ui, the dashboard and PGR read it in place of the
-  // deployment-wide HIERARCHY_TYPE / pgrBoundary*Level globalConfigs (#2260).
-  // The boundaries exist either way, so the rest still runs, but the operator
-  // is told: without this row the Geography step can't complete.
-  let schemaError: string | null = null;
-  if (levels.length > 0) {
-    try {
-      await mdmsService.ensureHierarchySchema(tenantId, {
-        hierarchy: hierarchyType,
-        highestHierarchy: levels[0].boundaryType,
-        lowestHierarchy: levels[levels.length - 1].boundaryType,
-      });
-    } catch (e) {
-      console.warn('[geography] CMS-BOUNDARY.HierarchySchema not written', e);
-      reportStepError('geography', 'hierarchy_schema', e, tenantId);
-      const reason = e instanceof ApiClientError ? e.firstError : e instanceof Error ? e.message : String(e);
-      schemaError = `Boundaries were created, but the hierarchy record didn't save: ${reason}`;
-    }
-  }
-
-  // Create localizations for boundaries
-  const boundaryData = created.map(b => ({
-    code: b.code,
-    name: b.name,
-  }));
-
-  // Seed under en_IN (digit-ui's boot locale) plus every StateInfo language:
-  // the citizen app reads boundary names under its active locale, so a missing
-  // one leaves the locality dropdown and map ward tooltips showing raw codes.
-  for (const locale of await labelLocales(tenantId)) {
-    await localizationService.uploadBoundaryLocalizations(
-      tenantId,
-      boundaryData,
-      hierarchyType,
-      locale
-    );
-
-    // Create level-label localization keys so DIGIT-UI renders "MUNICÍPIO" / "DISTRITO"
-    // instead of the raw key "maputo_hierarchy_type_MUNICÍPIO" in the complaint form.
-    await localizationService.uploadHierarchyLevelLocalizations(
-      tenantId,
-      hierarchyType,
-      levels,
-      locale
-    ).catch(e => console.warn(`hierarchy-level localization failed (non-fatal) for ${locale}`, e));
-  }
-
-  await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
-
-  // The boundaries just onboarded describe exactly the area this tenant serves,
-  // so they already answer where the citizen map should open, how far in, and
-  // which extent the address search may return results from. Derive all three
-  // rather than asking an admin to type eight numbers they cannot sanity-check
-  // without a map in front of them — and note a wrong search extent is not
-  // cosmetic: Nominatim's bounded search DISCARDS anything outside the box.
-  //
-  // Best-effort. Boundaries are the operator's real work here; failing Phase 2
-  // over a map default would be a poor trade. An unwritten MapConfig just means
-  // the map keeps its built-in defaults.
-  try {
-    const derived = deriveMapPosition(created);
-    if (derived) {
-      await mdmsService.upsertMapConfig(tenantId, {
-        ...derived,
-        // The wards the map draws are the ones we just created, for this tenant.
-        boundaryTenantId: tenantId,
-      });
-    } else {
-      console.warn('[geography] no boundary geometry — leaving MapConfig at its defaults');
-    }
-  } catch (e) {
-    console.warn('[geography] map position not written (non-fatal)', e);
-  }
-
-  // Clear ancestralmaterializedpath so boundary-service includeChildren=true
-  // doesn't combine two overlapping queries and return each node twice in the
-  // citizen create-complaint dropdown. Fire-and-forget: if the MCP REST shim
-  // isn't deployed, Phase 2 still completes and an operator can run
-  // fix_boundary_paths via the MCP tool manually.
-  try {
-    const { token } = apiClient.getAuth();
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 10_000);
-    const res = await fetch(`${window.location.origin}/v1/tools/fix_boundary_paths`, {
-      method: 'POST',
-      signal: ac.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ tenant_id: tenantId }),
-    });
-    clearTimeout(timer);
-    if (!res.ok) console.warn(`[geography] boundary path fix returned ${res.status}`);
-  } catch (e) {
-    console.warn('[geography] boundary path fix skipped (MCP not reachable):', e);
-  }
-  return schemaError;
-}
 
 export type BoundarySource = 'osm' | 'excel';
 
 /**
  * Bringing a boundary hierarchy in, from OpenStreetMap or from an Excel sheet.
- * Geography opens it for the source picked there, and it hands back when the
- * boundaries are created (onDone) or the operator backs out (onCancel).
+ * Geography opens it for the source picked there, and it hands back the chosen
+ * boundaries for Geography's list (onDone; nothing is written until Geography's
+ * Save and continue) or that the operator backed out (onCancel). `resume`
+ * reopens an earlier choice where it was left, for Edit.
  */
 export default function BoundaryImport({
   source,
   hasHierarchies,
   sourceChoices,
+  preconfigured = null,
+  resume = null,
+  list = null,
   onDone,
   onCancel,
 }: {
@@ -280,10 +166,20 @@ export default function BoundaryImport({
   /** Sources turbopass can answer, from Geography's /health read: null while
    *  asking, [] when it isn't deployed or holds no data. */
   sourceChoices: string[] | null;
-  onDone: () => void;
+  /** Geography's "Preconfigured" choice: the country's official set. The
+   *  search works as in Fetch, with the source fixed to that set and
+   *  suggestions limited to its country. */
+  preconfigured?: OfficialSet | null;
+  resume?: ImportResume | null;
+  /** The hierarchy of the boundaries already in Geography's list, if any. */
+  list?: ListHierarchy | null;
+  /** Adds the chosen boundaries to Geography's list, checked against the areas
+   *  already saved in their hierarchy; a message comes back when they can't join it. */
+  onDone: (selection: NewSelection, saved?: SavedArea[]) => string | null;
   onCancel: () => void;
 }) {
-  const { addUndo, state } = useApp();
+  const { state } = useApp();
+  const t = useOnboardingT();
   // Phase 2 writes boundaries at the onboarding tenant (the Phase-1 city, e.g.
   // mz.maputo). The configurator reads boundaries at THIS tenant everywhere —
   // its reference-data fetches and later phases all query targetTenant — so the
@@ -294,49 +190,83 @@ export default function BoundaryImport({
   // moving where the configurator stores boundaries.) Fall back to the session
   // tenant if Phase 1 was skipped (URL-direct).
   const boundaryTenant = state.targetTenant || state.tenant;
+  const resumedOsm = resume?.kind === 'osm' ? resume : null;
+  const resumedExcel = resume?.kind === 'excel' ? resume : null;
 
-  const [step, setStep] = useState<Step>(source === 'osm' ? 'osm-search' : hasHierarchies ? 'excel-landing' : 'create-hierarchy');
-  const [path] = useState<BoundaryPath>(source);
+  const [step, setStep] = useState<Step>(
+    resumedOsm
+      ? 'map-levels'
+      : resumedExcel
+        ? 'verify'
+        : preconfigured || source === 'osm'
+          ? 'osm-search'
+          : hasHierarchies || list
+            ? 'excel-landing'
+            : 'create-hierarchy',
+  );
+  // Which of Geography's three ways this is, on every event it sends.
+  const method: OnboardingMethod = preconfigured ? 'preconfigured' : source === 'osm' ? 'fetch' : 'excel';
+  const trackLevels = (levels: number, hierarchy: 'new' | 'existing' | 'fetched') =>
+    track('onboarding:geography_levels_select', { method, levels, hierarchy });
+  const trackSearch = (outcome: string, from: string, levels?: number) =>
+    track('onboarding:geography_area_search', { method, outcome, source: from, levels });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Hierarchy state (Excel path)
   const [existingHierarchies, setExistingHierarchies] = useState<BoundaryHierarchy[]>([]);
-  const [selectedHierarchy, setSelectedHierarchy] = useState<BoundaryHierarchy | null>(null);
+  const [selectedHierarchy, setSelectedHierarchy] = useState<BoundaryHierarchy | null>(resumedExcel?.hierarchy ?? null);
   const [hierarchyLevels, setHierarchyLevels] = useState(['Country', 'State', 'City', 'Ward']);
   const [hierarchyType, setHierarchyType] = useState('ADMIN');
   const [loadingHierarchies, setLoadingHierarchies] = useState(false);
+  // Hierarchies already defined on the server, as opposed to only in Geography's list;
+  // null until read, so the checks against them don't run on an empty set.
+  const [serverHierarchyTypes, setServerHierarchyTypes] = useState<Set<string> | null>(null);
+  // Why the hierarchy list couldn't be read. Kept apart from an empty list so a
+  // failed walk isn't shown as "no hierarchies, create one".
+  const [hierarchiesError, setHierarchiesError] = useState<string | null>(null);
 
   // Boundary data state (Excel path)
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [parsedBoundaries, setParsedBoundaries] = useState<BoundaryExcelRow[]>([]);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(resumedExcel?.file ?? null);
+  const [parsedBoundaries, setParsedBoundaries] = useState<BoundaryExcelRow[]>(resumedExcel?.parsed ?? []);
   const [, setParsedLevels] = useState<string[]>([]);
-  const [validBoundaries, setValidBoundaries] = useState<BoundaryExcelRow[]>([]);
-  const [invalidBoundaries, setInvalidBoundaries] = useState<{ boundary: BoundaryExcelRow; error: string }[]>([]);
+  const [validBoundaries, setValidBoundaries] = useState<BoundaryExcelRow[]>(resumedExcel?.valid ?? []);
+  const [invalidBoundaries, setInvalidBoundaries] = useState<{ boundary: BoundaryExcelRow; error: string }[]>(
+    resumedExcel?.invalid ?? [],
+  );
 
   // Optional polygon sidecar: GeoJSON FeatureCollection that supplies real
   // outlines for the citizen UI's OSM map. Without it every boundary gets
   // the unit-square placeholder that Bomet + Nairobi ship with today.
-  const [polygonFile, setPolygonFile] = useState<File | null>(null);
-  const [polygonSidecar, setPolygonSidecar] = useState<ParsedGeoJsonSidecar | null>(null);
+  const [polygonFile, setPolygonFile] = useState<File | null>(resumedExcel?.polygonFile ?? null);
+  const [polygonSidecar, setPolygonSidecar] = useState<ParsedGeoJsonSidecar | null>(resumedExcel?.polygonSidecar ?? null);
   const [polygonError, setPolygonError] = useState<string | null>(null);
 
   // OSM path state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [adminLevels, setAdminLevels] = useState<OsmAdminLevel[]>([]);
+  const [searchTerm, setSearchTerm] = useState(resumedOsm?.searchTerm ?? '');
+  const [adminLevels, setAdminLevels] = useState<OsmAdminLevel[]>(resumedOsm?.adminLevels ?? []);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   // Full turbopass suggestion the operator picked (null once they edit the
   // text again) — its place_id drives the turbopass /boundary/fetch call.
-  const [pickedSuggestion, setPickedSuggestion] = useState<any | null>(null);
+  const [pickedSuggestion, setPickedSuggestion] = useState<any | null>(resumedOsm?.pickedSuggestion ?? null);
   const [skippedFeatures, setSkippedFeatures] = useState<SkippedOsmFeature[]>([]);
   const [pendingBoundaries, setPendingBoundaries] = useState<Boundary[]>([]);
   // The place whose boundaries were fetched — named on the level screen.
-  const [fetchedPlace, setFetchedPlace] = useState<{ id: string; label: string; country: string | null } | null>(null);
+  const [fetchedPlace, setFetchedPlace] = useState<{ id: string; name: string; label: string; country: string | null } | null>(
+    resumedOsm?.fetchedPlace ?? null,
+  );
   // Credit line for the fetched data — the official sets' licences require it.
-  const [fetchedAttribution, setFetchedAttribution] = useState<string | null>(null);
+  const [fetchedAttribution, setFetchedAttribution] = useState<string | null>(resumedOsm?.attribution ?? null);
+  // The official set behind the fetched levels, with its per-level agreement
+  // with the other official source: handed in by Preconfigured, or looked up
+  // when a search fetched from the Official source.
+  const [officialSet, setOfficialSet] = useState<OfficialSet | null>(resumedOsm ? resumedOsm.officialSet : preconfigured);
+  // The place whose levels are on screen; a late official-set answer for another is dropped.
+  const openedPlaceRef = useRef<string | null>(resumedOsm?.fetchedPlace.id ?? null);
+  // Preconfigured fixes the source to the country's official set.
   const [turbopassSource, setTurbopassSource] = useState(() =>
-    chooseTurbopassSource(CONFIGURED_TURBOPASS_SOURCE, null),
+    resumedOsm ? resumedOsm.turbopassSource : preconfigured ? 'official' : chooseTurbopassSource(CONFIGURED_TURBOPASS_SOURCE, null),
   );
   const sourceRef = useRef(turbopassSource);
 
@@ -354,11 +284,23 @@ export default function BoundaryImport({
   }, []);
 
   // Once Geography's /health read lands, start on the first source the server
-  // can answer, unless the build pins one.
+  // can answer, unless the build pins one or an Edit reopened the one in use.
   useEffect(() => {
-    if (sourceChoices === null || (CONFIGURED_TURBOPASS_SOURCE ?? '').trim()) return;
+    if (preconfigured || resumedOsm || sourceChoices === null || (CONFIGURED_TURBOPASS_SOURCE ?? '').trim()) return;
     changeSource(chooseTurbopassSource(undefined, sourceChoices));
-  }, [sourceChoices, changeSource]);
+  }, [preconfigured, resumedOsm, sourceChoices, changeSource]);
+
+  // Preconfigured searches one country's official set: places elsewhere are
+  // left out of the suggestions and of what a typed name resolves to. The
+  // server filters first (`country`, before its result limit); this keeps a
+  // turbopass that predates that parameter correct too.
+  const inScope = useCallback(
+    <F extends SuggestionFeature>(features: F[]): F[] =>
+      preconfigured
+        ? features.filter((f) => String(f.properties?.country_code ?? '').toUpperCase() === preconfigured.country.toUpperCase())
+        : features,
+    [preconfigured],
+  );
 
   // Google Maps (optional, #1994): kept in this tenant's MapConfig, so every
   // map that honours MapConfig switches together.
@@ -391,9 +333,24 @@ export default function BoundaryImport({
     [levelSelectionKey],
   );
 
-  // Created boundaries tracking (both paths)
-  const [createdCounts, setCreatedCounts] = useState<Record<string, number>>({});
-  const [totalCreated, setTotalCreated] = useState(0);
+  // "the official boundaries for Kenya (OCHA COD-AB)" — where Geography's list got them.
+  const createdSourceText = officialSet
+    ? t('geography.source_official', 'the official boundaries for %{country} (%{dataset})', {
+        country: countryName(officialSet.country),
+        dataset: datasetName(officialSet.source),
+      })
+    : fetchedPlace
+      ? t('geography.source_place', '%{source} for %{place}', { source: sourceLabel(turbopassSource), place: fetchedPlace.label })
+      : sourceLabel(turbopassSource);
+
+  // The checks against the server's hierarchies need its list: until it's read
+  // they wait, and a list that couldn't be read is said so, not taken as empty.
+  const hierarchiesUnknown = (): string | null =>
+    serverHierarchyTypes
+      ? null
+      : hierarchiesError
+        ? t('geography.excel.hierarchies_load_failed', 'Couldn’t load your hierarchies. %{reason}', { reason: hierarchiesError })
+        : t('geography.excel.hierarchies_loading', 'Still reading your hierarchies. Try again in a moment.');
 
   // Fetch existing hierarchies on mount
   useEffect(() => {
@@ -403,14 +360,35 @@ export default function BoundaryImport({
   const fetchHierarchies = async () => {
     setLoadingHierarchies(true);
     try {
-      const hierarchies = await boundaryService.getHierarchies(boundaryTenant);
-      setExistingHierarchies(hierarchies);
-      if (hierarchies.length > 0) {
-        setSelectedHierarchy(hierarchies[0]);
+      const { hierarchies, hierarchyType: preferred, listError } = await loadTenantHierarchies(boundaryTenant);
+      if (listError) {
+        // Keep whatever was listed before; the select step offers a retry.
+        console.error('Failed to fetch hierarchies:', listError);
+        setHierarchiesError(listError.message);
+        return;
       }
-    } catch (err) {
-      console.error('Failed to fetch hierarchies:', err);
-      // Don't show error - just means no hierarchies exist yet
+      setHierarchiesError(null);
+      setServerHierarchyTypes(new Set(hierarchies.map((h) => h.hierarchyType)));
+      // The hierarchy of Geography's unsaved list can be picked too: its areas go into it.
+      const inList: BoundaryHierarchy | null =
+        list && !hierarchies.some((h) => h.hierarchyType === list.hierarchyType)
+          ? {
+              tenantId: boundaryTenant,
+              hierarchyType: list.hierarchyType,
+              boundaryHierarchy: list.levels.map((boundaryType, index) => ({
+                boundaryType,
+                parentBoundaryType: index > 0 ? list.levels[index - 1] : undefined,
+                active: true,
+              })),
+            }
+          : null;
+      setExistingHierarchies(inList ? [...hierarchies, inList] : hierarchies);
+      const preselected = list
+        ? (inList ?? hierarchies.find((h) => h.hierarchyType === list.hierarchyType))
+        : hierarchies.find((h) => h.hierarchyType === preferred);
+      if (preselected) {
+        setSelectedHierarchy((selected) => selected ?? preselected);
+      }
     } finally {
       setLoadingHierarchies(false);
     }
@@ -433,11 +411,11 @@ export default function BoundaryImport({
     const timeoutId = setTimeout(async () => {
       try {
         // Only places with areas inside them: anything else can't form a hierarchy.
-        const res = await fetch(turbopassSearchUrl(TURBOPASS_BASE, searchTerm, turbopassSource, TURBOPASS_MATCH, true));
+        const res = await fetch(turbopassSearchUrl(TURBOPASS_BASE, searchTerm, turbopassSource, TURBOPASS_MATCH, true, preconfigured?.country));
         if (!res.ok) throw new Error(`Turbopass boundary search returned ${res.status}`);
         const data = await res.json();
         // An answer for a term or source the operator has since changed is dropped.
-        if (!stale) setSuggestions(tagWithSource(data.features, turbopassSource).slice(0, 5));
+        if (!stale) setSuggestions(inScope(tagWithSource(data.features, turbopassSource)).slice(0, 5));
       } catch (e) {
         console.debug('Turbopass boundary suggestions unavailable', e);
         if (!stale) setSuggestions([]);
@@ -448,68 +426,71 @@ export default function BoundaryImport({
       stale = true;
       clearTimeout(timeoutId);
     };
-  }, [searchTerm, showSuggestions, turbopassSource]);
+  }, [searchTerm, showSuggestions, turbopassSource, inScope, preconfigured?.country]);
 
   // ============================================
   // Excel path handlers (develop's original flow)
   // ============================================
 
-  const handleCreateHierarchy = async () => {
+  // Defines the hierarchy here only: it is created on the server with its
+  // areas, when Geography's Save and continue saves them.
+  const handleCreateHierarchy = () => {
+    // Whether the name is taken depends on the server's list: wait for it.
+    const unknown = hierarchiesUnknown();
+    if (unknown) {
+      setError(unknown);
+      if (hierarchiesError) void fetchHierarchies();
+      return;
+    }
     if (!hierarchyType.trim()) {
-      setError('Hierarchy type name is required');
+      setError(t('geography.excel.type_required', 'Hierarchy type name is required'));
       return;
     }
     if (hierarchyType.trim().toUpperCase() === WORKSPACE_HIERARCHY_TYPE) {
-      setError(`"${WORKSPACE_HIERARCHY_TYPE}" is reserved for the workspace root. Choose another hierarchy name.`);
+      setError(
+        t('geography.excel.type_reserved', '"%{type}" is reserved for the workspace root. Choose another hierarchy name.', {
+          type: WORKSPACE_HIERARCHY_TYPE,
+        }),
+      );
       return;
     }
 
     const validLevels = hierarchyLevels.filter(l => l.trim());
     if (validLevels.length < 2) {
-      setError('At least 2 hierarchy levels are required');
+      setError(t('geography.excel.levels_required', 'At least 2 hierarchy levels are required'));
+      return;
+    }
+    if (existingHierarchies.some(h => h.hierarchyType === hierarchyType)) {
+      setError(
+        t('geography.excel.type_exists', 'A "%{type}" hierarchy already exists. Choose it under "Use an existing hierarchy", or pick another name.', {
+          type: hierarchyType,
+        }),
+      );
       return;
     }
 
-    setLoading(true);
     setError(null);
-
-    try {
-      const newHierarchy = await boundaryService.createHierarchyFromLevels(
-        boundaryTenant,
-        hierarchyType,
-        validLevels
-      );
-
-      setSelectedHierarchy(newHierarchy);
-      setExistingHierarchies(prev => [...prev, newHierarchy]);
-      addUndo('create_hierarchy', `Created hierarchy: ${hierarchyType}`);
-      trackStepAction('geography', 'entity_create', 'boundary', {
-        tenant: boundaryTenant,
-        source: 'excel',
-        kind: 'hierarchy',
-        levels: validLevels.length,
-      });
-      setStep('template');
-    } catch (err) {
-      console.error('Hierarchy creation error:', err);
-      reportStepError('geography', 'create_hierarchy', err, boundaryTenant);
-      if (err instanceof ApiClientError) {
-        setError(err.firstError);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to create hierarchy. Please try again.');
-      }
-    } finally {
-      setLoading(false);
-    }
+    const newHierarchy: BoundaryHierarchy = {
+      tenantId: boundaryTenant,
+      hierarchyType,
+      boundaryHierarchy: validLevels.map((boundaryType, index) => ({
+        boundaryType,
+        parentBoundaryType: index > 0 ? validLevels[index - 1] : undefined,
+        active: true,
+      })),
+    };
+    setSelectedHierarchy(newHierarchy);
+    setExistingHierarchies(prev => [...prev, newHierarchy]);
+    trackLevels(validLevels.length, 'new');
+    setStep('template');
   };
 
   const handleSelectHierarchy = () => {
     if (!selectedHierarchy) {
-      setError('Please select a hierarchy');
+      setError(t('geography.excel.select_required', 'Please select a hierarchy'));
       return;
     }
+    trackLevels(selectedHierarchy.boundaryHierarchy?.length ?? 0, 'existing');
     setStep('template');
   };
 
@@ -537,11 +518,24 @@ export default function BoundaryImport({
         validateBoundaries(result.data);
         setStep('verify');
       } else {
-        setError(result.validation.errors.map(e => e.message).join(', '));
+        // A repeated code blocks the whole sheet, so nothing is written until each row has its own.
+        const { errors } = result.validation;
+        const repeated = errors
+          .filter(e => e.code === 'DUPLICATE_CODE')
+          .map(e =>
+            t('geography.excel.duplicate_code', 'The code "%{code}" is used on rows %{rows}. Each boundary needs its own code.', {
+              code: e.value ?? '',
+              rows: (e.rows ?? []).join(', '),
+            }),
+          );
+        const others = errors.filter(e => e.code !== 'DUPLICATE_CODE').map(e => e.message).join(', ');
+        setError([...repeated, others].filter(Boolean).join(' '));
+        trackUploadRefused('geography', 'boundary', errors[0]?.code || 'INVALID_SHEET', errors.length);
       }
     } catch (err) {
       console.error('Excel parse error:', err);
-      setError('Failed to parse Excel file. Please ensure it is a valid .xlsx file.');
+      setError(t('geography.excel.parse_failed', 'Failed to parse Excel file. Please ensure it is a valid .xlsx file.'));
+      trackUploadRefused('geography', 'boundary', 'UNREADABLE');
     } finally {
       setLoading(false);
     }
@@ -583,20 +577,20 @@ export default function BoundaryImport({
 
       // Check for duplicate codes
       if (!boundary.code) {
-        errors.push('Missing boundary code');
+        errors.push(t('geography.excel.missing_code', 'Missing boundary code'));
       }
 
       if (!boundary.name) {
-        errors.push('Missing boundary name');
+        errors.push(t('geography.excel.missing_name', 'Missing boundary name'));
       }
 
       if (!boundary.boundaryType) {
-        errors.push('Missing boundary type');
+        errors.push(t('geography.excel.missing_type', 'Missing boundary type'));
       }
 
       // Check if parent exists (for non-root boundaries)
       if (boundary.parentCode && !existingCodes.has(boundary.parentCode)) {
-        errors.push(`Parent "${boundary.parentCode}" not found`);
+        errors.push(t('geography.excel.parent_missing', 'Parent "%{code}" not found', { code: boundary.parentCode }));
       }
 
       if (errors.length > 0) {
@@ -612,7 +606,13 @@ export default function BoundaryImport({
 
   const handleUploadBoundaries = async () => {
     if (!selectedHierarchy || validBoundaries.length === 0) {
-      setError('No valid boundaries to upload');
+      setError(t('geography.excel.nothing_valid', 'No valid boundaries to upload'));
+      return;
+    }
+    const unknown = hierarchiesUnknown();
+    if (unknown || !serverHierarchyTypes) {
+      setError(unknown);
+      if (hierarchiesError) void fetchHierarchies();
       return;
     }
 
@@ -620,10 +620,44 @@ export default function BoundaryImport({
     setError(null);
 
     try {
+      // An upload never renames or moves an area (#2456): a code already in the hierarchy under
+      // another name or parent stops the whole sheet before any write. An exact match is left alone,
+      // except that one with no en_IN name gets the sheet's: adding a missing name isn't a rename.
+      // A hierarchy only in Geography's list has nothing on the server yet.
+      const existing = serverHierarchyTypes.has(selectedHierarchy.hierarchyType)
+        ? await boundaryService.existingBoundaries(boundaryTenant, selectedHierarchy.hierarchyType)
+        : [];
+      const { toCreate, alreadyThere, toLabel, conflicts } = compareWithExisting(validBoundaries, existing);
+      if (conflicts.length > 0) {
+        trackUploadRefused('geography', 'boundary', 'EXISTING_CONFLICT', conflicts.length);
+        const none = t('geography.excel.no_parent', 'none');
+        setError([
+          t(
+            'geography.excel.existing_conflicts',
+            'Nothing was uploaded. These codes are already in this hierarchy with a different name or parent, and an upload can’t rename or move an area. Use the current name and parent, or a new code.',
+          ),
+          ...conflicts.map(c =>
+            t('geography.excel.existing_conflict', 'Row %{row}: %{code} is %{currentName} (parent: %{currentParent}) in the hierarchy, but %{sheetName} (parent: %{sheetParent}) in the sheet.', {
+              row: c.row ?? '?',
+              code: c.code,
+              currentName: c.current.name ?? t('geography.excel.unnamed', 'unnamed'),
+              currentParent: c.current.parent ?? none,
+              sheetName: c.sheet.name,
+              sheetParent: c.sheet.parent ?? none,
+            }),
+          ),
+        ].join(' '));
+        return;
+      }
+      if (toCreate.length === 0 && toLabel.length === 0) {
+        setError(t('geography.excel.nothing_new', 'Every area in this sheet is already in the hierarchy as listed, so there is nothing to add.'));
+        return;
+      }
+
       // Convert Excel rows to Boundary objects, attaching real geometry
       // (polygon sidecar > lat/long > undefined → service defaults to the
       // unit-square placeholder for unmatched rows).
-      const boundariesToCreate: Boundary[] = validBoundaries.map(row => ({
+      const boundariesToCreate: Boundary[] = toCreate.map(row => ({
         tenantId: boundaryTenant,
         code: row.code,
         name: row.name,
@@ -635,43 +669,31 @@ export default function BoundaryImport({
         geometry: geometryForBoundary(row, polygonSidecar ?? undefined),
       }));
 
-      // Create boundaries
-      const result = await boundaryService.createBoundaries(boundariesToCreate, (created, total) => {
-        // Progress callback
-        console.log(`Created ${created}/${total} boundaries`);
-      });
-
-      // Track counts by level
-      const counts: Record<string, number> = {};
-      result.success.forEach(b => {
-        counts[b.boundaryType] = (counts[b.boundaryType] || 0) + 1;
-      });
-
-      setCreatedCounts(counts);
-      setTotalCreated(result.success.length);
-
-      // Localizations + cache-bust + boundary-path repair (shared with OSM path)
-      const schemaError = await runPostCreatePipeline(
-        boundaryTenant,
-        result.success,
-        selectedHierarchy.hierarchyType,
-        selectedHierarchy.boundaryHierarchy
-      );
-
-      addUndo('create_boundaries', `Created ${result.success.length} boundaries`);
-      trackStepAction('geography', 'entity_import', 'boundary', {
-        tenant: boundaryTenant,
+      const refused = onDone({
         source: 'excel',
-        count: result.success.length,
-        failed: result.failed.length,
+        method,
+        hierarchyType: selectedHierarchy.hierarchyType,
+        levels: getHierarchyLevels(selectedHierarchy),
+        hierarchyExists: serverHierarchyTypes.has(selectedHierarchy.hierarchyType),
+        boundaries: boundariesToCreate,
+        unnamed: toLabel.map(({ code, name }) => ({ code, name })),
+        alreadyThere: alreadyThere.length,
+        sourceText: t('geography.source_excel', 'your Excel upload'),
+        skipped: 0,
+        attribution: null,
+        preconfigured: null,
+        resume: {
+          kind: 'excel',
+          hierarchy: selectedHierarchy,
+          file: uploadedFile,
+          parsed: parsedBoundaries,
+          valid: validBoundaries,
+          invalid: invalidBoundaries,
+          polygonFile,
+          polygonSidecar,
+        },
       });
-      setStep('complete');
-
-      const failures = [
-        result.failed.length > 0 ? `${result.failed.length} boundaries failed to create.` : null,
-        schemaError,
-      ].filter(Boolean);
-      if (failures.length) setError(failures.join(' '));
+      if (refused) setError(refused);
     } catch (err) {
       console.error('Boundary upload error:', err);
       reportStepError('geography', 'import_excel', err, boundaryTenant);
@@ -680,7 +702,7 @@ export default function BoundaryImport({
       } else if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('Failed to upload boundaries. Please try again.');
+        setError(t('geography.excel.upload_failed', 'Failed to upload boundaries. Please try again.'));
       }
     } finally {
       setLoading(false);
@@ -698,16 +720,83 @@ export default function BoundaryImport({
       : hierarchyLevels;
     const type = selectedHierarchy?.hierarchyType || hierarchyType || 'ADMIN';
     downloadBoundaryTemplate(type, levels);
+    trackTemplateDownload('geography', 'boundary');
   };
 
   // ============================================
   // OSM path handlers
   // ============================================
 
+  // Fetch a place's boundaries and open the level screen. `suggestion` is the
+  // search result it came from.
+  const openPlace = async (place: {
+    id: string;
+    name: string;
+    label: string;
+    country: string | null;
+    countryCode: string | null;
+    source: string;
+    suggestion: SuggestionFeature;
+  }): Promise<boolean> => {
+    const { source } = place;
+    const searched = (outcome: string, levels?: number) => trackSearch(outcome, source, levels);
+    // An official set carries its agreement with the other official source.
+    // The country is known up front, so look it up alongside the fetch (best
+    // effort: the level screen works without it; fetchOfficialSet never throws).
+    const officialLookup =
+      !preconfigured && source === 'official' && place.countryCode ? fetchOfficialSet(TURBOPASS_BASE, place.countryCode) : null;
+    const res = await fetch(`${TURBOPASS_BASE}/boundary/fetch?id=${encodeURIComponent(place.id)}&source=${encodeURIComponent(source)}`);
+    if (!res.ok) {
+      setError(turbopassErrorMessage({
+        kind: 'fetch', source, status: res.status, serverMessage: await serverMessage(res), place: place.name,
+      }));
+      searched('fetch_failed');
+      return false;
+    }
+    const geojson = await res.json();
+
+    // The fetch returns the picked place and what lies inside it — never
+    // anything above it — so every polygon with an admin level belongs. The
+    // old target-level detection name-matched the search term against the
+    // features and could latch onto the wrong one (#1016 point 1).
+    const extractedLevels = groupFetchedLevels(geojson.features);
+
+    if (extractedLevels.length === 0) {
+      setError(t('geography.search.no_boundaries', 'No administrative boundaries came back for "%{place}". Try a different place.', { place: place.name }));
+      searched('no_boundaries', 0);
+      return false;
+    }
+    // A hierarchy needs two levels. Stop here with the reason rather than
+    // open a level screen that can't be completed (#1016 point 3) — this is
+    // the check that covers Geoapify, which can't say so up front.
+    if (extractedLevels.length < 2) {
+      setError(tooFewLevelsMessage(place.suggestion, (geojson.features ?? []).length));
+      searched('too_few_levels', extractedLevels.length);
+      return false;
+    }
+
+    setFetchedPlace({ id: place.id, name: place.name, label: place.label, country: place.country });
+    setFetchedAttribution(attributionLine(geojson.features));
+    openedPlaceRef.current = place.id;
+    if (!preconfigured) {
+      setOfficialSet(null);
+      // Best effort and never in the way: the level screen opens now, and the
+      // summary appears when the lookup answers — unless another place has been
+      // opened since.
+      void officialLookup?.then((set) => {
+        if (openedPlaceRef.current === place.id) setOfficialSet(set && set !== 'unavailable' ? set : null);
+      });
+    }
+    setAdminLevels(extractedLevels);
+    setStep('map-levels');
+    searched('found', extractedLevels.length);
+    return true;
+  };
+
   const handleSearch = async () => {
     const term = searchTerm.trim();
     if (!term) {
-      setError("Please enter a location name to search.");
+      setError(t('geography.search.enter_name', 'Please enter a location name to search.'));
       return;
     }
     setLoading(true);
@@ -720,7 +809,7 @@ export default function BoundaryImport({
         // otherwise show the ranked, disambiguated candidates and let the
         // operator choose, rather than taking whatever came back first (#1016:
         // "Delhi" used to resolve to "Delhi Govt Flats").
-        const res = await fetch(turbopassSearchUrl(TURBOPASS_BASE, term, turbopassSource, TURBOPASS_MATCH, true));
+        const res = await fetch(turbopassSearchUrl(TURBOPASS_BASE, term, turbopassSource, TURBOPASS_MATCH, true, preconfigured?.country));
         if (!res.ok) {
           setError(turbopassErrorMessage({
             kind: 'search', source: turbopassSource, status: res.status, serverMessage: await serverMessage(res),
@@ -728,21 +817,24 @@ export default function BoundaryImport({
           return;
         }
         const data = await res.json();
-        const result = pickSuggestion(tagWithSource(data.features, turbopassSource), term);
+        const result = pickSuggestion(inScope(tagWithSource(data.features, turbopassSource)), term);
         if (result.reason === 'no-results' && isOfflineSource(turbopassSource)) {
           // Nothing with areas inside it matched. If the name exists only as a
           // place with nothing inside it, say so — and where it lies.
-          const all = await fetch(turbopassSearchUrl(TURBOPASS_BASE, term, turbopassSource, TURBOPASS_MATCH, false))
+          const all = await fetch(turbopassSearchUrl(TURBOPASS_BASE, term, turbopassSource, TURBOPASS_MATCH, false, preconfigured?.country))
             .then((r) => (r.ok ? r.json() : null))
             .catch(() => null);
-          const leaf = all?.features?.[0];
+          // Same country scope as the search above (a server that predates `country` ignores it).
+          const leaf = inScope((all?.features ?? []) as SuggestionFeature[])[0];
           setError(leaf ? deadEndMessage(leaf) : pickPromptMessage(result, term));
+          trackSearch(leaf ? 'nothing_inside' : 'no_results', turbopassSource);
           return;
         }
         if (!result.pick) {
           setSuggestions(result.candidates.slice(0, 5));
           setShowSuggestions(result.candidates.length > 0);
           setError(pickPromptMessage(result, term));
+          trackSearch(result.candidates.length ? 'choose_one' : 'no_results', turbopassSource);
           return;
         }
         suggestion = result.pick;
@@ -752,52 +844,26 @@ export default function BoundaryImport({
       const placeId = suggestion?.properties?.place_id;
       const placeName = suggestion?.properties?.name || term;
       if (!placeId) {
-        setError('Pick a place from the suggestions.');
+        setError(t('geography.search.pick_suggestion', 'Pick a place from the suggestions.'));
         return;
       }
       // Overture says up front when nothing lies inside the place (#1016 point 3).
       if (suggestion.properties.descendant_count === 0) {
         setError(deadEndMessage(suggestion));
+        trackSearch('nothing_inside', turbopassSource);
         return;
       }
 
       // Fetch from the source that found the place, whatever the dropdown says now.
-      const source = fetchSourceFor(suggestion, turbopassSource);
-      const res = await fetch(`${TURBOPASS_BASE}/boundary/fetch?id=${encodeURIComponent(placeId)}&source=${encodeURIComponent(source)}`);
-      if (!res.ok) {
-        setError(turbopassErrorMessage({
-          kind: 'fetch', source, status: res.status, serverMessage: await serverMessage(res), place: placeName,
-        }));
-        return;
-      }
-      const geojson = await res.json();
-
-      // The fetch returns the picked place and what lies inside it — never
-      // anything above it — so every polygon with an admin level belongs. The
-      // old target-level detection name-matched the search term against the
-      // features and could latch onto the wrong one (#1016 point 1).
-      const extractedLevels = groupFetchedLevels(geojson.features);
-
-      if (extractedLevels.length === 0) {
-        setError(`No administrative boundaries came back for "${placeName}". Try a different place.`);
-        return;
-      }
-      // A hierarchy needs two levels. Stop here with the reason rather than
-      // open a level screen that can't be completed (#1016 point 3) — this is
-      // the check that covers Geoapify, which can't say so up front.
-      if (extractedLevels.length < 2) {
-        setError(tooFewLevelsMessage(suggestion, (geojson.features ?? []).length));
-        return;
-      }
-
-      setFetchedPlace({
+      await openPlace({
         id: placeId,
+        name: placeName,
         label: suggestion.properties.formatted || placeName,
         country: suggestion.properties.country_name || null,
+        countryCode: suggestion.properties.country_code || null,
+        source: fetchSourceFor(suggestion, turbopassSource),
+        suggestion,
       });
-      setFetchedAttribution(attributionLine(geojson.features));
-      setAdminLevels(extractedLevels);
-      setStep('map-levels');
     } catch (e) {
       console.error(e);
       setError(turbopassErrorMessage({ kind: 'network', source: turbopassSource }));
@@ -824,17 +890,29 @@ export default function BoundaryImport({
       await mapProvider.reload();
       setGoogleKeyDraft('');
       setGoogleKeyStatus(check === 'ok'
-        ? { kind: 'ok', text: `Saved. Maps for ${boundaryTenant} now draw on Google Maps.` }
+        ? { kind: 'ok', text: t('geography.google.saved', 'Saved. Maps for %{tenant} now draw on Google Maps.', { tenant: boundaryTenant }) }
         : {
             kind: 'warn',
-            text: `Saved, but Google didn't confirm the key in time, so it isn't verified. If Google rejects it later, ` +
-              `maps for ${boundaryTenant} fall back to OpenStreetMap tiles and say why.`,
+            text: t(
+              'geography.google.saved_unverified',
+              'Saved, but Google didn\'t confirm the key in time, so it isn\'t verified. If Google rejects it later, maps for %{tenant} fall back to OpenStreetMap tiles and say why.',
+              { tenant: boundaryTenant },
+            ),
           });
     } catch (e) {
       setGoogleKeyStatus({
         kind: 'error',
-        text: `${check === 'ok' ? 'Google accepted the key' : "Google didn't confirm the key in time"}, and saving it to Map Config failed: ${e instanceof Error ? e.message : String(e)}. ` +
-          'A deployment whose MapConfig schema predates the mapProvider field rejects it — see docs/features/maps/README.md.',
+        text: t(
+          'geography.google.save_failed',
+          '%{check}, and saving it to Map Config failed: %{reason}. A deployment whose MapConfig schema predates the mapProvider field rejects it — see docs/features/maps/README.md.',
+          {
+            check:
+              check === 'ok'
+                ? t('geography.google.accepted', 'Google accepted the key')
+                : t('geography.google.unconfirmed', 'Google didn\'t confirm the key in time'),
+            reason: e instanceof Error ? e.message : String(e),
+          },
+        ),
       });
     } finally {
       setSavingGoogleKey(false);
@@ -847,12 +925,31 @@ export default function BoundaryImport({
     try {
       await mdmsService.upsertMapConfig(boundaryTenant, { mapProvider: 'leaflet' });
       await mapProvider.reload();
-      setGoogleKeyStatus({ kind: 'ok', text: `Maps for ${boundaryTenant} are back on OpenStreetMap tiles.` });
+      setGoogleKeyStatus({ kind: 'ok', text: t('geography.google.back_to_osm', 'Maps for %{tenant} are back on OpenStreetMap tiles.', { tenant: boundaryTenant }) });
     } catch (e) {
-      setGoogleKeyStatus({ kind: 'error', text: `Couldn't update Map Config: ${e instanceof Error ? e.message : String(e)}` });
+      setGoogleKeyStatus({
+        kind: 'error',
+        text: t('geography.google.update_failed', 'Couldn\'t update Map Config: %{reason}', { reason: e instanceof Error ? e.message : String(e) }),
+      });
     } finally {
       setSavingGoogleKey(false);
     }
+  };
+
+  // The ticked levels' areas as a sheet: a column per level, a row per area
+  // path, by the rules the save uses.
+  const handleDownloadList = () => {
+    const { valid, error: selError } = validateLevelSelection(adminLevels, t);
+    if (!valid) {
+      setError(selError);
+      return;
+    }
+    setError(null);
+    const levels = getSelectedLevels(adminLevels);
+    const levelNames = levels.map((l) => l.mappedName.trim());
+    const { boundaries, skipped } = buildOsmBoundaries(levels, boundaryTenant, OSM_HIERARCHY_TYPE, containingParents);
+    const place = (fetchedPlace?.name || searchTerm).normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    downloadBoundaryList(levelNames, boundaryPathRows(boundaries, skipped, levelNames), `${place || 'boundary'}-list.xlsx`);
   };
 
   // Build the boundary payload from the mapped levels. Features that are
@@ -860,7 +957,7 @@ export default function BoundaryImport({
   // EXCLUDED (never silently re-parented) — if any were dropped, show the
   // review step so the operator knows exactly what's missing before create.
   const handlePrepareOsmCreate = () => {
-    const { valid, error: selError } = validateLevelSelection(adminLevels);
+    const { valid, error: selError } = validateLevelSelection(adminLevels, t);
     if (!valid) {
       setError(selError);
       return;
@@ -871,117 +968,106 @@ export default function BoundaryImport({
     const { boundaries, skipped } = buildOsmBoundaries(sortedLevels, boundaryTenant, OSM_HIERARCHY_TYPE, containingParents);
 
     if (boundaries.length === 0) {
-      setError("All fetched features were skipped (unnamed, name not romanizable, or no parent found). Nothing to create.");
+      setError(
+        t(
+          'geography.osm.all_skipped',
+          'All fetched features were skipped (unnamed, name not romanizable, or no parent found). Nothing to create.',
+        ),
+      );
       return;
     }
 
     setPendingBoundaries(boundaries);
     setSkippedFeatures(skipped);
+    trackLevels(sortedLevels.length, 'fetched');
 
     if (skipped.length > 0) {
       setStep('osm-review');
     } else {
-      void runOsmCreate(boundaries);
+      void runOsmCreate(boundaries, 0);
     }
   };
 
-  const runOsmCreate = async (boundariesToCreate: Boundary[]) => {
+  const runOsmCreate = async (boundariesToCreate: Boundary[], skipped: number) => {
     const validLevels = getSelectedLevels(adminLevels);
     const levelNames = validLevels.map(l => l.mappedName.trim());
 
     if (OSM_HIERARCHY_TYPE === WORKSPACE_HIERARCHY_TYPE) {
-      setError(`"${WORKSPACE_HIERARCHY_TYPE}" is reserved for the workspace root. Set HIERARCHY_TYPE to another hierarchy name.`);
+      setError(
+        t('geography.osm.type_reserved', '"%{type}" is reserved for the workspace root. Set HIERARCHY_TYPE to another hierarchy name.', {
+          type: WORKSPACE_HIERARCHY_TYPE,
+        }),
+      );
       return;
     }
 
-    setLoading(true);
-    setError(null);
-    setStep('creating');
-
-    try {
-      // Step 1: Create Hierarchy
-      try {
-        await boundaryService.createHierarchyFromLevels(
-          boundaryTenant,
-          OSM_HIERARCHY_TYPE,
-          levelNames
-        );
-        addUndo('create_hierarchy', `Created hierarchy: ${OSM_HIERARCHY_TYPE}`);
-      } catch (e: any) {
-        const msg = String(e?.message || e);
-        if (msg.toLowerCase().includes('already exist') || msg.includes('DUPLICATE')) {
-          // An ADMIN hierarchy already exists. Proceeding blindly is only
-          // safe when its level names match the operator's mapping — if they
-          // differ, every boundary create fails slowly (validation retries)
-          // with a misleading error. Compare order-sensitively and abort
-          // with a clear message when they diverge.
-          const hierarchies = await boundaryService.getHierarchies(boundaryTenant);
-          const existing = hierarchies.find(h => h.hierarchyType === OSM_HIERARCHY_TYPE);
-          const existingLevels = (existing?.boundaryHierarchy ?? []).map(l => l.boundaryType);
-          const sameLevels =
-            existingLevels.length === levelNames.length &&
-            existingLevels.every((lvlName, idx) => lvlName === levelNames[idx]);
-          if (!sameLevels) {
-            setError(
-              `A "${OSM_HIERARCHY_TYPE}" hierarchy already exists on ${boundaryTenant} with levels ` +
-              `[${existingLevels.join(' → ')}], which do not match your mapped levels ` +
-              `[${levelNames.join(' → ')}]. Boundaries cannot be created against mismatched ` +
-              `level names. Either rename your mapped levels to match the existing hierarchy, ` +
-              `or use the Excel path's "use existing hierarchy" option.`
-            );
-            setStep('map-levels');
-            return;
-          }
-          console.log("Hierarchy already exists with matching levels, proceeding to create boundaries...");
-        } else {
-          throw e;
-        }
-      }
-
-      // Create boundaries
-      const result = await boundaryService.createBoundaries(boundariesToCreate, () => {});
-
-      const counts: Record<string, number> = {};
-      result.success.forEach(b => {
-        counts[b.boundaryType] = (counts[b.boundaryType] || 0) + 1;
-      });
-
-      setCreatedCounts(counts);
-      setTotalCreated(result.success.length);
-
-      if (result.success.length > 0) {
-        addUndo('create_boundaries', `Created ${result.success.length} boundaries from OSM data`);
-      }
-
-      // Localizations + cache-bust + boundary-path repair (shared with Excel path)
-      const schemaError = await runPostCreatePipeline(
-        boundaryTenant,
-        result.success,
-        OSM_HIERARCHY_TYPE,
-        levelNames.map(n => ({ boundaryType: n }))
-      );
-
-      trackStepAction('geography', 'entity_import', 'boundary', {
-        tenant: boundaryTenant,
-        source: 'osm',
-        count: result.success.length,
-        failed: result.failed.length,
-        levels: levelNames.length,
-      });
-      setStep('complete');
-
-      const failures = [
-        result.failed.length > 0 ? `${result.failed.length} boundaries failed to create.` : null,
-        schemaError,
-      ].filter(Boolean);
-      if (failures.length) setError(failures.join(' '));
-    } catch (e) {
-      console.error(e);
-      reportStepError('geography', 'import_osm', e, boundaryTenant);
-      setError(e instanceof Error ? e.message : "Failed to create boundaries.");
+    // An ADMIN hierarchy already on the server is only usable when its level
+    // names match the operator's mapping: say so here, before the list.
+    const unknown = hierarchiesUnknown();
+    if (unknown || !serverHierarchyTypes) {
+      setError(unknown);
+      if (hierarchiesError) void fetchHierarchies();
       setStep('map-levels');
-    } finally {
-      setLoading(false);
+      return;
+    }
+    const existing = serverHierarchyTypes.has(OSM_HIERARCHY_TYPE)
+      ? existingHierarchies.find(h => h.hierarchyType === OSM_HIERARCHY_TYPE)
+      : undefined;
+    const mismatch = existing
+      && levelsMismatch(boundaryTenant, OSM_HIERARCHY_TYPE, (existing.boundaryHierarchy ?? []).map(l => l.boundaryType), levelNames);
+    if (mismatch) {
+      setError(t(mismatch.key, mismatch.english, mismatch.params));
+      setStep('map-levels');
+      return;
+    }
+
+    if (!fetchedPlace) return;
+    // Codes come from names, so one may already belong to a different saved area:
+    // the list checks the new areas against those already in the hierarchy.
+    let saved: SavedArea[] = [];
+    if (existing) {
+      setLoading(true);
+      try {
+        saved = await boundaryService.existingBoundaries(boundaryTenant, OSM_HIERARCHY_TYPE);
+      } catch (e) {
+        setError(
+          t('geography.load_failed', 'Couldn’t load your boundaries. %{reason}', {
+            reason: e instanceof ApiClientError ? e.firstError : e instanceof Error ? e.message : String(e),
+          }),
+        );
+        setStep('map-levels');
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+    const refused = onDone({
+      source: 'osm',
+      method,
+      hierarchyType: OSM_HIERARCHY_TYPE,
+      levels: levelNames,
+      hierarchyExists: !!existing,
+      boundaries: boundariesToCreate,
+      unnamed: [],
+      alreadyThere: 0,
+      sourceText: createdSourceText,
+      skipped,
+      attribution: fetchedAttribution,
+      preconfigured,
+      resume: {
+        kind: 'osm',
+        searchTerm,
+        pickedSuggestion,
+        turbopassSource,
+        fetchedPlace,
+        adminLevels,
+        attribution: fetchedAttribution,
+        officialSet,
+      },
+    }, saved);
+    if (refused) {
+      setError(refused);
+      setStep('map-levels');
     }
   };
 
@@ -1027,7 +1113,7 @@ export default function BoundaryImport({
       {/* Excel landing: new vs existing hierarchy */}
       {step === 'excel-landing' && (
         <DigitCard>
-          <SubHeader>Add to an existing hierarchy or start a new one?</SubHeader>
+          <SubHeader>{t('geography.excel.landing_heading', 'Add to an existing hierarchy or start a new one?')}</SubHeader>
 
           <div className="grid sm:grid-cols-2 gap-4">
             <button
@@ -1038,11 +1124,13 @@ export default function BoundaryImport({
               <span className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
                 {loadingHierarchies ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderOpen className="w-5 h-5" />}
               </span>
-              <span className="mt-3 text-base font-medium text-foreground">Use an existing hierarchy</span>
+              <span className="mt-3 text-base font-medium text-foreground">{t('geography.excel.use_existing', 'Use an existing hierarchy')}</span>
               <span className="mt-1 text-sm text-muted-foreground">
                 {existingHierarchies.length === 1
-                  ? 'Upload more areas into the hierarchy you already have.'
-                  : `Upload more areas into one of your ${existingHierarchies.length} hierarchies.`}
+                  ? t('geography.excel.use_existing_one', 'Upload more areas into the hierarchy you already have.')
+                  : t('geography.excel.use_existing_other', 'Upload more areas into one of your %{count} hierarchies.', {
+                      count: existingHierarchies.length,
+                    })}
               </span>
             </button>
 
@@ -1053,15 +1141,17 @@ export default function BoundaryImport({
               <span className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
                 <Plus className="w-5 h-5" />
               </span>
-              <span className="mt-3 text-base font-medium text-foreground">Create a new hierarchy</span>
-              <span className="mt-1 text-sm text-muted-foreground">Define its levels, like County → Sub-county → Ward.</span>
+              <span className="mt-3 text-base font-medium text-foreground">{t('geography.excel.create_new', 'Create a new hierarchy')}</span>
+              <span className="mt-1 text-sm text-muted-foreground">
+                {t('geography.excel.create_new_body', 'Define its levels, like County → Sub-county → Ward.')}
+              </span>
             </button>
           </div>
 
           <div className="mt-6">
             <Button variant="ghost" size="sm" onClick={onCancel} className="gap-1.5 text-primary hover:text-primary">
               <ArrowLeft className="w-4 h-4" />
-              Back
+              {t('step.back', 'Back')}
             </Button>
           </div>
         </DigitCard>
@@ -1070,30 +1160,38 @@ export default function BoundaryImport({
       {/* Create Hierarchy */}
       {step === 'create-hierarchy' && (
         <DigitCard>
-          <SubHeader>Create Boundary Hierarchy</SubHeader>
-          <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">Define the boundary hierarchy for tenant: <span className="text-primary font-medium">{boundaryTenant.toUpperCase()}</span></p>
+          <SubHeader>{t('geography.excel.create_heading', 'Create Boundary Hierarchy')}</SubHeader>
+          <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">
+            {withNodes(t('geography.excel.create_for_tenant', 'Define the boundary hierarchy for tenant: %{tenant}'), {
+              tenant: <span className="text-primary font-medium">{boundaryTenant.toUpperCase()}</span>,
+            })}
+          </p>
 
           <div className="space-y-6">
             <LabelFieldPair>
-              <CardLabel required>Hierarchy Type Name</CardLabel>
+              <CardLabel required>{t('geography.excel.type_name', 'Hierarchy Type Name')}</CardLabel>
               <Field>
                 <Input
                   id="hierarchyType"
+                  aria-required="true"
                   value={hierarchyType}
                   onChange={(e) => setHierarchyType(e.target.value)}
                   placeholder="ADMIN"
                   className="border-input-border focus:border-primary"
                 />
-                <p className="text-xs text-muted-foreground mt-1">Common types: ADMIN, REVENUE, ADMIN1, ADMIN2</p>
+                <p className="text-xs text-muted-foreground mt-1">{t('geography.excel.common_types', 'Common types: ADMIN, REVENUE, ADMIN1, ADMIN2')}</p>
               </Field>
             </LabelFieldPair>
 
             <div className="mb-4 sm:mb-6">
-              <CardLabel className="mb-2">Define Levels (top to bottom)</CardLabel>
+              {/* At least two named levels. */}
+              <CardLabel className="mb-2" required>{t('geography.excel.define_levels', 'Define Levels (top to bottom)')}</CardLabel>
               <div className="border border-border rounded p-3 sm:p-4 mt-2 bg-muted/30">
                 {hierarchyLevels.map((level, idx) => (
                   <div key={idx} className="flex items-center gap-2 sm:gap-3 mb-3 last:mb-0">
-                    <span className="text-xs sm:text-sm text-muted-foreground w-14 sm:w-16 flex-shrink-0 font-condensed">Level {idx + 1}:</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground w-14 sm:w-16 flex-shrink-0 font-condensed">
+                      {t('geography.excel.level_n', 'Level %{n}:', { n: idx + 1 })}
+                    </span>
                     <Input
                       value={level}
                       onChange={(e) => {
@@ -1103,8 +1201,10 @@ export default function BoundaryImport({
                       }}
                       className="flex-1 border-input-border focus:border-primary"
                     />
-                    {idx === 0 && <span className="text-xs text-primary hidden sm:inline">[Root]</span>}
-                    {idx === hierarchyLevels.length - 1 && <span className="text-xs text-primary hidden sm:inline">[Lowest]</span>}
+                    {idx === 0 && <span className="text-xs text-primary hidden sm:inline">{t('geography.excel.root', '[Root]')}</span>}
+                    {idx === hierarchyLevels.length - 1 && (
+                      <span className="text-xs text-primary hidden sm:inline">{t('geography.excel.lowest', '[Lowest]')}</span>
+                    )}
                     {hierarchyLevels.length > 2 && (
                       <Button
                         variant="ghost"
@@ -1123,21 +1223,21 @@ export default function BoundaryImport({
                   onClick={() => setHierarchyLevels([...hierarchyLevels, ''])}
                   className="mt-3 border-primary text-primary hover:bg-primary/10"
                 >
-                  <Plus className="w-4 h-4 mr-1" /> Add Level
+                  <Plus className="w-4 h-4 mr-1" /> {t('geography.excel.add_level', 'Add Level')}
                 </Button>
               </div>
             </div>
           </div>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 mt-6">
-            <Button variant="ghost" size="sm" onClick={hasHierarchies ? () => setStep('excel-landing') : onCancel} className="gap-1.5 text-primary hover:text-primary">
+            <Button variant="ghost" size="sm" onClick={hasHierarchies || list ? () => setStep('excel-landing') : onCancel} className="gap-1.5 text-primary hover:text-primary">
               <ArrowLeft className="w-4 h-4" />
-              Back
+              {t('step.back', 'Back')}
             </Button>
             <SubmitBar
-              label={loading ? 'Creating...' : 'Create Hierarchy'}
+              label={loading ? t('geography.creating', 'Creating...') : t('geography.excel.create_hierarchy', 'Create Hierarchy')}
               onSubmit={handleCreateHierarchy}
-              disabled={loading}
+              disabled={loading || (!serverHierarchyTypes && !hierarchiesError)}
               icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
             />
           </div>
@@ -1149,8 +1249,12 @@ export default function BoundaryImport({
         <DigitCard>
           <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
-              <SubHeader>Select Existing Hierarchy</SubHeader>
-              <p className="text-xs sm:text-sm text-muted-foreground">Available hierarchies for tenant: <span className="text-primary font-medium">{boundaryTenant.toUpperCase()}</span></p>
+              <SubHeader>{t('geography.excel.select_heading', 'Select Existing Hierarchy')}</SubHeader>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {withNodes(t('geography.excel.available_for_tenant', 'Available hierarchies for tenant: %{tenant}'), {
+                  tenant: <span className="text-primary font-medium">{boundaryTenant.toUpperCase()}</span>,
+                })}
+              </p>
             </div>
             <Button
               variant="ghost"
@@ -1163,16 +1267,32 @@ export default function BoundaryImport({
             </Button>
           </div>
 
+          {hierarchiesError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                <span>
+                  {t('geography.excel.hierarchies_load_failed', 'Couldn’t load your hierarchies. %{reason}', {
+                    reason: hierarchiesError,
+                  })}
+                </span>
+                <Button variant="outline" size="sm" onClick={fetchHierarchies} disabled={loadingHierarchies}>
+                  {t('common.try_again', 'Try again')}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {existingHierarchies.length === 0 ? (
-            <div className="text-center py-8">
+            // A list that failed to load is not an empty one: don't steer to "create".
+            !hierarchiesError && <div className="text-center py-8">
               <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground mb-4">No hierarchies found for this tenant.</p>
+              <p className="text-muted-foreground mb-4">{t('geography.excel.none_found', 'No hierarchies found for this tenant.')}</p>
               <Button
                 variant="outline"
                 onClick={() => setStep('create-hierarchy')}
                 className="border-primary text-primary"
               >
-                <Plus className="w-4 h-4 mr-2" /> Create New Hierarchy
+                <Plus className="w-4 h-4 mr-2" /> {t('geography.excel.create_new_button', 'Create New Hierarchy')}
               </Button>
             </div>
           ) : (
@@ -1196,7 +1316,9 @@ export default function BoundaryImport({
                     <div className="min-w-0">
                       <p className="font-condensed font-medium text-foreground text-sm sm:text-base">{hierarchy.hierarchyType}</p>
                       <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                        Levels: <span className="text-primary">{getHierarchyLevels(hierarchy).join(' → ')}</span>
+                        {withNodes(t('geography.excel.levels_line', 'Levels: %{levels}'), {
+                          levels: <span className="text-primary">{getHierarchyLevels(hierarchy).join(' → ')}</span>,
+                        })}
                       </p>
                     </div>
                   </div>
@@ -1206,9 +1328,9 @@ export default function BoundaryImport({
           )}
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-            <Button variant="ghost" size="sm" onClick={() => setStep('excel-landing')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('excel-landing')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />{t('step.back', 'Back')}</Button>
             <SubmitBar
-              label="Use Selected Hierarchy"
+              label={t('geography.excel.use_selected', 'Use Selected Hierarchy')}
               onSubmit={handleSelectHierarchy}
               disabled={!selectedHierarchy}
               icon={<ChevronRight className="w-4 h-4" />}
@@ -1220,28 +1342,34 @@ export default function BoundaryImport({
       {/* Template */}
       {step === 'template' && selectedHierarchy && (
         <DigitCard>
-          <SubHeader>Boundary Data Upload</SubHeader>
+          <SubHeader>{t('geography.excel.upload_heading', 'Boundary Data Upload')}</SubHeader>
           <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">
-            Hierarchy: <span className="text-primary font-medium">{selectedHierarchy.hierarchyType}</span> •
-            Levels: <span className="text-primary">{getHierarchyLevels(selectedHierarchy).join(' → ')}</span>
+            {withNodes(t('geography.excel.hierarchy_and_levels', 'Hierarchy: %{hierarchy} • Levels: %{levels}'), {
+              hierarchy: <span className="text-primary font-medium">{selectedHierarchy.hierarchyType}</span>,
+              levels: <span className="text-primary">{getHierarchyLevels(selectedHierarchy).join(' → ')}</span>,
+            })}
           </p>
 
           <div className="p-4 bg-primary/5 border border-primary/20 rounded mb-4 sm:mb-6">
             <div className="flex items-center gap-2 text-primary mb-2">
               <Download className="w-5 h-5" />
-              <strong className="text-sm font-condensed">Download Template</strong>
+              <strong className="text-sm font-condensed">{t('geography.excel.download_template', 'Download Template')}</strong>
             </div>
             <p className="text-xs sm:text-sm mb-2 text-foreground">Boundary_Template_{selectedHierarchy.hierarchyType}.xlsx</p>
-            <p className="text-xs sm:text-sm mb-2 text-muted-foreground">Required columns:</p>
+            <p className="text-xs sm:text-sm mb-2 text-muted-foreground">{t('geography.excel.required_columns', 'Required columns:')}</p>
+            {/* The column names are the template's own headers, so they stay as they are. */}
             <ul className="text-xs sm:text-sm space-y-1 mb-3 sm:mb-4 text-muted-foreground">
-              <li>• <strong>code</strong> - Unique boundary code</li>
-              <li>• <strong>name</strong> - Display name</li>
-              <li>• <strong>boundaryType</strong> - Level type ({getHierarchyLevels(selectedHierarchy).join(', ')})</li>
-              <li>• <strong>parentCode</strong> - Parent boundary code (optional for root)</li>
+              <li>• <strong>code</strong> - {t('geography.excel.col_code', 'Unique boundary code')}</li>
+              <li>• <strong>name</strong> - {t('geography.excel.col_name', 'Display name')}</li>
+              <li>
+                • <strong>boundaryType</strong> -{' '}
+                {t('geography.excel.col_type', 'Level type (%{levels})', { levels: getHierarchyLevels(selectedHierarchy).join(', ') })}
+              </li>
+              <li>• <strong>parentCode</strong> - {t('geography.excel.col_parent', 'Parent boundary code (optional for root)')}</li>
             </ul>
             <Button size="sm" className="bg-primary hover:bg-primary/90 text-white" onClick={handleDownloadTemplate}>
               <Download className="w-4 h-4 mr-2" />
-              Download Template
+              {t('geography.excel.download_template', 'Download Template')}
             </Button>
           </div>
 
@@ -1252,15 +1380,15 @@ export default function BoundaryImport({
             {loading ? (
               <>
                 <Loader2 className="w-8 h-8 text-primary mx-auto mb-3 animate-spin" />
-                <p className="text-sm font-condensed font-medium text-foreground">Parsing Excel file...</p>
+                <p className="text-sm font-condensed font-medium text-foreground">{t('geography.excel.parsing', 'Parsing Excel file...')}</p>
               </>
             ) : (
               <>
                 <Upload className="w-8 h-8 text-primary mx-auto mb-3" />
                 <p className="text-sm font-condensed font-medium text-foreground mb-2">
-                  Drop your filled boundary template here
+                  {t('geography.excel.drop_here', 'Drop your filled boundary template here')}
                 </p>
-                <p className="text-xs text-muted-foreground">or click to browse</p>
+                <p className="text-xs text-muted-foreground">{t('geography.excel.or_browse', 'or click to browse')}</p>
               </>
             )}
           </div>
@@ -1271,23 +1399,26 @@ export default function BoundaryImport({
               to 'verify' the moment a file is dropped. */}
           <p className="text-xs text-muted-foreground mb-4 flex items-center gap-2">
             <MapPin className="w-3 h-3 inline" />
-            After upload, you'll be able to attach an optional GeoJSON file for real boundary outlines on the map.
+            {t(
+              'geography.excel.geojson_hint',
+              'After upload, you\'ll be able to attach an optional GeoJSON file for real boundary outlines on the map.',
+            )}
           </p>
 
           <Alert variant="warning" className="mb-4 sm:mb-6">
             <AlertTriangle className="w-4 h-4" />
             <AlertDescription>
-              <strong className="block mb-2 text-sm">Important Rules:</strong>
+              <strong className="block mb-2 text-sm">{t('geography.excel.rules', 'Important Rules:')}</strong>
               <ul className="text-xs sm:text-sm space-y-1">
-                <li>• Each boundary must have a unique code</li>
-                <li>• Parent boundary must exist before child</li>
-                <li>• Do not skip hierarchy levels</li>
+                <li>• {t('geography.excel.rule_unique', 'Each boundary must have a unique code')}</li>
+                <li>• {t('geography.excel.rule_parent', 'Parent boundary must exist before child')}</li>
+                <li>• {t('geography.excel.rule_no_skip', 'Do not skip hierarchy levels')}</li>
               </ul>
             </AlertDescription>
           </Alert>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-            <Button variant="ghost" size="sm" onClick={() => setStep('excel-landing')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('excel-landing')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />{t('step.back', 'Back')}</Button>
           </div>
         </DigitCard>
       )}
@@ -1295,11 +1426,11 @@ export default function BoundaryImport({
       {/* Verify */}
       {step === 'verify' && selectedHierarchy && (
         <DigitCard>
-          <SubHeader>Verify Boundary Data</SubHeader>
+          <SubHeader>{t('geography.excel.verify_heading', 'Verify Boundary Data')}</SubHeader>
 
           <div className="flex items-center gap-2 text-primary mb-3 sm:mb-4">
             <Check className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="text-sm sm:text-base truncate">File: {uploadedFile?.name}</span>
+            <span className="text-sm sm:text-base truncate">{t('geography.excel.file', 'File: %{name}', { name: uploadedFile?.name ?? '' })}</span>
           </div>
 
           {/* Optional polygon GeoJSON sidecar — real outlines for the
@@ -1316,12 +1447,14 @@ export default function BoundaryImport({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 text-foreground mb-1">
                   <MapPin className="w-4 h-4 text-primary" />
-                  <strong className="text-sm font-condensed">Polygon outlines (optional)</strong>
+                  <strong className="text-sm font-condensed">{t('geography.excel.polygons', 'Polygon outlines (optional)')}</strong>
                 </div>
                 {!polygonFile && !polygonError && (
                   <p className="text-xs text-muted-foreground">
-                    Drop a GeoJSON FeatureCollection to draw real boundary outlines on the citizen map.
-                    Skip to use the default placeholder shape.
+                    {t(
+                      'geography.excel.polygons_hint',
+                      'Drop a GeoJSON FeatureCollection to draw real boundary outlines on the citizen map. Skip to use the default placeholder shape.',
+                    )}
                   </p>
                 )}
                 {polygonFile && polygonSidecar && (() => {
@@ -1330,9 +1463,22 @@ export default function BoundaryImport({
                   ).length;
                   return (
                     <p className="text-xs text-muted-foreground">
-                      <span className="text-primary font-medium">{polygonFile.name}</span>
-                      {' '}— <span className="text-primary font-medium">{matched}</span> of {validBoundaries.length} boundaries will get real outlines
-                      {' '}({polygonSidecar.totalFeatures} features in file, {polygonSidecar.matchedByCode} matched by code, {polygonSidecar.matchedByName} by name).
+                      {withNodes(
+                        t(
+                          'geography.excel.polygons_matched',
+                          '%{file} — %{matched} of %{total} boundaries will get real outlines (%{features} features in file, %{byCode} matched by code, %{byName} by name).',
+                          {
+                            total: validBoundaries.length,
+                            features: polygonSidecar.totalFeatures,
+                            byCode: polygonSidecar.matchedByCode,
+                            byName: polygonSidecar.matchedByName,
+                          },
+                        ),
+                        {
+                          file: <span className="text-primary font-medium">{polygonFile.name}</span>,
+                          matched: <span className="text-primary font-medium">{matched}</span>,
+                        },
+                      )}
                     </p>
                   );
                 })()}
@@ -1355,13 +1501,13 @@ export default function BoundaryImport({
               <Tabs defaultValue="all">
                 <TabsList className="w-full sm:w-auto flex-wrap h-auto gap-1 p-1 bg-muted">
                   <TabsTrigger value="all" className="text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-white">
-                    All ({parsedBoundaries.length})
+                    {t('geography.excel.tab_all', 'All (%{count})', { count: parsedBoundaries.length })}
                   </TabsTrigger>
                   <TabsTrigger value="valid" className="text-xs sm:text-sm data-[state=active]:bg-success data-[state=active]:text-white">
-                    Valid ({validBoundaries.length})
+                    {t('geography.excel.tab_valid', 'Valid (%{count})', { count: validBoundaries.length })}
                   </TabsTrigger>
                   <TabsTrigger value="errors" className="text-xs sm:text-sm data-[state=active]:bg-destructive data-[state=active]:text-white">
-                    Errors ({invalidBoundaries.length})
+                    {t('geography.excel.tab_errors', 'Errors (%{count})', { count: invalidBoundaries.length })}
                   </TabsTrigger>
                 </TabsList>
 
@@ -1380,7 +1526,7 @@ export default function BoundaryImport({
                       invalidBoundaries={invalidBoundaries}
                     />
                   ) : (
-                    <p className="text-muted-foreground text-center py-4">No errors found</p>
+                    <p className="text-muted-foreground text-center py-4">{t('geography.excel.no_errors', 'No errors found')}</p>
                   )}
                 </TabsContent>
               </Tabs>
@@ -1388,13 +1534,20 @@ export default function BoundaryImport({
           </div>
 
           <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">
-            Summary: {parsedBoundaries.length} total |
-            <span className="text-success"> {validBoundaries.length} valid</span> |
-            <span className="text-destructive"> {invalidBoundaries.length} errors</span>
+            {withNodes(t('geography.excel.summary', 'Summary: %{total} total | %{valid} | %{errors}', { total: parsedBoundaries.length }), {
+              valid: (
+                <span className="text-success">{t('geography.excel.summary_valid', '%{count} valid', { count: validBoundaries.length })}</span>
+              ),
+              errors: (
+                <span className="text-destructive">
+                  {t('geography.excel.summary_errors', '%{count} errors', { count: invalidBoundaries.length })}
+                </span>
+              ),
+            })}
           </p>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-            <Button variant="ghost" size="sm" onClick={() => setStep('template')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('template')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />{t('step.back', 'Back')}</Button>
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               {invalidBoundaries.length > 0 && (
                 <Button
@@ -1403,13 +1556,17 @@ export default function BoundaryImport({
                   onClick={() => document.getElementById('boundary-file-upload')?.click()}
                   className="border-primary text-primary hover:bg-primary/10"
                 >
-                  Re-upload Fixed File
+                  {t('geography.excel.reupload', 'Re-upload Fixed File')}
                 </Button>
               )}
               <SubmitBar
-                label={loading ? 'Uploading...' : `Upload ${validBoundaries.length} Boundaries`}
+                label={
+                  loading
+                    ? t('geography.excel.uploading', 'Uploading...')
+                    : t('geography.excel.upload_n', 'Upload %{count} Boundaries', { count: validBoundaries.length })
+                }
                 onSubmit={handleUploadBoundaries}
-                disabled={loading || validBoundaries.length === 0}
+                disabled={loading || validBoundaries.length === 0 || (!serverHierarchyTypes && !hierarchiesError)}
                 icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
               />
             </div>
@@ -1422,20 +1579,46 @@ export default function BoundaryImport({
         <DigitCard>
           <div className="border border-border rounded-xl p-8 bg-card text-center space-y-4">
             <Search className="h-12 w-12 mx-auto text-primary opacity-80" />
-            <h2 className="text-xl font-semibold">Fetch boundaries</h2>
+            <h2 className="text-xl font-semibold">
+              {preconfigured
+                ? t('geography.search.official_title', 'Search %{country}\'s official boundaries', { country: countryName(preconfigured.country) })
+                : t('geography.fetch_title', 'Fetch boundaries')}
+            </h2>
             <p className="text-muted-foreground max-w-md mx-auto">
-              Enter the name of your city or region to fetch its administrative boundaries and their map polygons.
+              {preconfigured
+                ? t(
+                    'geography.search.official_intro',
+                    'Enter the name of your city or region. Its boundaries and map polygons come from the official set below.',
+                  )
+                : t(
+                    'geography.search.intro',
+                    'Enter the name of your city or region to fetch its administrative boundaries and their map polygons.',
+                  )}
             </p>
 
-            {sourceChoices && sourceChoices.length > 0 && (
+            {preconfigured && (
+              <div className="max-w-xl mx-auto text-left" data-testid="preconfigured-source">
+                <OfficialSetSummary set={preconfigured} />
+              </div>
+            )}
+
+            {!preconfigured && sourceChoices && sourceChoices.length > 0 && (
               <div className="max-w-sm mx-auto text-left space-y-1">
-                <label htmlFor="boundary-source" className="text-sm font-medium">Boundary source</label>
+                <label htmlFor="boundary-source" className="text-sm font-medium">
+                  {t('geography.search.source', 'Boundary source')}
+                </label>
                 <Select value={turbopassSource} onValueChange={changeSource} disabled={loading}>
                   <SelectTrigger id="boundary-source" data-testid="boundary-source">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(sourceChoices.includes(turbopassSource) ? sourceChoices : [turbopassSource, ...sourceChoices]).map((s) => (
+                    {/* "Official" already picks the better official set per country, so its parts aren't offered beside it. */}
+                    {(() => {
+                      const offered = sourceChoices.includes('official')
+                        ? sourceChoices.filter((s) => s !== 'cod' && s !== 'geoboundaries')
+                        : sourceChoices;
+                      return offered.includes(turbopassSource) ? offered : [turbopassSource, ...offered];
+                    })().map((s) => (
                       <SelectItem key={s} value={s}>{sourceOptionLabel(s)}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1446,7 +1629,11 @@ export default function BoundaryImport({
             <div className="relative max-w-sm mx-auto pt-4">
               <div className="flex space-x-2">
                 <Input
-                  placeholder="e.g., Maputo"
+                  placeholder={
+                    preconfigured
+                      ? t('geography.search.placeholder_country', 'e.g., a city in %{country}', { country: countryName(preconfigured.country) })
+                      : t('geography.search.placeholder', 'e.g., a city or region')
+                  }
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
@@ -1457,7 +1644,7 @@ export default function BoundaryImport({
                 />
                 <Button onClick={handleSearch} disabled={!searchTerm || loading}>
                   {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
-                  Search
+                  {t('geography.search.button', 'Search')}
                 </Button>
               </div>
 
@@ -1491,30 +1678,41 @@ export default function BoundaryImport({
             <div className="max-w-sm mx-auto pt-6 text-left">
               <details className="rounded-lg border border-border px-4 py-3" open={mapProvider.provider === 'google' || !!googleKeyStatus}>
                 <summary className="cursor-pointer text-sm font-medium">
-                  Map provider: {mapProvider.provider === 'google' ? 'Google Maps' : 'OpenStreetMap tiles'} (optional)
+                  {t('geography.google.summary', 'Map provider: %{provider} (optional)', {
+                    provider:
+                      mapProvider.provider === 'google'
+                        ? t('geography.google.google_maps', 'Google Maps')
+                        : t('geography.google.osm_tiles', 'OpenStreetMap tiles'),
+                  })}
                 </summary>
                 <div className="space-y-3 pt-3 text-sm">
                   <p className="text-muted-foreground">
-                    Boundaries come from {sourceLabel(turbopassSource)} either way — a Google Maps key only changes the
-                    map they are drawn on, here and on the boundary pages. It is saved in this tenant's Map Config and sent
-                    to every browser that shows a map, so restrict it to this site in Google Cloud Console.
+                    {t(
+                      'geography.google.explain',
+                      'Boundaries come from %{source} either way — a Google Maps key only changes the map they are drawn on, here and on the boundary pages. It is saved in this tenant\'s Map Config and sent to every browser that shows a map, so restrict it to this site in Google Cloud Console.',
+                      { source: sourceLabel(turbopassSource) },
+                    )}
                   </p>
                   <div className="flex gap-2">
                     <Input
                       type="password"
                       autoComplete="off"
-                      placeholder={mapProvider.googleMapsApiKey ? 'Replace the saved key' : 'Google Maps JavaScript API key'}
+                      placeholder={
+                        mapProvider.googleMapsApiKey
+                          ? t('geography.google.replace_key', 'Replace the saved key')
+                          : t('geography.google.key_placeholder', 'Google Maps JavaScript API key')
+                      }
                       value={googleKeyDraft}
                       onChange={(e) => setGoogleKeyDraft(e.target.value)}
                       disabled={savingGoogleKey}
                     />
                     <Button variant="outline" onClick={saveGoogleMapsKey} disabled={!googleKeyDraft.trim() || savingGoogleKey}>
-                      {savingGoogleKey ? <Loader2 className="animate-spin h-4 w-4" /> : 'Save'}
+                      {savingGoogleKey ? <Loader2 className="animate-spin h-4 w-4" /> : t('geography.google.save', 'Save')}
                     </Button>
                   </div>
                   {mapProvider.provider === 'google' && (
                     <Button variant="link" size="sm" className="px-0 h-auto" onClick={switchToOpenStreetMap} disabled={savingGoogleKey}>
-                      Switch back to OpenStreetMap tiles
+                      {t('geography.google.switch_back', 'Switch back to OpenStreetMap tiles')}
                     </Button>
                   )}
                   {googleKeyStatus && (
@@ -1528,7 +1726,7 @@ export default function BoundaryImport({
           <div className="mt-6">
             <Button variant="ghost" size="sm" onClick={onCancel} className="gap-1.5 text-primary hover:text-primary">
               <ArrowLeft className="w-4 h-4" />
-              Back
+              {t('step.back', 'Back')}
             </Button>
           </div>
         </DigitCard>
@@ -1536,50 +1734,103 @@ export default function BoundaryImport({
 
       {/* OSM: map admin levels to hierarchy names */}
       {step === 'map-levels' && (() => {
-        const levelSel = validateLevelSelection(adminLevels);
+        const levelSel = validateLevelSelection(adminLevels, t);
+        // The official set's figures are country-wide; when the fetched place is
+        // smaller than the country (its top level isn't ADM0), say so beside them.
+        const top = adminLevels[0]?.adminLevel;
+        const fetchedSubPlace = officialSet && top !== undefined && top > 0 ? fetchedPlace?.name ?? null : null;
         return (
         <DigitCard>
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Header>Map Admin Levels</Header>
+            <Header>{t('geography.levels.heading', 'Map Admin Levels')}</Header>
             <SubHeader>
-              We found {adminLevels.length} levels of administrative boundaries for {fetchedPlace?.label || searchTerm}.
-              Tick the levels to include and name each — the selection must be a
-              contiguous range (you can drop the outer levels, but not skip one in the middle).
+              {t(
+                'geography.levels.intro',
+                'We found %{count} levels of administrative boundaries for %{place}. Tick the levels to include and name each — the selection must be a contiguous range (you can drop the outer levels, but not skip one in the middle).',
+                { count: adminLevels.length, place: fetchedPlace?.label || searchTerm },
+              )}
             </SubHeader>
-            {fetchedAttribution && (
-              <p className="text-xs text-muted-foreground" data-testid="boundary-attribution">{fetchedAttribution}</p>
-            )}
+            {/* Source, confidence, the data check and the data credit, out of the way until asked for. */}
+            {(officialSet || boundaryQuality || fetchedAttribution) && (
+              <details className="rounded-lg border border-border px-4 py-3" data-testid="validation-report">
+                <summary className="cursor-pointer text-sm font-medium">
+                  {t('geography.validation_report', 'Geographic Boundary Validation Report')}
+                </summary>
+                <div className="space-y-4 pt-3">
+                  {officialSet && <OfficialSetSummary set={officialSet} place={fetchedSubPlace} />}
 
-            {boundaryQuality && (
-              <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm space-y-2">
-                <div className="font-medium">
-                  Data check for the selected levels: {boundaryQuality.totalAreas.toLocaleString()} areas,{' '}
-                  {boundaryQuality.kept.toLocaleString()} will be created
-                  {boundaryQuality.skipped > 0 ? `, ${boundaryQuality.skipped.toLocaleString()} skipped` : ''}
+                  {boundaryQuality && (
+                    <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm space-y-2">
+                      <div className="font-medium">
+                        {boundaryQuality.skipped > 0
+                          ? t(
+                              'geography.quality.summary_skipped',
+                              'Data check for the selected levels: %{total} areas, %{kept} will be created, %{skipped} skipped',
+                              {
+                                total: boundaryQuality.totalAreas.toLocaleString(),
+                                kept: boundaryQuality.kept.toLocaleString(),
+                                skipped: boundaryQuality.skipped.toLocaleString(),
+                              },
+                            )
+                          : t('geography.quality.summary', 'Data check for the selected levels: %{total} areas, %{kept} will be created', {
+                              total: boundaryQuality.totalAreas.toLocaleString(),
+                              kept: boundaryQuality.kept.toLocaleString(),
+                            })}
+                      </div>
+                      <ul className="space-y-1 text-muted-foreground">
+                        {boundaryQuality.levels.map((q) => (
+                          <li key={q.level}>
+                            {t('geography.quality.level', 'Level %{level}: %{kept} of %{total} areas', {
+                              level: q.level,
+                              kept: q.kept.toLocaleString(),
+                              total: q.total.toLocaleString(),
+                            })}
+                            {q.parentsTotal != null &&
+                              ` · ${t('geography.quality.present', 'present in %{covered} of %{parents} areas of the level above', {
+                                covered: q.parentsCovered ?? 0,
+                                parents: q.parentsTotal,
+                              })}`}
+                            {q.noParent > 0 &&
+                              ` · ${t('geography.quality.no_parent', '%{count} lie in no area of the level above (skipped)', { count: q.noParent })}`}
+                            {q.unnamed > 0 && ` · ${t('geography.quality.unnamed', '%{count} unnamed (skipped)', { count: q.unnamed })}`}
+                          </li>
+                        ))}
+                      </ul>
+                      {boundaryQuality.levels.some((q) => q.parentsTotal != null && (q.parentsCovered ?? 0) < q.parentsTotal) && (
+                        <p className="text-xs text-muted-foreground">
+                          {t(
+                            'geography.quality.leaf_hint',
+                            'An area with nothing inside it at the next level is where the map data stops: it becomes a leaf of your hierarchy.',
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {fetchedAttribution && (
+                    <p className="text-xs text-muted-foreground" data-testid="boundary-attribution">{fetchedAttribution}</p>
+                  )}
                 </div>
-                <ul className="space-y-1 text-muted-foreground">
-                  {boundaryQuality.levels.map((q) => (
-                    <li key={q.level}>
-                      Level {q.level}: {q.kept.toLocaleString()} of {q.total.toLocaleString()} areas
-                      {q.parentsTotal != null && ` · present in ${q.parentsCovered} of ${q.parentsTotal} areas of the level above`}
-                      {q.noParent > 0 && ` · ${q.noParent} lie in no area of the level above (skipped)`}
-                      {q.unnamed > 0 && ` · ${q.unnamed} unnamed (skipped)`}
-                    </li>
-                  ))}
-                </ul>
-                {boundaryQuality.levels.some((q) => q.parentsTotal != null && (q.parentsCovered ?? 0) < q.parentsTotal) && (
-                  <p className="text-xs text-muted-foreground">
-                    An area with nothing inside it at the next level is where the map data stops: it becomes a leaf of
-                    your hierarchy.
-                  </p>
-                )}
-              </div>
+              </details>
             )}
 
             <BoundaryMap data={selectedFeatures} height="320px" google={mapProvider.google} />
+            <Button
+              variant="link"
+              size="sm"
+              onClick={handleDownloadList}
+              disabled={!adminLevels.some((l) => l.selected)}
+              className="-mt-3 h-auto gap-1.5 px-0 no-underline hover:underline"
+            >
+              <Download className="w-4 h-4" />
+              {t('geography.levels.download_list', 'Download boundary list')}
+            </Button>
 
             <div className="space-y-4 pt-4">
-              {adminLevels.map((lvl, index) => (
+              {adminLevels.map((lvl, index) => {
+                // The official set's figures for this level, matched by the source's own number (ADM2 → 2).
+                const officialLevel = officialSet?.levels.find((l) => l.admin_level === lvl.adminLevel) ?? null;
+                return (
                 <div
                   key={lvl.level}
                   className={`border p-6 rounded-lg space-y-4 transition-colors ${lvl.selected ? 'bg-card/50' : 'bg-muted/30 opacity-60'}`}
@@ -1598,24 +1849,40 @@ export default function BoundaryImport({
                         }}
                       />
                       <span>
-                        <h3 className="font-medium text-lg flex items-center">
-                          Level {lvl.level}
-                          <Badge variant="outline" className="ml-2 bg-background">
-                            {lvl.features.length} regions
+                        <h3 className="font-medium text-lg flex flex-wrap items-center gap-2">
+                          {t('geography.levels.level_n', 'Level %{n}', { n: lvl.level })}
+                          <Badge variant="outline" className="bg-background">
+                            {lvl.features.length === 1
+                              ? t('geography.levels.regions_one', '%{count} region', { count: 1 })
+                              : t('geography.levels.regions_other', '%{count} regions', { count: lvl.features.length })}
                           </Badge>
+                          {officialLevel && <LevelStatusBadge level={officialLevel} />}
                         </h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Examples: {lvl.examples.join(', ')}{lvl.examples.length < lvl.features.length ? ', etc.' : ''}
+                          {lvl.examples.length < lvl.features.length
+                            ? t('geography.levels.examples_more', 'Examples: %{examples}, etc.', { examples: lvl.examples.join(', ') })
+                            : t('geography.levels.examples', 'Examples: %{examples}', { examples: lvl.examples.join(', ') })}
                         </p>
+                        {officialLevel && officialSet?.agreement_measured && (
+                          <p className="text-xs text-muted-foreground mt-1" data-testid="level-status-detail">
+                            {statusDetail(officialLevel, officialSet, fetchedSubPlace)}
+                          </p>
+                        )}
                       </span>
                     </label>
                   </div>
 
                   {lvl.selected && (
                     <div className="pt-2">
-                      <label className="text-sm font-medium mb-1.5 block">Hierarchy Name</label>
+                      {/* A chosen level must be named before the hierarchy can be created. */}
+                      <label htmlFor={`level-name-${lvl.level}`} className="text-sm font-medium mb-1.5 block">
+                        {t('geography.levels.name_label', 'Hierarchy Name')}
+                        <RequiredMark />
+                      </label>
                       <Input
-                        placeholder="e.g., District"
+                        id={`level-name-${lvl.level}`}
+                        aria-required="true"
+                        placeholder={t('geography.levels.name_placeholder', 'e.g., District')}
                         value={lvl.mappedName}
                         onChange={(e) => {
                           const newLevels = [...adminLevels];
@@ -1626,13 +1893,16 @@ export default function BoundaryImport({
                       />
                       {lvl.suggestedName && lvl.mappedName === lvl.suggestedName && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          Suggested: what {fetchedPlace?.country || 'this country'} calls this level. Edit it if your tenant uses another name.
+                          {t('geography.levels.suggested', 'Suggested: what %{country} calls this level. Edit it if your tenant uses another name.', {
+                            country: fetchedPlace?.country || t('geography.levels.this_country', 'this country'),
+                          })}
                         </p>
                       )}
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {!levelSel.valid && levelSel.error && (
@@ -1643,11 +1913,11 @@ export default function BoundaryImport({
             )}
 
             <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-              <Button variant="ghost" size="sm" onClick={() => setStep('osm-search')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
+              <Button variant="ghost" size="sm" onClick={() => setStep('osm-search')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />{t('step.back', 'Back')}</Button>
               <SubmitBar
-                label={loading ? "Creating..." : "Create Hierarchy & Boundaries"}
+                label={loading ? t('geography.creating', 'Creating...') : t('geography.levels.create', 'Create Hierarchy & Boundaries')}
                 onSubmit={handlePrepareOsmCreate}
-                disabled={loading || !levelSel.valid}
+                disabled={loading || !levelSel.valid || (!serverHierarchyTypes && !hierarchiesError)}
               />
             </div>
           </div>
@@ -1658,20 +1928,22 @@ export default function BoundaryImport({
       {/* OSM: review skipped features before create */}
       {step === 'osm-review' && (
         <DigitCard>
-          <SubHeader>Review Before Creating</SubHeader>
+          <SubHeader>{t('geography.review.heading', 'Review Before Creating')}</SubHeader>
 
           <Alert variant="warning" className="mb-4 sm:mb-6">
             <AlertTriangle className="w-4 h-4" />
             <AlertDescription>
               <strong className="block mb-2 text-sm">
-                {skippedFeatures.length} feature(s) will be SKIPPED:
+                {t('geography.review.skipped', '%{count} feature(s) will be SKIPPED:', { count: skippedFeatures.length })}
               </strong>
               <ul className="text-xs sm:text-sm space-y-1 max-h-64 overflow-y-auto">
                 {skippedFeatures.map((s, i) => (
                   <li key={i}>
-                    • <span className="font-medium">{s.name}</span>
-                    {' '}— {s.levelName} (OSM level {s.osmLevel}) —
-                    {' '}<span className="text-destructive">{s.reason}</span>
+                    •{' '}
+                    {withNodes(t('geography.review.item_plain', '%{name} — %{level} — %{reason}', { level: s.levelName }), {
+                      name: <span className="font-medium">{s.name}</span>,
+                      reason: <span className="text-destructive">{s.reason}</span>,
+                    })}
                   </li>
                 ))}
               </ul>
@@ -1679,114 +1951,26 @@ export default function BoundaryImport({
           </Alert>
 
           <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">
-            Unnamed features and features whose centroid falls in no parent boundary are
-            excluded rather than guessed. If these matter, fix them in OpenStreetMap (or
-            use the Excel path) and re-run the search. Creation proceeds with the
-            remaining <span className="text-primary font-medium">{pendingBoundaries.length}</span> boundaries.
+            {withNodes(
+              t(
+                'geography.review.explain',
+                'Unnamed features and features whose centroid falls in no parent boundary are excluded rather than guessed. If these matter, fix them in OpenStreetMap (or use the Excel path) and re-run the search. Creation proceeds with the remaining %{count} boundaries.',
+              ),
+              { count: <span className="text-primary font-medium">{pendingBoundaries.length}</span> },
+            )}
           </p>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-            <Button variant="ghost" size="sm" onClick={() => setStep('map-levels')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('map-levels')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />{t('step.back', 'Back')}</Button>
             <SubmitBar
-              label={loading ? 'Creating...' : `Create ${pendingBoundaries.length} Boundaries`}
-              onSubmit={() => runOsmCreate(pendingBoundaries)}
+              label={
+                loading
+                  ? t('geography.creating', 'Creating...')
+                  : t('geography.review.create_n', 'Create %{count} Boundaries', { count: pendingBoundaries.length })
+              }
+              onSubmit={() => void runOsmCreate(pendingBoundaries, skippedFeatures.length)}
               disabled={loading}
               icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
-            />
-          </div>
-        </DigitCard>
-      )}
-
-      {/* OSM: creating */}
-      {step === 'creating' && (
-        <DigitCard>
-          <div className="py-24 text-center space-y-6">
-            <Loader2 className="h-16 w-16 mx-auto text-primary animate-spin" />
-            <div className="space-y-2">
-              <h2 className="text-2xl font-semibold">Creating Boundaries</h2>
-              <p className="text-muted-foreground">
-                Building geographic hierarchy and writing polygons to the database...
-              </p>
-            </div>
-          </div>
-        </DigitCard>
-      )}
-
-      {/* Complete: Excel path */}
-      {step === 'complete' && path === 'excel' && selectedHierarchy && (
-        <DigitCard>
-          <Banner
-            successful={true}
-            message="Boundaries created"
-            info={`Hierarchy: ${selectedHierarchy.hierarchyType} • Tenant: ${boundaryTenant.toUpperCase()}`}
-          />
-
-          <div className="mt-6 p-4 bg-muted rounded overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs sm:text-sm font-condensed">Level</TableHead>
-                  <TableHead className="text-xs sm:text-sm font-condensed">Count</TableHead>
-                  <TableHead className="text-xs sm:text-sm font-condensed">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {getHierarchyLevels(selectedHierarchy).map((level) => (
-                  <TableRow key={level}>
-                    <TableCell className="text-xs sm:text-sm">{level}</TableCell>
-                    <TableCell className="text-xs sm:text-sm">{createdCounts[level] || 0}</TableCell>
-                    <TableCell className="text-success text-xs sm:text-sm">✓ Created</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          <p className="text-sm sm:text-base text-muted-foreground mt-4 text-center">
-            Total: <span className="text-primary font-medium">{totalCreated} boundaries</span> created
-          </p>
-
-          <div className="mt-6 flex justify-center">
-            <SubmitBar
-              label="Back to Geography"
-              onSubmit={onDone}
-              icon={<ChevronRight className="w-4 h-4" />}
-            />
-          </div>
-        </DigitCard>
-      )}
-
-      {/* Complete: OSM path */}
-      {step === 'complete' && path === 'osm' && (
-        <DigitCard>
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Banner
-              successful={true}
-              message="Boundaries created"
-              info={`Successfully generated ${totalCreated} boundaries from OSM data.`}
-            />
-
-            <div className="max-w-lg mx-auto mt-6">
-              <h3 className="text-lg font-semibold mb-4">Summary</h3>
-              <div className="space-y-3">
-                {Object.entries(createdCounts).map(([type, count]) => (
-                  <div key={type} className="flex justify-between items-center p-3 bg-secondary/50 rounded-lg">
-                    <span className="font-medium">{type}</span>
-                    <Badge variant="secondary">{count} items</Badge>
-                  </div>
-                ))}
-              </div>
-              {skippedFeatures.length > 0 && (
-                <p className="text-xs text-muted-foreground mt-4">
-                  {skippedFeatures.length} feature(s) were skipped (unnamed, name not romanizable, or no parent found) — see the review step report.
-                </p>
-              )}
-            </div>
-
-            <SubmitBar
-              label="Back to Geography"
-              onSubmit={onDone}
-              icon={<ChevronRight className="w-4 h-4" />}
             />
           </div>
         </DigitCard>
@@ -1803,6 +1987,7 @@ function BoundaryTable({
   boundaries: BoundaryExcelRow[];
   invalidBoundaries: { boundary: BoundaryExcelRow; error: string }[];
 }) {
+  const t = useOnboardingT();
   const getError = (code: string) => {
     const invalid = invalidBoundaries.find(i => i.boundary.code === code);
     return invalid?.error;
@@ -1813,11 +1998,11 @@ function BoundaryTable({
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
-            <TableHead className="text-xs sm:text-sm font-condensed">Status</TableHead>
-            <TableHead className="text-xs sm:text-sm font-condensed">Code</TableHead>
-            <TableHead className="text-xs sm:text-sm font-condensed">Name</TableHead>
-            <TableHead className="text-xs sm:text-sm font-condensed">Type</TableHead>
-            <TableHead className="text-xs sm:text-sm font-condensed">Parent</TableHead>
+            <TableHead className="text-xs sm:text-sm font-condensed">{t('geography.table.status', 'Status')}</TableHead>
+            <TableHead className="text-xs sm:text-sm font-condensed">{t('common.code', 'Code')}</TableHead>
+            <TableHead className="text-xs sm:text-sm font-condensed">{t('common.name', 'Name')}</TableHead>
+            <TableHead className="text-xs sm:text-sm font-condensed">{t('geography.table.type', 'Type')}</TableHead>
+            <TableHead className="text-xs sm:text-sm font-condensed">{t('geography.table.parent', 'Parent')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -1828,11 +2013,11 @@ function BoundaryTable({
                 <TableCell>
                   {error ? (
                     <Badge variant="destructive" className="gap-1 text-xs">
-                      <AlertTriangle className="w-3 h-3" /> Error
+                      <AlertTriangle className="w-3 h-3" /> {t('geography.table.error', 'Error')}
                     </Badge>
                   ) : (
                     <Badge className="gap-1 text-xs bg-success text-white">
-                      <Check className="w-3 h-3" /> Valid
+                      <Check className="w-3 h-3" /> {t('geography.table.valid', 'Valid')}
                     </Badge>
                   )}
                 </TableCell>
@@ -1850,7 +2035,7 @@ function BoundaryTable({
       </Table>
       {boundaries.length > 20 && (
         <p className="text-xs text-muted-foreground text-center py-2">
-          Showing first 20 of {boundaries.length} rows
+          {t('geography.table.showing', 'Showing first 20 of %{count} rows', { count: boundaries.length })}
         </p>
       )}
     </div>

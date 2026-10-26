@@ -20,9 +20,9 @@ public class PlatformBaseline {
         try (var input = new ClassPathResource("onboarding/platform-baseline-v1.json").getInputStream()) {
             seed = mapper.readTree(input);
         }
-        // The seed version is recorded per workspace as seed_version. Bump it with every content change; records are
-        // create-if-absent, so a workspace onboarded on an older version keeps that content until it is upgraded.
-        if (!"2".equals(seed.path("version").asText())) throw new IOException("Unsupported platform seed");
+        // The seed version is recorded per workspace as seed_version. Bump it with every content change, here only:
+        // records are create-if-absent, so BaselineUpgrader brings workspaces on an older version up to this one.
+        if (!seed.path("version").asText().matches("[1-9][0-9]{0,8}")) throw new IOException("Unsupported platform seed");
         for (Resource pack : new PathMatchingResourcePatternResolver().getResources(PACKS)) {
             String[] path = pack.getURL().getPath().split("/");
             String locale = path[path.length - 2], module = path[path.length - 1].replaceFirst("\\.json$", "");
@@ -40,6 +40,7 @@ public class PlatformBaseline {
         if (!packs.containsKey("en_IN")) throw new IOException("Missing en_IN localization packs");
     }
     public String version() { return seed.path("version").asText(); }
+    public int versionNumber() { return Integer.parseInt(version()); }
     public JsonNode schemas() { return seed.path("schemas"); }
     public JsonNode records() { return seed.path("records"); }
     public JsonNode workflows() { return seed.path("workflow"); }

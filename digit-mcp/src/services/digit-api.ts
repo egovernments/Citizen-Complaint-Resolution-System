@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { ENDPOINTS, OAUTH_CONFIG } from '../config/endpoints.js';
 import { getEnvironment } from '../config/environments.js';
 import type { RequestInfo, UserInfo, MdmsRecord, ApiError, Environment, ErrorCategory } from '../types/index.js';
+import { withCsrRole } from '@digit-mcp/data-provider/client';
 
 function deriveErrorCategory(statusCode: number): ErrorCategory {
   if (statusCode === 401 || statusCode === 403) return 'auth';
@@ -665,7 +666,7 @@ class DigitApiClient {
       this.endpoint('HRMS_EMPLOYEES_CREATE'),
       {
         RequestInfo: this.buildRequestInfo(),
-        Employees: employees.map((emp) => ({ ...emp, tenantId })),
+        Employees: employees.map((emp) => withCsrRole({ ...emp, tenantId }, tenantId)),
       }
     );
 
@@ -850,7 +851,9 @@ class DigitApiClient {
           tenantId,
           serviceCode,
           description,
-          address: { tenantId, geoLocation: { latitude: 0, longitude: 0 }, ...address },
+          // No location is `{}`: null or a missing geoLocation fails in the persister
+          // and the complaint is never saved, and (0, 0) is a real point (#1581).
+          address: { tenantId, ...address, geoLocation: address?.geoLocation ?? {} },
           citizen: citizenInfo,
           source: 'web',
           active: true,

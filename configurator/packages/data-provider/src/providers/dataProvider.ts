@@ -1,5 +1,5 @@
 import type { DataProvider, RaRecord, GetListResult, GetOneResult, GetManyResult, GetManyReferenceResult, CreateResult, UpdateResult, DeleteResult, Identifier } from 'ra-core';
-import type { DigitApiClient } from '../client/DigitApiClient.js';
+import { exactTenantRow, type DigitApiClient } from '../client/DigitApiClient.js';
 import type { MdmsRecord } from '../client/types.js';
 import { getResourceConfig, type ResourceConfig } from './resourceRegistry.js';
 import { migrateThemeConfigToV3 } from './themeConfigMigration.js';
@@ -290,7 +290,8 @@ function isDuplicateError(error: unknown): boolean {
 
 /** PGR owns its escalation policy in RAINMAKER-PGR.EscalationConfig.
  *  Do not let the generic workflow masters create a second live PGR policy.
- *  Existing legacy rows remain deletable so operators can complete migration. */
+ *  Existing legacy rows can still be deactivated (Edit, untick Active) or
+ *  deleted, so operators can clear PGR_ESCALATION_CONFIG_CONFLICT. */
 function rejectLegacyPgrEscalationWrite(
   config: ResourceConfig,
   data: Record<string, unknown>,
@@ -650,7 +651,8 @@ async function hrmsFindOne(
   const searchAt = async (t: string) => {
     let r = await client.employeeSearch(t, { uuids: [id] });
     if (!r.length) r = await client.employeeSearch(t, { codes: [id] });
-    return r[0];
+    // A code search also keeps t's cities' rows; a city's employee is found at the city below.
+    return exactTenantRow(r, t, id);
   };
   const direct = await searchAt(tenantId);
   if (direct) return direct;
@@ -1755,8 +1757,9 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         mirrorActiveFlags(existing.data, desiredIsActive);
         // React-admin may send only dirty fields. Validate the authoritative
         // merged record so partial updates, updateMany, and reactivation cannot
-        // revive a competing PGR Workflow.AutoEscalation policy.
-        rejectLegacyPgrEscalationWrite(config, existing.data);
+        // revive a competing PGR Workflow.AutoEscalation policy. A write that
+        // leaves the row inactive is the migration path and is let through.
+        if (desiredIsActive) rejectLegacyPgrEscalationWrite(config, existing.data);
         const updated = await client.mdmsUpdate(existing, desiredIsActive);
         if (config.leafServiceDefAdapter) {
           // includeInactive: a leaf that was just disabled must still map back.
@@ -1973,12 +1976,15 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         // Search by UUID first (idField is 'uuid'), fall back to codes
         let results = await client.employeeSearch(targetTenantId, { uuids: [String(params.id)] });
         if (!results.length) results = await client.employeeSearch(targetTenantId, { codes: [String(params.id)] });
-        if (!results.length) throw new Error(`Employee not found: ${params.id}`);
-        let emp = results[0] as Record<string, unknown>;
+        // Never a city's employee that shares the code (#2456).
+        let emp = exactTenantRow(results, targetTenantId, String(params.id));
+        if (!emp) throw new Error(`Employee not found: ${params.id}`);
         // If user is null (UUID search may omit user), re-fetch by code to get full object
         if (!emp.user && emp.code) {
-          const byCode = await client.employeeSearch(targetTenantId, { codes: [emp.code as string] });
-          if (byCode.length) emp = byCode[0] as Record<string, unknown>;
+          const { uuid } = emp;
+          const byCode = (await client.employeeSearch(targetTenantId, { codes: [emp.code as string] }))
+            .find((row) => row.uuid === uuid);
+          if (byCode) emp = byCode;
         }
         emp.isActive = false;
         emp.deactivationDetails = [{ reasonForDeactivation: 'OTHERS', effectiveFrom: Date.now() }];

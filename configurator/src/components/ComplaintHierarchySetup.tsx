@@ -10,11 +10,13 @@ import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldP
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { mdmsService, localizationService } from '@/api';
 import {
+  levelLabel,
   parseExcelFile,
   parseComplaintHierarchyExcel,
   type ComplaintHierarchyRow,
 } from '@/utils/excelParser';
 import { downloadComplaintHierarchyTemplate } from '@/utils/templateBuilder';
+import { labelLocales } from '@/onboarding/labelLocales';
 
 type Step = 'define' | 'template' | 'verify';
 
@@ -75,7 +77,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
       parentLevel: i === 0 ? null : arr[i - 1],
       isFreeText: false,
       isLeafServiceCode: i === arr.length - 1,
-      label: lc,
+      label: levelLabel(lc),
     }));
 
   const handleDefine = () => {
@@ -167,22 +169,21 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
           console.warn('[ComplaintHierarchy] state-root dual-write failed (non-fatal):', e)
         );
       }
-      await localizationService
-        .uploadComplaintTypeLocalizations(
-          targetTenant,
-          // Seed SERVICEDEFS.<code> for EVERY node — interior nodes (category /
-          // sector) too, not just leaves. The inbox and complaint lists label a
-          // complaint by its PARENT group key (SERVICEDEFS.<parentCode>), and a
-          // leaf-less branch is now filed against an interior node directly, so
-          // both must be localized or they render the raw key.
-          nodes.map((s) => ({
-            serviceCode: s.code,
-            name: s.name,
-            department: s.isLeaf ? s.department : undefined,
-          })),
-          'en_IN'
-        )
-        .catch((e) => console.warn('[ComplaintHierarchy] localization failed (non-fatal):', e));
+      // Seed COMPLAINT_HIERARCHY.<code> for EVERY node — interior nodes
+      // (category / sector) too, not just leaves — since a leaf-less branch is
+      // filed against an interior node directly and would render the raw key.
+      // Written under every workspace language, as the typed-in route does;
+      // non-English languages only get keys they lack (no overwrite).
+      const labels = nodes.map((s) => ({
+        serviceCode: s.code,
+        name: s.name,
+        department: s.isLeaf ? s.department : undefined,
+      }));
+      await localizationService.uploadComplaintTypeLocalizationsForLocales(
+        targetTenant,
+        labels,
+        await labelLocales(targetTenant)
+      );
       await localizationService.cacheBust().catch(() => undefined);
       onDone({ nodes: nodes.length, defs: leaves.length });
     } catch (err) {
@@ -194,7 +195,9 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
   };
 
   return (
-    <div>
+    // data-step lets tests wait for a step without matching its heading copy
+    // (#ch-file-upload is rendered in every step, so it can't tell them apart).
+    <div data-testid="complaint-hierarchy-setup" data-step={step}>
       <input id="ch-file-upload" type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" disabled={loading} />
 
       {error && (
@@ -256,7 +259,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
             </div>
           </div>
           <div className="flex justify-end mt-6">
-            <SubmitBar label="Next: Template" onSubmit={handleDefine} icon={<ChevronRight className="w-4 h-4" />} />
+            <SubmitBar label="Next: Template" onSubmit={handleDefine} icon={<ChevronRight className="w-4 h-4" />} data-testid="ch-next-template" />
           </div>
         </div>
       )}
@@ -368,11 +371,15 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
           </p>
           <div className="flex justify-between">
             <Button variant="ghost" size="sm" onClick={() => setStep('template')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
+            {/* data-testid is for the integration suite to click instead of the label,
+                which is copy: "Sub-types" → "Subcategories" (#2243) stalled the
+                onboarding tests until their timeout. */}
             <SubmitBar
               label={loading ? 'Creating…' : `Create ${leaves.length} Subcategories`}
               onSubmit={handleIngest}
               disabled={loading || leaves.length === 0}
               icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
+              data-testid="ch-create"
             />
           </div>
         </div>

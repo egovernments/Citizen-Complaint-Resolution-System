@@ -12,6 +12,7 @@
 import { expect, type Page } from '@playwright/test';
 import { getDigitToken, loginViaApi, type TokenResponse } from './auth';
 import { BASE_URL, TENANT, ROOT_TENANT } from './env';
+import { SRID_RE } from './pgr-idgen';
 
 export interface Principal {
   token: string;
@@ -113,19 +114,18 @@ export async function apiReject(gro: Principal, srid: string, comment = '[DUPLIC
 
 /** Read the visible inbox rows as {srid, locality, status} objects (skips the header row). */
 export async function readInboxRows(page: Page): Promise<{ srid: string; locality: string; status: string }[]> {
-  return page.evaluate(() => {
+  return page.evaluate((sridSource) => {
     const rows = Array.from(document.querySelectorAll('[role="row"]'));
     const out: { srid: string; locality: string; status: string }[] = [];
     for (const r of rows) {
       const cells = Array.from(r.querySelectorAll('[role="cell"], [role="gridcell"]')) as HTMLElement[];
       if (cells.length < 3) continue; // header row has no data cells
-      // Prefix-agnostic SRID: Maputo emits PG-PGR-…, Kenya emits NCCG-PGR-…, etc.
-      const m = (cells[0].innerText || '').match(/[A-Z]+-PGR-\d{4}-\d{2}-\d{2}-\d+/);
+      const m = (cells[0].innerText || '').match(new RegExp(sridSource));
       if (!m) continue;
       out.push({ srid: m[0], locality: (cells[1].innerText || '').trim(), status: (cells[2].innerText || '').trim() });
     }
     return out;
-  });
+  }, SRID_RE.source);
 }
 
 /** Matches the inbox's own server-side search so callers can await the re-query

@@ -18,10 +18,17 @@ import { useColumnConfig } from './editing/useColumnConfig';
 import type { DigitColumn } from './columns/types';
 import type { FilterElement } from './filters/types';
 import { FilterBar } from './filters/FilterBar';
+import { T } from './i18n/T';
+import { ColumnLabel } from './i18n/ColumnLabel';
+import { isI18nCode } from './i18n/columnLabelKey';
 
 export interface DigitListProps {
-  /** Page title displayed as h1 */
-  title: string;
+  /**
+   * Page title displayed as h1 — a localization code, or a pre-built `<T>` node.
+   * Plain English is shown as written and gets no `data-i18n-key`: it isn't a
+   * code an admin could find under System → Localization.
+   */
+  title: React.ReactNode;
   /** Optional subtitle shown below the title */
   subtitle?: string;
   /** Resource name (overrides ResourceContext) */
@@ -156,7 +163,11 @@ export function DigitList({
           <div className="min-w-0">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-                {translate(title, { _: title })}
+                {typeof title !== 'string'
+                  ? title
+                  : isI18nCode(title)
+                    ? <T i18nKey={title}>{title}</T>
+                    : translate(title, { _: title })}
               </h1>
               {listContext.total != null && (
                 <Badge variant="secondary" className="text-xs">
@@ -177,12 +188,12 @@ export function DigitList({
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5">
                     <Settings2 className="w-4 h-4" />
-                    {translate('app.list.columns', { _: 'Columns' })}
+                    <T i18nKey="app.list.columns">Columns</T>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-56">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium mb-2">{translate('app.list.show_columns', { _: 'Show columns' })}</p>
+                    <p className="text-sm font-medium mb-2"><T i18nKey="app.list.show_columns">Show columns</T></p>
                     {columns!.map((col) => (
                       <label
                         key={col.source}
@@ -195,7 +206,7 @@ export function DigitList({
                           disabled={alwaysVisibleSources?.includes(col.source)}
                           className="rounded"
                         />
-                        {translate(col.label, { _: col.label })}
+                        <ColumnLabel column={col} />
                       </label>
                     ))}
                     <Button
@@ -204,7 +215,7 @@ export function DigitList({
                       onClick={columnConfig.resetColumns}
                       className="w-full mt-2"
                     >
-                      {translate('app.list.reset', { _: 'Reset' })}
+                      <T i18nKey="app.list.reset">Reset</T>
                     </Button>
                   </div>
                 </PopoverContent>
@@ -220,12 +231,12 @@ export function DigitList({
               <RefreshCw
                 className={`w-4 h-4 ${listContext.isFetching ? 'animate-spin' : ''}`}
               />
-              {translate('app.list.refresh', { _: 'Refresh' })}
+              <T i18nKey="app.list.refresh">Refresh</T>
             </Button>
             {hasCreate && (
               <Button size="sm" onClick={onCreate ?? (() => navigate(`${location.pathname}/create`))} className="gap-1.5">
                 <Plus className="w-4 h-4" />
-                {translate('app.list.create', { _: 'Create' })}
+                <T i18nKey="app.list.create">Create</T>
               </Button>
             )}
           </div>
@@ -244,6 +255,7 @@ export function DigitList({
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder={translate('app.list.search', { _: 'Search...' })}
+                  data-i18n-key-placeholder="app.list.search"
                   value={searchValue}
                   onChange={handleSearchChange}
                   className="pl-9 max-w-sm"
@@ -256,7 +268,7 @@ export function DigitList({
           {listContext.isPending && (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-              {translate('app.list.loading', { _: 'Loading...' })}
+              <T i18nKey="app.list.loading">Loading...</T>
             </div>
           )}
 
@@ -264,12 +276,12 @@ export function DigitList({
           {listContext.error && !listContext.isPending && (
             <div className="text-center py-12">
               <p className="text-destructive font-medium">
-                {translate('app.list.error_loading', { _: 'Error loading data' })}
+                <T i18nKey="app.list.error_loading">Error loading data</T>
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 {listContext.error instanceof Error
                   ? listContext.error.message
-                  : translate('app.list.error_unexpected', { _: 'An unexpected error occurred' })}
+                  : <T i18nKey="app.list.error_unexpected">An unexpected error occurred</T>}
               </p>
               <Button
                 variant="outline"
@@ -277,7 +289,7 @@ export function DigitList({
                 onClick={handleRefresh}
                 className="mt-3"
               >
-                {translate('app.list.try_again', { _: 'Try again' })}
+                <T i18nKey="app.list.try_again">Try again</T>
               </Button>
             </div>
           )}
@@ -291,10 +303,10 @@ export function DigitList({
             listContext.data &&
             listContext.data.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
-                <p className="font-medium">{translate('app.list.no_records', { _: 'No records found' })}</p>
+                <p className="font-medium"><T i18nKey="app.list.no_records">No records found</T></p>
                 {searchValue && (
                   <p className="text-sm mt-1">
-                    {translate('app.list.adjust_search', { _: 'Try adjusting your search query' })}
+                    <T i18nKey="app.list.adjust_search">Try adjusting your search query</T>
                   </p>
                 )}
               </div>

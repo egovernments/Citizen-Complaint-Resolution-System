@@ -254,6 +254,24 @@ digit_ui_mode: static
 # /pgr-services/v2/dashboard API remain intact.
 enable_legacy_pgr_dashboard: false
 
+# The banner upload in the Configurator's Branding step (#2358), baked in at
+# build time (VITE_ENABLE_CITIZEN_BANNER), so a change needs a configurator
+# rebuild. The citizen app draws the banner only with citizen_banner_enabled.
+configurator_banner_enabled: false
+
+# Lets the Configurator's Geography step take more than one boundary selection
+# (several places, or a fetch plus a sheet) into its list before saving. Baked
+# in at build time (VITE_ENABLE_GEOGRAPHY_MULTIPLE_SELECTIONS). Off: one at a time.
+configurator_geography_multiple_selections: false
+
+# The Configurator's own Sentry and PostHog, rendered into its config.js at
+# deploy time, so changing them needs no rebuild. Unset means off: the repo
+# ships no project. The citizen app's analytics are MDMS rows instead
+# (configurator → System → Analytics Providers).
+# configurator_sentry_dsn: ""
+# configurator_posthog_key: ""          # phc_…, the project's write-only key
+# configurator_posthog_host: ""         # default https://us.i.posthog.com
+
 # digit-integration-tests dashboards. Builds the react-admin catalog dashboard
 # from the VENDORED in-tree source (tests/integration-tests/) and serves both
 # the vanilla (/tests/) and react-admin (/tests-v2/)
@@ -277,11 +295,67 @@ integration_tests_basic_auth_user: "digit-tests"
 # (it's nice'd, but still). Leave off unless you want in-dashboard runs.
 enable_integration_tests_runner: false
 # integration_tests_runner_port: 8181        # loopback port the daemon listens on
-# integration_tests_runner_run_limit: 5      # keep at most N runs on disk
+# integration_tests_runner_run_limit: 5      # runs that keep their full report (videos/traces) on disk; the dashboards keep results for 30.
+#                                             # If a scheduled run on this box passes a larger RUN_LIMIT, the larger one is kept (runner/README.md, Retention).
 # integration_tests_runner_branch: "deployed"
 # Env file the run sources so it targets THIS box's tenant (BASE_URL/DIGIT_TENANT/
 # LOCALITY_CODE/SERVICE_CODE). Point at the deploy env you already maintain.
 # integration_tests_runner_tenant_env: "/opt/integration-tests/deploy/bomet.env"
+
+# Regression email alerts for the integration tests. A systemd timer polls the
+# published catalog.json every test_alerts_poll_minutes; when a NEW run has
+# appeared it compares every test with the run before it and mails
+# test_alerts_to the tests that
+#   regressed        failed or timed out now, passed last time it ran
+#   now skipped      skipped now, passed last time it ran
+#   stopped running  passed in the previous run, no result now (e.g. the run
+#                    was cut short by its global timeout, or setup failed)
+# plus, for context, the ones that were fixed. Only on a change: a test that
+# stays red is not mailed again, and the first poll on a box only records a
+# baseline. At most one mail per poll (several runs to report go out as one
+# digest), and never the same mail twice. Needs enable_integration_tests: true
+# (the timer reads /var/www/integration-tests). The script is plain Node:
+# tests/integration-tests/scripts/regression-alert.mjs. Runbook, dry-run and
+# troubleshooting: tests/integration-tests/runner/README.md.
+#
+# If a required setting is missing or malformed the deploy prints a WARNING
+# and leaves alerts off; a mail misconfiguration never fails the deploy.
+# Alerts off (test_alerts_enabled: false, or that WARNING) stops the timer and
+# deletes the env file, the units, the script copy and the alert state, so
+# turning them back on starts from a fresh baseline (no backlog of old runs).
+test_alerts_enabled: false
+# test_alerts_smtp_host: "smtp.example.org"     # required
+# test_alerts_smtp_port: 587                     # default 587, or 465 with test_alerts_smtp_tls: true;
+#                                                #   465 is blocked outbound on the Hetzner boxes
+# test_alerts_smtp_starttls: true                # require STARTTLS on port 587 (recommended). false: use
+#                                                #   STARTTLS only if the relay offers it; anyone on the path
+#                                                #   can strip that offer, and the login then goes in clear
+# test_alerts_smtp_tls: false                    # true = implicit TLS (smtps://); the port then defaults to 465
+# test_alerts_smtp_user: "test-alerts@example.org"   # omit for an unauthenticated relay
+# test_alerts_from: "CCRS test alerts <test-alerts@example.org>"   # required; must be a sender the SMTP account may use
+# Recipients (required): a list, or one address as a plain string. Each entry
+# is one "addr@domain" or "Name <addr@domain>"; several addresses go in a
+# list, not in one comma-separated string. A single group / mailing-list
+# address is easiest: people join and leave the list without anyone editing
+# the box.
+# test_alerts_to:
+#   - "ccrs-test-alerts@example.org"
+# test_alerts_box_name: "bomet"                  # label in the subject; default: inventory hostname
+# test_alerts_dashboard_url: "https://bomet.example.org/tests/"   # default: https://<domain>/tests/
+# test_alerts_poll_minutes: 5                    # how often the timer checks for a new run (whole minutes, >= 1)
+# test_alerts_max_list: 40                       # max tests listed per group in one mail
+# test_alerts_stale_after_hours: 0               # >0: also mail once when no new run appears for this long
+#                                                #     (e.g. 26 on a daily box, 8 on a 4x/day box); 0 = off
+#
+# SMTP password: test_alerts_smtp_password. Never commit it (this repo is
+# public; scripts/check-committed-secrets.sh enforces that). Either:
+#   - keep it in OpenBao (preferred): on a box that is already set up,
+#       bao kv patch <secrets_path> test_alerts_smtp_password=<value>
+#     (bootstrap_secrets.test_alerts_smtp_password below seeds it on a FRESH
+#     tenant only, because that seed never overwrites an existing secret), or
+#   - set test_alerts_smtp_password in this host_vars file (it wins over OpenBao).
+# The deploy writes it to /etc/ccrs-test-alerts.env (root-only, 0600).
+# test_alerts_smtp_password: ""
 
 # ────────── Optional services (opt-in via flags) ──────────
 
@@ -299,7 +373,7 @@ enable_otp_services: false
 # Fixed citizen OTP (123456, CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) for egov-user
 # and the identity BFF, plus the BFF's `log` sender. DEVELOPMENT ONLY: anyone can
 # sign in as any citizen number with it. Off by default, never derived from
-# enable_otp_services. With enable_keycloak and neither this nor real OTP nor
+# enable_otp_services. With neither this nor real OTP nor
 # identity_citizen_otp_sender, citizen phone sign-in is unavailable (the deploy
 # warns).
 # identity_dev_fixed_otp: false
@@ -338,6 +412,27 @@ enable_search_stack: false
 # matomo_site_name: ""            # defaults to <domain>; the label on reports
 # matomo_archive_interval: 3600   # seconds between report-archiving passes
 # upstream_matomo_port: 18081     # loopback bind + the Host header nginx sends
+
+# ────────── OpenSRE (diagnose-only AI SRE agent) ──────────
+# An AI agent that reads this box's monitoring (Gatus, Prometheus and Loki via
+# Grafana, Tempo, Redpanda consumer lag) and, whenever Gatus shows checks
+# failing, writes a root-cause diagnosis to /opt/digit/opensre/logs/. It changes
+# nothing and sends no alerts. 1 GB memory cap.
+#
+# Needs a PROJECT-OWNED Anthropic API key in OpenBao (not a personal one):
+#   bao kv patch <secrets_path> opensre_anthropic_api_key=<key>
+# Without it the container starts and idles. The Grafana read token it also
+# needs is minted by the deploy. Tokens, phone numbers and emails in what it
+# reads are masked before they reach the model — local-setup/opensre/guardrails.yml.
+#
+# Tempo is only used at observability_level `traces`. Setting this back to
+# false removes the container; its logs stay on disk.
+# See docs/operations/monitoring/opensre.md.
+# enable_opensre: false
+# opensre_model: claude-opus-5          # model for investigations
+# opensre_sweep_interval_minutes: 15    # how often it checks Gatus (no model call when all green)
+# opensre_dedupe_hours: 6               # don't re-investigate the same failures within this window
+# opensre_max_investigations_per_day: 12  # hard cap on investigations in any 24 h
 
 # Pull + start digit-mcp + mcp-postgres. The MCP server exposes a REST
 # shim on :3000 (POST /v1/tenant/bootstrap, POST /v1/tools/:name) that
@@ -400,10 +495,21 @@ enable_mcp: true
 enable_turbopass: false
 # turbopass_port: 13301        # loopback port the search-api publishes on
 #
-# Offline Overture boundaries — the configurator's default source. Build the
-# DB separately (turbopass/README.md, "Build the boundary DB"); it is not part
-# of this deploy. The directory holding boundaries.sqlite, mounted read-only:
-# turbopass_overture_data_dir: /opt/turbopass/overture-data
+# Offline boundary DB (Overture plus the official COD-AB / geoBoundaries sets):
+# Phase 2's "Fetch boundaries" and "Preconfigured boundaries" read it. The
+# deploy builds it on this box for turbopass_countries when the DB doesn't hold
+# them yet, then mounts it read-only (#2600). Defaults are in
+# group_vars/digit.yml: every country signup offers, under <digit_dir>/turbopass-data.
+# The first build takes minutes per country and needs outbound HTTPS to Docker
+# Hub, PyPI, extensions.duckdb.org, Overture's S3 bucket, HDX and geoBoundaries
+# (group_vars/digit.yml lists them); a failure is a deploy WARNING and the
+# previous DB stays served. A single-country box can narrow the list:
+# turbopass_countries: [KE]
+# turbopass_overture_data_dir: /opt/digit/turbopass-data
+# turbopass_overture_release: 2026-09-23.1      # blank (default) = the newest
+# turbopass_official_sources: cod,geoboundaries # none = Overture only, no Preconfigured boundaries
+# Rebuild one that already holds them (e.g. for a newer Overture release):
+#   ./deploy.sh <tenant> --tags=turbopass -e '{"turbopass_rebuild_boundary_db": true}'
 #
 # Optional Geoapify passthrough (source=geoapify). Prefer an ansible-vault var
 # over a plain value in this file:
@@ -631,23 +737,28 @@ novu_bridge_smscountry_password: ""
 # migrator, novu-bridge and its novu-bridge-db migrator MUST come from the same
 # build: pgr-services emits thin events only a bridge of the same build resolves
 # (an older bridge dead-letters them, unrecoverably), and each app needs the
-# Flyway migrations its -db image carries. This one tag moves all four.
+# Flyway migrations its -db image carries. digit-user-preferences-service and its
+# -db migrator (the bridge's consent store) ride the same tag: its 2.12 tags are
+# the retired Go service, which the develop definition cannot run. This one tag
+# moves all six.
 # Unset = the compose default, for now "nightly-develop": the rolling tag the develop
-# nightly publishes for all four, a stopgap until a release pins an immutable one
+# nightly publishes for all six, a stopgap until a release pins an immutable one
 # (build/NIGHTLY-BUILDS.md "Release step"). That tag moves PER IMAGE and can briefly
 # point at different commits for different images, so a live deployment pins an
-# immutable tag that exists for all four: a release tag, or a develop-<sha8>. The
+# immutable tag that exists for all six: a release tag, or a develop-<sha8>. The
 # deploy warns while any image it runs resolves to a rolling tag.
 # notification_stack_tag: "develop-<sha8>"
 #
 # Per-image overrides — for a local or VPC-registry build. Each wins over the tag
-# above for ITS image only, so pin all four to the same build or none. The deploy
+# above for ITS image only, so pin all six to the same build or none. The deploy
 # warns when only some are pinned: pgr_services_image + pgr_services_db_image on
-# every box (both run with notifications off too), all four when enable_novu is on.
+# every box (both run with notifications off too), all six when enable_novu is on.
 # pgr_services_image:     "10.0.0.4:5000/egovio/pgr-services:develop-<sha8>"
 # pgr_services_db_image:  "10.0.0.4:5000/egovio/pgr-services-db:develop-<sha8>"
 # novu_bridge_image:      "10.0.0.4:5000/egovio/novu-bridge:develop-<sha8>"
 # novu_bridge_db_image:   "10.0.0.4:5000/egovio/novu-bridge-db:develop-<sha8>"
+# digit_user_preferences_service_image:    "10.0.0.4:5000/egovio/digit-user-preferences-service:develop-<sha8>"
+# digit_user_preferences_service_db_image: "10.0.0.4:5000/egovio/digit-user-preferences-service-db:develop-<sha8>"
 
 # NOTE: `build_novu_bridge` and `build_pgr_services` used to be listed here.
 # Neither has ever had a playbook task behind it — the images come only from
@@ -674,8 +785,14 @@ novu_bridge_smscountry_password: ""
 # novu_bridge_preference_enabled: false
 # novu_bridge_preference_fail_open: true
 
-# Country code prefixed to OTP numbers that arrive without one (core SMS from
-# user-otp / egov-user), e.g. "254". Blank = numbers are sent as received.
+# Deployment-wide LAST-RESORT country code for phone numbers that arrive without
+# one (login OTPs from user-otp / egov-user, complaint notifications), e.g. "+254".
+# The tenant's own common-masters.MobileNumberValidation rule (written at workspace
+# signup from the signup country) and the user's own egov-user countryCode come
+# first, so a deployment with workspaces in several countries sends each its own
+# code; this is used only at a tenant that has no rule. Blank and no rule = the
+# message is NOT sent (SKIPPED / NB_CONTACT_INVALID on Logs), never as "+" + the
+# national number.
 # novu_bridge_core_sms_country_code: ""
 
 # Per-channel Novu workflow ids the bridge triggers (the rendered message travels
@@ -717,14 +834,14 @@ novu_bridge_smscountry_password: ""
 # novu_front_base_url:  "https://pilot.example.org/novu"
 # novu_node_env: "production"
 
-# ────────── Keycloak + Identity BFF (REQUIRED) ──────────
-# Adds Keycloak 26.7.3 and the Identity BFF. Public browser routes are /auth/
+# ────────── Keycloak + Identity BFF (always deployed) ──────────
+# Keycloak 26.7.3 and the Identity BFF. Public browser routes are /auth/
 # and /identity/v1/; internal provisioning routes stay on the Docker network.
 #
-# REQUIRED since D26: every employee and citizen sign-in goes through the
+# Mandatory since D26: every employee and citizen sign-in goes through the
 # Identity BFF (the /<tenant-slug>/digit-ui/ routes resolve their tenant
-# through it), the old DIGIT OTP/password login pages are gone, and the
-# deploy refuses `enable_keycloak: false`.
+# through it) and the old DIGIT OTP/password login pages are gone. There is
+# no enable_keycloak switch any more; the deploy refuses one set to false.
 #
 # Workflow:
 #   1. The deploy creates one shared realm (`digit` by default) with
@@ -741,11 +858,11 @@ novu_bridge_smscountry_password: ""
 # identity_onboarding_token and identity_citizen_otp_secret — are generated independently on first deploy
 # and stored in OpenBao, so none of them is derivable from another. Read one
 # back with `bao kv get -field=<key> kv/digit/<tenant>`; rotate one with
-# `bao kv put`, and the next deploy pushes it into Keycloak.
-enable_keycloak: true
-# Rollback switch for D26. Defaults to false when Keycloak is enabled and true
-# otherwise. Keep false after identity completion; it closes native create,
-# reset and OTP endpoints at Kong while preserving /user/oauth/token.
+# `bao kv patch`, and the next deploy pushes it into Keycloak.
+#
+# Rollback switch for D26. Defaults to false. Keep false after identity
+# completion; it closes native create, reset and OTP endpoints at Kong while
+# preserving /user/oauth/token.
 # identity_legacy_user_endpoints: false
 keycloak_organization_realm: "digit"
 identity_bff_image: ""
@@ -758,14 +875,54 @@ identity_magic_link_request_window_seconds: 1800
 identity_magic_link_request_limit: 3
 identity_signin_methods: [password, google, github]
 identity_signup_methods: [magic_link, google, github]
+# Citizen sign-in methods on the digit-ui citizen client (KEYCLOAK_CITIZEN_SIGNIN_METHODS).
+# Empty (the default) offers none. [phone_otp] needs an OTP channel: enable_otp_services,
+# identity_citizen_otp_sender or, on a development box only, identity_dev_fixed_otp.
+identity_citizen_signin_methods: []
+# true: an employee's HRMS mobile signs in as that staff person (#2595). Off until #2631 lands.
+# identity_staff_phone_join: false
 identity_magic_link_enabled: false
 identity_reconcile_on_startup: true
 identity_reconciliation_interval_seconds: 900
-# PGR is the only onboarding runner (the BFF worker is gone). Rendered on only
-# with enable_keycloak: signups arrive through the identity BFF.
+# Workspace trial: a self-serve workspace signs in for this many days after creation, then
+# sign-in is paused until the platform team approves it. Use 30 for self-serve SaaS. 0 (the
+# default) turns trials off: nothing new is stamped and no workspace locks, whatever its end
+# date. Approvals and extensions made meanwhile apply when trials are on again.
+# identity_workspace_trial_days: 0
+# Reminder emails to the workspace's admins, in days before the trial ends, plus one when it
+# locks; [0] sends only that one. Off while trials are. They need an active email integration
+# in Novu; the Notifications Channels policy does not apply to them, so EMAIL can stay off at
+# the platform root (turning it on there would also start that root's complaint emails).
+# identity_workspace_trial_reminder_days: [14, 7, 3, 2, 1]
+# false stops the reminder emails while trials stay on (e.g. before an email integration exists).
+# identity_workspace_trial_reminders_enabled: true
+# The notice a locked-out user sees. Empty (the default) uses the BFF's built-in text. The
+# link shows only when both its label and its URL are set. Free text: $, quotes, & and # are safe.
+# identity_workspace_trial_notice_title: ''
+# identity_workspace_trial_notice_message: ''
+# identity_workspace_trial_notice_link_label: ''
+# identity_workspace_trial_notice_link_url: ''
+# PGR is the only onboarding runner (the BFF worker is gone): signups arrive
+# through the identity BFF.
 pgr_onboarding_runner_enabled: true
+# Idle runner ticks bring workspaces onboarded on an older platform seed up to
+# the current one (create-if-absent; founder edits are kept).
+pgr_onboarding_baseline_upgrade_enabled: true
+# A new workspace gets the notification defaults (schemas, access rows, templates,
+# routing) at signup only where the notification stack runs: unset = enable_novu.
+# pgr_onboarding_notification_defaults_enabled: false
 identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
 identity_digit_admin_tenant_id: "pg"
+# Roles that may sign in to the Configurator (#2599). Unset = the founder's admin
+# roles (SUPERUSER, ACCOUNT_ADMIN, MDMS_ADMIN, LOC_ADMIN, HRMS_ADMIN, WORKFLOW_ADMIN);
+# operational staff use the employee app. A list, or one comma-separated string.
+# identity_configurator_roles: [SUPERUSER, ACCOUNT_ADMIN, MDMS_ADMIN, LOC_ADMIN, HRMS_ADMIN, WORKFLOW_ADMIN, SUPERVISOR]
+# Root tenants this deploy seeds, comma-separated. Each gets an Identity BFF
+# Organization route (alias and URL slug = the tenant id) when nothing maps it
+# yet; an existing route is never renamed. Unset (or a bare key) = state_root;
+# "" = none. `pg` never gets one, and a host with state_root: pg (a legacy,
+# pre-#1999 layout) routes no root, whatever this says.
+# identity_tenant_route_backfill_roots: ke
 # Platform provisioner the runner signs in as (PGR only, internal APIs). It must
 # be an EMPLOYEE of a ROOT tenant (no dot) holding MDMS_ADMIN, ACCOUNT_ADMIN,
 # LOC_ADMIN and HRMS_ADMIN there. With the runner on, the playbook creates it if
@@ -788,7 +945,7 @@ identity_smtp_starttls: true
 
 # Retired (D26): auth_provider, citizen_auth_provider, employee_auth_provider
 # and keycloak_client_id no longer change anything. Every employee and citizen
-# sign-in goes through the Identity BFF (enable_keycloak above). The deploy
+# sign-in goes through the Identity BFF (Keycloak section above). The deploy
 # still refuses `keycloak` in the first three, because that meant the removed
 # browser-adapter path. Leave them unset.
 
@@ -918,6 +1075,7 @@ grafana_anonymous_enabled: false
 # digit_config_service_image: ""
 # digit_config_service_db_image: ""
 # digit_user_preferences_service_image: ""
+# digit_user_preferences_service_db_image: ""   # pin with the app image: one build
 
 # ── Ports ──
 # Host port nginx proxies /configurator/ to. The only upstream_*_port that
@@ -950,8 +1108,30 @@ grafana_anonymous_enabled: false
 # The BFF's DIGIT admin username/tenant are configured in the identity block
 # above; its password belongs in bootstrap_secrets.identity_digit_admin_password.
 # novu_admin_email: "admin@digit.local"      # Novu's own first-run account
-# novu_admin_password: "Digit@12345"
+# novu_admin_password: "Digit@12345"         # with novu_tenant_accounts on, leave this UNSET: the
+#                                            # deploy generates one in OpenBao (novu_admin_password)
+#                                            # and refuses the published default
 # novu_org_name: "DIGIT"
+#
+# ── Per-tenant Novu accounts (#2203) ──
+# Each signup workspace gets its own Novu ORGANIZATION (its own provider credentials, managed by
+# its own admins in the Configurator); every other tenant keeps the shared account. Default: on
+# with enable_novu (self-serve signup always runs); set it to override either way.
+# Secrets (generated into OpenBao on first use, never in host_vars):
+#   novu_bridge_tenant_key_encryption_key, novu_bridge_internal_admin_token,
+#   novu_bridge_internal_send_token, novu_admin_password
+# Turning it on for a box whose Novu admin still has the old password: the deploy changes it from
+# novu_admin_password_legacy (default the published "Digit@12345") to the OpenBao one, before
+# anything signs in. Read it back with `bao kv get -field=novu_admin_password <secrets_path>`.
+# The deploy then signs in to Novu with the password the bridge gets. Refused (an admin password
+# changed by hand and not pinned here): off for that deploy with an ACTION line, or the deploy
+# stops when novu_tenant_accounts is true or workspaces already have their own organization. Pin
+# the current password as novu_admin_password_legacy (moved) or novu_admin_password (kept).
+# novu_tenant_accounts: true
+# novu_admin_password_legacy: "Digit@12345"
+# Tenants that predate the feature are moved onto their own organization only when listed here
+# (idempotent; each then needs its own providers): docs/releases/2.20/notifications/tenant-accounts.md
+# novu_tenant_accounts_backfill: []          # e.g. ["acme", "globex"]
 
 # ── Host / platform ──
 # deploy_become: true                   # false = macOS thin path, no sudo
@@ -1069,6 +1249,13 @@ grafana_anonymous_enabled: false
 # that write access is effectively script-injection access.
 # analytics_custom_enabled: false
 
+# Citizen home banner (#2358): draw the banner image set in the Configurator's
+# Branding step (common-masters.StateInfo.bannerUrl) as a hero above the
+# citizen's All Services. Off by default. Turning it on shows whatever
+# StateInfo.bannerUrl already holds, so set the banner (and StateInfo's name,
+# which the hero greets with) first. Re-render globalConfigs.js; no rebuild.
+# citizen_banner_enabled: false
+
 # ────────── nginx features (location blocks rendered into the host nginx site) ──────────
 #
 # Keep every key below present. nginx-site.conf.j2 reads six of them
@@ -1112,6 +1299,15 @@ status_basic_auth_user: digit-status
 # kong_cors_origins:
 #   - "https://{{ domain }}"
 #   - "https://analytics.example.org"
+#
+# DEV tenant only — a configurator running on a developer's machine
+# (`VITE_ONBOARDING_API_ORIGIN=https://<domain> npm run dev`, see
+# configurator/README.md) needs its origin here AND in identity_allowed_origins,
+# plus these two flags, because its onboarding calls are cross-site and carry
+# the identity BFF's session cookie. Not for production: any page served from a
+# listed origin can then act as whoever is signed in on that browser.
+# kong_cors_credentials: false
+# identity_cookie_same_site: "Lax"          # "None" for the dev case above
 
 # ==================== nginx security headers ====================
 # X-Content-Type-Options, X-Frame-Options, Referrer-Policy and HSTS (when
@@ -1158,22 +1354,6 @@ hrms_dev_mode: false
 # which is arbitrary code by design, and is reachable through nginx /tests/api/.
 # integration_tests_runner_user: digit-tests
 
-# ==================== Keycloak dev redirect URIs ====================
-# Only consumed when enable_keycloak: true. EMPTY by default, deliberately.
-#
-# The realm template used to hardcode `http://localhost:*` as a redirect URI on
-# a PUBLIC client. On a public client the redirect list is the only thing
-# binding an authorization code to a legitimate destination, so a localhost
-# wildcard lets anything listening on the victim's own machine receive a real
-# code for that user. The wildcard `https://*.egov.theflywheel.in/*` origin is
-# gone for the same reason: any subdomain, including one an attacker controls.
-#
-# Set these on a DEV tenant only:
-# keycloak_dev_redirect_uris:
-#   - "http://localhost:5173/*"
-# keycloak_dev_web_origins:
-#   - "http://localhost:5173"
-
 # ==================== Host firewall ====================
 # The playbook installs and enables ufw on Debian/Ubuntu (default deny
 # incoming; 22/ansible_port, 80 and 443 allowed) and firewalld on RHEL.
@@ -1196,7 +1376,7 @@ nginx_features:
                              #   bao kv get -field=status_basic_auth_password <secrets_path>
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
-  keycloak: true             # /auth/ + /identity/v1/ — requires enable_keycloak: true
+  keycloak: true             # validates /auth/ and /identity/v1/ after the deploy
   integration_tests: false   # /tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
   integration_tests_runner: false  # /tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)
   matomo: false              # /matomo/matomo.js + .php — the two Matomo TRACKING endpoints only
@@ -1286,10 +1466,8 @@ bootstrap_secrets:
   #
   # (Anonymous/logged-out Grafana access is a separate, top-level knob —
   #  `grafana_anonymous_enabled`, documented further down. It is not a secret.)
-  # Keycloak secrets — only consumed when enable_keycloak: true.
-  # Leave empty on tenants without Keycloak; the playbook only resolves
-  # these via `| mandatory` inside the digit.env.j2 keycloak block,
-  # which is itself gated on enable_keycloak.
+  # Keycloak secrets. keycloak_admin_password is required: the deploy
+  # fails closed without it.
   keycloak_admin_password: ""               # master realm admin login
   keycloak_db_password: ""                  # Keycloak's Postgres connection
   keycloak_google_client_secret: ""         # only if keycloak_google_client_id is set
@@ -1302,3 +1480,6 @@ bootstrap_secrets:
   pgr_digit_provisioner_password: ""
   pgr_digit_oauth_client_secret: ""
   identity_smtp_password: ""
+  # Integration-test alert mail (test_alerts_*). Seeds a fresh tenant only; on
+  # an existing one use `bao kv patch <secrets_path> test_alerts_smtp_password=…`.
+  test_alerts_smtp_password: ""

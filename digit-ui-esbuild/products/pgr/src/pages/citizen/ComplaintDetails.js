@@ -18,11 +18,18 @@ import { AlertCircle } from "lucide-react";
 
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { complaintLabel } from "../../utils/complaintLabel";
+import { translateOr } from "../../utils/selectPlaceholder";
 import TimeLine from "../../components/TimeLine";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 import { hasUsableGeoLocation } from "../../utils/geoLocation";
+
+// An empty detail row, in the user's language.
+const notAvailable = (t) => {
+  const value = t("CS_NA");
+  return value && value !== "CS_NA" ? value : "N/A";
+};
 
 function renderRowValue(val, t) {
   if (Array.isArray(val)) {
@@ -31,9 +38,9 @@ function renderRowValue(val, t) {
       .filter(Boolean)
       .join(", ");
   }
-  if (val == null || val === "") return "N/A";
-  if (typeof val === "object") return t(val?.code ?? "") || "N/A";
-  return t(String(val)) || "N/A";
+  if (val == null || val === "") return notAvailable(t);
+  if (typeof val === "object") return t(val?.code ?? "") || notAvailable(t);
+  return t(String(val)) || notAvailable(t);
 }
 
 function WorkflowComponent({ complaintDetails, id }) {
@@ -137,7 +144,7 @@ const ComplaintDetailsPage = () => {
     address?.buildingName,
     address?.street,
     address?.landmark,
-    address?.locality?.name || address?.locality?.code,
+    address?.locality?.code ? translateOr(t, address.locality.code, address.locality.name || address.locality.code) : address?.locality?.name,
     address?.pincode,
   ]
     .filter(Boolean)
@@ -152,7 +159,7 @@ const ComplaintDetailsPage = () => {
   let classificationPlaced = false;
   const pushClassification = () => {
     if (classificationPlaced || !classification || classification.length === 0) return;
-    classification.forEach((r) => detailRows.push({ key: r.levelCode, label: r.label, value: r.value || "N/A" }));
+    classification.forEach((r) => detailRows.push({ key: r.levelCode, label: r.label, value: r.value || notAvailable(t) }));
     classificationPlaced = true;
   };
   Object.keys(complaintDetails?.details || {}).forEach((flag) => {
@@ -182,7 +189,7 @@ const ComplaintDetailsPage = () => {
   return (
     <div className="v2-scope cms-details">
       <nav className="cms-breadcrumb" aria-label={tr("CS_COMMON_BREADCRUMB", "Breadcrumb")}>
-        <Link to={home} data-analytics-event="pgr.complaint.details-home">
+        <Link to={home} data-analytics-event="complaint:details_home_click">
           {tr("CS_COMMON_HOME", "Home")}
         </Link>
         <span aria-hidden="true">/</span>
@@ -280,7 +287,7 @@ const ComplaintDetailsPage = () => {
           </section>
 
           <div className="cms-details-actions">
-            <Button onClick={() => history.push(fileAnother)} data-analytics-event="pgr.complaint.details-file-another">
+            <Button onClick={() => history.push(fileAnother)} data-analytics-event="complaint:details_file_another_click">
               {tr("CS_FILE_ANOTHER", "File another complaint")}
             </Button>
           </div>

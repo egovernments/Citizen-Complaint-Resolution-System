@@ -7164,6 +7164,24 @@
         "locale": "default"
     },
     {
+        "code": "CS_HOME_BANNER_WELCOME",
+        "message": "Welcome to",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOME_BANNER_PRODUCT",
+        "message": "Complaint Management System",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOME_BANNER_TAGLINE",
+        "message": "Report issues, track progress and see what is happening in your area.",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
         "code": "CS_HOME_PT",
         "message": "Property Tax",
         "module": "rainmaker-common",

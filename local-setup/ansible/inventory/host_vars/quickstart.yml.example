@@ -187,11 +187,9 @@ db_fast_path: true
 # migrate it first: docs/releases/2.12/operations/postgres-volume-migration.md
 db_fast_path_ack_data_wipe: false
 
-# REQUIRED. Every employee and citizen sign-in goes through Keycloak and the
-# Identity BFF; the old DIGIT OTP/password login pages are gone, and the deploy
-# refuses `false`. Needs the keycloak_* and identity_digit_admin_password
-# entries in bootstrap_secrets below.
-enable_keycloak: true
+# Keycloak and the Identity BFF are always deployed: every employee and citizen
+# sign-in goes through them. They need the keycloak_* and
+# identity_digit_admin_password entries in bootstrap_secrets below.
 
 # Off by default, and each one costs real memory:
 enable_search_stack: false     # Elasticsearch + indexer + employee inbox (~3 GB)

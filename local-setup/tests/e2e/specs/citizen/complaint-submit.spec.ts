@@ -21,7 +21,7 @@
  * whose location chip is unreadable. One real complaint is created per
  * run, consistent with the other lifecycle suites.
  *
- * A second test in the same describe.serial block re-logs in fresh and
+ * A second test in the same describe.serial block opens a fresh page and
  * clicks "My Complaints" on the citizen home, verifying that the
  * complaint we just filed shows up in the list. The citizen-side
  * inbox is the citizen's only confirmation surface — if filing succeeds
@@ -29,8 +29,9 @@
  * broken from the user's POV even though pgr-services holds the row.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { citizenOtpLogin } from '../../utils/citizen-auth';
+import { citizenLoginViaApi } from '../../utils/citizen-auth';
 import { appBase } from '../../utils/auth';
+import { pickSelectOption } from '../../utils/select';
 
 // Visible text that looks like a raw localization key: uppercase
 // letter/digit run with at least one `.`/`_` separator. Matches
@@ -56,18 +57,25 @@ function captureLoc(page: Page, sink: LocFetch[]) {
   });
 }
 
-// Addis Ababa central postal code; deliberately NOT in any allowlist a
-// stale bootstrap could have copied.
-const POSTAL_CODE = process.env.CITIZEN_POSTAL_CODE || '1000';
-
-async function pickFirstOption(page: Page, combo: ReturnType<Page['locator']>) {
-  await combo.click();
-  const options = page.getByRole('option');
-  await expect.poll(async () => options.count(), { timeout: 20_000 }).toBeGreaterThan(0);
-  const label = (await options.first().innerText()).trim();
-  await options.first().click();
-  return label;
+/**
+ * A postal code that passes the tenant's postal rule, read the way the
+ * wizard reads it (products/pgr utils/postalCode.js: the MDMS FormValidations
+ * row, then globalConfigs CORE_POSTAL_CONFIGS). Built from the rule, so it is
+ * in no allowlist a stale bootstrap could have copied.
+ */
+async function validPostalCode(page: Page): Promise<string> {
+  const pattern = await page.evaluate(() => {
+    const w = window as any;
+    const getConfig = w.globalConfigs?.getConfig;
+    return w.__DIGIT_FORM_VALIDATIONS?.postalCode?.pattern
+      || [getConfig?.('CORE_POSTAL_CONFIGS'), getConfig?.('CORE_POSTAL_CODE_CONFIGS')].find((c: any) => c?.postalCodePattern)?.postalCodePattern
+      || '^[0-9]{5}$';
+  });
+  const digits = String(pattern).match(/^\^?\[0-9\]\{\s*(\d+)\s*\}\$?$/)?.[1];
+  if (!digits) throw new Error(`Postal rule ${pattern} is not an N-digit rule; extend validPostalCode for it`);
+  return '1'.padEnd(Number(digits), '0');
 }
+
 
 test.describe.serial('Citizen complaint submit + view', () => {
   test.slow();
@@ -93,29 +101,26 @@ test.describe.serial('Citizen complaint submit + view', () => {
       })
     );
 
-    await citizenOtpLogin(page);
+    await citizenLoginViaApi(page);
     await page.goto(`${appBase()}/citizen/pgr/create-complaint/complaint-type`);
 
     const nextBtn = page.getByRole('button', { name: /^next$/i });
 
-    // ── Step 0: complaint type (+ subtype when the type has any) ──
-    const typeCombo = page.getByRole('combobox', { name: /complaint type/i }).first();
-    await typeCombo.waitFor({ state: 'visible', timeout: 30_000 });
-    const typeLabel = await pickFirstOption(page, typeCombo);
-    console.log('COMPLAINT TYPE:', typeLabel);
-
-    const subCombo = page.getByRole('combobox', { name: /sub\s?-?\s?type/i }).first();
-    if (await subCombo.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      console.log('SUBTYPE:', await pickFirstOption(page, subCombo));
+    // ── Step 1, Complaint Details: description, then each complaint-type
+    // level (#lvl-0, #lvl-1, …) until the chosen branch ends ──
+    const description = page.locator('#complaint-description');
+    await description.waitFor({ state: 'visible', timeout: 30_000 });
+    await description.fill('e2e submit regression — typed postal code, manual ward selection');
+    for (let level = 0; level < 6; level++) {
+      const typeCombo = page.locator(`#lvl-${level}`);
+      if (!await typeCombo.isVisible().catch(() => false)) break;
+      await expect(typeCombo).toBeEnabled({ timeout: 15_000 });
+      console.log(`COMPLAINT TYPE level ${level}:`, await pickSelectOption(page, typeCombo));
     }
     await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
     await nextBtn.click();
 
-    // ── Step 1: map pin — auto-seeded from MAP_CENTER, just confirm ──
-    await expect(nextBtn).toBeEnabled({ timeout: 30_000 });
-    await nextBtn.click();
-
-    // ── Step 2: location — service-driven boundary cascade + typed
+    // ── Step 2, Location: service-driven boundary cascade + typed
     // postal code. The hierarchy is fetched from boundary-service per
     // tenant, so walk every `[id^="boundary-"]` dropdown in DOM order
     // rather than hardcoding level names. At each level assert (a) the
@@ -170,8 +175,10 @@ test.describe.serial('Citizen complaint submit + view', () => {
           .join(', ')} (sample: ${optionLabels.slice(0, 5).join(' | ')})`
       ).toHaveLength(0);
 
+      // Commit by keyboard: the popover can sit outside the viewport (see utils/select.ts).
       const pickedLabel = (await options.first().innerText()).trim();
-      await options.first().click();
+      await page.keyboard.press('Enter');
+      await expect(combo).toContainText(pickedLabel);
       pickedLevels.push(`${comboId}=${pickedLabel}`);
       console.log(`BOUNDARY ${comboId}: ${pickedLabel}`);
     }
@@ -182,27 +189,19 @@ test.describe.serial('Citizen complaint submit + view', () => {
     ).toBeGreaterThan(0);
 
     const postal = page.locator('#postal-code');
+    const postalCode = await validPostalCode(page);
     await expect(postal).toBeEnabled();
     await postal.click();
     // Type key-by-key — the field once disabled itself after the first
     // keystroke (fixed in d3caecb1), which fill() would mask.
-    await page.keyboard.type(POSTAL_CODE, { delay: 60 });
-    await expect(postal).toHaveValue(POSTAL_CODE);
+    await page.keyboard.type(postalCode, { delay: 60 });
+    await expect(postal).toHaveValue(postalCode);
 
     await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
     await nextBtn.click();
 
-    // ── Step 3: description ──
-    const description = page.locator('#complaint-description');
-    await description.waitFor({ state: 'visible', timeout: 15_000 });
-    await description.fill(
-      `e2e submit regression — typed postal ${POSTAL_CODE}, manual ward selection`
-    );
-    await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
-    await nextBtn.click();
-
-    // ── Step 4: photos (optional) → SUBMIT ──
-    const submitBtn = page.getByRole('button', { name: /^submit$/i });
+    // ── Step 3, Review → Submit complaint ──
+    const submitBtn = page.getByRole('button', { name: /submit complaint/i });
     await expect(submitBtn).toBeEnabled({ timeout: 15_000 });
     await submitBtn.click();
 
@@ -235,11 +234,11 @@ test.describe.serial('Citizen complaint submit + view', () => {
     const locFetches: LocFetch[] = [];
     captureLoc(page, locFetches);
 
-    // Fresh login on a new page context — the inbox is server-driven
-    // (tied to the citizen's DIGIT user UUID), so the just-filed
-    // reference must be retrievable from a clean session, not just the
-    // one that submitted it.
-    await citizenOtpLogin(page);
+    // New page context: the SPA builds a fresh DIGIT session from the
+    // worker's citizen sign-in. The inbox is server-driven (tied to the
+    // citizen's DIGIT user UUID), so the just-filed reference must be
+    // retrievable from a clean session, not just the one that submitted it.
+    await citizenLoginViaApi(page);
     await page.goto(`${appBase()}/citizen`);
 
     // "My Complaints" on the V2 citizen home is a card / link / button

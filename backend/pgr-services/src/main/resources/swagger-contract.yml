@@ -243,7 +243,19 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OnboardingOperationRequest'
+              type: object
+              required: [Operation]
+              properties:
+                Operation:
+                  type: object
+                  description: The operation's id, or the id of the signup it belongs to (a page reloaded onto its signup).
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    signupId:
+                      type: string
+                      format: uuid
       responses:
         '200':
           description: Matching tenant-admin-owned operation
@@ -417,7 +429,7 @@ components:
           enum: [PENDING, RUNNING, SUCCEEDED, RETRYABLE_FAILED, TERMINAL_FAILED]
         currentStep:
           type: string
-          enum: [TENANT_FOUNDATION, ORGANIZATION, TENANT_ADMIN_MEMBERSHIP, TENANT_ADMIN_ROLES, DIGIT_ACCOUNT]
+          enum: [TENANT_FOUNDATION, PLATFORM_BASELINE, FOUNDER_HRMS, ORGANIZATION, MEMBERSHIP, BINDING]
         completedSteps:
           type: array
           items:

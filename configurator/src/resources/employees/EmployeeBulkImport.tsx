@@ -5,7 +5,10 @@ import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { BulkImportPanel, triggerDownload, type BulkRow, type BulkColumn } from '@/admin/bulk/BulkImportPanel';
 import { parseEmployeeExcel } from '@/utils/excelParser';
+import { useOnboardingT } from '@/onboarding/i18n';
+import { buildEmployeeTemplate, employeeTemplateFilename } from '@/utils/templateBuilder';
 import { hrmsService, mdmsService, boundaryService } from '@/api';
+import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import type {
   EmployeeExcelRow,
   Employee,
@@ -13,95 +16,15 @@ import type {
   Designation,
   Boundary,
 } from '@/api/types';
+import { codeProblem, employeesByCode, withEmployeeCodes, type EmployeeRecord } from '@/onboarding/employees/employeesApi';
 import { useApp } from '../../App';
 
 type EmployeeBulkRow = EmployeeExcelRow & BulkRow;
 
-const TEMPLATE_COLUMNS = [
-  'employeeCode',
-  'name',
-  'userName',
-  'mobileNumber',
-  'emailId',
-  'gender',
-  'dob',
-  'department',
-  'designation',
-  'roles',
-  'jurisdictions',
-  'dateOfAppointment',
-];
-
-const TEMPLATE_SAMPLE = {
-  employeeCode: 'EMP_001',
-  name: 'Jane Kamau',
-  userName: '',
-  mobileNumber: '0712345678',
-  emailId: 'jane.kamau@example.com',
-  gender: 'FEMALE',
-  dob: '1990-05-14',
-  department: 'DEPT_07',
-  designation: 'DESIG_1004',
-  roles: 'PGR_LME',
-  jurisdictions: 'NAIROBI_CITY_VIWANDANI',
-  dateOfAppointment: '2026-01-15',
-};
-
-function buildTemplate(
-  tenant: string,
-  depts: Department[],
-  desigs: Designation[],
-  boundaries: Boundary[],
-  roles: { code: string; name: string }[],
-): Blob {
-  const wb = XLSX.utils.book_new();
-  const primary = XLSX.utils.aoa_to_sheet([
-    TEMPLATE_COLUMNS,
-    TEMPLATE_COLUMNS.map((c) => TEMPLATE_SAMPLE[c as keyof typeof TEMPLATE_SAMPLE] ?? ''),
-  ]);
-  primary['!cols'] = TEMPLATE_COLUMNS.map((c) => ({ wch: Math.max(12, c.length + 2) }));
-  XLSX.utils.book_append_sheet(wb, primary, 'Employee');
-
-  const maxLen = Math.max(depts.length, desigs.length, roles.length, boundaries.length);
-  const rows: (string | undefined)[][] = [
-    ['departments (code : name)', 'designations (code : name)', 'roles (code)', 'boundaries (code : type)'],
-  ];
-  for (let i = 0; i < maxLen; i += 1) {
-    rows.push([
-      depts[i] ? `${depts[i].code} : ${depts[i].name}` : '',
-      desigs[i] ? `${desigs[i].code} : ${desigs[i].name}` : '',
-      roles[i] ? roles[i].code : '',
-      boundaries[i] ? `${boundaries[i].code} : ${boundaries[i].boundaryType ?? ''}` : '',
-    ]);
-  }
-  const ref = XLSX.utils.aoa_to_sheet(rows);
-  ref['!cols'] = [{ wch: 36 }, { wch: 36 }, { wch: 20 }, { wch: 36 }];
-  XLSX.utils.book_append_sheet(wb, ref, 'Codes');
-
-  const notes = XLSX.utils.aoa_to_sheet([
-    ['Employee bulk import template'],
-    [`Tenant: ${tenant}`],
-    [''],
-    ['Required columns: employeeCode, name, mobileNumber (per the tenant mobile rule),'],
-    ['department (from Codes), designation (from Codes).'],
-    ['Required: emailId. Optional: userName (auto-derives), gender, dob (YYYY-MM-DD),'],
-    ['roles (comma-separated), jurisdictions (comma-separated boundary codes),'],
-    ['dateOfAppointment (YYYY-MM-DD).'],
-    [''],
-    ['Email is required. New employees receive a secure password setup email.'],
-  ]);
-  notes['!cols'] = [{ wch: 80 }];
-  XLSX.utils.book_append_sheet(wb, notes, 'Instructions');
-
-  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
-  return new Blob([buf], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-}
-
 export function EmployeeBulkImport() {
   const { state } = useApp();
   const tenantId = state.tenant;
+  const t = useOnboardingT();
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
@@ -114,6 +37,7 @@ export function EmployeeBulkImport() {
     pattern: string;
     errorMessage: string;
   } | null>(null);
+  const [existingEmployees, setExistingEmployees] = useState<Map<string, EmployeeRecord>>(new Map());
   const [refsLoading, setRefsLoading] = useState(false);
   const [createdEmployees, setCreatedEmployees] = useState<Employee[]>([]);
 
@@ -127,15 +51,19 @@ export function EmployeeBulkImport() {
     async function load() {
       setRefsLoading(true);
       try {
-        const hierarchies = await boundaryService.getHierarchies(tenantId).catch(() => []);
-        const hierarchyType = hierarchies[0]?.hierarchyType;
+        // Only the boundaries wait for the hierarchy walk.
+        const boundariesInDefaultHierarchy = loadTenantHierarchies(tenantId).then(({ hierarchyType }) =>
+          boundaryService.searchBoundaries(tenantId, hierarchyType ? { hierarchyType } : undefined),
+        );
 
-        const [depts, desigs, bounds, fetchedRoles, mobile] = await Promise.all([
+        const [depts, desigs, bounds, fetchedRoles, mobile, employees] = await Promise.all([
           mdmsService.getDepartments(tenantId),
           mdmsService.getDesignations(tenantId),
-          boundaryService.searchBoundaries(tenantId, hierarchyType ? { hierarchyType } : undefined),
+          boundariesInDefaultHierarchy,
           mdmsService.getRoles(tenantId).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(tenantId).catch(() => null),
+          // The code check is advisory: creating still refuses a code that's taken.
+          employeesByCode(tenantId).catch(() => new Map<string, EmployeeRecord>()),
         ]);
         if (cancelled) return;
         setDepartments(depts);
@@ -143,6 +71,7 @@ export function EmployeeBulkImport() {
         setBoundaries(bounds);
         setRoles(fetchedRoles);
         setMobileRules(mobile);
+        setExistingEmployees(employees);
       } finally {
         if (!cancelled) setRefsLoading(false);
       }
@@ -173,11 +102,11 @@ export function EmployeeBulkImport() {
 
   const parseWorkbook = useCallback((wb: XLSX.WorkBook) => {
     const result = parseEmployeeExcel(wb);
-    return { data: result.data as EmployeeBulkRow[] };
-  }, []);
+    return { data: withEmployeeCodes(result.data, existingEmployees) as EmployeeBulkRow[] };
+  }, [existingEmployees]);
 
   const validateRow = useCallback(
-    (row: EmployeeBulkRow): string[] => {
+    (row: EmployeeBulkRow, rows: EmployeeBulkRow[]): string[] => {
       const deptCodes = new Set(departments.map((d) => d.code));
       const desigCodes = new Set(designations.map((d) => d.code));
       const boundaryCodes = new Set(templateBoundaries.map((b) => b.code));
@@ -190,6 +119,8 @@ export function EmployeeBulkImport() {
 
       const errors: string[] = [];
       if (!row.emailId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.emailId)) errors.push('A valid email is required to invite an employee.');
+      const clash = codeProblem(row, rows, existingEmployees);
+      if (clash) errors.push('repeated' in clash ? `${row.employeeCode} is on more than one row` : `${row.employeeCode} is already used by ${clash.takenBy}`);
       if (row.department && !deptCodes.has(row.department)) errors.push(`Department "${row.department}" not found`);
       if (row.designation && !desigCodes.has(row.designation)) errors.push(`Designation "${row.designation}" not found`);
       if (row.roles) {
@@ -232,11 +163,11 @@ export function EmployeeBulkImport() {
       }
       return errors;
     },
-    [departments, designations, templateBoundaries, roles, mobileRules],
+    [departments, designations, templateBoundaries, roles, mobileRules, existingEmployees],
   );
 
   const createOne = useCallback(
-    async (row: EmployeeBulkRow, index: number) => {
+    async (row: EmployeeBulkRow) => {
       const empRoles = row.roles
         ? row.roles
             .split(',')
@@ -265,9 +196,9 @@ export function EmployeeBulkImport() {
 
       const built = hrmsService.buildEmployee({
         tenantId,
-        code: row.employeeCode || hrmsService.generateEmployeeCode('EMP', index + 1),
+        code: row.employeeCode,
         name: row.name,
-        userName: (row.userName && row.userName.trim()) || hrmsService.generateUsername(row.name),
+        userName: row.employeeCode, // HRMS makes the username the code anyway
         mobileNumber: row.mobileNumber,
         emailId: row.emailId,
         gender: row.gender,
@@ -323,9 +254,9 @@ export function EmployeeBulkImport() {
         { label: 'Boundaries', value: templateBoundaries.length },
       ]}
       buildTemplate={() =>
-        buildTemplate(tenantId, departments, designations, templateBoundaries, roles)
+        buildEmployeeTemplate(tenantId, departments, designations, templateBoundaries, roles, t)
       }
-      templateFilename={`employees-template-${tenantId}.xlsx`}
+      templateFilename={employeeTemplateFilename(tenantId)}
       parseWorkbook={parseWorkbook}
       validateRow={validateRow}
       columns={columns}

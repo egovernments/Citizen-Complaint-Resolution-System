@@ -15,6 +15,7 @@ import {
 } from "@egovernments/digit-ui-libraries";
 
 import Header from "./Header";
+import WorkspaceTrialNotice, { WorkspaceTrialNoticeBody } from "./WorkspaceTrialNotice";
 
 const cleanAuthResult = () => {
   const url = new URL(window.location.href);
@@ -43,14 +44,16 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
   const [status, setStatus] = useState(hasTenant ? "checking" : "no-tenant");
   const [message, setMessage] = useState("");
   const [invitation, setInvitation] = useState(null);
+  // Set with status "trial-expired": the workspace's operator notice.
+  const [notice, setNotice] = useState(null);
   const destination = hasTenant
     ? restrictIdentityBffDestination(
         location.state?.from || new URLSearchParams(location.search).get("from"),
         identityBffSurfaceBase(tenant, surface),
       )
     : null;
-  const tr = (key, fallback) => {
-    const value = t(key);
+  const tr = (key, fallback, params) => {
+    const value = t(key, params);
     return value === key ? fallback : value;
   };
   const unavailable = () => tr("CORE_IDENTITY_SIGNIN_UNAVAILABLE", "Sign-in is temporarily unavailable. Please try again.");
@@ -83,10 +86,15 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
       await (onSignedOut || beginSignIn)();
       return;
     }
+    if (result.status === "trial-expired") {
+      setNotice(result.notice);
+      setStatus("trial-expired");
+      return;
+    }
     if (result.status !== "authenticated") {
       setInvitation(result.invitation || null);
       setStatus(result.status);
-      setMessage(result.messageKey ? tr(result.messageKey, result.message) : "");
+      setMessage(result.messageKey ? tr(result.messageKey, result.message, result.params) : "");
       return;
     }
     complete(result.user);
@@ -121,6 +129,22 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
     return retry(start || beginSignIn);
   };
 
+  // Declining removes this workspace's binding, so the person stays signed in
+  // with no access here: the same card as a 403 on the route tenant.
+  const declineInvitation = () => retry(async () => {
+    setStatus("checking");
+    try {
+      await IdentityAccount.declineIdentityInvitation({ tenant, invitation, fetchImpl: window.fetch.bind(window) });
+      setInvitation(null);
+      setStatus("forbidden");
+      setMessage(tr("CORE_IDENTITY_INVITATION_DECLINED", "You declined the invitation to this workspace."));
+    } catch (error) {
+      const failure = IdentityAccount.identityMessage(error.code);
+      setStatus("error");
+      setMessage(tr(failure.messageKey, failure.message));
+    }
+  });
+
   useEffect(() => {
     // A tenantless page keeps its choose-organisation card, whatever the flag says.
     if (!hasTenant) return;
@@ -136,13 +160,29 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { tenant, status, setStatus, message, setMessage, tr, unavailable, beginSignIn, establishSession, complete, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut };
+  return { tenant, status, setStatus, notice, setNotice, message, setMessage, tr, unavailable, beginSignIn, establishSession, complete, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut, declineInvitation };
 };
 
 /** The card shown when sign-in stops: retry, sign in again, or sign out. */
 export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
-  const { tenant, status, message, tr, beginSignIn, establishSession, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut } = signIn;
+  const { tenant, status, message, tr, beginSignIn, establishSession, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut, declineInvitation } = signIn;
+  const [confirmDecline, setConfirmDecline] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   if (status === "no-tenant") return <ChooseOrganisationCard tr={tr} Shell={Shell} />;
+  // Closing the modal leaves the notice inline; sign-in stays blocked.
+  if (status === "trial-expired" && signIn.notice) {
+    return dismissed ? (
+      <Shell>
+        <V2Card style={{ width: "100%", maxWidth: "420px", padding: "32px", display: "flex", flexDirection: "column", gap: "16px", borderRadius: "14px", border: "none", boxShadow: "0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.10)" }}>
+          <div style={{ display: "flex", justifyContent: "center" }}><Header /></div>
+          <h1 style={{ margin: 0, fontSize: "1.5rem", textAlign: "center", color: "var(--color-text-heading, #1D2433)" }}>{signIn.notice.title}</h1>
+          <WorkspaceTrialNoticeBody notice={signIn.notice} />
+        </V2Card>
+      </Shell>
+    ) : (
+      <Shell><WorkspaceTrialNotice notice={signIn.notice} onClose={() => setDismissed(true)} /></Shell>
+    );
+  }
   return (
     <Shell>
       <V2Card
@@ -179,10 +219,29 @@ export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
             {tr("CORE_IDENTITY_SIGN_OUT_HINT", "Sign out if you need to use a different account.")}
           </p>
         ) : null}
-        {status === "pending-invitation" && invitation && (
-          <V2Button type="button" width="full" onClick={acceptInvitation}>
-            {tr("CORE_IDENTITY_ACCEPT_INVITATION", "Accept invitation")}
-          </V2Button>
+        {status === "pending-invitation" && invitation && !confirmDecline && (
+          <>
+            <V2Button type="button" width="full" onClick={acceptInvitation}>
+              {tr("CORE_IDENTITY_ACCEPT_INVITATION", "Accept invitation")}
+            </V2Button>
+            <V2Button type="button" width="full" variation="secondary" onClick={() => setConfirmDecline(true)}>
+              {tr("CORE_IDENTITY_DECLINE_INVITATION", "Decline invitation")}
+            </V2Button>
+          </>
+        )}
+        {status === "pending-invitation" && invitation && confirmDecline && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <p style={{ margin: 0, color: "var(--color-text-secondary, #505A5F)" }}>
+              {tr("CORE_IDENTITY_DECLINE_INVITATION_CONFIRM",
+                "Decline this invitation? Your administrator would need to invite you again.")}
+            </p>
+            <V2Button type="button" width="full" onClick={() => { setConfirmDecline(false); declineInvitation(); }}>
+              {tr("CORE_IDENTITY_CONFIRM_DECLINE", "Confirm decline")}
+            </V2Button>
+            <V2Button type="button" width="full" variation="secondary" onClick={() => setConfirmDecline(false)}>
+              {tr("CORE_COMMON_CANCEL", "Cancel")}
+            </V2Button>
+          </div>
         )}
         {status === "signout-incomplete" && (
           <V2Button type="button" width="full" variant="secondary" onClick={() => signInAfterIncompleteSignOut(onSignIn)}>

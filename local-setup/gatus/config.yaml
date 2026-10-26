@@ -457,8 +457,14 @@ endpoints:
     alerts:
       - type: slack
 
+  # docker-compose.egov-digit.yaml (the tenant stack ansible deploys) binds the
+  # Admin API to Kong's own loopback (KONG_ADMIN_LISTEN 127.0.0.1:8001), so
+  # kong:8001 refuses every other container there and it sets GATUS_KONG_ADMIN
+  # false. The other compose stacks and the k3s tier still listen on
+  # 0.0.0.0:8001 and keep the check (#2458).
   - name: Kong Admin API
     group: API Gateway
+    enabled: ${GATUS_KONG_ADMIN}
     url: "http://kong:8001/"
     interval: 30s
     conditions:

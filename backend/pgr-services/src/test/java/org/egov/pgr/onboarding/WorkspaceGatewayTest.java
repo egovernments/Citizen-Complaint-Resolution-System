@@ -33,6 +33,9 @@ public class WorkspaceGatewayTest {
     private final Map<String,String> labels = new LinkedHashMap<>();
     private boolean cacheBusted;
 
+    /** Inline mocks keep every call they record, platform-baseline payloads included, until cleared:
+     *  without this the onboarding package outgrows a 512 MB test heap. */
+    @After public void releaseMocks() { framework().clearInlineMocks(); }
     @Before public void setup() throws Exception {
         tenantName="Old Name"; nameStatus=200;
         nameCheck=mapper.valueToTree(Map.of("results",List.of(Map.of("type","ORGANIZATION_NAME","value","new name","available",true))));
@@ -141,7 +144,7 @@ public class WorkspaceGatewayTest {
         assertEquals("example",query.getFirst("tenantId"));assertEquals("0",query.getFirst("offset"));assertEquals("1000",query.getFirst("limit"));
     }
     @Test public void paginatedProbeStillExcludesFounderAndInactiveEmployees() throws Exception {
-        employees=List.of(Map.of("code","FOUNDER_1"),Map.of("code","INACTIVE_EMP","isActive",false),
+        employees=List.of(Map.of("code","FOUNDER_1"),Map.of("code","EMP_0001","assignments",List.of(Map.of("designation","CLERK")),"user",Map.of("uuid","founder-uuid")),Map.of("code","INACTIVE_EMP","isActive",false),
                 Map.of("code","DISABLED_USER","user",Map.of("active",false)));
         workspaceSearch().andExpect(status().isOk()).andExpect(jsonPath("$.Probes.EMPLOYEES").value(false));
     }
@@ -152,6 +155,7 @@ public class WorkspaceGatewayTest {
     }
     private org.springframework.test.web.servlet.ResultActions workspaceSearch() throws Exception {
         var repository=mock(WorkspaceRepository.class);
+        when(repository.founderDigitUuid("example")).thenReturn(Optional.of("founder-uuid"));
         when(repository.find("example",false)).thenReturn(Optional.of(Map.of("tenantId","example","legacy",false,"status","NOT_STARTED","version",1L)));
         var mvc=MockMvcBuilders.standaloneSetup(new WorkspaceApiController(new WorkspaceService(repository,gateway,new OnboardingIdentifierService()),new WorkspaceRenamePublisher(repository,gateway))).build();
         return mvc.perform(post("/v2/onboarding/workspaces/_search").contentType("application/json")

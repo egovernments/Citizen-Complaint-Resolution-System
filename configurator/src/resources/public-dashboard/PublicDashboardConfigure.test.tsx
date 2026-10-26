@@ -1,16 +1,17 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getConfig, upsertConfig, refreshConfig } = vi.hoisted(() => ({
+const { getConfig, upsertConfig, refreshConfig, appState } = vi.hoisted(() => ({
   getConfig: vi.fn(),
   upsertConfig: vi.fn(),
   refreshConfig: vi.fn(),
+  appState: { tenant: 'ke.bomet' },
 }));
 
 vi.mock('@/App', () => ({
   useApp: () => ({
     state: {
-      tenant: 'ke.bomet',
+      tenant: appState.tenant,
       environment: 'https://complaints.example/',
       user: { name: 'Vikram Mehta', email: 'vikram@example.org' },
     },
@@ -36,6 +37,7 @@ vi.mock('@/lib/timezones', () => ({
   ],
 }));
 
+import { ApiClientError } from '@/api/client';
 import PublicDashboardConfigure from './PublicDashboardConfigure';
 
 /** MDMS record wrapper the screen reads `.data` off. */
@@ -45,6 +47,7 @@ beforeEach(() => {
   getConfig.mockReset().mockResolvedValue(null);
   upsertConfig.mockReset().mockResolvedValue({});
   refreshConfig.mockReset().mockResolvedValue(true);
+  appState.tenant = 'ke.bomet';
 });
 
 const openAccessDialog = async () => {
@@ -59,6 +62,14 @@ describe('PublicDashboardConfigure', () => {
     const url = await screen.findByLabelText('Public dashboard URL');
     expect(url).toHaveValue('https://complaints.example/bomet/digit-ui/public-dashboard');
     expect(screen.getByText(/Control credential-free access/)).toHaveTextContent('ke');
+  });
+
+  it('targets the signed-in tenant root, not the build-time root (#2072)', async () => {
+    appState.tenant = 'kisumu';
+    render(<PublicDashboardConfigure />);
+
+    await waitFor(() => expect(getConfig).toHaveBeenCalledWith('kisumu'));
+    expect(getConfig).not.toHaveBeenCalledWith('ke');
   });
 
   it('enables in one click and stamps the published time', async () => {
@@ -235,5 +246,20 @@ describe('PublicDashboardConfigure', () => {
 
     expect(await screen.findByText('mdms-v2 unreachable')).toBeInTheDocument();
     expect(input).toHaveValue('Asia/Kolkata');
+  });
+
+  it('says why under the picker when the deployment refuses the save', async () => {
+    // naipepea had no _update/dss.DashboardConfig action: every change snapped back to Nairobi
+    // with the reason only in the page-level alert, scrolled out of view (#2221).
+    upsertConfig.mockRejectedValue(new ApiClientError([{ code: 'AccessDenied', message: 'Not authorized to access this resource' }], 403));
+    render(<PublicDashboardConfigure />);
+    const input = await screen.findByRole('combobox', { name: 'Dashboard time zone' });
+
+    fireEvent.focus(input);
+    fireEvent.mouseDown(await screen.findByRole('option', { name: 'Africa/Maputo' }));
+
+    const message = await screen.findByTestId('timezone-save-error');
+    expect(message).toHaveTextContent("This account isn't allowed to change the dashboard settings here, so the time zone wasn't saved.");
+    expect(input).toHaveValue('Africa/Nairobi');
   });
 });

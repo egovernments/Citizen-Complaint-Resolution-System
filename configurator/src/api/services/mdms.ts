@@ -8,6 +8,7 @@ import type {
   ComplaintType,
   MdmsRecord,
   Tenant,
+  EscalationConfigData,
 } from '../types';
 import {
   selectOwnedDashboardConfig,
@@ -32,6 +33,18 @@ const DASHBOARD_CONFIG_KEY = 'default';
 function writtenRecord(response: Record<string, unknown>): MdmsRecord {
   const written = response.mdms ?? response.Mdms;
   return (Array.isArray(written) ? written[0] : written) as MdmsRecord;
+}
+
+/**
+ * The tenant's active "CMS" HierarchySchema row; HRMS rows don't count. A city
+ * search returns its own rows and its state's in no set order, so the city's
+ * own row wins over the one it inherits.
+ */
+function visibleCmsHierarchyRow(rows: MdmsRecord[], tenantId: string): MdmsRecord | undefined {
+  const cms = rows.filter(
+    (r) => r.isActive !== false && (r.data as { moduleName?: string } | undefined)?.moduleName === 'CMS',
+  );
+  return cms.find((r) => r.tenantId === tenantId) ?? cms[0];
 }
 
 export const mdmsService = {
@@ -123,11 +136,17 @@ export const mdmsService = {
   async searchRecords(
     tenantId: string,
     schemaCode: string,
-    options?: { limit?: number }
+    options?: { limit?: number; uniqueIdentifiers?: string[] }
   ): Promise<MdmsRecord[]> {
     const response = await apiClient.post(ENDPOINTS.MDMS_SEARCH, {
       RequestInfo: apiClient.buildRequestInfo(),
-      MdmsCriteria: { tenantId, schemaCode, limit: options?.limit || 100, offset: 0 },
+      MdmsCriteria: {
+        tenantId,
+        schemaCode,
+        limit: options?.limit || 100,
+        offset: 0,
+        uniqueIdentifiers: options?.uniqueIdentifiers,
+      },
     });
     return (response.mdms || []) as MdmsRecord[];
   },
@@ -218,15 +237,19 @@ export const mdmsService = {
       );
     }
     const rows = await this.searchRecords(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA);
-    const visible = rows.find(
-      (r) => r.isActive !== false && (r.data as { moduleName?: string } | undefined)?.moduleName === 'CMS',
-    );
-    if (visible) return null;
+    if (visibleCmsHierarchyRow(rows, tenantId)) return null;
     return this.create(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA, 'CMS.All', {
       moduleName: 'CMS',
       department: 'All',
       ...hierarchy,
     });
+  },
+
+  /** The hierarchy type the tenant's CMS HierarchySchema row names, if it has one. */
+  async getRecordedHierarchyType(tenantId: string): Promise<string | undefined> {
+    const rows = await this.searchRecords(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA);
+    const hierarchy = (visibleCmsHierarchyRow(rows, tenantId)?.data as { hierarchy?: string } | undefined)?.hierarchy;
+    return hierarchy || undefined;
   },
 
   /** Load the active DashboardConfig owned by the state root (never an inherited row). */
@@ -270,6 +293,34 @@ export const mdmsService = {
       tenantId,
     });
     return response.publicDashboardEnabled === true;
+  },
+
+  /**
+   * Load the singleton EscalationConfig record (raw, with metadata).
+   * Searches RAINMAKER-PGR.EscalationConfig at tenantId, returning the
+   * active 'DEFAULT' record (or first active record).
+   */
+  async getEscalationConfig(tenantId: string): Promise<MdmsRecord | null> {
+    const records = await this.searchRecords(tenantId, MDMS_SCHEMAS.ESCALATION_CONFIG);
+    const active = records.filter(
+      (r) => r.isActive !== false && r.tenantId === tenantId
+    );
+    return active.find((r) => r.uniqueIdentifier === 'DEFAULT') ?? active[0] ?? null;
+  },
+
+  /**
+   * Save the edited EscalationConfig, preserving unknown top-level fields.
+   */
+  async saveEscalationConfig(
+    record: MdmsRecord,
+    data: EscalationConfigData
+  ): Promise<MdmsRecord> {
+    const mergedData = {
+      ...(record.data as Record<string, unknown>),
+      ...data,
+      code: 'DEFAULT',
+    };
+    return this.update(record, mergedData);
   },
 
   // ============================================

@@ -94,8 +94,13 @@ describe('configurator sign in', () => {
     fireEvent.click(screen.getByRole('button', { name: /send password setup link/i }));
 
     await waitFor(() => expect(api.requestPasswordSetup).toHaveBeenCalledWith('oauth.only@example.com'));
-    expect(await screen.findByText(/if an eligible account exists/i)).toBeInTheDocument();
-    expect(screen.getByText('Check your email')).toBeInTheDocument();
+    // The form's hint also starts "If an eligible account exists", and the form
+    // unmounts once the request settles, so match the notice's own text and
+    // re-query until it is there.
+    await waitFor(() => {
+      expect(screen.getByText(/a password setup email has been sent/i)).toBeInTheDocument();
+      expect(screen.getByText('Check your email')).toBeInTheDocument();
+    });
   });
 
   it('consumes a recovery result once under StrictMode and shows its action', async () => {
@@ -119,7 +124,7 @@ describe('configurator sign in', () => {
     fireEvent.click(screen.getByRole('button', { name: /send password setup link/i }));
 
     await waitFor(() => expect(api.requestPasswordSetup).toHaveBeenCalledWith('oauth.only@example.com'));
-    expect(await screen.findByText(/if an eligible account exists/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/a password setup email has been sent/i)).toBeInTheDocument());
     expect(screen.queryByText(/password setup was not completed/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /send password setup link/i })).not.toBeInTheDocument();
   });
@@ -157,6 +162,80 @@ describe('configurator sign in', () => {
 
     await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('ke.bomet'));
     expect(localSession.installDigitContext).toHaveBeenCalledWith(context, signedIn.user, [1, 2, 3, 4, 5]);
+  });
+
+  it('explains a refusal for staff without a Configurator role and installs nothing (#2599)', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({
+      tenants: [{ tenantId: 'ke', name: 'Bomet County', organizationAlias: 'ke', roles: [] }],
+      selectionRequired: false,
+      onboardingRequired: false,
+    });
+    vi.mocked(api.selectContext).mockRejectedValue(
+      new api.OnboardingError(403, 'CONFIGURATOR_ROLE_REQUIRED', 'This account has no Configurator access in this workspace'),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /bomet county/i }));
+
+    expect(await screen.findByText(/the configurator is for workspace admins/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /open the employee app/i })).toHaveAttribute(
+      'href',
+      `${window.location.origin}/ke/digit-ui/employee`,
+    );
+    expect(localSession.installDigitContext).not.toHaveBeenCalled();
+  });
+
+  it('returns to sign-in when the identity session ended before a workspace was chosen', async () => {
+    vi.mocked(api.session).mockResolvedValueOnce(signedIn).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.tenants).mockResolvedValue({
+      tenants: [{ tenantId: 'ke', name: 'Bomet County', organizationAlias: 'ke', roles: ['MDMS_ADMIN'] }],
+      selectionRequired: false,
+      onboardingRequired: false,
+    });
+    vi.mocked(api.selectContext).mockRejectedValue(new api.OnboardingError(401, 'SESSION_REVOKED', 'Identity session revoked'));
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /bomet county/i }));
+
+    expect(await screen.findByText(/your session ended\. sign in again/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^log in$/i })).toBeInTheDocument();
+    expect(screen.queryByText(/contact support/i)).not.toBeInTheDocument();
+    expect(localSession.installDigitContext).not.toHaveBeenCalled();
+  });
+
+  describe('expired trial workspace', () => {
+    const notice = { title: 'Your trial has ended', message: 'Talk to us to continue.', linkLabel: 'Contact sales', linkUrl: 'https://example.org/sales' };
+    const locked = { tenantId: 'ke.demo', name: 'Demo Workspace', organizationAlias: 'demo', roles: ['ACCOUNT_ADMIN'], code: 'WORKSPACE_TRIAL_EXPIRED' as const };
+    const open = { tenantId: 'ke.bomet', name: 'Bomet County', organizationAlias: 'bomet', roles: ['EMPLOYEE'] };
+
+    it('opens the dialog on load for a sole locked workspace without redirecting to signup', async () => {
+      vi.mocked(api.session).mockResolvedValue(signedIn);
+      vi.mocked(api.tenants).mockResolvedValue({ tenants: [locked], selectionRequired: false, onboardingRequired: false, notice });
+      const assign = vi.fn();
+      vi.stubGlobal('location', { ...window.location, assign });
+      renderPage();
+
+      expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+      expect(screen.getByText(notice.title)).toBeInTheDocument();
+      expect(screen.getByText(notice.message)).toBeInTheDocument();
+      expect(assign).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    });
+
+    it('opens the dialog when _select answers 403 WORKSPACE_TRIAL_EXPIRED', async () => {
+      vi.mocked(api.session).mockResolvedValue(signedIn);
+      vi.mocked(api.tenants).mockResolvedValue({ tenants: [open], selectionRequired: false, onboardingRequired: false });
+      vi.mocked(api.selectContext).mockRejectedValue(
+        new api.OnboardingError(403, 'WORKSPACE_TRIAL_EXPIRED', 'Trial ended', { notice }),
+      );
+      renderPage();
+
+      fireEvent.click(await screen.findByRole('button', { name: /bomet county/i }));
+      expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+      expect(screen.getByText(notice.title)).toBeInTheDocument();
+      expect(screen.queryByText(/could not sign in/i)).not.toBeInTheDocument();
+    });
   });
 
   it('signs out through the fail-open helper and returns to sign-in', async () => {

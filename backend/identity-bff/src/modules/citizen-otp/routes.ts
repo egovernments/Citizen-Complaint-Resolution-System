@@ -15,6 +15,7 @@ import {
 } from "../organizations/organization-service.js";
 import { sessionCookie } from "../sessions/session-store.js";
 import { config } from "../../infrastructure/config.js";
+import { isSlugTrialLocked, sendTrialExpired } from "../workspace-trial/access.js";
 import { audit } from "./audit.js";
 import { fixedOtpCode, OtpDeliveryError, otpSender, phoneOtpAvailable } from "./otp-sender.js";
 import {
@@ -49,16 +50,31 @@ function refuse(response: express.Response, refusal: Refusal) {
  * text only and may change.
  *
  * The tenant comes from the route slug exactly as `/identity/v1/authorize`
- * resolves it: server-side, mapped and live, or refused.
+ * resolves it: server-side, mapped and live, or refused. A workspace whose
+ * trial ended is refused too, so it is sent no code.
  */
 async function routeTenant(
   tenantSlug: unknown,
   response: express.Response,
 ): Promise<PublicTenantRoute | null> {
   const route = await routeForSlug(tenantSlug);
-  if (!("status" in route)) return route;
-  response.status(route.status).json({ error: route.error, code: route.code });
-  return null;
+  if ("status" in route) {
+    response.status(route.status).json({ error: route.error, code: route.code });
+    return null;
+  }
+  let locked: boolean;
+  try {
+    locked = await isSlugTrialLocked(route.urlSlug);
+  } catch {
+    // The same answer as a slug that cannot be resolved.
+    response.status(503).json({ error: "Tenant routes are temporarily unavailable", code: "TENANT_ROUTE_UNAVAILABLE" });
+    return null;
+  }
+  if (locked) {
+    sendTrialExpired(response);
+    return null;
+  }
+  return route;
 }
 
 async function phoneOtpEnabled(): Promise<boolean> {
@@ -310,6 +326,7 @@ export function registerCitizenOtpRoutes(app: express.Application, phoneEffects:
       ...base, event: "SESSION_CREATE", outcome: "SUCCESS", subject: user.id,
       sessionRef: privateRef("session", sessionId),
       ...(user.created && { reason: "IDENTITY_CREATED" }),
+      ...(user.staffProved && { reason: "STAFF_PHONE_PROVED" }),
     });
     response.setHeader("Set-Cookie", sessionCookie(sessionId, maxAge, "citizen"));
     return response.json({

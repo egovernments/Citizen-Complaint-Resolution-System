@@ -1,11 +1,9 @@
 /**
  * Boundary lookup, sourced from the live deployment.
  *
- * Boundaries don't live in MDMS — they're owned by egov-location (v1) and
- * boundary-service (v2). This helper uses the v1 tree endpoint because
- * (a) it returns the parent-child nesting in one call, (b) it's stable
- * across DIGIT deployments going back several versions, and (c) the
- * children:[] marker makes leaf detection trivial.
+ * Boundaries don't live in MDMS. This helper reads boundary-service's
+ * relationship tree (`includeChildren`), the same source PGR validates a
+ * locality against; develop deployments have no egov-location.
  *
  * Public API (keep stable across ports — see memory feedback_test_data_from_deployment):
  *   getBoundaryTree(tenant, opts)      -> Promise<Boundary[]>
@@ -19,6 +17,7 @@
  * is only configured for one specific path.
  */
 import { getDigitToken } from '../utils/auth';
+import { requiredEnv } from '../utils/identity';
 
 export interface Boundary {
   code: string;
@@ -35,7 +34,6 @@ export interface BoundaryLookupOptions {
   hierarchyType?: string;
   adminUser?: string;
   adminPassword?: string;
-  authTenant?: string;
 }
 
 /**
@@ -47,29 +45,22 @@ export async function getBoundaryTree(
   tenant: string,
   opts: BoundaryLookupOptions = {},
 ): Promise<Boundary[]> {
-  const baseURL = opts.baseURL ?? process.env.BASE_URL ?? 'http://localhost:18080';
+  const baseURL = opts.baseURL ?? requiredEnv('BASE_URL');
   const hierarchyType = opts.hierarchyType ?? 'ADMIN';
-  const authTenant = opts.authTenant ?? tenant;
-  const adminUser =
-    opts.adminUser ?? process.env.ADMIN_USER ?? process.env.DIGIT_EMPLOYEE_USER ?? 'ADMIN';
-  const adminPassword =
-    opts.adminPassword ??
-    process.env.ADMIN_PASSWORD ??
-    process.env.DIGIT_EMPLOYEE_PASSWORD ??
-    'eGov@123';
+  const adminUser = opts.adminUser ?? requiredEnv('DIGIT_USERNAME');
+  const adminPassword = opts.adminPassword ?? requiredEnv('DIGIT_PASSWORD');
 
   const token = await getDigitToken({
     baseURL,
-    tenant: authTenant,
+    tenant,
     username: adminUser,
     password: adminPassword,
-    userType: 'EMPLOYEE',
   });
 
   const url =
-    `${baseURL}/egov-location/boundarys/_search` +
+    `${baseURL}/boundary-service/boundary-relationships/_search` +
     `?tenantId=${encodeURIComponent(tenant)}` +
-    `&hierarchyTypeCode=${encodeURIComponent(hierarchyType)}`;
+    `&hierarchyType=${encodeURIComponent(hierarchyType)}&includeChildren=true`;
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -84,7 +75,9 @@ export async function getBoundaryTree(
   const json = (await resp.json()) as {
     TenantBoundary?: Array<{ boundary?: Boundary[] }>;
   };
-  return json.TenantBoundary?.[0]?.boundary ?? [];
+  // boundary-service nodes carry no name; the code doubles as one.
+  const named = (n: Boundary): Boundary => ({ ...n, name: n.name ?? n.code, children: (n.children ?? []).map(named) });
+  return (json.TenantBoundary?.[0]?.boundary ?? []).map(named);
 }
 
 /**

@@ -50,6 +50,9 @@ jobs:
       - name: Unit tests (no environment required)
         run: npx tsx test-master-localizations.ts
 
+      - name: Boundary geometry sent to boundary-service
+        run: npm run test:boundary-geometry
+
       # The security boundary (auth modes, tool access tiers, redaction,
       # artifact confinement, forwarded-for trust, request isolation). These are
       # invariants a refactor can silently break, so they gate the build rather

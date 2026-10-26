@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { DigitList, DigitDatagrid } from '@/admin';
 import type { DigitColumn } from '@/admin';
+import { fieldLabelKey } from '@digit-ui/datagrid';
 import { useListContext, useResourceContext } from 'ra-core';
 import { getResourceConfig, getResourceBySchema } from '@/providers/bridge';
-import { useResourceLabel } from '@/providers/useResourceLabel';
+import { ResourceLabel } from '@/providers/ResourceLabel';
 import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
 import { generateColumns, getRefMap, generateFilterElements, applyDescriptorListWidgets } from './schemaUtils';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
@@ -13,7 +14,6 @@ import { getDescriptor, type SchemaDescriptor } from './schemaDescriptors';
 export function MdmsResourcePage() {
   const resource = useResourceContext() ?? '';
   const config = getResourceConfig(resource);
-  const label = useResourceLabel()(resource);
   const { canEditResource } = useMastersCapability();
   const { definition } = useSchemaDefinition(config?.schema);
   // Per-schema list-cell overrides. Applied to BOTH column sources below,
@@ -43,7 +43,7 @@ export function MdmsResourcePage() {
   return (
     <>
       <ReadOnlyResourceNotice resource={resource} />
-      <DigitList title={label} subtitle={subtitle} filters={filterElements} hasCreate={canEditResource(resource)}>
+      <DigitList title={<ResourceLabel resource={resource} />} subtitle={subtitle} filters={filterElements} hasCreate={canEditResource(resource)}>
         {schemaColumns ? (
           <DigitDatagrid columns={schemaColumns} rowClick="show" />
         ) : (
@@ -60,13 +60,14 @@ function AutoDetectDatagrid({ descriptor }: { descriptor?: SchemaDescriptor }) {
   const firstRecord = data?.[0];
 
   const columns: DigitColumn[] = useMemo(() => {
-    if (!firstRecord) return [{ source: 'id', label: 'ID' }];
+    if (!firstRecord) return [{ source: 'id', label: 'ID', labelKey: fieldLabelKey('id') }];
     const detected = Object.keys(firstRecord as Record<string, unknown>)
       .filter((key) => !key.startsWith('_') && key !== 'id')
       .slice(0, 8)
       .map((key) => ({
         source: key,
         label: key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()),
+        labelKey: fieldLabelKey(key),
       }));
     return applyDescriptorListWidgets(detected, descriptor);
   }, [firstRecord, descriptor]);

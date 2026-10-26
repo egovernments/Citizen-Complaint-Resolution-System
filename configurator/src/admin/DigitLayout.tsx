@@ -3,132 +3,31 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslate } from 'ra-core';
 import { useApp } from '../App';
 import {
-  User,
-  Globe,
   Building2,
-  MapPin,
-  Briefcase,
-  Award,
-  AlertTriangle,
-  Users,
   LayoutDashboard,
   BarChart3,
-  Network,
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
-  Settings,
   Database,
-  Shield,
-  GitBranch,
-  MessageSquare,
-  History,
-  FileCode,
-  Workflow,
-  Bell,
-  Mail,
-  ScrollText,
-  Plug,
-  SlidersHorizontal,
-  ToggleRight,
-  MessageCircle,
-  UserCog,
-  Map,
   Globe2,
-  CalendarClock,
+  Inbox,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
+import { T } from '@digit-ui/datagrid';
+import { getResourceLabel } from '@/providers/bridge';
+import { useResourceLabel } from '@/providers/useResourceLabel';
+import { ResourceLabel } from '@/providers/ResourceLabel';
+import { navGroups, getAdvancedResourceIds } from './navGroups';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
-import { LEGACY_PGR_DASHBOARD_ENABLED, ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
-import { NavRow, SectionLabel, ActiveBar, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
+import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
+import { NavRow, NavExternalRow, SectionLabel, ActiveBar, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
 import { railClasses, rowTone } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
 import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
-import { resumePath } from '@/onboarding/progress';
-
-/** Sidebar navigation groups — names are i18n keys resolved at render time */
-const navGroups = [
-  {
-    labelKey: 'app.nav.notifications',
-    // Ordered the way a first-time operator needs them, not alphabetically and
-    // not by storage: a gateway account must exist (Providers) before a channel
-    // can be switched on (Channels), before anything can be configured
-    // (Configure), which is read against the vocabulary (Events). The raw
-    // Templates/Routing masters come after the guided screen because they are
-    // the bulk-edit path, WhatsApp's extra step after them, and Logs last —
-    // that is where you go once something has been sent. User Preferences is
-    // per-citizen data, not setup, so it sits at the end.
-    //
-    // Labels drop the "Notification" prefix: inside a menu already titled
-    // Notifications it read as "Notifications → Notification Routing". The page
-    // TITLES keep the long form so a screen is unambiguous out of context.
-    //
-    // The masters below are the shared NOTIFICATIONS.* ones, and they appear
-    // HERE ONLY — `advancedResources` drops every id already listed in a
-    // primary group, so Advanced no longer repeats "Notification Events /
-    // Routing / Templates" a second time under different labels.
-    //
-    // The legacy RAINMAKER-PGR.Notification* four are deliberately NOT in this
-    // group: they are read-only history, still reachable at
-    // /manage/notification-<x> and, because they are in no primary group, still
-    // listed in Advanced — so an operator on an un-migrated tenant can see their
-    // data without the sidebar offering two of everything.
-    items: [
-      { id: 'notification-provider', nameKey: 'app.nav.notification_providers', path: '/manage/notification-provider', icon: Plug },
-      { id: 'notifications-channel', nameKey: 'app.nav.notification_channels', path: '/manage/notifications-channel', icon: ToggleRight },
-      { id: 'notification-configure', nameKey: 'app.nav.notification_configure', path: '/manage/notification-configure', icon: SlidersHorizontal },
-      { id: 'notifications-event-catalogue', nameKey: 'app.nav.notification_events', path: '/manage/notifications-event-catalogue', icon: CalendarClock },
-      { id: 'notifications-template', nameKey: 'app.nav.notification_templates', path: '/manage/notifications-template', icon: Mail },
-      { id: 'notifications-routing', nameKey: 'app.nav.notification_routing', path: '/manage/notifications-routing', icon: Bell },
-      { id: 'notifications-provider-template', nameKey: 'app.nav.notification_provider_templates', path: '/manage/notifications-provider-template', icon: MessageCircle },
-      { id: 'notification-log', nameKey: 'app.nav.notification_logs', path: '/manage/notification-log', icon: ScrollText },
-      { id: 'notification-preference', nameKey: 'app.nav.notification_preferences', path: '/manage/notification-preference', icon: UserCog },
-    ],
-  },
-  {
-    labelKey: 'app.nav.tenant_management',
-    items: [
-      { id: 'tenants', nameKey: 'app.nav.tenants', path: '/manage/tenants', icon: Building2 },
-      { id: 'departments', nameKey: 'app.nav.departments', path: '/manage/departments', icon: Briefcase },
-      { id: 'designations', nameKey: 'app.nav.designations', path: '/manage/designations', icon: Award },
-      { id: 'boundary-hierarchies', nameKey: 'app.nav.hierarchies', path: '/manage/boundary-hierarchies', icon: GitBranch },
-      { id: 'map-config', nameKey: 'app.nav.map_config', path: '/manage/map-config', icon: Map },
-    ],
-  },
-  {
-    labelKey: 'app.nav.complaint_management',
-    items: [
-      { id: 'complaint-hierarchies', nameKey: 'app.nav.complaint_hierarchies', path: '/manage/complaint-hierarchies', icon: GitBranch },
-      { id: 'complaint-hierarchy', nameKey: 'app.nav.complaint_types', path: '/manage/complaint-hierarchy', icon: AlertTriangle },
-      { id: 'complaints', nameKey: 'app.nav.complaints', path: '/manage/complaints', icon: MessageSquare },
-      { id: 'localization', nameKey: 'app.nav.localization', path: '/manage/localization', icon: Globe },
-    ],
-  },
-  {
-    labelKey: 'app.nav.people',
-    items: [
-      { id: 'employees', nameKey: 'app.nav.employees', path: '/manage/employees', icon: Users },
-      { id: 'org-chart', nameKey: 'app.nav.org_chart', path: '/manage/org-chart', icon: Network },
-      { id: 'users', nameKey: 'app.nav.users', path: '/manage/users', icon: User },
-    ],
-  },
-  {
-    labelKey: 'app.nav.system',
-    items: [
-      { id: 'access-roles', nameKey: 'app.nav.access_roles', path: '/manage/access-roles', icon: Shield },
-      { id: 'workflow-business-services', nameKey: 'app.nav.workflows', path: '/manage/workflow-business-services', icon: Workflow },
-      { id: 'workflow-processes', nameKey: 'app.nav.processes', path: '/manage/workflow-processes', icon: History },
-      { id: 'mdms-schemas', nameKey: 'app.nav.mdms_schemas', path: '/manage/mdms-schemas', icon: FileCode },
-      { id: 'boundaries', nameKey: 'app.nav.boundaries', path: '/manage/boundaries', icon: MapPin },
-      // Only useful to people who can change destinations; requiredRoles keeps it
-      // out of everyone else's sidebar (the route itself renders read-only for
-      // them, so this is a tidiness gate, not the security boundary).
-      { id: 'analytics-providers', nameKey: 'app.nav.analytics_providers', path: '/manage/analytics-providers', icon: BarChart3, requiredRoles: ['SUPERUSER', 'MDMS_ADMIN'] },
-    ],
-  },
-];
+import { isOnboardingComplete } from '@/onboarding/progress';
+import { complaintDeskUrl, useWorkspaceSlug } from '@/identity/workspaceSlug';
 
 /** The links above the groups, always shown first */
 const mainLinks = [
@@ -139,34 +38,21 @@ const mainLinks = [
   { path: '/manage/public-dashboard', nameKey: 'app.nav.public_dashboard', icon: Globe2 },
 ];
 
-/** Every resource id that already has its own entry in a primary nav group. */
-const primaryNavIds = new Set(navGroups.flatMap((group) => group.items.map((item) => item.id)));
-
-/**
- * Generic MDMS resources for the Advanced section.
- *
- * Derived from the menu definition above rather than from a hand-kept list, so
- * a resource promoted into a primary group cannot end up listed twice — which
- * is what "Notification Events / Routing / Templates" were, once under
- * NOTIFICATIONS and again down here under their long registry labels. Anything
- * NOT in a primary group stays, including the read-only Legacy (PGR)
- * Notification masters, for which Advanced is the only way in.
- */
-const advancedResources = Object.keys(getGenericMdmsResources())
-  .filter((name) => !primaryNavIds.has(name))
-  .map((name) => ({
-    id: name,
-    name: getResourceLabel(name),
-    path: `/manage/${name}`,
-  }));
+/** Generic MDMS resources for the Advanced section (see getAdvancedResourceIds). */
+const advancedResources = getAdvancedResourceIds().map((name) => ({
+  id: name,
+  name: getResourceLabel(name),
+  path: `/manage/${name}`,
+}));
 
 export function DigitLayout({ children }: { children?: ReactNode }) {
-  const { state, logout, setMode, toggleHelp } = useApp();
+  const { state, logout, toggleHelp } = useApp();
 
   const userRoles = state.user?.roles ?? [];
   const navigate = useNavigate();
   const location = useLocation();
   const translate = useTranslate();
+  const resourceLabel = useResourceLabel();
   const { canViewResource } = useMastersCapability();
 
   // Masters the current role can't see (per resource.masters conditions on
@@ -184,7 +70,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           ...group,
           items: group.items.filter(
             (item) =>
-              canViewResource(item.id) &&
+              canViewResource((item as { gate?: string }).gate ?? item.id) &&
               (!('requiredRoles' in item) ||
                 !!(item as { requiredRoles?: string[] }).requiredRoles?.some((r) => roleKey.split(',').includes(r))),
           ),
@@ -224,10 +110,10 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
     catch (error) { window.alert(error instanceof Error ? error.message : 'Sign-out failed. Please retry.'); }
   };
 
-  const handleSwitchToOnboarding = () => {
-    setMode('onboarding');
-    navigate(resumePath(state.completedPhases));
-  };
+  // Once setup is done, the way to where the workspace's staff handle complaints.
+  const slug = useWorkspaceSlug(state.tenant);
+  const deskUrl = isOnboardingComplete(state.completedPhases) ? complaintDeskUrl(state.environment, slug) : null;
+
 
   const envName = state.environment.includes('api.egov.theflywheel') || state.environment.includes('chakshu')
     ? 'chakshu-dev'
@@ -241,8 +127,8 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
 
   const query = navQuery.trim().toLowerCase();
   const matches = (label: string) => !query || label.toLowerCase().includes(query);
-  const advancedLabel = (item: { id: string; name: string }) =>
-    translate(`app.resources.${item.id.replace(/-/g, '_')}`, { _: item.name });
+  // Same code and fallback as the list title and dashboard card (resourceLabelKey).
+  const advancedLabel = (item: { id: string }) => resourceLabel(item.id);
   const shownMainLinks = mainLinks.filter((link) => matches(translate(link.nameKey)));
   const shownGroups = visibleNavGroups
     .map((group) => ({ ...group, items: group.items.filter((item) => matches(translate(item.nameKey))) }))
@@ -283,8 +169,8 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-5 text-foreground truncate">DIGIT</p>
-                  <p className="text-xs leading-4 text-muted-foreground truncate">
-                    {translate('app.header.brand', { _: 'Complaints Management' })}
+                  <p className="text-xs leading-4 text-muted-foreground break-words">
+                    <T i18nKey="app.header.product_name">Complaint Management System</T>
                   </p>
                 </div>
               </>
@@ -326,12 +212,13 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         <nav className="flex-1 py-2 overflow-y-auto">
           {shownMainLinks.length > 0 && (
             <div className="pb-5">
-              {!sidebarCollapsed && <SectionLabel>{translate('app.nav.main', { _: 'Main' })}</SectionLabel>}
+              {!sidebarCollapsed && <SectionLabel><T i18nKey="app.nav.main">Main</T></SectionLabel>}
               {shownMainLinks.map((link) => (
                 <NavRow
                   key={link.path}
                   icon={link.icon}
                   label={translate(link.nameKey)}
+                  i18nKey={link.nameKey}
                   active={location.pathname === link.path}
                   collapsed={sidebarCollapsed}
                   onClick={() => navigate(link.path)}
@@ -354,7 +241,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                     className="w-full text-left focus-visible:outline-none focus-visible:bg-muted"
                   >
                     <SectionLabel>
-                      <span className="flex-1">{translate(group.labelKey)}</span>
+                      <span className="flex-1"><T i18nKey={group.labelKey} /></span>
                       <ChevronDown
                         aria-hidden="true"
                         className={`w-3 h-3 transition-transform ${isOpen ? '' : '-rotate-90'}`}
@@ -368,6 +255,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                       key={item.id}
                       icon={item.icon}
                       label={translate(item.nameKey)}
+                      i18nKey={item.nameKey}
                       active={location.pathname === item.path || location.pathname.startsWith(item.path + '/')}
                       collapsed={sidebarCollapsed}
                       onClick={() => navigate(item.path)}
@@ -383,6 +271,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
               <NavRow
                 icon={Database}
                 label={translate('app.nav.advanced')}
+                i18nKey="app.nav.advanced"
                 active={location.pathname === '/manage/advanced'}
                 collapsed={sidebarCollapsed}
                 onClick={() => {
@@ -411,7 +300,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                       className={`relative w-full min-h-8 flex items-center pl-11 pr-4 py-1.5 text-xs text-left transition-colors ${rowTone(isActive)}`}
                     >
                       {isActive && <ActiveBar />}
-                      <span className="truncate">{advancedLabel(item)}</span>
+                      <span className="truncate"><ResourceLabel resource={item.id} /></span>
                     </button>
                   );
                 })}
@@ -420,22 +309,20 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
 
           {!sidebarCollapsed && query && nothingFound && (
             <p className="px-4 py-2 text-xs text-muted-foreground">
-              {translate('app.nav.no_matches', { _: 'No matches' })}
+              <T i18nKey="app.nav.no_matches">No matches</T>
             </p>
           )}
         </nav>
 
-        {/* Sidebar footer: the way back to onboarding while switching is
-            allowed (with onboarding compulsory there is nothing to go back to),
-            then "Powered by DIGIT" */}
-        {!ONBOARDING_GATE_ENABLED && (
+        {/* Sidebar footer: the complaint desk once setup is done, then "Powered by DIGIT" */}
+        {deskUrl && (
           <div className="border-t border-border py-2">
-            <NavRow
-              icon={Settings}
-              label={translate('app.nav.switch_to_onboarding')}
-              active={false}
+            <NavExternalRow
+              icon={Inbox}
+              label={translate('app.nav.open_complaint_desk', { _: 'Open complaint desk' })}
+              i18nKey="app.nav.open_complaint_desk"
+              href={deskUrl}
               collapsed={sidebarCollapsed}
-              onClick={handleSwitchToOnboarding}
             />
           </div>
         )}
@@ -457,7 +344,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
               variant="outline"
               className="hidden sm:inline-flex text-xs bg-blue-50 text-blue-700 border-blue-200"
             >
-              {translate('app.header.management_mode')}
+              <T i18nKey="app.header.management_mode" />
             </Badge>
             <Badge
               variant="secondary"

@@ -13,6 +13,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { complaintLabel } from "../../utils/complaintLabel";
 import { pageOf, searchComplaints, statusTone } from "../../utils/citizenComplaints";
 import { trackEvent } from "../../utils/analytics";
+import { formatLocaleDate } from "../../utils/localeDate";
 import { useTranslation } from "react-i18next";
 import { Link, useHistory, useRouteMatch } from "react-router-dom";
 
@@ -153,7 +154,7 @@ export const ComplaintsList = () => {
         category: def?.menuPath ? complaintLabel(t, def.menuPath, def.menuPathName) : "",
         description: service.description || "",
         createdTime,
-        filedOn: createdTime ? Digit.DateUtils.ConvertTimestampToDate(createdTime) : "",
+        filedOn: formatLocaleDate(createdTime),
       };
     });
   }, [data, defsByCode, t]);
@@ -164,7 +165,7 @@ export const ComplaintsList = () => {
 
   const goCreate = () => history.push(`/${window.contextPath}/citizen/pgr/create-complaint`);
   const detailsUrl = (id) => `${path}/${id}`;
-  const onOpen = (id, from) => trackEvent("pgr.my-complaints.open", { category: "pgr", label: from, value: searching ? 1 : 0 });
+  const onOpen = (id, from) => trackEvent("complaint:my_complaints_item_open", { label: from, value: searching ? 1 : 0 });
   const open = (id, from) => {
     onOpen(id, from);
     history.push(detailsUrl(id));
@@ -240,10 +241,10 @@ export const ComplaintsList = () => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onBlur={() => {
-                  if (searching) trackEvent("pgr.my-complaints.search", { category: "pgr", value: matches.length });
+                  if (searching) trackEvent("complaint:my_complaints_search", { value: matches.length });
                 }}
-                placeholder={tr("CS_MY_COMPLAINTS_SEARCH", "Search by complaint no. or text")}
-                aria-label={tr("CS_MY_COMPLAINTS_SEARCH", "Search by complaint no. or text")}
+                placeholder={tr("CS_MY_COMPLAINTS_SEARCH", "Search for a complaint")}
+                aria-label={tr("CS_MY_COMPLAINTS_SEARCH", "Search for a complaint")}
                 className="cms-complaints-search-field"
               />
             </div>
@@ -337,22 +338,28 @@ export const ComplaintsList = () => {
                   <span>{range}</span>
                   {shown.pages > 1 ? (
                     <span className="cms-complaints-pager-buttons">
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="icon"
                         onClick={() => setPage(shown.page - 1)}
                         disabled={shown.page <= 1}
                         aria-label={tr("CS_COMMON_PREVIOUS", "Previous")}
+                        title={tr("CS_COMMON_PREVIOUS", "Previous")}
                       >
-                        <ChevronLeft aria-hidden />
-                      </button>
-                      <button
+                        <ChevronLeft aria-hidden className="h-4 w-4" />
+                      </Button>
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="icon"
                         onClick={() => setPage(shown.page + 1)}
                         disabled={shown.page >= shown.pages}
                         aria-label={tr("CS_COMMON_NEXT", "Next")}
+                        title={tr("CS_COMMON_NEXT", "Next")}
                       >
-                        <ChevronRight aria-hidden />
-                      </button>
+                        <ChevronRight aria-hidden className="h-4 w-4" />
+                      </Button>
                     </span>
                   ) : null}
                 </div>

@@ -222,6 +222,18 @@ public class OnboardingPostgresTest {
         op.getCompletedSteps().add("TENANT_FOUNDATION");repository.checkpoint(op,third.getLeaseToken(),now);assertEquals(0,retryCount(op.getId()));
         failRetry(third,now);assertEquals(Long.valueOf(now+1000),retryAt(original.getId()));
     }
+    /** NOTIFICATION_DEFAULTS counts its retryable failures in the progress; the count must never read as progress. */
+    @Test public void aFailureCounterInTheProgressDoesNotResetTheRetryBudget_andSurvivesTheReclaim() {
+        var original=submit();long now=System.currentTimeMillis();var first=repository.claimOperation("first",UUID.randomUUID(),now+120000,now).orElseThrow();failRetry(first,now);
+        now+=1000;var second=repository.claimOperation("second",UUID.randomUUID(),now+120000,now).orElseThrow();var op=second.getOperation();
+        var progress=new OnboardingProgress(repository,op,second.getLeaseToken());
+        assertEquals(1,progress.increment(NotificationDefaultsStep.RETRYABLE_FAILURES));assertEquals(1,retryCount(op.getId()));
+        assertEquals(2,progress.increment(NotificationDefaultsStep.RETRYABLE_FAILURES));assertEquals(1,retryCount(op.getId()));
+        failRetry(second,now);now+=2000;var third=repository.claimOperation("third",UUID.randomUUID(),now+120000,now).orElseThrow();
+        assertEquals("2",third.getOperation().getRecordProgress().get(NotificationDefaultsStep.RETRYABLE_FAILURES));
+        assertEquals(3,new OnboardingProgress(repository,third.getOperation(),third.getLeaseToken()).increment(NotificationDefaultsStep.RETRYABLE_FAILURES));
+        assertEquals(2,retryCount(original.getId()));
+    }
     @Test public void concurrentAutomaticClaimsHaveOneLeaseWinner() throws Exception {
         submit();long now=System.currentTimeMillis();var first=repository.claimOperation("first",UUID.randomUUID(),now+120000,now).orElseThrow();failRetry(first,now);
         var pool=java.util.concurrent.Executors.newFixedThreadPool(2);var start=new java.util.concurrent.CountDownLatch(1);
@@ -303,7 +315,8 @@ public class OnboardingPostgresTest {
                 var record=(Map<String,Object>)body.get("Mdms");String key=record.get("tenantId")+"|"+record.get("schemaCode")+"|"+record.get("uniqueIdentifier");
                 assertFalse("projection recovery must search before another create",stored.containsKey(key));stored.put(key,record);hidden.add(key);return mapper.createObjectNode();
             }
-            if(service.equals("hrms")) return mapper.valueToTree(Map.of("Employees",List.of(Map.of("user",Map.of("uuid","stable-founder")))));
+            // HRMS's own row for the workspace: the step counts only rows with the workspace's tenantId.
+            if(service.equals("hrms")) return mapper.valueToTree(Map.of("Employees",List.of(Map.of("tenantId",signup.getRequestedTenantId(),"code",OnboardingSteps.FOUNDER_CODE,"assignments",List.of(Map.of("designation",OnboardingSteps.FOUNDER_DESIGNATION)),"user",Map.of("uuid","stable-founder")))));
             // The baseline seeds the PGR workflow: a search finds none, the accepted create is the checkpoint.
             if(service.equals("workflow")) return path.contains("_search")?mapper.valueToTree(Map.of("BusinessServices",List.of())):mapper.createObjectNode();
             if(service.equals("boundary")) return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("hierarchyType",OnboardingSteps.WORKSPACE_HIERARCHY)),"Boundary",List.of(Map.of("code","example")),"TenantBoundary",List.of(Map.of("tenantId","example","hierarchyType",OnboardingSteps.WORKSPACE_HIERARCHY,"boundary",List.of(Map.of("code","example","boundaryType","ROOT"))))));

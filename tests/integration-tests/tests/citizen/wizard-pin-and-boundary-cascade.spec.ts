@@ -22,6 +22,7 @@ import { tenantSlug } from '../utils/identity-bff';
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
 import { BASE_URL } from '../utils/env';
+import { continueFiling, fillDetailsStep, primaryButton } from '../utils/citizen-filing';
 
 test.describe('06-citizen-pin-and-cascade — PR #74 regression', () => {
   test.slow();
@@ -36,12 +37,11 @@ Steps:
 2. Attach pageerror listener (only catches uncaught throws — bundle has noisy console.error from PropTypes etc).
 3. citizenOtpLogin (provisioned citizen); assert Citizen.token persisted.
 4. Navigate to /pgr/create-complaint/complaint-type, wait 6s for hydration.
-5. Step 1: open type dropdown → pick first item; if a subtype dropdown appears, pick its first item too. NEXT.
-6. Step 2: Pin Location — assert the optional map starts with no marker and NEXT is enabled.
-7. Assert no "pincode not serviceable" toast appeared after step 2.
-8. Step 3 Location Details (cascade): assert more than 1 cascade dropdown initially — every level renders from the start.
-9. Pick the deepest level first; assert every level above it now shows a value (its own ancestors).
-10. Assert pageErrors === [].
+5. Step 1 (details): fill the description and pick every complaint-category level. Next.
+6. Step 2 (location): assert the optional map starts with no marker and no "pincode not serviceable" toast shows.
+7. Assert more than 1 cascade dropdown initially — every level renders from the start.
+8. Pick the deepest level first; assert every level above it now shows a value (its own ancestors).
+9. Assert Next is enabled without a pin, and pageErrors === [].
 
 The cascade dropdowns use button[role="combobox"] on modern digit-ui (Ethiopia) or
 input[class*="select-wrap--elipses"] on older builds — the locator covers both.
@@ -69,79 +69,23 @@ The dropdowns are scoped to the cascade's own .pgr-boundary-cascade container, s
     });
     await page.waitForTimeout(6000);
 
-    const clickNext = async () => {
-      const btn = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
-      await btn.waitFor({ state: 'visible', timeout: 10_000 });
-      await btn.scrollIntoViewIfNeeded();
-      await btn.click();
-      await page.waitForTimeout(2500);
-    };
-
-    // Cross-build dropdown locator: modern digit-ui (Ethiopia) uses
-    // button[role="combobox"]; older builds used input.digit-dropdown-*.
-    const dropdowns = page.locator(
-      'button[role="combobox"], input.digit-dropdown-employee-select-wrap--elipses',
-    );
-    // Cascade-specific: matches both modern button comboboxes and older inputs,
-    // inside the cascade only (earlier steps stay mounted while hidden).
     const cascadeDropdowns = page
       .locator('.pgr-boundary-cascade')
       .locator('button[role="combobox"], input[class*="select-wrap--elipses"]');
-    // ── Step 1: Complaint Details — walk EVERY hierarchy level ──────
-    // The complaint-type hierarchy depth is tenant-defined (MDMS
-    // RAINMAKER-PGR.ComplaintHierarchyDefinition): 2 levels on mz.maputo
-    // (CATEGORY → SUB_TYPE) but 4 on ke (AUTHORITY_TYPE → MAIN_CATEGORY →
-    // SECTOR → SUB_TYPE). EVERY level with options is mandatory, so NEXT
-    // stays disabled until the deepest one is picked. Assuming a fixed
-    // Type+Subtype pair left SECTOR/SUB_TYPE unset on ke and the test hung
-    // on a permanently-disabled NEXT. Walk until no enabled, unset level
-    // remains; safety limit of 8 covers every known deployment.
-    await dropdowns.first().waitFor({ state: 'visible', timeout: 15_000 });
-    for (let level = 0; level < 8; level++) {
-      const combobox = dropdowns.nth(level);
-      const visible = await combobox
-        .isVisible({ timeout: level === 0 ? 5000 : 3000 })
-        .catch(() => false);
-      if (!visible) break;
-      // Child levels render disabled until the parent's MDMS lookup lands.
-      await expect(combobox).toBeEnabled({ timeout: 8000 }).catch(() => {});
-      if (!(await combobox.isEnabled().catch(() => false))) break;
-      // Skip any level the app already auto-filled.
-      const hasPlaceholder = await combobox
-        .evaluate((el) => /^Select/i.test((el as HTMLElement).innerText.trim()))
-        .catch(() => true);
-      if (!hasPlaceholder) continue;
-      await combobox.click();
-      await page.waitForTimeout(800);
-      const option = page
-        .locator('[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible')
-        .first();
-      if (!(await option.isVisible({ timeout: 5000 }).catch(() => false))) break;
-      await option.click();
-      await page.waitForTimeout(1500);
-    }
-    await clickNext();
 
-    // ── Step 2: optional Pin Location — continue without a pin. ─────
-    // The configured centre is only a viewport. It must not create a marker,
-    // reverse-geocoded postal code, or mandatory-value gate.
-    await page.waitForTimeout(2500);
+    // Step 1 (details): description and every category level.
+    await fillDetailsStep(page);
+    await continueFiling(page);
+
+    // Step 2 (location): the optional map starts with no marker, above the cascade.
     const map = page.locator('.leaflet-container').first();
     await expect(map).toBeVisible();
     await expect(map.locator('.leaflet-marker-icon')).toHaveCount(0);
-    await expect(page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first()).toBeEnabled();
-    await clickNext();
 
-    // ── Assert no pincode toast appeared after pin step ──────────────
     const pincodeToast = page.locator('text=/pincode.*not serv|CS_COMMON_PINCODE_NOT_SERVICABLE/i');
     await expect(pincodeToast).toHaveCount(0);
 
-    // ── Step 3: Location Details (boundary cascade) ──────────────────
-    // Every level renders from the start so a citizen can search for their
-    // ward directly. What CCRS#477 needs is that a ward never stands without
-    // its own County → Sub-County: picking the deepest level fills them.
-    await page.waitForTimeout(3000);
-
+    await expect(cascadeDropdowns.first()).toBeVisible({ timeout: 15_000 });
     const initialCount = await cascadeDropdowns.count();
     expect(
       initialCount,
@@ -165,6 +109,9 @@ The dropdowns are scoped to the cascade's own .pgr-boundary-cascade container, s
       const text = await cascadeDropdowns.nth(i).evaluate((el) => (el as HTMLElement).innerText.trim());
       expect(text, `Cascade level ${i + 1} should be filled by the deepest pick`).not.toMatch(/^Select/i);
     }
+
+    // The pin is optional: with the cascade filled and no pin, Next is open.
+    await expect(primaryButton(page), 'a citizen must be able to continue without a pin').toBeEnabled();
 
     expect(pageErrors, 'no uncaught errors during the wizard').toEqual([]);
   });

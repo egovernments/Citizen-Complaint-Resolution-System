@@ -463,8 +463,12 @@ data:
         alerts:
           - type: slack
 
+      # Toggled for the compose tenant stack, whose Admin API is loopback-only.
+      # The k3s Kong listens on 0.0.0.0:8001 (k8s/app-services/kong.yaml), so
+      # this tier sets GATUS_KONG_ADMIN true below (#2458).
       - name: Kong Admin API
         group: API Gateway
+        enabled: ${GATUS_KONG_ADMIN}
         url: "http://kong:8001/"
         interval: 30s
         conditions:
@@ -812,6 +816,9 @@ spec:
             # No audit-service Deployment in the k3s tier either.
             - name: GATUS_AUDIT
               value: "false"
+            # Kong's Admin API listens on 0.0.0.0:8001 in this tier, so the check can pass.
+            - name: GATUS_KONG_ADMIN
+              value: "true"
             - name: GATUS_PROXIES
               value: "false"
             # No ingress and no public hostname in this tier (#1618), so the

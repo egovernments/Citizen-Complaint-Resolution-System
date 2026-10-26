@@ -3,27 +3,42 @@ import { API_ORIGIN, call, type Invitation } from '@/api/onboarding';
 const base = `${API_ORIGIN}/identity/v1`;
 export interface Member {
   subject: string;
-  email: string;
-  name: string;
+  /** The current email for an active member; the invited address (if recorded) otherwise. */
+  email?: string;
+  name?: string;
   digitUuid: string;
-  state: 'active' | 'pending';
+  /** An expired invitation is listed as `removed`, with `removedAt` equal to `expiresAt`. */
+  state: 'active' | 'pending' | 'removed';
   invitationVersion: number;
+  boundAt?: number;
   expiresAt?: number;
+  removedAt?: number;
   missing?: boolean;
 }
 
-export async function members(tenantId: string): Promise<Member[]> {
+/** Active and pending members by default; `state` lists one state, `removed` included. */
+export async function members(tenantId: string, state?: Member['state']): Promise<Member[]> {
   const result: Member[] = [];
-  for (let first = 0; ; first += 100) {
-    const page = await call<{ members: Member[] }>(`${base}/workspace-members?${new URLSearchParams({ tenantId, first: String(first), max: '100' })}`);
+  // A page can be short and still not be the last: follow nextFirst.
+  for (let first: number | undefined = 0; first !== undefined; ) {
+    const query = new URLSearchParams({ tenantId, first: String(first), max: '100', ...(state && { state }) });
+    const page: { members: Member[]; nextFirst?: number } = await call(`${base}/workspace-members?${query}`);
     result.push(...page.members);
-    if (page.members.length < 100) return result;
+    first = page.nextFirst;
   }
+  return result;
 }
 
 export function linkMember(tenantId: string, digitUuid: string, email: string, reinvite = false) {
   return call<{ binding: { state: string }; activationEmailSent?: boolean }>(`${base}/workspace-members/_link`, {
     method: 'POST', body: JSON.stringify({ tenantId, digitUuid, email, ...(reinvite ? { reinvite } : {}) }),
+  });
+}
+
+/** Send the sign-in setup (or email confirmation) again; the binding doesn't change. */
+export function resendActivation(tenantId: string, digitUuid: string, email: string) {
+  return call<{ activationEmail: 'password_setup' | 'verify_email' }>(`${base}/workspace-members/_link`, {
+    method: 'POST', body: JSON.stringify({ tenantId, digitUuid, email, resend: true }),
   });
 }
 
@@ -39,6 +54,12 @@ export function updateMemberEmail(tenantId: string, digitUuid: string, email: st
 
 export function acceptInvitation(invitation: Pick<Invitation, 'tenantId' | 'invitationVersion'>) {
   return call(`${base}/workspace-invitations/_accept`, {
+    method: 'POST', body: JSON.stringify({ tenantId: invitation.tenantId, invitationVersion: invitation.invitationVersion }),
+  });
+}
+
+export function declineInvitation(invitation: Pick<Invitation, 'tenantId' | 'invitationVersion'>) {
+  return call(`${base}/workspace-invitations/_decline`, {
     method: 'POST', body: JSON.stringify({ tenantId: invitation.tenantId, invitationVersion: invitation.invitationVersion }),
   });
 }

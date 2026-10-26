@@ -4,6 +4,7 @@ import { readBindings } from "../bindings/store.js";
 import { readUser } from "../../integrations/keycloak/admin-api.js";
 import { splitE164 } from "../citizens/citizen-registration.js";
 import { mobileValidationForRoute } from "../citizen-otp/mobile-validation.js";
+import { keycloakPhoneIsAdminControlled } from "../organizations/organization-service.js";
 import { accountEntries } from "./state.js";
 
 export interface PropagationResult { written: number; unchanged: number; skipped: number }
@@ -18,9 +19,16 @@ export function propagateIdentifiers(subject: string): Promise<PropagationResult
     const email = user.emailVerified === true && user.email?.trim() && !/\*{2,}/.test(user.email)
       ? user.email.trim() : undefined;
     const phoneValues = user.attributes?.phoneNumber;
-    const phone = user.attributes?.phoneNumberVerified?.length === 1 &&
+    const verifiedPhone = user.attributes?.phoneNumberVerified?.length === 1 &&
       user.attributes.phoneNumberVerified[0] === "true" && phoneValues?.length === 1 ? phoneValues[0] : undefined;
     const entries = accountEntries(user);
+    // Only a phone users cannot edit in Keycloak, so one a BFF code or an
+    // admin put there, reaches a citizen account: pgr-services attaches an
+    // employee-filed complaint to the one BFF-created citizen holding the
+    // number (#2640). Elsewhere a proved number arrives at the next phone-OTP
+    // `_select`.
+    const phone = verifiedPhone && entries.some(entry => entry.kind === "citizen") &&
+      await keycloakPhoneIsAdminControlled() ? verifiedPhone : undefined;
     const targets = [
       ...bindings.filter(binding => binding.state === "active").map(binding => ({ ...binding, kind: "staff" as const })),
       ...entries.filter(entry => entry.kind === "citizen"),

@@ -64,6 +64,12 @@ jobs:
       - name: pg storage guard — decision matrix
         run: ansible-playbook -i localhost, -c local tests/pg-storage-guard-test.yml
 
+      # Per-tenant Novu accounts (#2203, review S2 of #2343): the real
+      # tasks/novu-tenant-accounts-verify.yml over every sign-in verdict x phase x
+      # explicit switch x provisioned workspaces, with the .env the bridge reads checked.
+      - name: novu tenant accounts — verify decision matrix
+        run: ansible-playbook -i localhost, -c local tests/novu-tenant-accounts-verify-test.yml
+
       # Every combination of probe verdict x effective mount x stack state x
       # override, generated rather than hand-picked. The named rows above cover
       # the incidents; a coverage count showed they reached 14 of 56 tuples.
@@ -86,6 +92,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # The static suite runs Python tests that render playbook tasks and templates with
+      # jinja2 + PyYAML (static/notification-defaults.test.ts). The runner's system python3
+      # is not guaranteed to have them, and those cases would skip; the tests refuse to skip
+      # under CI, so install them here.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Python test dependencies
+        run: python3 -m pip install jinja2 PyYAML
 
       # Incident-derived combination rules (rules-as-code, each cites the
       # incident it encodes). Real tenant host_vars are gitignored, so CI
@@ -581,11 +597,13 @@ jobs:
             FAIL=1
           fi
 
-          # 3. Verify ServiceDefs were copied
-          echo -n "3. ServiceDefs on ciboot... "
+          # 3. Verify complaint types were copied
+          # Complaint types are the leaf rows (those with a department) of ComplaintHierarchy;
+          # the old RAINMAKER-PGR.ServiceDefs master no longer exists.
+          echo -n "3. Complaint types (ComplaintHierarchy leaves) on ciboot... "
           SVCDEFS=$(curl -sS -X POST "$MDMS_URL" -H 'Content-Type: application/json' \
-            -d '{"RequestInfo":{"apiId":"Rainmaker"},"MdmsCriteria":{"tenantId":"ciboot","moduleDetails":[{"moduleName":"RAINMAKER-PGR","masterDetails":[{"name":"ServiceDefs"}]}]}}')
-          SVCDEF_COUNT=$(echo "$SVCDEFS" | jq '[.MdmsRes."RAINMAKER-PGR".ServiceDefs // [] | length] | .[0]')
+            -d '{"RequestInfo":{"apiId":"Rainmaker"},"MdmsCriteria":{"tenantId":"ciboot","moduleDetails":[{"moduleName":"RAINMAKER-PGR","masterDetails":[{"name":"ComplaintHierarchy"}]}]}}')
+          SVCDEF_COUNT=$(echo "$SVCDEFS" | jq '[.MdmsRes."RAINMAKER-PGR".ComplaintHierarchy // [] | map(select(.department)) | length] | .[0]')
           if [ "$SVCDEF_COUNT" -gt 0 ]; then
             echo "OK ($SVCDEF_COUNT complaint types)"
           else

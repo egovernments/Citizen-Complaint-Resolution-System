@@ -17,6 +17,7 @@ import { config } from '../utils/config';
 import { LoginResponseSchema } from '../schemas/user';
 import { SearchServiceResponseSchema } from '../schemas/pgr';
 import { uniqueMobile } from '../utils/mobile';
+import { Admin, adminLogin, createHrmsEmployee, employeeUserInfo } from '../utils/hrms';
 
 // ── Tenant from env ──────────────────────────────────────────
 const TENANT = process.env.TENANT || 'pg.citya';
@@ -25,7 +26,6 @@ const TENANT_LABEL = TENANT.split('.').pop()!.toUpperCase();
 const timestamp = Date.now();
 
 const cityPart = TENANT.includes('.') ? TENANT.split('.').pop()! : TENANT;
-const LOCALITY_CODE = `LOC_${cityPart.toUpperCase()}_1`;
 
 const PGR_ROLES = [
   { code: 'EMPLOYEE', name: 'Employee' },
@@ -36,9 +36,13 @@ const PGR_ROLES = [
   { code: 'SUPERUSER', name: 'Super User' },
 ];
 const rolesForTenant = PGR_ROLES.map(r => ({ ...r, tenantId: TENANT }));
+// The HRMS employee this run creates and acts as.
+const EMPLOYEE_USERNAME = `e2e-${cityPart}-${timestamp}`;
 
+// These requests go straight to PGR, not through Kong, so this userInfo is all PGR knows
+// about the caller (see employeeUserInfo).
 function userInfo(uuid: string) {
-  return { uuid, type: 'EMPLOYEE', tenantId: TENANT, roles: rolesForTenant };
+  return employeeUserInfo(uuid, EMPLOYEE_USERNAME, TENANT, rolesForTenant);
 }
 function reqInfo(token: string, uuid: string) {
   return { ...createRequestInfo({ authToken: token }), userInfo: userInfo(uuid) };
@@ -52,13 +56,14 @@ describe(`PGR E2E — ${TENANT}`, () => {
   const { ports } = config;
 
   // ADMIN bootstrap state
+  let admin: Admin;
   let adminToken: string;
-  let adminUuid: string;
 
   // Test employee state
   let accessToken: string;
   let userUuid: string;
   let userName: string;
+  let localityCode: string;
 
   // PGR state
   let serviceRequestId: string;
@@ -76,17 +81,10 @@ describe(`PGR E2E — ${TENANT}`, () => {
   // ── Step 1: Bootstrap — login as ADMIN, fetch master data, create HRMS employee
   describe('Step 1: Create HRMS Employee', () => {
     test('should login as ADMIN', async () => {
-      const r = await fetch(`${config.baseUrl}:${ports.user}/user/oauth/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=' },
-        body: new URLSearchParams({ username: 'ADMIN', password: 'eGov@123', grant_type: 'password', scope: 'read', tenantId: STATE, userType: 'EMPLOYEE' }),
-      });
-      expect(r.ok).toBe(true);
-      const data = await r.json() as any;
-      adminToken = data.access_token;
-      adminUuid = data.UserRequest?.uuid;
+      admin = await adminLogin(STATE);
+      adminToken = admin.token;
       expect(adminToken).toBeDefined();
-      console.log(`ADMIN logged in, UUID: ${adminUuid}`);
+      console.log(`ADMIN logged in, UUID: ${admin.uuid}`);
     });
 
     test('should fetch ServiceDefs, departments, and designations from MDMS', async () => {
@@ -129,61 +127,25 @@ describe(`PGR E2E — ${TENANT}`, () => {
       const deptCode: string = (global as any).__testDeptCode;
       const desigs: any[] = (global as any).__testDesigs;
       const desig = pick(desigs);
-      userName = `e2e-${cityPart}-${timestamp}`;
-      const mobile = uniqueMobile();
+      userName = EMPLOYEE_USERNAME;
+      // The complaint is filed at this leaf (Step 4). The jurisdiction is the root of the
+      // leaf's own tree, so PGR's scoped search covers it.
+      localityCode = await db.leafBoundaryCode(TENANT);
+      const root = await db.rootBoundaryOf(TENANT, localityCode);
 
-      console.log(`Creating HRMS employee: ${userName}, dept=${deptCode}, desig=${desig.code}`);
-
-      const r = await api.post(ports.hrms, '/egov-hrms/employees/_create', {
-        RequestInfo: {
-          ...createRequestInfo({ authToken: adminToken }),
-          userInfo: { uuid: adminUuid, type: 'EMPLOYEE', tenantId: STATE, roles: [{ code: 'SUPERUSER', name: 'Super User', tenantId: STATE }] },
-        },
-        Employees: [{
-          tenantId: TENANT,
-          code: userName,
-          employeeStatus: 'EMPLOYED',
-          employeeType: 'PERMANENT',
-          dateOfAppointment: 1704067200000,
-          assignments: [{ fromDate: 1704067200000, isCurrentAssignment: true, department: deptCode, designation: desig.code }],
-          jurisdictions: [{ hierarchy: 'ADMIN', boundaryType: 'City', boundary: TENANT, tenantId: TENANT, roles: rolesForTenant }],
-          user: {
-            name: `${TENANT_LABEL} E2E Employee`,
-            userName,
-            mobileNumber: mobile,
-            active: true,
-            type: 'EMPLOYEE',
-            tenantId: TENANT,
-            roles: rolesForTenant,
-            password: 'TempHRMS@999',
-            otpReference: '12345',
-          },
-          serviceHistory: [], education: [], tests: [],
-        }],
-      }, { timeout: 30000 });
-
-      if (!r.ok) console.log('HRMS create:', JSON.stringify(r.data, null, 2).slice(0, 800));
-      expect(r.ok).toBe(true);
-
-      const emps = (r.data as any).Employees || [];
-      expect(emps.length).toBe(1);
-      userUuid = emps[0].user.uuid;
+      console.log(`Creating HRMS employee: ${userName}, dept=${deptCode}, desig=${desig.code}, jurisdiction=${root.code}`);
+      ({ uuid: userUuid } = await createHrmsEmployee(admin, {
+        tenantId: TENANT,
+        userName,
+        name: `${TENANT_LABEL} E2E Employee`,
+        mobileNumber: uniqueMobile(),
+        roles: rolesForTenant,
+        department: deptCode,
+        designation: desig.code,
+        jurisdiction: root,
+      }));
       console.log(`HRMS employee created: ${userName}, UUID: ${userUuid}, dept: ${deptCode}`);
-
-      // HRMS ignores the password we passed — set real password via _update
-      const searchR = await api.post(ports.hrms, `/egov-hrms/employees/_search?tenantId=${TENANT}&codes=${userName}`, {
-        RequestInfo: { ...createRequestInfo({ authToken: adminToken }), userInfo: { uuid: adminUuid, type: 'EMPLOYEE', tenantId: STATE, roles: [{ code: 'SUPERUSER', name: 'Super User', tenantId: STATE }] } },
-      });
-      const empData = (searchR.data as any).Employees?.[0];
-      if (empData?.id) {
-        empData.user.password = 'eGov@123';
-        await api.post(ports.hrms, '/egov-hrms/employees/_update', {
-          RequestInfo: { ...createRequestInfo({ authToken: adminToken }), userInfo: { uuid: adminUuid, type: 'EMPLOYEE', tenantId: STATE, roles: [{ code: 'SUPERUSER', name: 'Super User', tenantId: STATE }] } },
-          Employees: [empData],
-        });
-        console.log(`Password set for ${userName}`);
-      }
-    }, 30000);
+    }, 120000);
   });
 
   // ── Step 2: Login as the HRMS employee ─────────────────────
@@ -235,6 +197,7 @@ describe(`PGR E2E — ${TENANT}`, () => {
   describe('Step 4: Create PGR Complaint', () => {
     test('should create complaint', async () => {
       const serviceCode = (global as any).__testServiceCode || 'StreetLightNotWorking';
+      const LOCALITY_CODE = localityCode;
       const r = await api.post(ports.pgr, `/pgr-services/v2/request/_create?tenantId=${TENANT}`, {
         RequestInfo: reqInfo(accessToken, userUuid),
         service: {
@@ -279,8 +242,14 @@ describe(`PGR E2E — ${TENANT}`, () => {
   // ── Step 5: Search ─────────────────────────────────────────
   describe('Step 5: Search Complaint', () => {
     test('should find by serviceRequestId', async () => {
-      await new Promise(r => setTimeout(r, 3000));
-      const r = await api.post(ports.pgr, `/pgr-services/v2/request/_search?tenantId=${TENANT}&serviceRequestId=${serviceRequestId}`, { RequestInfo: reqInfo(accessToken, userUuid) });
+      // Poll: the first scoped search is cold (HRMS lookup, boundary expansion, MDMS), and
+      // HRMS persists the employee just created asynchronously, so one early attempt can
+      // time out or resolve an empty scope.
+      let r = await api.post(ports.pgr, `/pgr-services/v2/request/_search?tenantId=${TENANT}&serviceRequestId=${serviceRequestId}`, { RequestInfo: reqInfo(accessToken, userUuid) }, { timeout: 30000 });
+      for (let i = 0; i < 15 && !(r.ok && (r.data as any)?.ServiceWrappers?.length); i++) {
+        await new Promise(res => setTimeout(res, 2000));
+        r = await api.post(ports.pgr, `/pgr-services/v2/request/_search?tenantId=${TENANT}&serviceRequestId=${serviceRequestId}`, { RequestInfo: reqInfo(accessToken, userUuid) }, { timeout: 30000 });
+      }
       expect(r.ok).toBe(true);
       const parsed = SearchServiceResponseSchema.safeParse(r.data);
       expect(parsed.success).toBe(true);
@@ -289,7 +258,7 @@ describe(`PGR E2E — ${TENANT}`, () => {
         currentServiceData = parsed.data.ServiceWrappers[0].service;
         console.log(`Found. Status: ${currentServiceData.applicationStatus}`);
       }
-    });
+    }, 90000);
 
     test('should appear in tenant-wide search', async () => {
       const r = await api.post(ports.pgr, `/pgr-services/v2/request/_search?tenantId=${TENANT}`, { RequestInfo: reqInfo(accessToken, userUuid) });

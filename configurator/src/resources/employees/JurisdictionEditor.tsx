@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { uniqueBy } from '@/lib/uniqueBy';
 import type { EmployeeJurisdiction } from '@/api/types';
+import { pickerChoices } from '@/lib/systemRecords';
 
 export interface JurisdictionEditorProps {
   source?: string;
@@ -88,11 +89,15 @@ export function JurisdictionEditor({
   // the hierarchyType string, so the collapsed option drives it identically.
   const hierarchyChoices = useMemo(() => {
     if (!hierarchies) return [] as { value: string; label: string }[];
-    return uniqueBy(
-      hierarchies.map((h) => ({ value: h.hierarchyType, label: h.hierarchyType })),
+    return pickerChoices(
+      uniqueBy(
+        hierarchies.map((h) => ({ value: h.hierarchyType, label: h.hierarchyType })),
+        (c) => c.value,
+      ),
       (c) => c.value,
+      rows.map((row) => row.hierarchyType),
     );
-  }, [hierarchies]);
+  }, [hierarchies, rows]);
 
   // Keyed by hierarchyType, first definition wins — deliberately the same
   // survivor `hierarchyChoices` keeps, so the levels the cascade renders belong

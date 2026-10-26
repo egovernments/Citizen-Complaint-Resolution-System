@@ -149,13 +149,13 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         const response = await Digit.UploadServices.Filestorage("property-upload", ready, tenantId);
         const fileStoreId = response?.data?.files?.[0]?.fileStoreId;
         if (!fileStoreId) throw new Error("no fileStoreId");
-        trackEvent("pgr.file-complaint.photo.uploaded", { category: "pgr", label: ready === file ? "original" : "scaled" });
+        trackEvent("complaint:photo_upload_success", { label: ready === file ? "original" : "scaled" });
         // Named as uploaded: a scaled photo went up as a .jpg.
         onChange((prev) =>
           prev.map((p) => (p.id === photo.id ? { ...p, status: "done", fileStoreId, size: ready.size, name: ready.name } : p))
         );
       } catch {
-        trackEvent("pgr.file-complaint.photo.upload-failed", { category: "pgr" });
+        trackEvent("complaint:photo_upload_fail");
         onChange((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "failed" } : p)));
       }
     },
@@ -170,19 +170,19 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
     for (const file of files) {
       if (!/^image\/(jpeg|png|jpg)$/i.test(file.type)) {
         setNotice(tr("CS_PHOTO_TYPE", "Only JPG or PNG photos can be attached."));
-        trackEvent("pgr.file-complaint.photo.rejected", { category: "pgr", label: "type" });
+        trackEvent("complaint:photo_reject", { label: "type" });
         continue;
       }
       if (file.size > MAX_PICK_BYTES) {
         setNotice(tr("CS_PHOTO_TOO_LARGE", "That photo is over 5 MB. Choose a smaller one."));
-        trackEvent("pgr.file-complaint.photo.rejected", { category: "pgr", label: "size" });
+        trackEvent("complaint:photo_reject", { label: "size" });
         continue;
       }
       accepted.push(file);
     }
     if (accepted.length > room) {
       setNotice(tr("CS_PHOTO_LIMIT", `You can attach up to ${MAX_PHOTOS} photos.`));
-      trackEvent("pgr.file-complaint.photo.rejected", { category: "pgr", label: "limit" });
+      trackEvent("complaint:photo_reject", { label: "limit" });
     }
     const picked = accepted.slice(0, Math.max(0, room)).map((file) => ({
       file,
@@ -238,9 +238,9 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         disabled={full}
         leading={<CameraGlyph />}
         onClick={() => setSheetOpen(true)}
-        data-analytics-event="pgr.file-complaint.photo.open"
+        data-analytics-event="complaint:photo_picker_open"
       >
-        {tr("CS_ADDCOMPLAINT_UPLOAD_PHOTO", "Upload photo")}
+        {tr("CS_PHOTO_ADD", "Add a photo")}
       </Button>
 
       {/* Desktop: click or drop. */}
@@ -249,7 +249,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         role="button"
         tabIndex={full ? -1 : 0}
         aria-disabled={full}
-        data-analytics-event="pgr.file-complaint.photo.browse"
+        data-analytics-event="complaint:photo_browse_click"
         onClick={() => !full && galleryRef.current?.click()}
         onKeyDown={(event) => {
           if (!full && (event.key === "Enter" || event.key === " ")) {
@@ -267,7 +267,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
           setDragging(false);
           if (full) return;
           // A drop is no click, so the shim cannot see it.
-          trackEvent("pgr.file-complaint.photo.dropped", { category: "pgr", value: event.dataTransfer.files?.length || 0 });
+          trackEvent("complaint:photo_drop", { value: event.dataTransfer.files?.length || 0 });
           addFiles(event.dataTransfer.files);
         }}
       >
@@ -276,7 +276,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         </span>
         <span className="cms-drop-label">{tr("CS_PHOTO_DROP", "Click to upload or drag and drop a photo")}</span>
         <span className="cms-drop-hint">
-          {tr("CS_PHOTO_RULES", "JPG or PNG, up to 5 MB each")}
+          {tr("CS_PHOTO_RULES", "A photo helps us understand your concern better. You can upload a JPG or PNG up to 5 MB")}
         </span>
       </div>
 
@@ -306,7 +306,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
                   type="button"
                   className="cms-link-button cms-retry"
                   onClick={() => retry(photo)}
-                  data-analytics-event="pgr.file-complaint.photo.retry"
+                  data-analytics-event="complaint:photo_upload_retry"
                 >
                   <RetryGlyph />
                   {tr("CS_COMMON_RETRY", "Retry")}
@@ -316,7 +316,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
                 type="button"
                 className="cms-link-button"
                 onClick={() => remove(photo.id)}
-                data-analytics-event="pgr.file-complaint.photo.remove"
+                data-analytics-event="complaint:photo_remove"
               >
                 {tr("CS_COMMON_REMOVE", "Remove")}
               </button>
@@ -329,14 +329,14 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         <div className="cms-sheet-overlay" onMouseDown={(event) => event.target === event.currentTarget && setSheetOpen(false)}>
           <div ref={sheetRef} tabIndex={-1} className="cms-sheet cms-photo-sheet" role="dialog" aria-modal="true" aria-labelledby="cms-photo-title">
             <h2 id="cms-photo-title" className="cms-sheet-head">
-              {tr("CS_PHOTO_SHEET_TITLE", "Upload a photo")}
+              {tr("CS_PHOTO_SHEET_TITLE", "Add a photo")}
             </h2>
             <div className="cms-sheet-options">
               <button
                 type="button"
                 className="cms-sheet-option"
                 onClick={() => cameraRef.current?.click()}
-                data-analytics-event="pgr.file-complaint.photo.camera"
+                data-analytics-event="complaint:photo_camera_click"
               >
                 <CameraGlyph />
                 {tr("CS_PHOTO_TAKE", "Take a photo")}
@@ -345,7 +345,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
                 type="button"
                 className="cms-sheet-option"
                 onClick={() => galleryRef.current?.click()}
-                data-analytics-event="pgr.file-complaint.photo.gallery"
+                data-analytics-event="complaint:photo_gallery_click"
               >
                 <ImageGlyph />
                 {tr("CS_PHOTO_GALLERY", "Choose from gallery")}
@@ -356,7 +356,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
               width="full"
               className="cms-sheet-cancel"
               onClick={() => setSheetOpen(false)}
-              data-analytics-event="pgr.file-complaint.photo.cancel"
+              data-analytics-event="complaint:photo_picker_cancel"
             >
               {tr("CS_COMMON_CANCEL", "Cancel")}
             </Button>

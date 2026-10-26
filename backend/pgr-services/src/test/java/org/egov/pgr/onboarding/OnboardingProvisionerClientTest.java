@@ -19,8 +19,11 @@ public class OnboardingProvisionerClientTest {
     private final ObjectMapper mapper=new ObjectMapper();
     private HttpServer server; private OnboardingProvisionerClient client; private OnboardingRepository repository;
     private ObjectNode user; private JsonNode lastWrite; private int detailsStatus=200, writeStatus=200, loginStatus=200, writes, details, logins;
-    private String malformedDetails; private OnboardingSignup signup; private OnboardingOperation operation;
+    private String malformedDetails, writeError="{\"Errors\":[{\"code\":\"EMPLOYEE_ALREADY_EXISTS\"}]}"; private OnboardingSignup signup; private OnboardingOperation operation;
     private static final List<String> ROLES=List.of("MDMS_ADMIN","ACCOUNT_ADMIN","LOC_ADMIN","HRMS_ADMIN");
+    /** Inline mocks keep every call they record, platform-baseline payloads included, until cleared:
+     *  without this the onboarding package outgrows a 512 MB test heap. */
+    @After public void releaseMocks() { framework().clearInlineMocks(); }
     @Before public void setup() throws Exception {
         user=mapper.valueToTree(Map.of("uuid","live-provisioner","userName","fixture","tenantId","pg","type","EMPLOYEE","active",true,
                 "roles",ROLES.stream().map(code->Map.of("code",code,"tenantId","pg")).toList()));
@@ -31,7 +34,7 @@ public class OnboardingProvisionerClientTest {
         server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
         server.createContext("/user/oauth/token",e->{logins++;respond(e,loginStatus,loginStatus!=200?"{\"error\":\"invalid_grant\",\"error_description\":\"Account locked\"}":mapper.writeValueAsString(Map.of("access_token","fixture-only","UserRequest",Map.of("uuid","cached-claim","roles",ROLES))));});
         server.createContext("/user/_details",e->{details++;e.getRequestBody().readAllBytes();respond(e,detailsStatus,malformedDetails!=null?malformedDetails:mapper.writeValueAsString(Map.of("UserRequest",user)));});
-        server.createContext("/",e->{lastWrite=mapper.readTree(e.getRequestBody());writes++;respond(e,writeStatus,writeStatus==200?"{}":"{\"Errors\":[{\"code\":\"EMPLOYEE_ALREADY_EXISTS\"}]}");});
+        server.createContext("/",e->{lastWrite=mapper.readTree(e.getRequestBody());writes++;respond(e,writeStatus,writeStatus==200?"{}":writeError);});
         server.start();String base="http://127.0.0.1:"+server.getAddress().getPort();
         var env=new MockEnvironment().withProperty("pgr.onboarding.provisioner.username","fixture").withProperty("pgr.onboarding.provisioner.password","fixture-only")
                 .withProperty("pgr.onboarding.provisioner.tenant-id","pg");
@@ -106,11 +109,30 @@ public class OnboardingProvisionerClientTest {
         assertEquals(0,writes);assertEquals(0,details);
     }
     @Test public void nestedTenantMismatchAndDifferentFounderCannotEscapeScope(){
-        String code="FOUNDER_"+signup.getId().toString().replace("-","");
-        var employee=Map.of("tenantId","newtown","code",code,"user",Map.of("tenantId","newtown","userName",code,"roles",List.of(Map.of("code","SUPERUSER","tenantId","other"))));
+        var employee=Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","EMP_0001","roles",List.of(Map.of("code","SUPERUSER","tenantId","other"))));
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(employee))));
         assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","other","user",Map.of("tenantId","newtown","userName","other"))))));
+        // #2456: no more FOUNDER_ codes, and the username is the code.
+        String old=OnboardingSteps.legacyFounderCode(signup.getId());
+        assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code",old,"user",Map.of("tenantId","newtown","userName",old))))));
+        for(String userName:List.of("anita.wanjiru","emp_0001","Admin@x"))
+            assertThrows(OnboardingFailure.class,()->client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName",userName))))));
         assertEquals(0,writes);assertEquals(0,details);
+    }
+    @Test public void seedUpgradeMayDeleteOnlyTheTenantNameKeyAndBustTheCacheButNeverWriteBoundaries(){
+        boolean[] lease={true};var upgrade=new OnboardingProgress.WriteScope(signup.getId(),"newtown",BaselineUpgrader.STEP,()->lease[0]);
+        Map<String,Object> nameKey=Map.of("code","TENANT_TENANTS_NEWTOWN","module","rainmaker-common","locale","en_KE");
+        client.write(upgrade,"localization","/localization/messages/v1/_delete",Map.of("tenantId","newtown","messages",List.of(nameKey)));
+        client.write(upgrade,"localization","/localization/messages/cache-bust",Map.of());assertEquals(2,writes);
+        for(var other:List.of(Map.of("code","CS_COMMON_SUBMIT","module","rainmaker-common","locale","en_IN"),Map.of("code","TENANT_TENANTS_NEWTOWN","module","rainmaker-pgr","locale","en_KE")))
+            assertThrows(OnboardingFailure.class,()->client.write(upgrade,"localization","/localization/messages/v1/_delete",Map.of("tenantId","newtown","messages",List.of(other))));
+        assertThrows(OnboardingFailure.class,()->client.write(upgrade,"localization","/localization/messages/v1/_delete",Map.of("tenantId","other","messages",List.of(nameKey))));
+        assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"localization","/localization/messages/v1/_delete",Map.of("tenantId","newtown","messages",List.of(nameKey))));
+        assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"localization","/localization/messages/cache-bust",Map.of()));
+        assertThrows(OnboardingFailure.class,()->client.write(upgrade,"boundary","/boundary-service/boundary/_create",Map.of("Boundary",List.of(Map.of("tenantId","newtown","code","newtown")))));
+        assertEquals(2,writes);
+        lease[0]=false;assertEquals("ONBOARDING_LEASE_LOST",assertThrows(OnboardingFailure.class,()->client.write(upgrade,"localization","/localization/messages/cache-bust",Map.of())).getCode());
+        assertEquals(2,writes);
     }
     @Test public void expiredLeaseAndLeaseLostDuringAuthBothStopWrites(){
         when(repository.authorizesSignupWrite(any(),any(),anyInt(),any(),anyString(),anyString(),anyLong())).thenReturn(false);
@@ -121,6 +143,9 @@ public class OnboardingProvisionerClientTest {
     @Test public void errorEnvelopePreservesDuplicateClassificationAndServerFailuresRetry(){
         writeStatus=400;var rejected=assertThrows(OnboardingFailure.class,this::encrypt);assertEquals("EMPLOYEE_ALREADY_EXISTS",rejected.getCode());assertFalse(rejected.isRetryable());
         writeStatus=503;assertTrue(assertThrows(OnboardingFailure.class,this::encrypt).isRetryable());
+        writeStatus=400;writeError="{\"Errors\":[{\"code\":\"ERR_HRMS_USER_EXIST_MOB\"},{\"code\":\"ERR_HRMS_USER_EXIST_USERNAME\"}]}";
+        rejected=assertThrows(OnboardingFailure.class,this::encrypt);assertEquals("ERR_HRMS_USER_EXIST_MOB",rejected.getCode());
+        assertEquals(List.of("ERR_HRMS_USER_EXIST_MOB","ERR_HRMS_USER_EXIST_USERNAME"),rejected.getCodes());
     }
     @Test public void explicitReadIsSeparateAndCannotReachWritePaths(){
         client.read("hrms","/egov-hrms/employees/_search?tenantId=newtown&offset=0&limit=2",Map.of());assertEquals(0,details);
@@ -144,6 +169,18 @@ public class OnboardingProvisionerClientTest {
         client.write(scope("PLATFORM_BASELINE"),"localization","/localization/messages/v1/_upsert",Map.of("tenantId","newtown","messages",List.of(otp)));
         assertEquals(1,writes);
     }
+    @Test public void seedUpgradeMayOnlyDeactivateARevokedGrant(){
+        boolean[] lease={true};var upgrade=new OnboardingProgress.WriteScope(signup.getId(),"newtown",BaselineUpgrader.STEP,()->lease[0]);
+        String path="/egov-mdms-service/v2/_update/"+BaselineUpgrader.ROLE_ACTIONS;
+        java.util.function.BiFunction<String,Boolean,Map<String,Object>> grant=(id,active)->Map.of("Mdms",Map.of("tenantId","newtown","schemaCode",BaselineUpgrader.ROLE_ACTIONS,
+                "uniqueIdentifier",id,"isActive",active,"data",Map.of("rolecode",id.split("\\.")[0],"actionid",Integer.parseInt(id.split("\\.")[1]),"tenantId","newtown")));
+        client.write(upgrade,"mdms",path,grant.apply("CSR.605",false));assertEquals(1,writes);
+        assertThrows(OnboardingFailure.class,()->client.write(upgrade,"mdms",path,grant.apply("CSR.605",true)));      // never (re)activate
+        assertThrows(OnboardingFailure.class,()->client.write(upgrade,"mdms",path,grant.apply("CSR.2006",false)));    // only a revoked grant
+        assertThrows(OnboardingFailure.class,()->client.write(upgrade,"mdms",path,grant.apply("SUPERUSER.605",false)));
+        assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"mdms",path,grant.apply("CSR.605",false))); // only during an upgrade
+        assertEquals(1,writes);
+    }
     @Test public void legitimateSignupActionsPassThroughLiveAuthorization(){
         client.write(scope("TENANT_FOUNDATION"),"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code","tenant.tenants")));
         client.write(scope("TENANT_FOUNDATION"),"mdms","/egov-mdms-service/v2/_create/tenant.tenants",Map.of("Mdms",Map.of("tenantId","newtown","schemaCode","tenant.tenants","uniqueIdentifier","newtown","data",Map.of("code","newtown"))));
@@ -154,8 +191,7 @@ public class OnboardingProvisionerClientTest {
         client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary-hierarchy-definition/_create",Map.of("BoundaryHierarchy",Map.of("tenantId","newtown","hierarchyType",OnboardingSteps.WORKSPACE_HIERARCHY)));
         client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary/_create",Map.of("Boundary",List.of(Map.of("tenantId","newtown","code","newtown"))));
         client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary-relationships/_create",Map.of("BoundaryRelationship",Map.of("tenantId","newtown","code","newtown","hierarchyType",OnboardingSteps.WORKSPACE_HIERARCHY,"boundaryType","ROOT")));
-        String founder="FOUNDER_"+signup.getId().toString().replace("-","");
-        client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code",founder,"user",Map.of("tenantId","newtown","userName",founder)))));
+        client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code","EMP_0001","user",Map.of("tenantId","newtown","userName","EMP_0001")))));
         assertEquals(10,writes);assertEquals(writes,details);assertEquals(1,logins);
     }
 
@@ -186,4 +222,42 @@ public class OnboardingProvisionerClientTest {
         assertTrue(expected>900);assertEquals(expected,writes);assertEquals(expected,details);
     }
 
+    /** NOTIFICATION_DEFAULTS may create its own schemas and the packaged seed rows verbatim — nothing else, never an update. */
+    @SuppressWarnings("unchecked")
+    @Test public void notificationDefaultsWriteOnlyTheirSchemasAndSeedRowsVerbatim() throws Exception {
+        var defaults=new NotificationDefaults(mapper); var scope=scope(NotificationDefaultsStep.STEP);
+        String roleActions="ACCESSCONTROL-ROLEACTIONS.roleactions", templates="NOTIFICATIONS.Template";
+        java.util.function.BiFunction<String,Map<String,Object>,Map<String,Object>> mdmsRow=(schema,data)->Map.of("Mdms",
+                Map.of("tenantId","newtown","schemaCode",schema,"uniqueIdentifier","x","isActive",true,"data",data));
+        Map<String,Object> roleAction=mapper.convertValue(defaults.data(defaults.recordsBySchema().get(roleActions).get(0),"newtown"),Map.class);
+        Map<String,Object> template=mapper.convertValue(defaults.data(defaults.recordsBySchema().get(templates).get(0),"newtown"),Map.class);
+
+        JsonNode packaged=null;for(JsonNode schema:defaults.schemas())if(templates.equals(schema.path("code").asText()))packaged=schema.path("definition");
+        Map<String,Object> definition=mapper.convertValue(packaged,Map.class);
+        client.write(scope,"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code",templates,"definition",definition,"description",templates,"isActive",true)));
+        client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+roleActions,mdmsRow.apply(roleActions,roleAction));
+        client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+templates,mdmsRow.apply(templates,template));
+        assertEquals(3,writes);
+
+        Map<String,Object> widened=new LinkedHashMap<>(roleAction); widened.put("rolecode","CITIZEN");
+        Map<String,Object> otherTenant=new LinkedHashMap<>(roleAction); otherTenant.put("tenantId","othertown");
+        Map<String,Object> rewritten=new LinkedHashMap<>(template); rewritten.put("body","Send your OTP to this number");
+        Map<String,Object> loosened=new LinkedHashMap<>(definition); loosened.remove("required"); loosened.put("additionalProperties",true);
+        List<Runnable> refused=List.of(
+                ()->client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+roleActions,mdmsRow.apply(roleActions,widened)),
+                ()->client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+roleActions,mdmsRow.apply(roleActions,otherTenant)),
+                ()->client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+templates,mdmsRow.apply(templates,rewritten)),
+                ()->client.write(scope,"mdms","/egov-mdms-service/v2/_update/"+templates,mdmsRow.apply(templates,template)),
+                ()->client.write(scope,"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code","common-masters.StateInfo","definition",Map.of()))),
+                ()->client.write(scope,"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code",templates,"definition",Map.of()))),
+                ()->client.write(scope,"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code",templates,"definition",loosened))),
+                ()->client.write(scope,"mdms","/egov-mdms-service/v2/_create/common-masters.StateInfo",mdmsRow.apply("common-masters.StateInfo",Map.of("code","newtown"))),
+                ()->client.write(scope,"localization","/localization/messages/v1/_upsert",Map.of("tenantId","newtown","messages",List.of())));
+        for(Runnable write:refused)
+            assertEquals("SIGNUP_WRITE_SCOPE_DENIED",assertThrows(OnboardingFailure.class,write::run).getCode());
+        assertEquals("nothing refused reached a service",3,writes);
+        // And the baseline step may not write notification rows (the scope names its step).
+        assertEquals("SIGNUP_WRITE_SCOPE_DENIED",assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"mdms",
+                "/egov-mdms-service/v2/_create/"+templates,mdmsRow.apply(templates,template))).getCode());
+    }
 }

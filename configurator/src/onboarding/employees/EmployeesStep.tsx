@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, FileText, LayoutGrid, Network, Plus, Users } from 'lucide-react';
 import { useApp } from '../../App';
 import type { Employee } from '@/api/types';
+import { isInviteUnfinished } from '@/identity/memberActions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog';
@@ -12,58 +14,125 @@ import { EmptyState, OptionCard, StepActions } from '../StepParts';
 import { adjacentSteps, stepById } from '../steps';
 import { probeGate, useStepProbe } from '../stepProbe';
 import { describeSaveError } from '../errors';
-import { reportStepError, trackStepAction } from '../telemetry';
+import { reportStepError, trackMethod, trackRecordSave } from '../telemetry';
+import { track } from '@/lib/analytics';
+import { useOnboardingT, type OnboardingT } from '../i18n';
+import { blockingError, stepKeys, STEP_QUERY_OPTIONS } from '../stepQueries';
+import { RefreshNotice } from '../RefreshNotice';
 import { EmployeeDialog } from './EmployeeDialog';
 import BulkEmployeeImport from './BulkEmployeeImport';
+import { InviteState } from './InviteState';
+import {
+  activationNotNeeded,
+  describeInviteError,
+  inviteStatus,
+  loadMembers,
+  resendInvite,
+  sendInvite,
+  type InviteStatus,
+} from './inviteStatus';
 import {
   addEmployee,
   currentAssignment,
   listEmployees,
   loadEmployeeOptions,
   removeEmployee,
+  updateEmployeeDetails,
   suggestEmployeeCode,
-  type EmployeeOptions,
+  type EmailOutcome,
+  type EmployeeChanges,
   type NewEmployee,
 } from './employeesApi';
 
 const STEP = stepById('employees');
+
+/** What the update toast adds about a new email. */
+function emailOutcome(email: EmailOutcome, t: OnboardingT): string | undefined {
+  if (email === 'verification_sent') return t('employees.email_verification_sent', 'We sent a link to the new email. It takes effect once they confirm it.');
+  if (email === 'invited') return t('employees.email_reinvited', 'Their invitation now goes to the new email.');
+  return undefined;
+}
+
+/** Under the edit dialog's title: what a new email does for someone in this state. */
+function emailNote(kind: InviteStatus['kind'], t: OnboardingT): string | undefined {
+  if (kind === 'active') return t('employees.email_note_active', 'A new email is confirmed by a link sent to it.');
+  if (kind === 'invited') return t('employees.email_note_invited', 'A new email replaces their invitation with one sent to it.');
+  return undefined;
+}
 const DEPARTMENTS = stepById('departments');
 const { previous, next } = adjacentSteps('employees');
 
 export default function EmployeesStep() {
   const { state, completePhase } = useApp();
+  const t = useOnboardingT();
   const navigate = useNavigate();
   const tenant = state.targetTenant || state.tenant;
   const done = state.completedPhases.includes(STEP.number);
 
-  const [options, setOptions] = useState<EmployeeOptions | null>(null);
-  const [employees, setEmployees] = useState<Employee[] | null>(null);
-  // Every code HRMS holds, removed employees' included.
-  const [codes, setCodes] = useState<string[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  const queryClient = useQueryClient();
   const [bulk, setBulk] = useState(false);
+  const openBulk = () => {
+    setBulk(true);
+    trackMethod('employees', 'bulk');
+  };
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Employee | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([loadEmployeeOptions(tenant), listEmployees(tenant)])
-      .then(([loadedOptions, loadedEmployees]) => {
-        if (cancelled) return;
-        setOptions(loadedOptions);
-        setEmployees(loadedEmployees.active);
-        setCodes(loadedEmployees.codes);
-        setLoadError(null);
-      })
-      .catch((err) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tenant, reloadKey]);
+  const optionsQuery = useQuery({
+    queryKey: stepKeys.employeeOptions(tenant),
+    queryFn: () => loadEmployeeOptions(tenant),
+    ...STEP_QUERY_OPTIONS,
+  });
+  const employeesQuery = useQuery({
+    queryKey: stepKeys.employees(tenant),
+    queryFn: () => listEmployees(tenant),
+    ...STEP_QUERY_OPTIONS,
+  });
+  // Sign-in state by DIGIT uuid, from the identity BFF. It loads apart from HRMS, so a failure
+  // here only hides the states and the list still works.
+  const membersQuery = useQuery({
+    queryKey: stepKeys.members(tenant),
+    queryFn: () =>
+      loadMembers(tenant).catch((err: unknown) => {
+        reportStepError('employees', 'load_members', err, tenant);
+        throw err;
+      }),
+    ...STEP_QUERY_OPTIONS,
+  });
 
-  const reload = () => setReloadKey((key) => key + 1);
+  const options = optionsQuery.data ?? null;
+  const employees = employeesQuery.data?.active ?? null;
+  // Every code HRMS holds, removed employees' included.
+  const codes = employeesQuery.data?.codes ?? [];
+  const loadError = blockingError(optionsQuery) ?? blockingError(employeesQuery);
+  // A refresh failed with the last load still on screen.
+  const refreshFailed = optionsQuery.isRefetchError || employeesQuery.isRefetchError;
+  const memberIndex = membersQuery.data ?? null;
+  // A failed refresh counts too: the statuses shown would be the last load's.
+  const membersFailed = membersQuery.isError;
+  // Options cached before the account had a department, still being refetched. Drawn as they
+  // are, the step would say "create a department first" until the refetch lands, right after
+  // the user added one. (Areas only fill one field of the dialog, which says they're loading.)
+  const optionsOutdated = optionsQuery.isFetching && !!options && options.departments.length === 0;
+
+  // An employee change can't affect departments, designations or areas, so only the employee
+  // list and the invite states reload; the options are the slowest load. The table keeps
+  // showing while the fresh load comes in behind it.
+  const reload = () =>
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: stepKeys.employees(tenant) }),
+      queryClient.invalidateQueries({ queryKey: stepKeys.members(tenant) }),
+    ]);
+  const reloadMembers = () => void queryClient.invalidateQueries({ queryKey: stepKeys.members(tenant) });
+  const retryLoads = () => void Promise.all([optionsQuery.refetch(), employeesQuery.refetch()]);
+  const uuidOf = (employee: Employee) => employee.user?.uuid || employee.uuid;
+  const memberOf = (employee: Employee) => {
+    const uuid = uuidOf(employee);
+    return uuid ? memberIndex?.get(uuid) : undefined;
+  };
+  /** null while the member list is loading or failed to load. */
+  const statusOf = (employee: Employee): InviteStatus | null => (memberIndex ? inviteStatus(memberOf(employee)) : null);
 
   const names = useMemo(() => {
     const of = (list: { code: string; name: string }[] | undefined) => new Map((list ?? []).map((item) => [item.code, item.name]));
@@ -80,26 +149,112 @@ export default function EmployeesStep() {
   const { probe, recheck } = useStepProbe(state.tenant, 'EMPLOYEES', others.map((employee) => employee.code).join(','));
   const gate = probeGate(
     'EMPLOYEES',
-    { ready: others.length > 0, hint: others.length === 0 ? 'Add at least one employee to continue.' : undefined },
+    { ready: others.length > 0, hint: others.length === 0 ? t('employees.continue_hint', 'Add at least one employee to continue.') : undefined },
     probe,
+    t,
   );
 
   const add = async (input: NewEmployee) => {
     if (!options) return;
-    const created = await addEmployee(tenant, input, options).catch((err: unknown) => {
+    let created: Employee;
+    let inviteError: unknown = null;
+    try {
+      created = await addEmployee(tenant, input, options);
+    } catch (err) {
       reportStepError('employees', 'create_employee', err, tenant);
-      throw err;
-    });
-    trackStepAction('employees', 'entity_create', 'employee', {
-      tenant,
-      source: 'form',
-      departments: input.departments.length,
+      // HRMS has them but the invitation didn't go out. They are added: list them, with the
+      // invite on their row, rather than offer a retry that would add them a second time (#2456).
+      if (!isInviteUnfinished(err)) throw err;
+      created = err.employee as unknown as Employee;
+      inviteError = err.reason;
+    }
+    trackRecordSave('employees', 'employee', 'create', {
       roles: input.roles.length,
       jurisdictions: input.jurisdictions.length,
-      email: !!input.emailId,
+      has_email: !!input.emailId,
+      invited: !inviteError,
     });
-    toast({ title: `${created.user.name} added`, description: `They sign in as ${created.user.userName}.` });
+    toast(
+      inviteError
+        ? {
+            variant: 'destructive',
+            title: t('employees.added_not_invited', '%{name} added, but not invited', { name: created.user.name }),
+            description: t('employees.invite_from_row', '%{reason} They’re on your list now: use Edit or Send invite on their row to finish.', {
+              reason: describeInviteError(inviteError, t),
+            }),
+          }
+        : {
+            title: t('common.added_named', '%{name} added', { name: created.user.name }),
+            description: t('employees.signs_in_with_email', 'They sign in with %{email}.', { email: created.user.emailId || input.emailId || '' }),
+          },
+    );
     reload();
+  };
+
+  const update = async (employee: Employee, changes: EmployeeChanges) => {
+    if (!options) return;
+    const { email } = await updateEmployeeDetails(employee, changes, options, statusOf(employee)).catch((err: unknown) => {
+      reportStepError('employees', 'update_employee', err, tenant);
+      throw err;
+    });
+    trackRecordSave('employees', 'employee', 'update', {
+      roles: changes.roles.length,
+      jurisdictions: changes.jurisdictions.length,
+      outcome: email,
+    });
+    toast({ title: t('common.updated_named', '%{name} updated', { name: changes.name }), description: emailOutcome(email, t) });
+    reload();
+  };
+
+  // One email action per row: resend to an active or invited member, otherwise invite.
+  const emailAction = async (employee: Employee, status: InviteStatus) => {
+    const name = employee.user?.name ?? employee.code;
+    const member = memberOf(employee);
+    const resending = !!member && (status.kind === 'active' || status.kind === 'invited');
+    setSending(employee.code);
+    try {
+      if (resending) {
+        const { email, activationEmail } = await resendInvite(employee, member);
+        track('onboarding:invite_send', { outcome: 'resent', link: activationEmail });
+        toast({
+          title: t('employees.email_sent', 'Email sent to %{email}', { email }),
+          description:
+            activationEmail === 'password_setup'
+              ? t('employees.link_set_password', 'It has a link to set their password.')
+              : t('employees.link_confirm_email', 'It has a link to confirm their email address.'),
+        });
+      } else {
+        const { email, invited } = await sendInvite(employee, status.kind !== 'none');
+        track('onboarding:invite_send', { outcome: status.kind === 'none' ? 'sent' : 'sent_again' });
+        toast({
+          title: t('employees.invitation_sent', 'Invitation sent to %{email}', { email }),
+          description: invited
+            ? t('employees.has_account_sees_invite', '%{name} already has an account, so they’ll see the invitation when they next sign in.', { name })
+            : t('employees.link_set_password', 'It has a link to set their password.'),
+        });
+        reloadMembers();
+      }
+    } catch (err) {
+      if (resending && activationNotNeeded(err)) {
+        toast(
+          status.kind === 'active'
+            ? {
+                title: t('employees.already_set_up', '%{name} has already set up sign-in', { name }),
+                description: t('employees.nothing_to_resend', 'There’s nothing to resend.'),
+              }
+            : {
+                title: t('employees.already_has_account', '%{name} already has an account', { name }),
+                description: t('employees.sees_invite_next_sign_in', 'They’ll see the invitation when they next sign in.'),
+              },
+        );
+      } else {
+        reportStepError('employees', resending ? 'resend_invite' : 'send_invite', err, tenant);
+        track('onboarding:invite_send', { outcome: 'failed' });
+        toast({ variant: 'destructive', title: t('employees.email_not_sent', 'The email wasn’t sent'), description: describeInviteError(err, t) });
+      }
+    } finally {
+      setSending(null);
+    }
   };
 
   // The confirm dialog shows a thrown error and stays open, so the wording is set here.
@@ -108,17 +263,17 @@ export default function EmployeesStep() {
       await removeEmployee(employee);
     } catch (err) {
       reportStepError('employees', 'delete_employee', err, tenant);
-      throw new Error(describeSaveError(err, 'Removing failed. Try again.'));
+      throw new Error(describeSaveError(err, t('common.remove_failed', 'Removing failed. Try again.'), t));
     }
-    trackStepAction('employees', 'entity_delete', 'employee', { tenant });
-    toast({ title: `${employee.user.name} removed` });
+    trackRecordSave('employees', 'employee', 'delete');
+    toast({ title: t('common.removed_named', '%{name} removed', { name: employee.user.name }) });
     reload();
   };
 
-  const loaded = options !== null && employees !== null;
+  const loaded = options !== null && employees !== null && !optionsOutdated;
   const header = (
-    <StepHeader eyebrow="Your organisation" title="Employees" done={done}>
-      The people who will use your complaint system.
+    <StepHeader eyebrow={t('step.your_account', 'Your account')} title={t('steps.employees', 'Employees')} done={done}>
+      {t('employees.intro', 'The people who will use your complaint system.')}
     </StepHeader>
   );
 
@@ -128,9 +283,9 @@ export default function EmployeesStep() {
         {header}
         <Alert variant="destructive">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-            <span>Couldn’t load your employees. {loadError}</span>
-            <Button variant="outline" size="sm" onClick={reload}>
-              Try again
+            <span>{t('employees.load_failed', 'Couldn’t load your employees.')} {loadError}</span>
+            <Button variant="outline" size="sm" onClick={retryLoads}>
+              {t('common.try_again', 'Try again')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -152,13 +307,16 @@ export default function EmployeesStep() {
     return (
       <div className="space-y-8">
         {header}
-        <EmptyState icon={Network} title="You will have to create a department first">
-          Everyone you add belongs to a department, so there needs to be at least one before you can start adding
-          employees.
+        {refreshFailed && <RefreshNotice onRetry={retryLoads} />}
+        <EmptyState icon={Network} title={t('employees.needs_department_title', 'You will have to create a department first')}>
+          {t(
+            'employees.needs_department_body',
+            'Everyone you add belongs to a department, so there needs to be at least one before you can start adding employees.',
+          )}
         </EmptyState>
         <div className="flex justify-center">
           <Button onClick={() => navigate(DEPARTMENTS.path)} className="gap-2">
-            Add departments
+            {t('employees.add_departments', 'Add departments')}
             <ArrowRight className="w-4 h-4" />
           </Button>
         </div>
@@ -169,11 +327,14 @@ export default function EmployeesStep() {
   if (bulk) {
     return (
       <div className="space-y-6">
-        <StepHeader eyebrow="Employees" title="Upload your staff list" done={done}>
-          Get a template with your departments, designations, roles and areas built in, fill it, and upload it.
+        <StepHeader eyebrow={t('steps.employees', 'Employees')} title={t('employees.bulk_title', 'Upload your staff list')} done={done}>
+          {t('employees.bulk_intro', 'Get a template with your departments, designations, roles and areas built in, fill it, and upload it.')}
         </StepHeader>
         <BulkEmployeeImport
-          onCancel={() => setBulk(false)}
+          onCancel={() => {
+            setBulk(false);
+            trackMethod('employees', 'bulk', true);
+          }}
           onDone={() => {
             setBulk(false);
             reload();
@@ -186,20 +347,29 @@ export default function EmployeesStep() {
   return (
     <div className="space-y-8">
       {header}
+      {refreshFailed && <RefreshNotice onRetry={retryLoads} />}
 
       {others.length === 0 ? (
         <div className="space-y-6">
-          <EmptyState icon={Users} title="No employees yet">
-            These are the people who will handle complaints. Add them one at a time, or upload your staff list.
+          <EmptyState icon={Users} title={t('employees.empty_title', 'No employees yet')}>
+            {t('employees.empty_body', 'These are the people who will handle complaints. Add them one at a time, or upload your staff list.')}
           </EmptyState>
           <section className="space-y-4">
-            <h3 className="text-lg font-semibold text-foreground">How do you want to add your employees?</h3>
+            <h3 className="text-lg font-semibold text-foreground">{t('employees.how_to_add', 'How do you want to add your employees?')}</h3>
             <div className="grid max-w-xl grid-cols-1 gap-4 sm:grid-cols-2">
-              <OptionCard icon={FileText} title="Create manually" action="Start adding" onClick={() => setAdding(true)}>
-                Type in people one at a time.
+              <OptionCard
+                icon={FileText}
+                title={t('common.create_manually', 'Create manually')}
+                action={t('common.start_adding', 'Start adding')}
+                onClick={() => {
+                  setAdding(true);
+                  trackMethod('employees', 'form');
+                }}
+              >
+                {t('employees.manual_body', 'Type in people one at a time.')}
               </OptionCard>
-              <OptionCard icon={LayoutGrid} title="Bulk upload" action="Upload a file" onClick={() => setBulk(true)}>
-                Upload a staff list and we will bring everyone in.
+              <OptionCard icon={LayoutGrid} title={t('common.bulk_upload', 'Bulk upload')} action={t('common.upload_file', 'Upload a file')} onClick={openBulk}>
+                {t('employees.bulk_body', 'Upload a staff list and we will bring everyone in.')}
               </OptionCard>
             </div>
           </section>
@@ -207,15 +377,15 @@ export default function EmployeesStep() {
       ) : (
         <section className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold text-foreground">Employees</h3>
+            <h3 className="text-lg font-semibold text-foreground">{t('steps.employees', 'Employees')}</h3>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{employees.length}</span>
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setBulk(true)} className="h-9 text-primary hover:text-primary">
-                Upload a file
+              <Button variant="ghost" size="sm" onClick={openBulk} className="h-9 text-primary hover:text-primary">
+                {t('common.upload_file', 'Upload a file')}
               </Button>
               <Button size="sm" onClick={() => setAdding(true)} className="h-9 gap-1.5">
                 <Plus className="w-4 h-4" />
-                Add employee
+                {t('employees.add_employee', 'Add employee')}
               </Button>
             </div>
           </div>
@@ -224,14 +394,14 @@ export default function EmployeesStep() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-left text-xs font-medium uppercase tracking-[0.5px] text-muted-foreground">
                 <tr>
-                  <th scope="col" className="hidden sm:table-cell px-4 py-2.5 font-medium">Code</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Name</th>
-                  <th scope="col" className="hidden lg:table-cell px-4 py-2.5 font-medium">Contact</th>
-                  <th scope="col" className="hidden md:table-cell px-4 py-2.5 font-medium">Department</th>
-                  <th scope="col" className="hidden xl:table-cell px-4 py-2.5 font-medium">System roles</th>
-                  <th scope="col" className="hidden xl:table-cell px-4 py-2.5 font-medium">Jurisdictions</th>
+                  <th scope="col" className="hidden sm:table-cell px-4 py-2.5 font-medium">{t('common.code', 'Code')}</th>
+                  <th scope="col" className="px-4 py-2.5 font-medium">{t('common.name', 'Name')}</th>
+                  <th scope="col" className="hidden lg:table-cell px-4 py-2.5 font-medium">{t('employees.contact', 'Contact')}</th>
+                  <th scope="col" className="hidden md:table-cell px-4 py-2.5 font-medium">{t('departments.department', 'Department')}</th>
+                  <th scope="col" className="hidden xl:table-cell px-4 py-2.5 font-medium">{t('employees.system_roles', 'System roles')}</th>
+                  <th scope="col" className="hidden xl:table-cell px-4 py-2.5 font-medium">{t('employees.jurisdictions', 'Jurisdictions')}</th>
                   <th scope="col" className="px-4 py-2.5">
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t('common.actions', 'Actions')}</span>
                   </th>
                 </tr>
               </thead>
@@ -252,9 +422,17 @@ export default function EmployeesStep() {
                       <td className="px-4 py-3">
                         <span className="block font-medium text-foreground">
                           {employee.user?.name}
-                          {self && <span className="ml-1.5 text-xs font-normal text-muted-foreground">(you)</span>}
+                          {self && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{t('employees.you', '(you)')}</span>}
                         </span>
                         <span className="block text-xs text-muted-foreground">{employee.user?.userName}</span>
+                        {!self && statusOf(employee) && (
+                          <InviteState
+                            status={statusOf(employee)!}
+                            name={employee.user?.name ?? employee.code}
+                            busy={sending === employee.code}
+                            onAction={() => void emailAction(employee, statusOf(employee)!)}
+                          />
+                        )}
                         <span className="block md:hidden text-xs text-muted-foreground">
                           {department}
                           {designation && ` · ${designation}`}
@@ -271,14 +449,29 @@ export default function EmployeesStep() {
                       <td className="hidden xl:table-cell px-4 py-3 text-xs text-muted-foreground">{roles || '—'}</td>
                       <td className="hidden xl:table-cell px-4 py-3 text-xs text-muted-foreground">{areas || '—'}</td>
                       <td className="px-2 py-2 text-right whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditing(employee)}
+                          aria-label={t('common.edit_named', 'Edit %{name}', { name: employee.user?.name ?? employee.code })}
+                        >
+                          {t('common.edit', 'Edit')}
+                        </Button>
                         {!self && (
                           <DeleteConfirmDialog
-                            title={`Remove ${employee.user?.name}?`}
-                            description={`${employee.user?.name} won’t be able to sign in or handle complaints after this.`}
+                            title={t('common.remove_confirm', 'Remove %{name}?', { name: employee.user?.name ?? employee.code })}
+                            description={t('employees.remove_effect', '%{name} won’t be able to sign in or handle complaints after this.', {
+                              name: employee.user?.name ?? employee.code,
+                            })}
                             onConfirm={() => remove(employee)}
                             trigger={
-                              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" aria-label={`Remove ${employee.user?.name}`}>
-                                Remove
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                aria-label={t('common.remove_named', 'Remove %{name}', { name: employee.user?.name ?? employee.code })}
+                              >
+                                {t('common.remove', 'Remove')}
                               </Button>
                             }
                           />
@@ -290,6 +483,14 @@ export default function EmployeesStep() {
               </tbody>
             </table>
           </div>
+          {membersFailed && (
+            <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {t('employees.invites_load_failed', 'Couldn’t load invitation status.')}
+              <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={reloadMembers}>
+                {t('common.try_again', 'Try again')}
+              </Button>
+            </p>
+          )}
         </section>
       )}
 
@@ -305,18 +506,27 @@ export default function EmployeesStep() {
         />
         {gate.canRecheck && (
           <Button variant="ghost" size="sm" onClick={recheck}>
-            Check again
+            {t('probe.check_again', 'Check again')}
           </Button>
         )}
       </div>
 
       <EmployeeDialog
-        open={adding}
+        open={adding || !!editing}
         options={options}
         suggestedCode={suggestEmployeeCode(codes)}
         takenCodes={new Set(codes)}
-        onOpenChange={setAdding}
+        employee={editing ?? undefined}
+        emailLocked={!!editing && isSelf(editing)}
+        emailNote={editing ? emailNote(statusOf(editing)?.kind ?? 'active', t) : undefined}
+        optionsRefreshing={optionsQuery.isFetching}
+        onOpenChange={(open) => {
+          if (open) return;
+          setAdding(false);
+          setEditing(null);
+        }}
         onSave={add}
+        onUpdate={update}
       />
     </div>
   );

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { currentPersonLease, LeaseBusyError, withPersonLease } from "../accounts/person-lease.js";
 import { config } from "../../infrastructure/config.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
+import { readWorkspaceTrial, type WorkspaceTrial } from "../workspace-trial/trial.js";
 import type { UserRepresentation } from "../sync/keycloak-writer.js";
 import { createdId, findUser, paged, readUser } from "../../integrations/keycloak/admin-api.js";
 
@@ -364,6 +365,7 @@ export interface OrganizationMapping {
   parentTenantId: null;
   fallbackTenantIds: string[];
   mappingType: "organization";
+  trial: WorkspaceTrial | null;
 }
 
 function asMapping(organization: OrganizationRepresentation): OrganizationMapping | null {
@@ -386,6 +388,7 @@ function asMapping(organization: OrganizationRepresentation): OrganizationMappin
     parentTenantId: null,
     fallbackTenantIds: organization.attributes?.["digit.fallbackTenantIds"] || [],
     mappingType: "organization",
+    trial: readWorkspaceTrial(organization.attributes),
   };
 }
 
@@ -423,6 +426,8 @@ export interface OrganizationGroupMapping {
   parentTenantId: string;
   fallbackTenantIds: string[];
   mappingType: "organization-group";
+  /** The parent Organization's trial: a group is locked with its workspace. */
+  trial: WorkspaceTrial | null;
 }
 
 export type TenantMapping = OrganizationMapping | OrganizationGroupMapping;
@@ -480,6 +485,7 @@ function asGroupMapping(
     parentTenantId,
     fallbackTenantIds: group.attributes?.["digit.fallbackTenantIds"] || [],
     mappingType: "organization-group",
+    trial: organization.trial,
   };
 }
 
@@ -971,7 +977,7 @@ function verifiedPhoneOwner(user: UserRepresentation, phoneNumber: string): bool
     user.attributes?.[PHONE_VERIFIED_ATTRIBUTE]?.includes("true") === true;
 }
 
-function phoneIdentityUser(user: UserRepresentation, created: boolean): PhoneIdentityUser {
+export function phoneIdentityUser(user: UserRepresentation, created: boolean): PhoneIdentityUser {
   if (!user.id || user.enabled === false) {
     throw new IdentityAdminError("The Keycloak user for this phone number is disabled", 403);
   }

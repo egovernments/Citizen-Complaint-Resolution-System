@@ -12,6 +12,12 @@ import { execFileSync } from 'child_process';
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
+// js-yaml is a declared devDependency, typed here instead of through @types/js-yaml:
+// only safeLoad is used, and only on files from this repository.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const yaml: { safeLoad(src: string): unknown } = require('js-yaml');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const readYaml = (rel: string): any => yaml.safeLoad(read(rel));
 
 describe('default-data-handler tenant template', () => {
   // ethiopia inherited pg's Indian pincodes [143001-143005] from this
@@ -347,10 +353,10 @@ describe('example host_vars pass preflight.py (#2271)', () => {
     expect(unexpected).toEqual([]);
   });
 
-  test('preflight.py mirrors the D26 refusal in the playbook', () => {
+  test('preflight.py mirrors the Keycloak refusal in the playbook', () => {
     const script = read('local-setup/scripts/preflight.py');
     const playbook = read('local-setup/ansible/playbook-deploy.yml');
-    expect(playbook).toContain('- name: "preflight — identity requires enable_keycloak: true"');
+    expect(playbook).toContain('- name: "preflight — Keycloak is mandatory (refuse enable_keycloak: false)"');
     expect(script).toMatch(/"identity-needs-keycloak"/);
     const selfTest = execFileSync('python3', ['local-setup/scripts/preflight.py', '--self-test'],
       { cwd: REPO_ROOT, encoding: 'utf8' });
@@ -673,11 +679,10 @@ describe('Keycloak realm proxy client address', () => {
   test('Keycloak public paths win over the stock Novu dashboard /auth/ catch-all', () => {
     const stock = nginx.slice(nginx.indexOf('# Novu dashboard (SPA) — STOCK image.'));
     expect(stock).toMatch(/\n  location \/auth\/ \{\n    proxy_pass http:\/\/127\.0\.0\.1:14000;/);
-    expect(nginx.indexOf('{% if enable_keycloak | default(false) %}\n  # Keycloak\'s public surface'))
-      .toBeGreaterThan(-1);
+    expect(nginx.indexOf("\n\n  # Keycloak's public surface")).toBeGreaterThan(-1);
+    expect(nginx).not.toContain('enable_keycloak');
     expect(nginx).not.toContain('unsafe to combine with Keycloak');
     const playbook = read('local-setup/ansible/playbook-deploy.yml');
-    expect(playbook).toContain("nginx routes Keycloak's /auth/realms/ and\n          /auth/resources/ ahead of the stock dashboard's /auth/ paths");
     expect(playbook).not.toContain('until the frontend cutover');
   });
 });
@@ -1131,23 +1136,31 @@ describe('notification stack images come from one build', () => {
   const CHARTS = [
     'devops/deploy-as-code/charts/urban/pgr-services',
     'devops/deploy-as-code/charts/common-services/novu-bridge',
+    'devops/deploy-as-code/charts/common-services/digit-user-preferences-service',
   ];
-  // The app image (top-level `image:`) and the Flyway image (initContainers.dbMigration
-  // .image) of a chart, read from its values.yaml by layout (no YAML parser is a declared
-  // dependency here). A null means the layout moved: fix the pattern, do not drop the test.
+  // The app image (top-level `image`) and the Flyway image (initContainers.dbMigration
+  // .image) of a chart, from its values.yaml: <chart> and <chart>-db.
   const chartImages = (dir: string) => {
-    const v = read(`${dir}/values.yaml`);
-    const app = v.match(/^image:\n {2}repository: "[^"]+"\n {2}tag: "([^"]+)"[^\n]*\n {2}pullPolicy: (\S+)/m);
-    const db = v.match(/^ {4}image:\n {6}repository: "[^"]+-db"\n {6}tag: "([^"]+)"[^\n]*\n {6}pullPolicy: (\S+)/m);
-    expect(app).not.toBeNull();
-    expect(db).not.toBeNull();
-    return { app: { tag: app![1], pullPolicy: app![2] }, db: { tag: db![1], pullPolicy: db![2] } };
+    const v = readYaml(`${dir}/values.yaml`);
+    const app = v.image;
+    const db = v.initContainers?.dbMigration?.image;
+    expect(app?.repository).toBe(path.basename(dir));
+    expect(db?.repository).toBe(`${path.basename(dir)}-db`);
+    return {
+      app: { tag: String(app.tag), pullPolicy: app.pullPolicy },
+      db: { tag: String(db.tag), pullPolicy: db.pullPolicy },
+    };
   };
+  // digit-user-preferences-service and its migrator ride the same tag: every 2.12 tag of
+  // that image is the Go service, so a stack pinned to develop-<sha8> must not leave the
+  // pair on a rolling default of its own (review of #2368).
   const images: Array<[string, string, string]> = [
     [base, 'PGR_SERVICES_IMAGE', 'egovio/pgr-services'],
     [base, 'NOVU_BRIDGE_IMAGE', 'egovio/novu-bridge'],
+    [base, 'DIGIT_USER_PREFERENCES_SERVICE_IMAGE', 'egovio/digit-user-preferences-service'],
     [migrations, 'PGR_SERVICES_DB_IMAGE', 'egovio/pgr-services-db'],
     [migrations, 'NOVU_BRIDGE_DB_IMAGE', 'egovio/novu-bridge-db'],
+    [migrations, 'DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE', 'egovio/digit-user-preferences-service-db'],
   ];
   // The default tag of one image line: ${OVERRIDE:-<image>:${NOTIFICATION_STACK_TAG:-<tag>}}.
   const composeDefault = (file: string, override: string, image: string) => {
@@ -1166,9 +1179,9 @@ describe('notification stack images come from one build', () => {
   });
 
   // The release step (build/NIGHTLY-BUILDS.md) swaps the stopgap rolling default for an
-  // immutable develop-<sha8> in SIX places — four compose lines and two charts. Bumping
-  // only some of them is exactly the split build this block exists to prevent.
-  test('all four images default to ONE tag, in compose and in both Helm charts', () => {
+  // immutable develop-<sha8> in six compose lines and three charts. Bumping only some of
+  // them is exactly the split build this block exists to prevent.
+  test('every stack image defaults to ONE tag, in compose and in every stack Helm chart', () => {
     const tags = new Set(images.map(([file, override, image]) => composeDefault(file, override, image)));
     for (const dir of CHARTS) {
       const { app, db } = chartImages(dir);
@@ -1182,10 +1195,71 @@ describe('notification stack images come from one build', () => {
     expect(env).toContain("NOTIFICATION_STACK_TAG={{ notification_stack_tag | default('') }}");
   });
 
+  // Every image line that defaults to ${NOTIFICATION_STACK_TAG}, found in the compose files
+  // themselves rather than taken from the list above, so a new follower cannot join the
+  // stack without the release step, the registry check and the preflight learning of it.
+  const followers = () => [base, migrations].flatMap((file) =>
+    [...file.matchAll(/image: \$\{(\w+):-egovio\/([\w-]+):\$\{NOTIFICATION_STACK_TAG:-[^}]+\}\}/g)]
+      .map((m) => m[2])).sort();
+  const nightly = read('build/NIGHTLY-BUILDS.md');
+  const releaseStep = nightly.slice(nightly.indexOf('### Release step: pin the notification stack'));
+  const releaseSteps = releaseStep.slice(0, releaseStep.indexOf('\n### ', 1));
+
+  test('the list above is every image that follows NOTIFICATION_STACK_TAG', () => {
+    expect(followers()).toEqual(images.map(([, , image]) => image.replace('egovio/', '')).sort());
+  });
+
+  test('the release step names every follower: registry check, edit list and leftover grep', () => {
+    const loop = releaseSteps.match(/for img in ([^;]+); do/);
+    expect(loop).not.toBeNull();
+    expect(loop![1].replace(/\\\n/g, ' ').split(/\s+/).filter(Boolean).sort()).toEqual(followers());
+    // Compose lines, two values per chart, and enable-notifications.sh's default.
+    const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+      'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen'];
+    const count = releaseSteps.match(/in these \*\*(\w+)\*\* values/);
+    expect(count).not.toBeNull();
+    expect(WORDS.indexOf(count![1])).toBe(followers().length + 2 * CHARTS.length + 1);
+    const grep = releaseSteps.match(/grep -n 'nightly-develop'[^`]*?\| grep -E '([^']+)'/);
+    expect(grep).not.toBeNull();
+    for (const dir of CHARTS) {
+      expect(releaseSteps).toContain(`\`${dir}/values.yaml\``);
+      expect(grep![0]).toContain(`${dir}/values.yaml`);
+    }
+    for (const image of followers()) {
+      const service = image.replace(/-db$/, '');
+      expect(releaseSteps).toContain(`\`${image.endsWith('-db') ? `${service}-migration` : service}\``);
+      expect(grep![1].split('|')).toContain(service);
+    }
+  });
+
+  test('the deploy preflight checks every follower for partial pins and rolling tags', () => {
+    const play = read('local-setup/ansible/playbook-deploy.yml');
+    const task = play.slice(play.indexOf('- name: "preflight — notification-stack images: resolve what each one will run"'));
+    const repos = task.match(/ {8}_repos:\n((?: {10}\w+: egovio\/[\w-]+\n)+)/);
+    expect(repos).not.toBeNull();
+    const pairs = [...repos![1].matchAll(/(\w+): egovio\/([\w-]+)/g)].map((m) => [m[1], m[2]]);
+    expect(pairs.map(([, image]) => image).sort()).toEqual(followers());
+    const inUse = task.slice(0, task.indexOf('_repos:'));
+    for (const [v, image] of pairs) {
+      // The host_vars pin the preflight reads is the one the image catalog writes to .env.
+      expect(catalog).toMatch(new RegExp(`\\{image: ${image}, env: \\w+, var: ${v}[,}]`));
+      expect(inUse).toContain(`'${v}'`);
+    }
+  });
+
   // Kanav/Vinoth review of #2097: the charts pulled a rolling tag with Always while
   // env.yaml forced `nightly-develop` over any chart pin. The charts now default to
   // IfNotPresent and switch to Always only for a rolling tag, and env.yaml leaves the tag
   // to the charts unless a deployment pins one.
+  test.each(CHARTS)('%s takes global.notificationStackTag for the app and its migrator', (chartDir) => {
+    const tpl = read(`${chartDir}/templates/deployment.yaml`);
+    expect(tpl).toContain('{{- $stackTag := (.Values.global | default dict).notificationStackTag -}}');
+    expect(tpl).toContain('{{- $_ := set .Values.image "tag" $stackTag }}');
+    expect(tpl).toContain('{{- $_ := set .Values.initContainers.dbMigration.image "tag" $stackTag }}');
+    // Before common.name merges the env.yaml per-chart overrides, so those still win.
+    expect(tpl.indexOf('$stackTag')).toBeLessThan(tpl.indexOf('include "common.name"'));
+  });
+
   test.each(CHARTS)('%s pulls IfNotPresent unless the tag is rolling', (chartDir) => {
     const { app, db } = chartImages(chartDir);
     expect(app.pullPolicy).toBe('IfNotPresent');
@@ -1199,6 +1273,188 @@ describe('notification stack images come from one build', () => {
     const m = read('devops/deploy-as-code/charts/environments/env.yaml').match(/^ {2}notificationStackTag: "([^"]*)"/m);
     expect(m).not.toBeNull();
     expect(m![1]).not.toMatch(/^(latest|nightly-.*|develop|main|master)$/);
+  });
+});
+
+describe('digit-user-preferences-service runs the implementation its definition is written for', () => {
+  // #1982 rewrote the service from Go to Spring Boot and rewrote its compose and Helm
+  // definitions to match, but both kept defaulting to 2.12-5137119: the Go binary.
+  // It reads only DB_*, so under the Spring definition it dialled localhost:5432 and
+  // exited, never turned healthy, and novu-bridge's depends_on then failed the whole
+  // `compose up` of every enable_novu deploy. These tie the default image to the
+  // implementation in backend/, and the definition to what that implementation reads.
+  const SRC = 'backend/digit-user-preferences-service';
+  const CHART = 'devops/deploy-as-code/charts/common-services/digit-user-preferences-service';
+  const base = read('local-setup/docker-compose.egov-digit.yaml');
+  const migrations = read('local-setup/docker-compose.migrations.yml');
+  const baseY = readYaml('local-setup/docker-compose.egov-digit.yaml');
+  const migrationsY = readYaml('local-setup/docker-compose.migrations.yml');
+  const props = read(`${SRC}/src/main/resources/application.properties`);
+  const values = readYaml(`${CHART}/values.yaml`);
+
+  // Every tag this image was published under before the rewrite is the Go binary: the
+  // 2.12 release (2.12-5137119, v2.12, v2.12.x) and the master channel (master-*). The
+  // set is closed, so a release cut from the Java tree needs no edit here. What stops a
+  // release from forgetting this image is that both its defaults follow the notification
+  // stack's one tag (the block above), which the release step pins in one go.
+  const GO_BUILD_TAG = /^(2\.12(-[0-9a-f]+)?|v2\.12(\.\d+)*|master(-.*)?)$/;
+
+  // A compose service's environment as a map, whichever form (map or KEY=VALUE list) it
+  // is written in. Values arrive as YAML scalars, so a trailing comment is not part of one.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const envOf = (compose: any, service: string): Record<string, string> => {
+    const svc = compose?.services?.[service];
+    expect(svc).toBeDefined();
+    const e = svc.environment ?? {};
+    const pairs: Array<[string, unknown]> = Array.isArray(e)
+      ? e.map((kv: string) => (kv.includes('=') ? [kv.slice(0, kv.indexOf('=')), kv.slice(kv.indexOf('=') + 1)] : [kv, '']))
+      : Object.entries(e);
+    return Object.fromEntries(pairs.map(([k, v]) => [k, v == null ? '' : String(v)]));
+  };
+  const composeTag = (file: string, env: string, image: string) =>
+    file.match(new RegExp(`image: \\$\\{${env}:-egovio/${image}:\\$\\{NOTIFICATION_STACK_TAG:-([^}\\s]+)\\}\\}`))?.[1] ?? null;
+  const service = baseY.services['digit-user-preferences-service'];
+  const env = { ...envOf(baseY, 'digit-user-preferences-service'), ...envOf(migrationsY, 'digit-user-preferences-service') };
+
+  test('the source is the Spring Boot service, and CI builds that tree into the image', () => {
+    expect(fs.existsSync(path.join(REPO_ROOT, SRC, 'pom.xml'))).toBe(true);
+    expect(fs.existsSync(path.join(REPO_ROOT, SRC, 'go.mod'))).toBe(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const builds = (readYaml('build/build-config.yml').config as any[]).flatMap((c) => c.build ?? []);
+    expect(builds.filter((b) => b['work-dir'] === SRC)).toEqual([
+      expect.objectContaining({ 'image-name': 'digit-user-preferences-service', dockerfile: 'build/maven/Dockerfile' }),
+    ]);
+    expect(builds.filter((b) => b['work-dir'] === `${SRC}/src/main/resources/db`)).toEqual([
+      expect.objectContaining({ 'image-name': 'digit-user-preferences-service-db' }),
+    ]);
+  });
+
+  test('compose defaults the service and its migrator to the stack tag, never a Go build', () => {
+    const app = composeTag(base, 'DIGIT_USER_PREFERENCES_SERVICE_IMAGE', 'digit-user-preferences-service');
+    const db = composeTag(migrations, 'DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE', 'digit-user-preferences-service-db');
+    expect(app).not.toBeNull();
+    expect(db).toBe(app);
+    expect(app).not.toMatch(GO_BUILD_TAG);
+    expect(service.image).toBe(`\${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:\${NOTIFICATION_STACK_TAG:-${app}}}`);
+  });
+
+  test('the Helm chart defaults the app and its db-migration init container to one build, never a Go one', () => {
+    const app = String(values.image?.tag);
+    expect(values.image?.repository).toBe('digit-user-preferences-service');
+    expect(values.initContainers?.dbMigration?.image?.repository).toBe('digit-user-preferences-service-db');
+    expect(String(values.initContainers?.dbMigration?.image?.tag)).toBe(app);
+    expect(app).not.toMatch(GO_BUILD_TAG);
+    expect(values.appType).toBe('java-spring');
+    // A rolling default must not stick on a node that pulled it once.
+    const tpl = read(`${CHART}/templates/deployment.yaml`);
+    expect(tpl).toContain('range $img := list .Values.image .Values.initContainers.dbMigration.image');
+    expect(tpl).toContain('$_ := set $img "pullPolicy" "Always"');
+  });
+
+  // V20260205120000__create_user_preference.sql was edited after it shipped (#2081 added
+  // the duplicate collapse), and the develop chart ran the 2.12 -db image until #2368, so
+  // a cluster's history can hold the earlier checksum. With validation on, Flyway stops at
+  // "Migration checksum mismatch for migration version 20260205120000" and the pod never
+  // leaves Init (review of #2368). Compose has always migrated with validation off.
+  test('both migrators skip checksum validation; the Helm one otherwise keeps the common env', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const entries = (tpl: string): any[] => yaml.safeLoad(tpl.replace(/\{\{[^}]*\}\}/g, 'TEMPLATED')) as any[];
+    const common = entries(readYaml('devops/deploy-as-code/charts/common/values.yaml').initContainers.dbMigration.env);
+    const own = entries(values.initContainers?.dbMigration?.env ?? '');
+    expect(own).toEqual([...common, { name: 'FLYWAY_VALIDATE_ON_MIGRATE', value: 'false' }]);
+    expect(envOf(migrationsY, 'digit-user-preferences-service-migration').FLYWAY_VALIDATE_ON_MIGRATE).toBe('false');
+  });
+
+  test('every variable compose sets is one the service, its launcher or the platform reads', () => {
+    // application.properties placeholders, plus what build/maven/start.sh (the CI
+    // Dockerfile's entrypoint) reads. A misspelt key, or one only some other build of
+    // this image understands, is silently ignored at runtime and shows up here instead.
+    const read_ = new Set([
+      ...[...props.matchAll(/\$\{([A-Z][A-Z0-9_]*)/g)].map((m) => m[1]),
+      ...[...read('build/maven/start.sh').matchAll(/\$\{?([A-Z][A-Z0-9_]*)/g)].map((m) => m[1]),
+    ]);
+    // Read by the JVM itself (JAVA_TOOL_OPTIONS) or by the OpenTelemetry javaagent the
+    // stack mounts into its Java services (OTEL_*), not by the application. Sibling Java
+    // services carry them, so adding them here is not a misspelling.
+    const platform = (k: string) => k === 'JAVA_TOOL_OPTIONS' || /^OTEL_[A-Z0-9_]+$/.test(k);
+    expect(Object.keys(env)).toEqual(expect.arrayContaining(
+      ['SERVER_PORT', 'SERVER_CONTEXT_PATH', 'SPRING_DATASOURCE_URL', 'SPRING_DATASOURCE_USERNAME',
+        'SPRING_DATASOURCE_PASSWORD', 'SPRING_FLYWAY_ENABLED']));
+    expect(Object.keys(env).filter((k) => !read_.has(k) && !platform(k))).toEqual([]);
+    expect(env.SPRING_FLYWAY_ENABLED).toBe('false');
+  });
+
+  test('the healthcheck and probes hit where the service serves health, on the port it listens on', () => {
+    expect(props).toMatch(/^server\.port=\$\{SERVER_PORT:8080\}$/m);
+    expect(props).toMatch(/^management\.endpoints\.web\.base-path=\/$/m);
+    expect(props).toMatch(/^management\.endpoints\.web\.exposure\.include=(?:.*,)?health(?:,.*)?$/m);
+    const [kind, cmd] = service.healthcheck?.test ?? [];
+    expect(kind).toBe('CMD-SHELL');
+    const probe = String(cmd).match(/^wget -qO- http:\/\/127\.0\.0\.1:(\d+)(\/\S*) /);
+    expect(probe).not.toBeNull();
+    expect({ port: probe![1], path: probe![2] }).toEqual({ port: env.SERVER_PORT, path: '/health' });
+    expect(values.httpPort).toBe(8080);
+    expect(values.env).toMatch(/^- name: SERVER_PORT\n {2}value: "8080"$/m);
+    expect(values.healthChecks).toMatchObject({ enabled: true, livenessProbePath: '/health', readinessProbePath: '/health' });
+  });
+
+  test("novu-bridge's consent check posts to the path the controller maps", () => {
+    expect(props).toMatch(/^user\.preference\.context-path=\$\{SERVER_CONTEXT_PATH:\/user-preference\}$/m);
+    const controller = read(`${SRC}/src/main/java/org/egov/userpreference/controller/PreferenceController.java`);
+    expect(controller).toContain('@RequestMapping("${user.preference.context-path}/v1")');
+    expect(controller).toContain('@PostMapping("/_search")');
+    const searchPath = `${env.SERVER_CONTEXT_PATH}/v1/_search`;
+    const bridge = envOf(baseY, 'novu-bridge');
+    expect(bridge.NOVU_BRIDGE_PREFERENCE_HOST).toBe(`http://digit-user-preferences-service:${env.SERVER_PORT}`);
+    expect(bridge.NOVU_BRIDGE_PREFERENCE_CHECK_PATH).toBe(searchPath);
+    expect(bridge.NOVU_BRIDGE_PREFERENCE_SEARCH_PATH).toBe(searchPath);
+    const k8s = readYaml('devops/deploy-as-code/charts/environments/env.yaml');
+    expect(values.env).toMatch(/^- name: SERVER_CONTEXT_PATH\n {2}value: "\/user-preference"$/m);
+    expect(k8s['novu-bridge']['preference-check-path']).toBe(searchPath);
+    expect(k8s.configmaps['egov-service-host'].data['digit-user-preferences-service'])
+      .toBe(`http://digit-user-preferences-service.egov:${values.httpPort}/`);
+  });
+});
+
+describe('egovio images publish only from the canonical repository', () => {
+  // Review of #2368: two forks carrying these workflows and egovio push credentials
+  // overwrote egovio/<image>:nightly-develop with their own develop every evening (the Go
+  // digit-user-preferences-service among it) and pushed this repo's develop-<sha8> out of
+  // the keep-5 prune. Checked by numeric id: a name check would skip every build after a
+  // rename or transfer, silently.
+  const CANONICAL_ID = '1009464192'; // gh api repos/egovernments/Citizen-Complaint-Resolution-System --jq .id
+  const wf = (name: string) => readYaml(`.github/workflows/${name}`);
+
+  test('build-images.yml runs no job outside it, for every caller', () => {
+    const { jobs } = wf('build-images.yml');
+    expect(jobs.enumerate.if).toBe(`github.repository_id == '${CANONICAL_ID}'`);
+    // Every other job needs enumerate, directly or through another job; one that
+    // overrides the implicit success() with !cancelled() must check enumerate itself.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const needs = (j: any): string[] => [].concat(j.needs ?? []);
+    const reaches = (name: string): boolean =>
+      name === 'enumerate' || needs(jobs[name]).some((n) => reaches(n));
+    for (const [name, job] of Object.entries(jobs)) {
+      if (name === 'enumerate') continue;
+      expect([name, needs(job).some((n) => reaches(n))]).toEqual([name, true]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cond = String((job as any).if ?? '');
+      if (/cancelled\(\)|always\(\)|failure\(\)/.test(cond)) {
+        expect([name, cond]).toEqual([name, expect.stringContaining("needs.enumerate.result == 'success'")]);
+      }
+    }
+    // Both publishers go through it.
+    for (const caller of ['nightly-build-develop.yml', 'release-build.yml']) {
+      expect(wf(caller).jobs.build.uses).toBe('./.github/workflows/build-images.yml');
+    }
+  });
+
+  test('turbopass-build.yml pushes only from it', () => {
+    const { jobs } = wf('turbopass-build.yml');
+    const step = jobs.tag.steps.find((st: { id?: string }) => st.id === 'tag');
+    expect(step.env.REPOSITORY_ID).toBe('${{ github.repository_id }}');
+    expect(step.run).toContain(`[ "$REPOSITORY_ID" != "${CANONICAL_ID}" ]; then\n  echo "push=false"`);
+    expect(jobs.manifest.if).toBe("needs.tag.outputs.push == 'true'");
   });
 });
 
@@ -1230,6 +1486,45 @@ describe('tenant-master repair is report-only unless opted in', () => {
     expect(restart).toBeGreaterThan(-1);
     expect(wait).toBeGreaterThan(restart);
     expect(playbook.slice(wait, wait + 600)).toContain('/access/health');
+  });
+});
+
+describe('revoked role-action grants are deactivated on every deploy (#2239)', () => {
+  // Review of #2395 (4282485797): CSR -> /user/users/_createnovalidate stayed active on
+  // existing roots while the same deploy started giving CSR to every new employee.
+  const playbook = read('local-setup/ansible/playbook-deploy.yml');
+  const tasks = read('local-setup/ansible/tasks/revoke-role-grants.yml');
+  const sql = read('local-setup/db/revoke-role-grants.sql');
+  const include = playbook.slice(playbook.indexOf('revoke-grants — deactivate role-action grants this release revoked'));
+  const includeTask = include.slice(0, include.indexOf('\n    - name:'));
+
+  test('it runs on every box, pg included', () => {
+    expect(includeTask).toContain('tasks/revoke-role-grants.yml');
+    expect(includeTask).not.toContain('when:');
+  });
+
+  test('it runs after master-repair, so a repair cannot copy a grant back', () => {
+    expect(playbook.indexOf('revoke-grants — deactivate role-action grants')).toBeGreaterThan(
+      playbook.indexOf('master-repair — fail when the tenant cannot be repaired'));
+  });
+
+  test('the SQL only deactivates CSR -> 605 role-actions, and only active ones', () => {
+    expect(sql).toMatch(/UPDATE eg_mdms_data\s+SET isactive = false,/);
+    expect(sql).toContain("WHERE schemacode = 'ACCESSCONTROL-ROLEACTIONS.roleactions'");
+    expect(sql).toMatch(/AND isactive\s/);
+    expect(sql).toContain("IN (('CSR', '605'))");
+    expect(sql).not.toMatch(/\b(DELETE|INSERT)\b/);
+  });
+
+  test('a database error fails the deploy, and a restart is followed by a readiness wait', () => {
+    const run = tasks.slice(tasks.indexOf('revoke-grants — deactivate revoked role-action grants'));
+    expect(run.slice(0, run.indexOf('- name:', 10))).toContain('-v ON_ERROR_STOP=1');
+    expect(run.slice(0, run.indexOf('- name:', 10))).not.toContain('failed_when');
+    const restart = tasks.indexOf('revoke-grants — restart egov-accesscontrol');
+    const wait = tasks.indexOf('revoke-grants — wait for egov-accesscontrol to come back');
+    expect(restart).toBeGreaterThan(-1);
+    expect(wait).toBeGreaterThan(restart);
+    expect(tasks.slice(wait, wait + 600)).toContain('/access/health');
   });
 });
 
@@ -1420,6 +1715,9 @@ describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
     expect(pick).toContain('[notif_seed_tenant | trim] + (notif_complaint_counts.keys()');
     expect(pick).toContain("select('match', '^[A-Za-z][A-Za-z0-9_-]*$')");
     expect(pick).toContain("notifications_seed_exclude | default('(?i)^(PW_|pwt)')");
+    // Self-serve workspaces are seeded by pgr-services at signup, never with the deploy's ADMIN login.
+    expect(pick).toContain("reject('in', notif_workspace_routing.keys()");
+    expect(task('notif-seed — list the self-serve workspaces (pgr-services seeds them at signup)')).toContain('failed_when: false');
     for (const name of [
       'notif-seed — access-control rows (phase 1 of 2)',
       'notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)',
@@ -1597,6 +1895,11 @@ describe('standalone Identity BFF and Keycloak deployment contract', () => {
       'IDENTITY_POLLER_MAX_LAG_SECONDS']) {
       expect(bff).toContain(`${setting}:`);
     }
+    // Empty falls back to identity-bff's default (#2599); a list or a comma string both render as CSV.
+    // A bare host_vars key (None) counts as unset, not as a list to join.
+    expect(env).toContain("{% set configurator_roles = identity_configurator_roles | default('', true) %}");
+    expect(env).toContain('IDENTITY_CONFIGURATOR_ROLES={{ configurator_roles if configurator_roles is string else configurator_roles | join(\',\') }}');
+    expect(bff).toContain('DIGIT_CONFIGURATOR_ROLES: ${IDENTITY_CONFIGURATOR_ROLES:-}');
     expect(bff).not.toMatch(/^ +(?:PGR_)?ONBOARDING_WORKER_\w*:/m);
     for (const removed of ['DIGIT_PROVISIONER_USERNAME', 'DIGIT_MDMS_CREATE_URL']) {
       expect(bff).not.toContain(`${removed}:`);
@@ -1626,8 +1929,7 @@ describe('standalone Identity BFF and Keycloak deployment contract', () => {
     const task = playbook.slice(start, playbook.indexOf('\n\n', start));
     expect(task).toContain('ansible.builtin.debug:');
     expect(task).not.toMatch(/assert:|fail:/);
-    for (const guard of ['enable_keycloak | default(false) | bool',
-      'not (enable_otp_services | default(false) | bool)',
+    for (const guard of ['not (enable_otp_services | default(false) | bool)',
       'not (identity_dev_fixed_otp | default(false) | bool)',
       "not (identity_citizen_otp_sender | default('', true) | length > 0)"]) {
       expect(task).toContain(guard);
@@ -1841,7 +2143,10 @@ describe('D26 legacy identity paths are retired', () => {
     expect(kong).toContain('["/user/oauth/token"]=true');
     expect(kong).toContain('isInternal is not accepted at the public gateway');
     expect(playbook).toContain('identity_legacy_user_endpoints');
-    expect(playbook).toContain('default(not (enable_keycloak | default(false)))');
+    // `| bool` on all three: `-e identity_legacy_user_endpoints=false` is the truthy string "false".
+    expect(playbook.split('when: not (identity_legacy_user_endpoints | default(false) | bool)\n')).toHaveLength(3);
+    expect(playbook.split('when: identity_legacy_user_endpoints | default(false) | bool\n')).toHaveLength(2);
+    expect(playbook).not.toMatch(/identity_legacy_user_endpoints \| default\([^)]*\)(?! \| bool)/);
 
     // Mirror the two Ansible replacements for the Keycloak/default-false
     // configuration: the three native calls leave AUTH_OPTIONAL, the mock
@@ -1860,18 +2165,21 @@ describe('D26 legacy identity paths are retired', () => {
   });
 
   // High 3 (Dhruv, #2271 review 2): with Keycloak off there is no Identity
-  // BFF, so no tenant route resolves and nobody can sign in.
-  test('the deploy refuses enable_keycloak: false and every shipped example turns it on', () => {
-    const preflight = playbook.slice(playbook.indexOf('- name: "preflight — identity requires enable_keycloak: true"'));
-    expect(preflight).toMatch(/^- name: "preflight — identity requires enable_keycloak: true"\n\s+ansible\.builtin\.fail:/);
-    expect(preflight.slice(0, 1500)).toContain("when: not (enable_keycloak | default(false) | bool)");
+  // BFF, so no tenant route resolves and nobody can sign in. Keycloak is now
+  // always deployed; a leftover enable_keycloak: false must stop the deploy.
+  test('Keycloak is unconditional, a leftover enable_keycloak: false is refused, and no example sets it', () => {
+    const name = '- name: "preflight — Keycloak is mandatory (refuse enable_keycloak: false)"';
+    const preflight = playbook.slice(playbook.indexOf(name));
+    expect(preflight.startsWith(`${name}\n      ansible.builtin.fail:`)).toBe(true);
+    expect(preflight.slice(0, 1500)).toContain('when: enable_keycloak is defined and not (enable_keycloak | bool)');
+    expect(playbook).not.toMatch(/enable_keycloak \| default/);
     const dir = 'local-setup/ansible/inventory/host_vars';
     const examples = fs.readdirSync(path.join(REPO_ROOT, dir))
       .filter((f) => f.endsWith('.example') || f === '_example.yml');
     expect(examples.length).toBeGreaterThanOrEqual(6);
     for (const example of examples) {
       const text = read(`${dir}/${example}`);
-      expect([example, text.match(/^enable_keycloak: (\S+)/m)?.[1]]).toEqual([example, 'true']);
+      expect([example, /^enable_keycloak:/m.test(text)]).toEqual([example, false]);
       expect([example, /^\s+keycloak: true\b/m.test(text)]).toEqual([example, true]);
       expect([example, /OTP login works without|inert while enable_keycloak is false|DIGIT keeps working on OTP login/.test(text)])
         .toEqual([example, false]);
@@ -1922,8 +2230,33 @@ describe('D26 legacy identity paths are retired', () => {
   // Low (Dhruv, #2271 review 3): ~38 Playwright navigations across the spec
   // and page files still opened tenantless /digit-ui/<route> URLs, which D26
   // turns into a 404 or a redirect to the deployment default. They go through
-  // appBase() (/<E2E_TENANT_SLUG>/digit-ui) now. The one tenantless URL left
-  // is the static globalConfigs.js that loginViaApi uses to set the origin.
+  // appBase() or surfacePath() (/<IDENTITY_TEST_TENANT_SLUG>/digit-ui) now.
+  // #2398 deleted the city-tenant specs and the HRMS UI checks (HRMS is not
+  // enabled in digit-ui), so fewer navigations remain.
+  // A navigation is either a string/template argument (`goto(`${appBase()}/x`)`)
+  // or a bare surfacePath() call (`goto(surfacePath('citizen', 'login'))`).
+  const scanNavigations = (body: string) => {
+    let scoped = 0;
+    const tenantless: string[] = [];
+    for (const m of body.matchAll(/goto\(\s*([`'"])([^`'"]*)/g)) {
+      if (m[2].includes('${appBase()}') || m[2].includes('${surfacePath(')) scoped += 1;
+      if (/^(?:\$\{[A-Za-z_.]+\})?\/digit-ui\//.test(m[2]) && !m[2].endsWith('/digit-ui/globalConfigs.js')) {
+        tenantless.push(m[2]);
+      }
+    }
+    scoped += [...body.matchAll(/goto\(\s*surfacePath\(/g)].length;
+    return { scoped, tenantless };
+  };
+
+  test('the navigation scan counts both argument forms and flags tenantless routes', () => {
+    expect(scanNavigations([
+      "await page.goto(surfacePath('citizen', 'login'), { waitUntil: 'domcontentloaded' });",
+      'await page.goto(`${appBase()}/citizen`);',
+      'await page.goto(`${BASE_URL}${surfacePath(\'employee\', \'user/login\')}`);',
+      "await page.goto('/digit-ui/employee/pgr/inbox');",
+    ].join('\n'))).toEqual({ scoped: 3, tenantless: ['/digit-ui/employee/pgr/inbox'] });
+  });
+
   test('Playwright specs navigate only to tenant-scoped digit-ui routes', () => {
     const e2eDir = path.join(REPO_ROOT, 'local-setup/tests/e2e');
     const files = (fs.readdirSync(e2eDir, { recursive: true }) as string[])
@@ -1932,16 +2265,13 @@ describe('D26 legacy identity paths are retired', () => {
     let scoped = 0;
     for (const file of files) {
       const body = fs.readFileSync(path.join(e2eDir, file), 'utf8');
-      for (const m of body.matchAll(/goto\(\s*([`'"])([^`'"]*)/g)) {
-        if (m[2].includes('${appBase()}')) scoped += 1;
-        if (/^(?:\$\{[A-Za-z_.]+\})?\/digit-ui\//.test(m[2]) && !m[2].endsWith('/digit-ui/globalConfigs.js')) {
-          tenantless.push(`${file}: ${m[2]}`);
-        }
-      }
+      const found = scanNavigations(body);
+      scoped += found.scoped;
+      tenantless.push(...found.tenantless.map((route) => `${file}: ${route}`));
       expect([file, /^const \w+ = '\/digit-ui\//m.test(body)]).toEqual([file, false]);
     }
     expect(tenantless).toEqual([]);
-    expect(scoped).toBeGreaterThanOrEqual(38);
+    expect(scoped).toBeGreaterThanOrEqual(23);
   });
 
   test('legacy UI implementations are absent and BFF-flow specs remain', () => {
@@ -1963,7 +2293,8 @@ describe('D26 legacy identity paths are retired', () => {
       .toContain("/identity/v1/citizen/otp/_send");
     expect(read('tests/integration-tests/tests/employee/login.spec.ts'))
       .toContain("staffContext(page");
+    // Any request context: the spec selects on its own browser context, not a page.
     expect(read('tests/integration-tests/tests/keycloak/new-citizen-provisioning.spec.ts'))
-      .toContain("selectContext(page.request, BASE_URL, 'citizen'");
+      .toMatch(/selectContext\([^)]*'citizen'/);
   });
 });

@@ -209,4 +209,17 @@ class ThinEventBuilderTest {
         assertEquals("712345678", ThinEventBuilder.withCountryCode("712345678", null));
         assertTrue(ThinEventBuilder.withCountryCode(null, "+254") == null);
     }
+    @Test
+    void theCitizensPhoneIsE164WhenTheirCountryCodeIsKnown_andNationalOtherwise() {
+        assertEquals("+254762061507", ThinEventBuilder.withCountryCode("762061507", "+254"));
+        assertEquals("+254762061507", ThinEventBuilder.withCountryCode("0762061507", "+254"), "one trunk 0 dropped");
+        assertEquals("+254762061507", ThinEventBuilder.withCountryCode("762061507", "254"));
+        assertEquals("+254762061507", ThinEventBuilder.withCountryCode("254762061507", "+254"), "not prefixed twice");
+        assertEquals("+919123456789", ThinEventBuilder.withCountryCode("9123456789", "+91"), "national, though it starts with 91");
+        assertEquals("+254762061507", ThinEventBuilder.withCountryCode("+254762061507", "+91"));
+        // No code: the national number as stored; novu-bridge completes it with the tenant's code.
+        assertEquals("762061507", ThinEventBuilder.withCountryCode("762061507", null));
+        assertEquals("762061507", ThinEventBuilder.withCountryCode(" 762061507 ", ""));
+        assertEquals(null, ThinEventBuilder.withCountryCode(null, "+254"));
+    }
 }

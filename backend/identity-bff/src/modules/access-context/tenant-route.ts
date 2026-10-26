@@ -2,6 +2,7 @@ import {
   IdentityAdminError,
   liveTenantMapping,
   readTenantMappingForUrlSlug,
+  type TenantMapping,
 } from "../organizations/organization-service.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import type { BoundTenant } from "../authentication/surfaces.js";
@@ -69,16 +70,16 @@ export async function routeForSlug(tenantSlug: unknown): Promise<PublicTenantRou
 }
 
 /**
- * True while the route a session was bound to is still mapped, read live
- * from Keycloak: the same Organization (or group) still carries this slug and
- * tenant id, and the Organization is enabled.
+ * The live mapping while the route a session was bound to is still mapped,
+ * read from Keycloak: the same Organization (or group) still carries this slug
+ * and tenant id, and the Organization is enabled. Null otherwise.
  */
-export async function isLiveTenantRoute(
+export async function liveTenantRoute(
   route: { urlSlug: string; tenantId: string },
-): Promise<boolean> {
+): Promise<TenantMapping | null> {
   const mapping = await readTenantMappingForUrlSlug(route.urlSlug);
-  if (!mapping || mapping.tenantId !== route.tenantId) return false;
-  return (await liveTenantMapping(mapping)) !== null;
+  if (!mapping || mapping.tenantId !== route.tenantId) return null;
+  return liveTenantMapping(mapping);
 }
 
 /** The tenant a sign-in is bound to, from its resolved route. */

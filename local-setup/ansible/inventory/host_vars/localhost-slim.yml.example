@@ -234,10 +234,12 @@ build_digit_ui: false
 # steps are already satisfied and would otherwise abort the run.
 tolerate_bootstrap_failures: true
 
-# Turbopass: on-box OSM location autocomplete for the configurator's Phase 2.
-# Needs scraped OSM data under turbopass/data on the controller.
-# Values: true | false.
+# Turbopass: on-box boundary search and fetch for the configurator's Phase 2.
+# When on, the deploy builds its boundary DB for turbopass_countries
+# (group_vars/digit.yml) on the first run: minutes per country, and it needs
+# outbound HTTPS. Values: true | false.
 enable_turbopass: false
+# turbopass_countries: [IN]
 
 # ────────── Notifications (the full-vs-slim dividing line) ──────────
 #
@@ -290,10 +292,8 @@ novu_bridge_channel: "sms"
 
 # ────────── Keycloak SSO ──────────
 
-# Adds Keycloak + Identity BFF and the /auth/ + /identity/v1/ routes.
-# REQUIRED: every employee and citizen sign-in goes through them, the old
-# DIGIT OTP/password login pages are gone, and the deploy refuses `false`.
-enable_keycloak: true
+# Keycloak + Identity BFF and the /auth/ + /identity/v1/ routes are always
+# deployed: every employee and citizen sign-in goes through them.
 
 # auth_provider and keycloak_client_id are retired (D26): leave them unset.
 
@@ -362,7 +362,7 @@ nginx_features:
                              #   bao kv get -field=status_basic_auth_password <secrets_path>
   api_pgr: false           # /api/pgr/ — proxied to MCP for the dashboard
   mcp: true                # /mcp + /v1/* — needs enable_mcp: true
-  keycloak: true           # /auth/ + /identity/v1/ — needs enable_keycloak: true
+  keycloak: true           # validates /auth/ and /identity/v1/ after the deploy
   integration_tests: false      # /tests/ + /tests-v2/
   integration_tests_runner: false  # /tests/api/
 

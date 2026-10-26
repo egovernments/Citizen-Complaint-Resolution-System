@@ -15,6 +15,8 @@ import { useHistory, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import { Button } from "@egovernments/digit-ui-components-v2";
+import { formatLocaleParts } from "../../utils/localeDate";
+import { TRACK_COMPLAINT_TEXT_KEY, TRACK_COMPLAINT_TEXT_FALLBACK } from "../../utils/trackComplaintText";
 
 // PGR `_update` returns `ResponseInfo` (capital R); accept either casing.
 const hasUpdatePayload = (complaints) =>
@@ -56,11 +58,11 @@ const EyeGlyph = () => (
 /** "Today, 10:42" for today, else the date and time. */
 function filedOn(ts, tr) {
   const when = new Date(ts);
-  const time = when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const time = formatLocaleParts(ts, { hour: "2-digit", minute: "2-digit" }, "time");
   if (when.toDateString() === new Date().toDateString()) {
     return `${tr("CS_FILE_TODAY", "Today")}, ${time}`;
   }
-  return `${when.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}, ${time}`;
+  return `${formatLocaleParts(ts, { day: "numeric", month: "short", year: "numeric" })}, ${time}`;
 }
 
 function ComplaintNumber({ id, tr }) {
@@ -89,7 +91,7 @@ function ComplaintNumber({ id, tr }) {
         className="cms-link-button"
         onClick={copy}
         aria-live="polite"
-        data-analytics-event="pgr.complaint.response-copy-number"
+        data-analytics-event="complaint:response_number_copy"
       >
         {copied ? tr("CS_COMMON_COPIED", "Copied") : tr("CS_COMMON_COPY", "Copy")}
       </button>
@@ -136,14 +138,14 @@ const Response = () => {
   const supportingKey = success
     ? action === "RATE"
       ? "CS_COMMON_RATING_SUBMIT_TEXT"
-      : "CS_COMMON_TRACK_COMPLAINT_TEXT"
+      : TRACK_COMPLAINT_TEXT_KEY
     : "CS_COMMON_COMPLAINT_SUBMIT_RETRY";
   const supporting = tr(
     supportingKey,
     success
       ? action === "RATE"
         ? "Your rating has been submitted."
-        : "The notification along with complaint number is sent to your registered mobile number. You can track the complaint status using mobile or web app."
+        : TRACK_COMPLAINT_TEXT_FALLBACK
       : "Something went wrong while submitting your complaint. Please try again."
   );
 
@@ -193,17 +195,17 @@ const Response = () => {
               variant="outline"
               leading={<EyeGlyph />}
               onClick={() => history.push(goDetail)}
-              data-analytics-event="pgr.complaint.response-view"
+              data-analytics-event="complaint:response_view_click"
             >
               {tr("CS_COMMON_VIEW_COMPLAINT", "View Complaint")}
             </Button>
           ) : !success ? (
-            <Button variant="outline" onClick={() => history.push(retryFlow)} data-analytics-event="pgr.complaint.response-try-again">
+            <Button variant="outline" onClick={() => history.push(retryFlow)} data-analytics-event="complaint:response_retry_click">
               {tr("CS_COMMON_TRY_AGAIN", "Try Again")}
             </Button>
           ) : null}
           {/* Same name the employee response page gives its home button. */}
-          <Button onClick={() => history.push(goHome)} data-analytics-event="pgr.complaint.response-go-home">
+          <Button onClick={() => history.push(goHome)} data-analytics-event="complaint:response_home_click">
             {tr("CORE_COMMON_GO_TO_HOME", "Go back to home page")}
           </Button>
         </div>

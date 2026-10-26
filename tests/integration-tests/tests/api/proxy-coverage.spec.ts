@@ -3,41 +3,24 @@ import { tenantSlug } from '../utils/identity-bff';
  * API Proxy Coverage Test
  *
  * Validates that every API endpoint the frontend calls works correctly
- * through the token-exchange-svc v2 proxy with KC JWT authentication.
+ * through the gateway with the DIGIT token the Identity BFF selects.
  *
  * This test captures all network requests during a full employee + citizen
  * flow and verifies:
  * 1. Every API call gets a non-error response (not 500/502)
  * 2. JWT-authenticated calls are proxied correctly
  * 3. No API calls are blocked or dropped by the proxy
+ *
+ * The Keycloak block (OIDC discovery/CORS and redirect URIs on the per-tenant
+ * realm's public `digit-ui` client) was removed: #2088 deleted that realm and
+ * client in favour of the Identity BFF, so it only ever skipped. Realm `digit`
+ * discovery is covered by tests/keycloak/kc-api.spec.ts.
  */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, TENANT, ROOT_TENANT, KC_BASE, KC_REALM, KC_CLIENT_ID, ADMIN_USER, ADMIN_PASS, LOCALES } from '../utils/env';
+import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS, LOCALES } from '../utils/env';
 import { tryGetProfile } from '../utils/profile';
 import { getDigitToken, loginViaApi } from '../utils/auth';
 
-/**
- * Probe whether Keycloak's OIDC discovery is reachable on this deployment.
- * KC is an optional SSO overlay; when it isn't deployed the realm discovery
- * endpoint 404s/503s. The KC-specific tests below self-skip in that case
- * (deployment gap, not a product bug) rather than fail red.
- *
- * Must use KC_BASE (= `${BASE_URL}/auth`), NOT BASE_URL: Keycloak is served
- * exclusively under the /auth prefix (nginx has `location /auth/` and no
- * `location /realms/`; KC_HOSTNAME is set to https://<domain>/auth). Probing
- * `${BASE_URL}/realms/...` always 404s even when KC is healthy, so these tests
- * self-skipped with a FALSE "KC overlay not deployed here" — while
- * tests/keycloak/kc-api.spec.ts happily passed against `${BASE_URL}/auth/realms/<realm>`.
- * That stale probe hid the KC proxy coverage entirely.
- */
-async function kcReachable(): Promise<boolean> {
-  try {
-    const r = await fetch(`${KC_BASE}/realms/${KC_REALM}/.well-known/openid-configuration`);
-    return r.status === 200;
-  } catch {
-    return false;
-  }
-}
 
 interface ApiCall {
   method: string;
@@ -188,15 +171,14 @@ test.describe('API Proxy Coverage', () => {
   test('MDMS, localization, and access APIs work with JWT auth', {
     tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
   }, async ({ page }) => {
-    // Navigate to the domain first so fetch calls are same-origin
-    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    // Navigate to the domain first so fetch calls are same-origin. Not to a
+    // digit-ui page: with the BFF session in auth-api.json the SPA runs its own
+    // context _select and redirects, and that navigation aborts the fetches below.
+    await page.goto(`${BASE_URL}/identity/v1/tenant-contexts/${tenantSlug()}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
 
-    // Acquire a token. The KC BFF (/auth/login) only exists when the Keycloak
-    // overlay is deployed; on a classic (authProvider=digit) stack it 503s
-    // ("name resolution failed"). This test is about proxy coverage of the
-    // downstream service APIs, not the auth mechanism — so use the classic
-    // ROPC grant, which works on every deployment (and is what the digit-ui
-    // login form itself posts when authProvider=digit).
+    // Acquire a token through hosted sign-in + the BFF context exchange
+    // (getDigitToken). This test is about proxy coverage of the downstream
+    // service APIs, not the auth mechanism.
     const loginResp = await getDigitToken({ tenant: ROOT_TENANT, username: ADMIN_USER, password: ADMIN_PASS });
     expect(loginResp.access_token).toBeTruthy();
     const token = loginResp.access_token;
@@ -311,28 +293,6 @@ test.describe('API Proxy Coverage', () => {
     }
   });
 
-  test('KC OIDC endpoints are accessible (not blocked by proxy)', {
-    tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
-  }, async ({ page }) => {
-    test.skip(!(await kcReachable()), `Keycloak realm ${KC_REALM} discovery not reachable — KC overlay not deployed here.`);
-    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen`, { waitUntil: 'domcontentloaded', timeout: 15_000 });
-
-    // These endpoints go directly to Keycloak (not through proxy)
-    const kcEndpoints = [
-      `${KC_BASE}/realms/${KC_REALM}/.well-known/openid-configuration`,
-      `${KC_BASE}/realms/${KC_REALM}/protocol/openid-connect/certs`,
-    ];
-
-    for (const url of kcEndpoints) {
-      const resp = await page.evaluate(async (url) => {
-        const r = await fetch(url);
-        return { status: r.status, ok: r.ok };
-      }, url);
-
-      expect(resp.status, `${url} returned ${resp.status}`).toBe(200);
-    }
-  });
-
   test('citizen flow APIs work without authentication', {
     tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
   }, async ({ page }) => {
@@ -363,76 +323,5 @@ test.describe('API Proxy Coverage', () => {
     );
 
     expect(mdmsResult.status).toBeLessThan(500);
-  });
-});
-
-test.describe('Domain Configuration', () => {
-  test('KC client has deployment domain in redirect URIs', {
-    tag: ['@area:keycloak', '@layer:api', '@persona:cross'],
-  }, async ({ page }) => {
-    test.skip(!(await kcReachable()), `Keycloak realm ${KC_REALM} discovery not reachable — KC overlay not deployed here.`);
-    const deploymentDomain = new URL(BASE_URL).origin;
-
-    // Check OIDC discovery to get the client registration info. Node fetch,
-    // NOT page.evaluate: a browser-context fetch from the test page's origin
-    // is subject to CORS and fails with an opaque "Failed to fetch" that says
-    // nothing about redirect URIs. The dedicated CORS test next door owns the
-    // browser-context angle.
-    const discovery = await (
-      await fetch(`${KC_BASE}/realms/${KC_REALM}/.well-known/openid-configuration`)
-    ).json();
-
-    expect(discovery.issuer).toBeTruthy();
-    expect(discovery.authorization_endpoint).toBeTruthy();
-
-    // Verify the authorization endpoint is accessible and accepts our redirect_uri
-    const authUrl = new URL(discovery.authorization_endpoint);
-    authUrl.searchParams.set('client_id', KC_CLIENT_ID);
-    authUrl.searchParams.set('redirect_uri', `${deploymentDomain}/${tenantSlug()}/digit-ui/citizen/login`);
-    authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', 'openid');
-
-    const authRaw = await fetch(authUrl.toString(), { redirect: 'manual' });
-    const authResp = { status: authRaw.status, location: authRaw.headers.get('location') };
-
-    // Should redirect to login page (302) or return the login page (200)
-    // NOT return an error about invalid redirect_uri
-    expect(
-      authResp.status,
-      `KC should accept redirect_uri for ${deploymentDomain}. Got ${authResp.status}. ` +
-        `If this fails, add '${deploymentDomain}/*' to the KC client's redirectUris.`,
-    ).not.toBe(400);
-  });
-
-  test('KC CORS allows deployment domain', {
-    tag: ['@area:keycloak', '@layer:api', '@persona:cross'],
-  }, async ({ page }) => {
-    test.skip(!(await kcReachable()), `Keycloak realm ${KC_REALM} discovery not reachable — KC overlay not deployed here.`);
-    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 15_000,
-    });
-
-    // Test that KC OIDC endpoint allows CORS from our domain
-    const corsResult = await page.evaluate(
-      async ({ kcBase, kcRealm }) => {
-        try {
-          const resp = await fetch(
-            `${kcBase}/realms/${kcRealm}/.well-known/openid-configuration`,
-            { mode: 'cors' },
-          );
-          return { ok: resp.ok, status: resp.status, corsBlocked: false };
-        } catch {
-          return { ok: false, status: 0, corsBlocked: true };
-        }
-      },
-      { kcBase: KC_BASE, kcRealm: KC_REALM },
-    );
-
-    expect(
-      corsResult.corsBlocked,
-      `KC CORS blocks ${BASE_URL}. Add the domain to webOrigins in KC client config.`,
-    ).toBe(false);
-    expect(corsResult.ok).toBe(true);
   });
 });

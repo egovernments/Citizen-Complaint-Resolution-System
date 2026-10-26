@@ -84,6 +84,12 @@ var globalConfigs = (function () {
   var analyticsScriptHosts = {{ analytics_script_hosts | default([]) | to_json }};
   var analyticsCustomEnabled = {{ analytics_custom_enabled | default(false) | to_json }};
 
+  // Citizen home banner (#2358): the image an admin uploads in the
+  // Configurator's Branding step (common-masters.StateInfo.bannerUrl), drawn
+  // as a hero above All Services. OFF until `citizen_banner_enabled: true` in
+  // the inventory; flipping it is a re-render of this file, no rebuild.
+  var citizenBannerEnabled = {{ citizen_banner_enabled | default(false) | to_json }};
+
   var getConfig = function (key) {
     if (key === "EMPLOYEE_MODULE_DENYLIST") return employeeModuleDenylist;
     if (key === "STATE_LEVEL_TENANT_ID") {
@@ -148,6 +154,8 @@ var globalConfigs = (function () {
       return analyticsScriptHosts;
     } else if (key === "ANALYTICS_CUSTOM_ENABLED") {
       return analyticsCustomEnabled;
+    } else if (key === "CITIZEN_BANNER_ENABLED") {
+      return citizenBannerEnabled;
     }
   };
 

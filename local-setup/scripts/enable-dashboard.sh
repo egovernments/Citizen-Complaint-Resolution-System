@@ -834,21 +834,26 @@ PY
 # =============================================================================
 step5() {
   step step5 "${STEP_TITLES[5]}"
-  local locales
-  if [[ -n "$DASHBOARD_LOCALES" ]]; then
-    locales="${DASHBOARD_LOCALES//,/ }"
-  else
-    locales="$(cd "$DSS_L10N_DIR" 2>/dev/null && ls *.json 2>/dev/null | sed 's/\.json$//' | tr '\n' ' ')"
-  fi
-  [[ -n "$locales" ]] || { err "no locale packs in $DSS_L10N_DIR"; return 1; }
-  log "locales: $locales"
-
   # The language menu must list a locale or nobody can select it, however well
   # seeded it is. StateInfo.languages on the state root is the ONLY source.
   local declared
   declared="$(psql_q "select string_agg(l->>'value', ',') from eg_mdms_data d,
       lateral jsonb_array_elements(d.data->'languages') l
       where d.schemacode='common-masters.StateInfo' and d.tenantid='$DASHBOARD_TENANT' and d.isactive")"
+
+  # Every locale with a pack, plus every locale the root offers: one with no
+  # pack (pt_BR, sw_KE) still gets the two nav labels, so the home card and the
+  # sidebar entry are never a raw key in a language the menu lists.
+  local locales
+  if [[ -n "$DASHBOARD_LOCALES" ]]; then
+    locales="${DASHBOARD_LOCALES//,/ }"
+  else
+    locales="$( { (cd "$DSS_L10N_DIR" 2>/dev/null && ls *.json 2>/dev/null | sed 's/\.json$//'); \
+      tr ',' '\n' <<< "$declared"; } | awk 'NF && !seen[$0]++' | tr '\n' ' ')"
+  fi
+  [[ -n "$locales" ]] || { err "no locale packs in $DSS_L10N_DIR"; return 1; }
+  log "locales: $locales"
+
   for loc in $locales; do
     [[ ",${declared}," == *",${loc},"* ]] || \
       warn "$loc is not in common-masters.StateInfo.languages — seeded but unselectable in the UI"
@@ -856,33 +861,42 @@ step5() {
 
   for loc in $locales; do
     local pack="$DSS_L10N_DIR/${loc}.json"
-    [[ -f "$pack" ]] || { warn "no pack for $loc — skipping"; continue; }
-    local n; n="$(jq 'length' "$pack")"
-    if [[ "$DRY_RUN" == true ]]; then log "[dry-run] upsert $n messages for $loc"; continue; fi
-    local sent=0
-    while read -r batch; do
-      local body resp; body="$(mktemp)"
-      jq -n --argjson ri "$REQUEST_INFO" --arg t "$DASHBOARD_TENANT" --arg l "$loc" \
-        --argjson m "$batch" '{RequestInfo:$ri, tenantId:$t,
-          messages:[$m[] | {code:.code, message:.message, module:.module, locale:$l}]}' > "$body"
-      resp="$(curl -s -X POST "$LOCALIZATION_URL/localization/messages/v1/_upsert" \
-        -H 'Content-Type: application/json' --data-binary "@$body")"; rm -f "$body"
-      printf '%s' "$resp" | grep -qi 'messages' && sent=$((sent + $(printf '%s' "$batch" | jq 'length'))) \
-        || warn "$loc batch failed: $(printf '%s' "$resp" | head -c 160)"
-    done < <(jq -c "[_nwise($L10N_BATCH)][]" "$pack" 2>/dev/null || jq -c "[.] | .[]" "$pack")
-    ok "$loc — upserted $sent/$n rainmaker-dashboard messages"
+    if [[ "$DRY_RUN" == true ]]; then
+      if [[ -f "$pack" ]]; then log "[dry-run] upsert $(jq 'length' "$pack") messages for $loc"
+      else log "[dry-run] $loc has no pack"; fi
+      log "[dry-run] upsert the nav labels for $loc"; continue
+    fi
+    if [[ -f "$pack" ]]; then
+      local n; n="$(jq 'length' "$pack")"
+      local sent=0
+      while read -r batch; do
+        local body resp; body="$(mktemp)"
+        jq -n --argjson ri "$REQUEST_INFO" --arg t "$DASHBOARD_TENANT" --arg l "$loc" \
+          --argjson m "$batch" '{RequestInfo:$ri, tenantId:$t,
+            messages:[$m[] | {code:.code, message:.message, module:.module, locale:$l}]}' > "$body"
+        resp="$(curl -s -X POST "$LOCALIZATION_URL/localization/messages/v1/_upsert" \
+          -H 'Content-Type: application/json' --data-binary "@$body")"; rm -f "$body"
+        printf '%s' "$resp" | grep -qi 'messages' && sent=$((sent + $(printf '%s' "$batch" | jq 'length'))) \
+          || warn "$loc batch failed: $(printf '%s' "$resp" | head -c 160)"
+      done < <(jq -c "[_nwise($L10N_BATCH)][]" "$pack" 2>/dev/null || jq -c "[.] | .[]" "$pack")
+      ok "$loc — upserted $sent/$n rainmaker-dashboard messages"
+    else
+      warn "no pack for $loc — dashboard strings skipped; the nav labels are still seeded"
+    fi
 
-    # The two nav labels: module rainmaker-common, NOT rainmaker-dashboard.
+    # The two nav labels: module rainmaker-common, NOT rainmaker-dashboard,
+    # in the locale's own word (English for a locale without one).
     local body resp; body="$(mktemp)"
     jq -n --argjson ri "$REQUEST_INFO" --arg t "$DASHBOARD_TENANT" --arg l "$loc" \
-      '{RequestInfo:$ri, tenantId:$t, messages:[
-        {code:"ACTION_TEST_DASHBOARD", message:"Dashboard", module:"rainmaker-common", locale:$l},
-        {code:"DASHBOARD_CARD_HEADER",  message:"Dashboard", module:"rainmaker-common", locale:$l}]}' > "$body"
+      '({fr_FR:"Tableau de bord", pt_PT:"Painel", pt_BR:"Painel"}[$l] // "Dashboard") as $label |
+      {RequestInfo:$ri, tenantId:$t, messages:[
+        {code:"ACTION_TEST_DASHBOARD", message:$label, module:"rainmaker-common", locale:$l},
+        {code:"DASHBOARD_CARD_HEADER",  message:$label, module:"rainmaker-common", locale:$l}]}' > "$body"
     resp="$(curl -s -X POST "$LOCALIZATION_URL/localization/messages/v1/_upsert" \
       -H 'Content-Type: application/json' --data-binary "@$body")"; rm -f "$body"
     printf '%s' "$resp" | grep -qi 'messages' && ok "$loc — nav labels seeded (rainmaker-common)" \
       || warn "$loc nav labels: $(printf '%s' "$resp" | head -c 160)"
-    note "$loc nav labels are seeded in English — translate them for non-English locales."
+    case "$loc" in en_*|fr_FR|pt_PT|pt_BR) ;; *) note "$loc nav labels are seeded in English — translate them for this locale." ;; esac
   done
 
   # Cache-bust. The redis DEL alone is NOT enough; the service holds its own

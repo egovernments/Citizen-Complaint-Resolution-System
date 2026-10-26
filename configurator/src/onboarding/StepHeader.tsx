@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Check } from 'lucide-react';
+import { useOnboardingT } from './i18n';
 
 /**
  * The top of every onboarding step: a small section eyebrow, the step's name,
@@ -16,6 +17,7 @@ export function StepHeader({
   done?: boolean;
   children?: ReactNode;
 }) {
+  const t = useOnboardingT();
   return (
     <header className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -23,7 +25,7 @@ export function StepHeader({
         {done && (
           <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
             <Check className="w-3 h-3" strokeWidth={3} />
-            Completed
+            {t('step.completed', 'Completed')}
           </span>
         )}
       </div>

@@ -1,5 +1,8 @@
 import * as XLSX from 'xlsx';
 import { triggerDownload } from '@/admin/bulk/BulkImportPanel';
+import type { Boundary, Department, Designation } from '@/api/types';
+import { englishT, type OnboardingT } from '@/onboarding/i18n';
+import { allowedEmployeeRoles, pickerChoices } from '@/lib/systemRecords';
 
 type Row = Array<string | number>;
 
@@ -15,6 +18,13 @@ function writeWorkbook(wb: XLSX.WorkBook): Blob {
   return new Blob([buf], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
+}
+
+/** The boundaries on screen as a sheet: one column per level, one row per area path. */
+export function downloadBoundaryList(levels: string[], rows: string[][], filename: string) {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, buildSheet(levels, rows), 'Boundaries');
+  triggerDownload(writeWorkbook(wb), filename);
 }
 
 export function downloadBoundaryTemplate(hierarchyType: string, levels: string[]) {
@@ -99,55 +109,129 @@ export function downloadComplaintHierarchyTemplate(hierarchyType: string, levelC
   triggerDownload(writeWorkbook(wb), `Complaint_Hierarchy_${hierarchyType || 'PGR'}.xlsx`);
 }
 
-export function downloadEmployeeTemplate() {
-  const header = [
-    'employeeCode',
-    'name',
-    'userName',
-    'mobileNumber',
-    'emailId',
-    'gender',
-    'dob',
-    'department',
-    'designation',
-    'roles',
-    'jurisdictions',
-    'dateOfAppointment',
-  ];
-  // `department` accepts a comma-separated list — each extra department
-  // becomes a historical HRMS assignment (bootstrap-ADMIN pattern), letting
-  // one employee qualify as assignee for complaints in all of them.
-  const rows: Row[] = [
-    [
-      'EMP001',
-      'Jane Doe',
-      'jane.doe',
-      '777777701',
-      'jane@example.com',
-      'FEMALE',
-      '1990-01-15',
-      'ENV',
-      'OFFICER',
-      'EMPLOYEE,PGR_LME',
-      'WARD_001',
-      '2024-06-01',
-    ],
-    [
-      'EMP002',
-      'John Admin',
-      'john.admin',
-      '777777702',
-      'john.admin@example.com',
-      'MALE',
-      '1985-03-10',
-      'ENV,WORKS',
-      'OFFICER',
-      'EMPLOYEE,GRO,DGRO',
-      'COUNTY_001',
-      '2024-06-01',
-    ],
-  ];
+const EMPLOYEE_TEMPLATE_COLUMNS = [
+  'employeeCode',
+  'name',
+  'mobileNumber',
+  'emailId',
+  'gender',
+  'dob',
+  'department',
+  'designation',
+  'roles',
+  'jurisdictions',
+  'dateOfAppointment',
+];
+
+type CodeName = Pick<Department | Designation, 'code' | 'name'>;
+type CodeBoundary = Pick<Boundary, 'code' | 'boundaryType'> & Partial<Pick<Boundary, 'parent' | 'hierarchyType'>>;
+
+/** The one name of the employee template workbook, shown on screen and used for the download. */
+export function employeeTemplateFilename(tenant: string): string {
+  return `Employee_Master_Dynamic_${tenant.toUpperCase()}.xlsx`;
+}
+
+/**
+ * Employee bulk-import workbook: an `Employee` sheet with one sample row, a
+ * `Codes` reference sheet listing the workspace's departments, designations,
+ * roles and boundaries, and an `Instructions` sheet. The lists are narrowed to
+ * what an employee can be given (no founder records, no platform roles), and the
+ * sample row uses codes from them (blank when a list is empty) so it never
+ * references codes that do not exist in the workspace. The sample roles keep
+ * EMPLOYEE first, which the parser does not add when the cell is filled and
+ * without which the employee cannot sign in; the jurisdiction is a leaf boundary
+ * so a copied row is not tenant-wide; the mobile number is left blank because
+ * only the tenant's own rule says what is valid.
+ */
+export function buildEmployeeTemplate(
+  tenant: string,
+  allDepts: CodeName[],
+  allDesigs: CodeName[],
+  allBoundaries: CodeBoundary[],
+  allRoles: { code: string; name?: string }[],
+  t: OnboardingT = englishT,
+): Blob {
+  const depts = pickerChoices(allDepts, (d) => d.code);
+  const desigs = pickerChoices(allDesigs, (d) => d.code);
+  const roles = allowedEmployeeRoles(allRoles);
+  // The reserved WORKSPACE hierarchy roots the founder; it is not a place to assign anyone.
+  const boundaries = pickerChoices(allBoundaries, (b) => b.hierarchyType);
+  const parents = new Set(boundaries.map((b) => b.parent).filter(Boolean));
+  const leaf = boundaries.find((b) => !parents.has(b.code));
+  const extraRole = (roles.find((r) => r.code === 'PGR_LME') ?? roles.find((r) => r.code !== 'EMPLOYEE'))?.code;
+
+  const sample: Record<string, string> = {
+    employeeCode: 'EMP_001',
+    name: 'Jane Kamau',
+    mobileNumber: '',
+    emailId: 'jane.kamau@example.com',
+    gender: 'FEMALE',
+    dob: '1990-05-14',
+    department: depts[0]?.code ?? '',
+    designation: desigs[0]?.code ?? '',
+    roles: ['EMPLOYEE', extraRole].filter(Boolean).join(','),
+    jurisdictions: leaf?.code ?? '',
+    dateOfAppointment: '2026-01-15',
+  };
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, buildSheet(header, rows), 'Employee');
-  triggerDownload(writeWorkbook(wb), 'Employee_Template.xlsx');
+  const primary = XLSX.utils.aoa_to_sheet([
+    EMPLOYEE_TEMPLATE_COLUMNS,
+    EMPLOYEE_TEMPLATE_COLUMNS.map((c) => sample[c] ?? ''),
+  ]);
+  primary['!cols'] = EMPLOYEE_TEMPLATE_COLUMNS.map((c) => ({ wch: Math.max(12, c.length + 2) }));
+  XLSX.utils.book_append_sheet(wb, primary, 'Employee');
+
+  const maxLen = Math.max(depts.length, desigs.length, roles.length, boundaries.length);
+  const rows: (string | undefined)[][] = [
+    [
+      t('bulk_employees.codes_departments', 'departments (code : name)'),
+      t('bulk_employees.codes_designations', 'designations (code : name)'),
+      t('bulk_employees.codes_roles', 'roles (code)'),
+      t('bulk_employees.codes_boundaries', 'boundaries (code : type)'),
+    ],
+  ];
+  for (let i = 0; i < maxLen; i += 1) {
+    rows.push([
+      depts[i] ? `${depts[i].code} : ${depts[i].name ?? ''}` : '',
+      desigs[i] ? `${desigs[i].code} : ${desigs[i].name ?? ''}` : '',
+      roles[i] ? roles[i].code : '',
+      boundaries[i] ? `${boundaries[i].code} : ${boundaries[i].boundaryType ?? ''}` : '',
+    ]);
+  }
+  const ref = XLSX.utils.aoa_to_sheet(rows);
+  ref['!cols'] = [{ wch: 36 }, { wch: 36 }, { wch: 20 }, { wch: 36 }];
+  XLSX.utils.book_append_sheet(wb, ref, 'Codes');
+
+  const notes = XLSX.utils.aoa_to_sheet([
+    [t('bulk_employees.instr_title', 'Employee bulk import template')],
+    [t('bulk_employees.instr_tenant', 'Tenant: %{tenant}', { tenant })],
+    [''],
+    [t('bulk_employees.instr_required_1', 'Required columns: name, mobileNumber (per the tenant mobile rule; the sample row leaves it blank),')],
+    [t('bulk_employees.instr_required_2', 'department (ONE department code from Codes), designation (from Codes).')],
+    [t('bulk_employees.instr_required_3', 'Required: emailId. Optional: employeeCode (blank = the next free EMP_ code),')],
+    [t('bulk_employees.instr_optional_1', 'gender, dob (YYYY-MM-DD),')],
+    [t('bulk_employees.instr_optional_2', 'roles (comma-separated; keep EMPLOYEE first, it is what lets the employee sign in),')],
+    [t('bulk_employees.instr_optional_3', 'jurisdictions (comma-separated boundary codes; the sample uses a lowest-level boundary),')],
+    [t('bulk_employees.instr_optional_4', 'dateOfAppointment (YYYY-MM-DD).')],
+    [''],
+    [t('bulk_employees.instr_email', 'Email is required. New employees receive a secure password setup email.')],
+    [t('bulk_employees.instr_signin', 'Each employee signs in with their email address.')],
+    [t('bulk_employees.instr_csr_role', 'Every employee also gets the Complaint Registrar (CSR) role, so they can file complaints on behalf of citizens.')],
+  ]);
+  notes['!cols'] = [{ wch: 80 }];
+  XLSX.utils.book_append_sheet(wb, notes, 'Instructions');
+
+  return writeWorkbook(wb);
+}
+
+export function downloadEmployeeTemplate(
+  tenant: string,
+  depts: CodeName[],
+  desigs: CodeName[],
+  boundaries: CodeBoundary[],
+  roles: { code: string; name?: string }[],
+  t: OnboardingT = englishT,
+) {
+  triggerDownload(buildEmployeeTemplate(tenant, depts, desigs, boundaries, roles, t), employeeTemplateFilename(tenant));
 }

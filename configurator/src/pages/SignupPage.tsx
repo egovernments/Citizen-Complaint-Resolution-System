@@ -5,17 +5,18 @@ import {
   type AuthMethod,
   type AvailabilityResult,
   type Operation,
-  type ProvisioningStep,
   type Signup,
   type SignupDraftInput,
   type TenantOption,
+  type TenantsResponse,
+  type WorkspaceTrialNotice,
   OnboardingError,
   PROVISIONING_STEPS,
+  PROVISIONING_STEP_LABELS,
   authMethods,
   checkIdentifier,
   createSignup,
   deriveAccountCode,
-  findOperation,
   findSignup,
   isOperationReady,
   isOperationSettled,
@@ -24,6 +25,7 @@ import {
   newIdempotencyKey,
   retryOperation,
   requestMagicLinkSignup,
+  searchOperation,
   session,
   slugifyAccountName,
   startSignIn,
@@ -37,10 +39,21 @@ import type { Invitation } from '@/api/onboarding';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { RequiredMark } from '@/components/ui/required-mark';
 import { Stepper } from '@/components/ui/stepper';
 import { AuthShell } from '@/components/signup/AuthPanel';
+import { WorkspaceTrialDialog } from '@/components/WorkspaceTrialDialog';
 import { useAuthResult } from '@/hooks/useAuthResult';
 import { clearSignOutIncomplete, signOutIncomplete } from '@/lib/session';
+import { track } from '@/lib/analytics';
+import { useOnboardingT } from '@/onboarding/i18n';
+import { MOBILE_RULES, mobileHint, nationalMobile } from '@/onboarding/signup/mobileRules';
+import {
+  describeProvisioningFailure,
+  describeSignupError,
+  mobileInvalid,
+  type SignupProblem,
+} from '@/onboarding/signup/signupErrors';
 
 const STEPS = [
   { id: 'account', label: 'Account' },
@@ -48,30 +61,22 @@ const STEPS = [
   { id: 'review', label: 'Review' },
 ];
 
-/** Base countries, with the IANA zone each one suggests. */
 /**
- * `dialCode` is shown beside the mobile field so it is obvious the field takes
- * the national number and the prefix is added for you. That distinction is not
- * cosmetic: the value is submitted as `tenantMetadata.tenantAdmin.mobileNumber`
- * and egov-user validates it as a national number, so a founder who copied the
- * old `+254700000199` placeholder was being shown a shape the backend rejects.
+ * Base countries, with the IANA zone each one suggests.
  *
- * Every offered country has a product-owned rule in identity-bff tenant
- * foundation. Foundation persists it for the new tenant before egov-user
- * creates the founder's account; countries without an agreed rule are not
- * offered here.
+ * Only countries with a mobile rule in the platform baseline are offered: the
+ * worker cannot provision any other. The rule (MOBILE_RULES) supplies the dial
+ * code shown beside the mobile field, so it is obvious the field takes the
+ * national number and the prefix is added for you, plus the one-liner and the
+ * example under it. The value is submitted as
+ * `tenantMetadata.tenantAdmin.mobileNumber` and egov-user checks it as a
+ * national number against that same rule.
  */
-const COUNTRIES: {
-  code: string;
-  name: string;
-  timeZone: string;
-  dialCode: string;
-  nationalExample: string;
-}[] = [
-  { code: 'KE', name: 'Kenya', timeZone: 'Africa/Nairobi', dialCode: '+254', nationalExample: '712345678' },
-  { code: 'IN', name: 'India', timeZone: 'Asia/Kolkata', dialCode: '+91', nationalExample: '9876543210' },
-  { code: 'ET', name: 'Ethiopia', timeZone: 'Africa/Addis_Ababa', dialCode: '+251', nationalExample: '911234567' },
-  { code: 'MZ', name: 'Mozambique', timeZone: 'Africa/Maputo', dialCode: '+258', nationalExample: '841234567' },
+const COUNTRIES: { code: string; name: string; timeZone: string }[] = [
+  { code: 'KE', name: 'Kenya', timeZone: 'Africa/Nairobi' },
+  { code: 'IN', name: 'India', timeZone: 'Asia/Kolkata' },
+  { code: 'ET', name: 'Ethiopia', timeZone: 'Africa/Addis_Ababa' },
+  { code: 'MZ', name: 'Mozambique', timeZone: 'Africa/Maputo' },
 ];
 
 const TIME_ZONES = [...new Set(COUNTRIES.map((c) => c.timeZone))].sort();
@@ -102,6 +107,12 @@ const FINANCIAL_YEARS = [
   { code: 'OCT_SEP', label: 'October to September' },
 ];
 
+/**
+ * The terms version every signup records. Continuing past sign-in is the
+ * agreement ("By continuing, you agree to the Terms of Service and Privacy
+ * Notice"), so Review has no checkbox; pgr-services still needs the version to
+ * submit.
+ */
 const TERMS_VERSION = '2026-09';
 
 /**
@@ -117,6 +128,10 @@ const selectClass =
 
 /** Poll cadence the contract asks for: every 2-5 seconds. */
 const POLL_MS = 3000;
+/** One status check that hasn't answered by now is abandoned; the next tick asks again. */
+const POLL_TIMEOUT_MS = 10_000;
+/** A blip is not a failure: the founder sees an error only after this many checks in a row fail. */
+const POLL_FAILURES_BEFORE_ERROR = 3;
 
 /**
  * A SUCCEEDED run is published to the identity side on a later worker tick,
@@ -143,19 +158,6 @@ function SignupMethodIcon({ method }: { method: AuthMethod }) {
   );
 }
 
-/**
- * Founder-facing names for the backend's step codes. Lower-casing the codes
- * themselves read as internal machinery on the one screen where somebody is
- * watching every line, and turned the product name into "digit account".
- */
-const STEP_LABELS: Record<ProvisioningStep, string> = {
-  TENANT_FOUNDATION: 'Creating your account',
-  ORGANIZATION: 'Setting up your organisation',
-  TENANT_ADMIN_MEMBERSHIP: 'Adding you to your organisation',
-  TENANT_ADMIN_ROLES: 'Granting your permissions',
-  DIGIT_ACCOUNT: 'Creating your DIGIT login',
-};
-
 type Phase =
   | 'loading'
   | 'signedOut'
@@ -169,12 +171,6 @@ type Phase =
   | 'stuck'
   | 'failed';
 
-function errorText(error: unknown): string {
-  if (error instanceof OnboardingError) return error.message;
-  if (error instanceof Error) return error.message;
-  return 'Something went wrong.';
-}
-
 const isExpiredSession = (error: unknown) =>
   error instanceof OnboardingError && error.isUnauthenticated;
 
@@ -186,12 +182,15 @@ function Field({
   help,
   children,
   status,
+  required,
 }: {
   id: string;
   label: string;
   help?: React.ReactNode;
   children: React.ReactNode;
   status?: React.ReactNode;
+  /** Marks the label with the red asterisk; the control carries `aria-required` itself. */
+  required?: boolean;
 }) {
   return (
     <div>
@@ -200,9 +199,10 @@ function Field({
         className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground"
       >
         {label}
+        {required && <RequiredMark />}
       </label>
       <div className="mt-1">{children}</div>
-      {help && <p className="mt-1 text-xs text-muted-foreground">{help}</p>}
+      {help && <p id={`${id}-help`} className="mt-1 text-xs text-muted-foreground">{help}</p>}
       {status}
     </div>
   );
@@ -218,6 +218,7 @@ function AvailabilityNote({
   checking: boolean;
   invalidReason?: string;
 }) {
+  const t = useOnboardingT();
   if (invalidReason) {
     return (
       <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
@@ -241,7 +242,9 @@ function AvailabilityNote({
     <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
       <AlertCircle className="h-3 w-3" />{' '}
       {state.conflictingType === 'TENANT_ID' && state.derivedTenantId
-        ? `This URL maps to tenant ID “${state.derivedTenantId}”, which is already in use.`
+        ? t('signup.slug_clashes', 'This URL clashes with an existing workspace (“%{tenant}”). Choose a different one.', {
+            tenant: state.derivedTenantId,
+          })
         : 'Already taken.'}
     </p>
   );
@@ -254,6 +257,7 @@ function AvailabilityNote({
  * instead of a form floating on an empty page.
  */
 function SignupFlow() {
+  const t = useOnboardingT();
   const authResult = useAuthResult();
   const [phase, setPhase] = useState<Phase>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -263,6 +267,8 @@ function SignupFlow() {
   const [signupEmail, setSignupEmail] = useState('');
   const [sessionUser, setSessionUser] = useState<{ email: string; name: string } | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
+  const [trialNotice, setTrialNotice] = useState<WorkspaceTrialNotice | null>(null);
+  const [trialOpen, setTrialOpen] = useState(false);
   // The tenant the operator picked and how far it has actually been built. Set
   // only when the pick is refused, so the gate can name what it is holding.
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -282,7 +288,13 @@ function SignupFlow() {
   const [timeZone, setTimeZone] = useState('');
   const [financialYearPolicy, setFinancialYearPolicy] = useState('');
   const [tenantAdminMobile, setTenantAdminMobile] = useState('');
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  /** Why the mobile number won't do, shown under the field. */
+  const [mobileError, setMobileError] = useState<string | null>(null);
+  /** A failed run whose draft the backend handed back to be corrected. */
+  const [reopened, setReopened] = useState(false);
+  // Whether a TERMINAL_FAILED run's signup was handed back is read from the signup. Until that
+  // read answers, neither "Change my details" nor "contact support" is shown.
+  const [reopenCheck, setReopenCheck] = useState<'pending' | 'failed' | 'done'>('pending');
 
   const [codeState, setCodeState] = useState<AvailabilityResult | null>(null);
   const [codeChecking, setCodeChecking] = useState(false);
@@ -295,6 +307,14 @@ function SignupFlow() {
   const timeZoneTouched = useRef(false);
   /** Drives the dial-code prefix and the mobile hint on the Preferences step. */
   const selectedCountry = COUNTRIES.find((c) => c.code === countryCode);
+  const mobileRule = MOBILE_RULES[countryCode];
+  /** The number as egov-user will check it, or null when it fails the country's rule. */
+  const mobileNational = mobileRule ? nationalMobile(tenantAdminMobile, mobileRule) : null;
+  const describe = useCallback(
+    (caught: unknown, magicLink = false): SignupProblem =>
+      describeSignupError(caught, t, { countryName: selectedCountry?.name, magicLink }),
+    [t, selectedCountry?.name],
+  );
   // Reused when retrying the *same* action after a network failure, which is
   // the whole point of the header.
   const createKey = useRef<string>(newIdempotencyKey());
@@ -310,7 +330,6 @@ function SignupFlow() {
     setTimeZone(record.timeZone || '');
     setFinancialYearPolicy(record.financialYearPolicy || '');
     setTenantAdminMobile(String(record.tenantMetadata?.tenantAdmin?.mobileNumber || ''));
-    setAcceptedTerms(Boolean(record.acceptedTermsVersion));
     // Only a value the operator typed stops following the name. A saved value
     // that is still what the saved name derives was never edited by hand, so
     // it keeps updating when the name changes after a resume.
@@ -322,6 +341,32 @@ function SignupFlow() {
     // A resumed draft's zone was already settled once; changing country
     // on the way back through should not quietly rewrite it.
     if (record.timeZone) timeZoneTouched.current = true;
+  }, []);
+
+  /** The contract's answer to a 401: sign in again, which resumes the server-side draft. */
+  const restartSignIn = useCallback(async () => {
+    try {
+      const { methods: available } = await authMethods('signup');
+      setMethods(available);
+    } catch {
+      /* The gate still renders; it just may list nothing. */
+    }
+    setError(t('signup.session_expired', 'Your sign-in expired. Sign in again to pick up where you left off.'));
+    setPhase('signedOut');
+  }, [t]);
+
+  /**
+   * A locked workspace stays listed so it is not mistaken for no workspace (and
+   * a locked founder sent into a second signup). With nothing else to choose,
+   * say so now; otherwise wait for the click.
+   */
+  const offerTenants = useCallback((view: TenantsResponse) => {
+    setTenantOptions(view.tenants);
+    const locked = view.tenants.filter((option) => option.code === 'WORKSPACE_TRIAL_EXPIRED');
+    if (view.notice && locked.length) {
+      setTrialNotice(view.notice);
+      setTrialOpen(locked.length === view.tenants.length);
+    }
   }, []);
 
   /** Session → tenants → onboarding or chooser. The contract's own order. */
@@ -342,7 +387,7 @@ function SignupFlow() {
       }
       const view = await tenants();
       if (view.tenants.length) {
-        setTenantOptions(view.tenants);
+        offerTenants(view);
         setPhase('chooseTenant');
         return;
       }
@@ -387,14 +432,41 @@ function SignupFlow() {
         case 'ACTIVE':
           setPhase('resuming');
           return;
-        default:
+        default: {
+          // A DRAFT with a failed run was handed back after the run refused the founder's own
+          // details. Show that run, as before the reload, so the wizard isn't entered unexplained.
+          let run: Operation | null = null;
+          if (existing) {
+            try {
+              run = await searchOperation({ signupId: existing.id });
+            } catch (caught) {
+              // An expired sign-in goes back to sign-in.
+              if (isExpiredSession(caught)) {
+                await restartSignIn();
+                return;
+              }
+              // A 400 is a pgr-services from before #2515, which can only look a run up by its own
+              // id. Carry on as the page did then, rather than block every draft until it upgrades.
+              // Anything else is this load's own error, with its Try again.
+              if (!(caught instanceof OnboardingError && caught.status === 400)) throw caught;
+            }
+          }
+          if (run?.status === 'TERMINAL_FAILED') {
+            setOperation(run);
+            // The signup is a DRAFT again, so this run handed it back to be corrected.
+            setReopened(true);
+            setReopenCheck('done');
+            setPhase('provisioning');
+            return;
+          }
           setPhase('wizard');
+        }
       }
     } catch (caught) {
-      setError(errorText(caught));
+      setError(describeSignupError(caught, t).message);
       setPhase('failed');
     }
-  }, [seedFrom]);
+  }, [seedFrom, t, restartSignIn, offerTenants]);
 
   useEffect(() => {
     // Load on mount. Every setState inside `bootstrap` happens after an await,
@@ -476,12 +548,21 @@ function SignupFlow() {
     if (languages.length) next.languages = languages;
     if (timeZone) next.timeZone = timeZone;
     if (financialYearPolicy) next.financialYearPolicy = financialYearPolicy;
-    if (acceptedTerms) next.acceptedTermsVersion = TERMS_VERSION;
+    next.acceptedTermsVersion = TERMS_VERSION;
     if (tenantAdminMobile.trim()) {
-      next.tenantMetadata = { schemaVersion: 1, tenantAdmin: { mobileNumber: tenantAdminMobile.trim() } };
+      // The bare national number when it passes the rule: the backend's parser and egov-user then see the same digits.
+      next.tenantMetadata = { schemaVersion: 1, tenantAdmin: { mobileNumber: mobileNational ?? tenantAdminMobile.trim() } };
     }
     return next;
-  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, tenantAdminMobile]);
+  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, tenantAdminMobile, mobileNational]);
+
+  /** Preferences' choices as analytics gets them: never the mobile number. */
+  const preferenceChoices = {
+    country: countryCode,
+    languages: languages.join(','),
+    time_zone: timeZone,
+    financial_year: financialYearPolicy,
+  };
 
   /** Create on first save, update thereafter — one signup per founder. */
   const persist = useCallback(async (): Promise<Signup> => {
@@ -504,24 +585,33 @@ function SignupFlow() {
    */
   const handleFailure = useCallback(async (caught: unknown) => {
     if (!isExpiredSession(caught)) {
-      setError(errorText(caught));
+      const problem = describe(caught);
+      if (problem.field === 'mobile') {
+        // Under the field it is about, on the step that has it.
+        setMobileError(problem.message);
+        setStep('preferences');
+      } else {
+        setError(problem.message);
+      }
       return;
     }
-    try {
-      const { methods: available } = await authMethods('signup');
-      setMethods(available);
-    } catch {
-      /* The gate still renders; it just may list nothing. */
-    }
-    setError('Your sign-in expired. Sign in again to pick up where you left off.');
-    setPhase('signedOut');
-  }, []);
+    await restartSignIn();
+  }, [describe, restartSignIn]);
+
+  /** The mobile number against the country's rule, before the server is asked. */
+  const checkMobile = useCallback((): boolean => {
+    if (!mobileRule || !tenantAdminMobile.trim() || mobileNational) return true;
+    setMobileError(mobileInvalid(selectedCountry?.name, t));
+    return false;
+  }, [mobileRule, tenantAdminMobile, mobileNational, selectedCountry?.name, t]);
 
   const advance = async (next: string) => {
+    if (step === 'preferences' && !checkMobile()) return;
     setSaving(true);
     setError(null);
     try {
       await persist();
+      track('signup:step_complete', step === 'preferences' ? { step, ...preferenceChoices } : { step });
       setStep(next);
     } catch (caught) {
       await handleFailure(caught);
@@ -536,6 +626,7 @@ function SignupFlow() {
     try {
       const record = await persist();
       const started = await submitSignup(record.id, submitKey.current);
+      track('signup:account_submit', { country: countryCode });
       setOperation(started);
       setPhase('provisioning');
     } catch (caught) {
@@ -550,6 +641,7 @@ function SignupFlow() {
     authResult.clear();
     setSaving(true);
     setError(null);
+    track('signup:method_select', { method: 'magic_link' });
     try {
       clearSignOutIncomplete();
       await requestMagicLinkSignup({
@@ -557,9 +649,10 @@ function SignupFlow() {
         lastName: signupLastName.trim(),
         email: signupEmail.trim(),
       });
+      track('signup:link_send');
       setPhase('checkEmail');
     } catch (caught) {
-      setError(errorText(caught));
+      setError(describe(caught, true).message);
     } finally {
       setSaving(false);
     }
@@ -576,20 +669,61 @@ function SignupFlow() {
     return () => clearTimeout(timer);
   }, [awaitingPublication]);
 
-  // Poll while the worker runs. Stops as soon as the operation settles, so a
-  // terminal failure does not sit here hammering the endpoint.
+  // Poll while the worker runs, on a fixed cadence keyed to the operation, not
+  // its contents: an answer that changes nothing, an empty answer or a check
+  // that never returns must not stop the loop (a stalled checklist once read
+  // as a stalled setup). Stops as soon as the operation settles, so a terminal
+  // failure does not sit here hammering the endpoint.
+  const operationId = operation?.id ?? null;
+  const settled = !!operation && isOperationSettled(operation);
+  const pollDelay = useRef(POLL_MS);
   useEffect(() => {
-    if (phase !== 'provisioning' || !operation || isOperationSettled(operation)) return;
-    const timer = setTimeout(async () => {
+    pollDelay.current = awaitingPublication && publishSlow ? SLOW_POLL_MS : POLL_MS;
+  }, [awaitingPublication, publishSlow]);
+  useEffect(() => {
+    if (phase !== 'provisioning' || !operationId || settled) return;
+    let live = true;
+    let failures = 0;
+    let shownError = false;
+    let timer: number | undefined;
+    let inFlight: AbortController | null = null;
+    const check = async () => {
+      const controller = new AbortController();
+      inFlight = controller;
+      const timeout = window.setTimeout(() => controller.abort(), POLL_TIMEOUT_MS);
       try {
-        const latest = await findOperation(operation.id);
+        const latest = await searchOperation({ id: operationId }, controller.signal);
+        if (!live) return;
+        failures = 0;
+        if (shownError) {
+          shownError = false;
+          setError(null);
+        }
         if (latest) setOperation(latest);
       } catch (caught) {
-        await handleFailure(caught);
+        if (!live) return;
+        failures += 1;
+        // An expired sign-in can't recover on its own, so it is reported at once; anything else may be a blip.
+        if (isExpiredSession(caught)) {
+          await handleFailure(caught);
+          return;
+        }
+        if (failures >= POLL_FAILURES_BEFORE_ERROR) {
+          shownError = true;
+          await handleFailure(caught);
+        }
+      } finally {
+        window.clearTimeout(timeout);
       }
-    }, awaitingPublication && publishSlow ? SLOW_POLL_MS : POLL_MS);
-    return () => clearTimeout(timer);
-  }, [phase, operation, handleFailure, awaitingPublication, publishSlow]);
+      if (live) timer = window.setTimeout(check, pollDelay.current);
+    };
+    timer = window.setTimeout(check, pollDelay.current);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+      inFlight?.abort();
+    };
+  }, [phase, operationId, settled, handleFailure]);
 
   // Resumed into a run that was already going. Only the signup is addressable
   // here, so this polls that rather than the operation, and resolves the same
@@ -617,6 +751,33 @@ function SignupFlow() {
     };
   }, [phase, seedFrom, restart]);
 
+  const enter = useCallback(async (option: TenantOption): Promise<boolean> => {
+    setError(null);
+    if (option.code === 'WORKSPACE_TRIAL_EXPIRED') {
+      // The dialog renders only with a notice. `enter` doesn't read it, so a new
+      // notice per tenant read never re-creates `enter` or re-runs the effect below.
+      setTrialOpen(true);
+      return false;
+    }
+    setSaving(true);
+    try {
+      await enterWorkspace(option.tenantId, sessionUser);
+      return true;
+    } catch (caught) {
+      const notice = caught instanceof OnboardingError && caught.code === 'WORKSPACE_TRIAL_EXPIRED'
+        ? (caught.details?.notice as WorkspaceTrialNotice | undefined)
+        : undefined;
+      if (notice) {
+        setTrialNotice(notice);
+        setTrialOpen(true);
+      } else {
+        setError(describe(caught).message);
+      }
+      setSaving(false);
+      return false;
+    }
+  }, [sessionUser, describe]);
+
   // Provisioning done and published: the new tenant appears without another
   // sign-in. Acting on SUCCEEDED alone reads an empty tenant list (CCRS#2303).
   useEffect(() => {
@@ -626,27 +787,98 @@ function SignupFlow() {
       try {
         const view = await tenants();
         if (!live) return;
-        setTenantOptions(view.tenants);
+        offerTenants(view);
+        if (view.tenants.length === 1) {
+          const ok = await enter(view.tenants[0]);
+          if (!live) return;
+          if (!ok) {
+            setPhase('chooseTenant');
+          }
+          return;
+        }
         setPhase('chooseTenant');
       } catch (caught) {
-        if (live) setError(errorText(caught));
+        if (live) setError(describe(caught).message);
       }
     })();
     return () => {
       live = false;
     };
-  }, [ready]);
+  }, [ready, enter, describe, offerTenants]);
 
-  const enter = async (option: TenantOption) => {
+  // A run that failed on the founder's own input hands the draft back (PGR's
+  // user-correctable codes) rather than closing it. The signup, not a list of
+  // codes kept here, says which happened: DRAFT again means it can be corrected.
+  const terminal = phase === 'provisioning' && operation?.status === 'TERMINAL_FAILED';
+  useEffect(() => {
+    if (!terminal || reopenCheck !== 'pending') return;
+    let live = true;
+    findSignup()
+      .then((latest) => {
+        if (!live) return;
+        if (latest?.status === 'DRAFT') setReopened(true);
+        setReopenCheck('done');
+      })
+      .catch((caught) => {
+        if (!live) return;
+        // Not knowing is not "closed": offer the check again rather than "contact support".
+        if (!isExpiredSession(caught)) setReopenCheck('failed');
+        void handleFailure(caught);
+      });
+    return () => {
+      live = false;
+    };
+  }, [terminal, reopenCheck, handleFailure]);
+
+  /** Back into the wizard on the reopened draft, at the step with the mobile number. */
+  const correctDetails = async () => {
     setSaving(true);
     setError(null);
     try {
-      await enterWorkspace(option.tenantId, sessionUser);
+      const latest = await findSignup();
+      if (latest) seedFrom(latest);
+      // The run already created the workspace under this account code, so it no longer follows the name or country.
+      codeTouched.current = true;
+      // Only a draft that still holds what the run refused is flagged or cleared. The failure set
+      // the signup's updatedAt to the run's own and only a save moves it on, so a correction saved
+      // since (and kept over a reload) stays as it is.
+      const savedSince = !!latest && !!operation && latest.updatedAt > operation.updatedAt;
+      const refused = savedSince ? null : operation?.errorCode?.toUpperCase();
+      if (refused === 'TENANT_ADMIN_ACCOUNT_REJECTED') {
+        setMobileError(t('signup.mobile_rejected', 'Check this number: your user account couldn’t be created with it.'));
+      }
+      // The one case where the country may change: it is what the run refused.
+      if (refused === 'COUNTRY_NOT_SUPPORTED') setCountryCode('');
+      track('signup:details_change', { error_code: operation?.errorCode ?? undefined });
+      setOperation(null);
+      setReopened(false);
+      setReopenCheck('pending');
+      setStep('preferences');
+      setPhase('wizard');
     } catch (caught) {
-      setError(errorText(caught));
+      await handleFailure(caught);
+    } finally {
       setSaving(false);
     }
   };
+
+  // The funnel's steps: the sign-in gate, the emailed link, then the wizard's three.
+  const viewed = phase === 'signedOut' ? 'sign_in' : phase === 'checkEmail' ? 'check_email' : phase === 'wizard' ? step : null;
+  useEffect(() => {
+    if (viewed) track('signup:step_view', { step: viewed });
+  }, [viewed]);
+
+  // How the run ended, once per operation and outcome.
+  const runStatus = operation?.status;
+  const runError = operation?.errorCode;
+  useEffect(() => {
+    if (runStatus === 'TERMINAL_FAILED' || runStatus === 'RETRYABLE_FAILED') {
+      track('signup:provision_fail', { error_code: runError ?? 'UNKNOWN', retryable: runStatus === 'RETRYABLE_FAILED' });
+    }
+  }, [operationId, runStatus, runError]);
+  useEffect(() => {
+    if (ready) track('signup:provision_complete');
+  }, [ready]);
 
   const accountReady =
     accountName.trim().length > 0 && codeValid && codeState?.available !== false;
@@ -700,7 +932,7 @@ function SignupFlow() {
           {magicLink ? (
             <form className="space-y-3" onSubmit={(event) => void sendSignupLink(event)}>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field id="signup-first-name" label="First name">
+                <Field id="signup-first-name" label="First name" required>
                   <Input
                     id="signup-first-name"
                     className={CONTROL_HEIGHT}
@@ -710,7 +942,7 @@ function SignupFlow() {
                     required
                   />
                 </Field>
-                <Field id="signup-last-name" label="Last name">
+                <Field id="signup-last-name" label="Last name" required>
                   <Input
                     id="signup-last-name"
                     className={CONTROL_HEIGHT}
@@ -721,7 +953,7 @@ function SignupFlow() {
                   />
                 </Field>
               </div>
-              <Field id="signup-email" label="Email address">
+              <Field id="signup-email" label="Email address" required>
                 <Input
                   id="signup-email"
                   className={CONTROL_HEIGHT}
@@ -757,7 +989,11 @@ function SignupFlow() {
                     key={method.id}
                     variant="outline"
                     className="w-full"
-                    onClick={() => { clearSignOutIncomplete(); startSignIn(method.id, 'signup'); }}
+                    onClick={() => {
+                      clearSignOutIncomplete();
+                      track('signup:method_select', { method: method.id });
+                      startSignIn(method.id, 'signup');
+                    }}
                   >
                     <SignupMethodIcon method={method} />
                     {method.label}
@@ -819,10 +1055,13 @@ function SignupFlow() {
               onClick={() => enter(option)}
             >
               <span>{option.name}</span>
-              <span className="text-xs text-muted-foreground">{option.tenantId}</span>
+              <span className="text-xs text-muted-foreground">
+                {option.tenantId}{option.code === 'WORKSPACE_TRIAL_EXPIRED' ? ' — trial ended' : ''}
+              </span>
             </Button>
           ))}
         </div>
+        {trialNotice && <WorkspaceTrialDialog notice={trialNotice} open={trialOpen} onClose={() => setTrialOpen(false)} />}
       </div>
     );
   }
@@ -851,7 +1090,7 @@ function SignupFlow() {
     );
   }
 
-  if (phase === 'invitations') return <Invitations invitations={invitations} onAccepted={bootstrap} />;
+  if (phase === 'invitations') return <Invitations invitations={invitations} onChanged={bootstrap} />;
 
   if (phase === 'entering') {
     return (
@@ -864,15 +1103,20 @@ function SignupFlow() {
   if (phase === 'provisioning' && operation) {
     const done = new Set(operation.completedSteps);
     const failed = operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
+    // PGR runs the steps in order, so while the run is live the step in progress is the first one not
+    // done. That holds for a step code this list does not know, and after a resubmit, which clears
+    // completedSteps but leaves currentStep where the last attempt stopped. A settled run spins nothing.
+    const live = operation.status === 'PENDING' || operation.status === 'RUNNING';
+    const current = live ? PROVISIONING_STEPS.find((name) => !done.has(name)) : undefined;
     return (
       <div>
-        <h1 className="text-2xl font-semibold">Setting up {accountName}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">This usually takes a minute or two.</p>
+        <h1 className="text-2xl font-semibold">{t('signup.setting_up', 'Setting up %{name}', { name: accountName })}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{t('signup.takes_a_minute', 'This usually takes a minute or two.')}</p>
         {banner}
         <ol className="mt-6 space-y-3">
           {PROVISIONING_STEPS.map((name) => {
             const isDone = done.has(name);
-            const isCurrent = operation.currentStep === name && !isDone;
+            const isCurrent = current === name && !isDone;
             return (
               <li key={name} className="flex items-center gap-3 text-sm">
                 {isDone ? (
@@ -883,7 +1127,7 @@ function SignupFlow() {
                   <span className="h-4 w-4 rounded-full border border-muted-foreground/40" />
                 )}
                 <span className={isDone ? 'text-foreground' : 'text-muted-foreground'}>
-                  {STEP_LABELS[name]}
+                  {t(`provisioning_step.${name.toLowerCase()}`, PROVISIONING_STEP_LABELS[name])}
                 </span>
               </li>
             );
@@ -892,10 +1136,14 @@ function SignupFlow() {
         {failed && (
           <Alert variant="destructive" className="mt-6">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Setup did not finish</AlertTitle>
+            <AlertTitle>{t('signup.setup_failed', 'Setup did not finish')}</AlertTitle>
             <AlertDescription>
-              {operation.errorMessage || 'The setup could not be completed.'}
-              {operation.errorCode ? ` (${operation.errorCode})` : ''}
+              {describeProvisioningFailure(operation, t)}
+              {operation.errorCode && (
+                <span className="mt-1 block text-xs opacity-80">
+                  {t('signup.setup_reference', 'Reference: %{code}', { code: operation.errorCode })}
+                </span>
+              )}
             </AlertDescription>
           </Alert>
         )}
@@ -908,32 +1156,48 @@ function SignupFlow() {
               try {
                 setOperation(await retryOperation(operation.id));
               } catch (caught) {
-                setError(errorText(caught));
+                setError(describe(caught).message);
               } finally {
                 setSaving(false);
               }
             }}
           >
-            <RefreshCw className="mr-2 h-4 w-4" /> Try again
+            <RefreshCw className="mr-2 h-4 w-4" /> {t('signup.try_again', 'Try again')}
           </Button>
         )}
-        {operation.status === 'TERMINAL_FAILED' && (
+        {operation.status === 'TERMINAL_FAILED' && reopened && (
+          <Button className="mt-4" disabled={saving} onClick={() => void correctDetails()}>
+            {t('signup.correct_details', 'Change my details')}
+          </Button>
+        )}
+        {operation.status === 'TERMINAL_FAILED' && !reopened && reopenCheck === 'done' && (
           <p className="mt-4 text-sm text-muted-foreground">
-            This signup cannot be retried. Please contact support to continue.
+            {t('signup.cannot_retry', 'This signup cannot be retried. Please contact support to continue.')}
           </p>
+        )}
+        {operation.status === 'TERMINAL_FAILED' && !reopened && reopenCheck === 'failed' && (
+          <Button
+            className="mt-4"
+            variant="outline"
+            onClick={() => {
+              setError(null);
+              setReopenCheck('pending');
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" /> {t('signup.try_again', 'Try again')}
+          </Button>
         )}
         {awaitingPublication && !publishSlow && (
           <div className="mt-6 flex items-center text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Finishing setup…
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t('signup.finishing', 'Finishing setup…')}
           </div>
         )}
         {awaitingPublication && publishSlow && (
           <Alert className="mt-6">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <AlertTitle>Your workspace is almost ready</AlertTitle>
+            <AlertTitle>{t('signup.almost_ready', 'Your workspace is almost ready')}</AlertTitle>
             <AlertDescription>
-              We're finishing setup. This page will continue automatically, or you can come back
-              and sign in again shortly.
+              {t('signup.almost_ready_detail', 'We\'re finishing setup. This page will continue automatically, or you can come back and sign in again shortly.')}
             </AlertDescription>
           </Alert>
         )}
@@ -1000,10 +1264,12 @@ function SignupFlow() {
           <Field
             id="accountName"
             label="Account name"
+            required
             help="The name of your account. It could be a government organisation, agency, department, institution, or programme."
           >
             <Input
               id="accountName"
+              aria-required="true"
               value={accountName}
               onChange={(e) => setAccountName(e.target.value)}
             />
@@ -1012,6 +1278,7 @@ function SignupFlow() {
           <Field
             id="accountCode"
             label="Account code"
+            required
             help="Used as a short identifier for your account across configuration, URLs, and system references."
             status={
               <AvailabilityNote
@@ -1027,6 +1294,7 @@ function SignupFlow() {
           >
             <Input
               id="accountCode"
+              aria-required="true"
               value={accountCode}
               onChange={(e) => {
                 codeTouched.current = true;
@@ -1035,7 +1303,14 @@ function SignupFlow() {
             />
           </Field>
 
-          <Button className="w-full" disabled={!accountReady} onClick={() => setStep('preferences')}>
+          <Button
+            className="w-full"
+            disabled={!accountReady}
+            onClick={() => {
+              track('signup:step_complete', { step: 'account' });
+              setStep('preferences');
+            }}
+          >
             Continue
           </Button>
         </section>
@@ -1051,15 +1326,19 @@ function SignupFlow() {
           <Field
             id="countryCode"
             label="Base country of operations"
+            required
             help="Used to suggest locale, timezone, and account code defaults."
           >
             <select
               id="countryCode"
+              aria-required="true"
               className={selectClass}
               value={countryCode}
               onChange={(e) => {
                 const next = e.target.value;
                 setCountryCode(next);
+                // The number is checked against the new country's rule from here on.
+                setMobileError(null);
                 // Suggest, never overwrite a zone chosen by hand. "Chosen by
                 // hand" has to be tracked, not inferred from the field being
                 // non-empty: the first country pick fills it, so that test was
@@ -1081,6 +1360,7 @@ function SignupFlow() {
           <div>
             <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Languages
+              <RequiredMark />
             </span>
             {/* Pills, not checkboxes: a short multi-select reads better as
                 toggles and matches the reference. */}
@@ -1111,9 +1391,10 @@ function SignupFlow() {
             </div>
           </div>
 
-          <Field id="timeZone" label="Timezone">
+          <Field id="timeZone" label="Timezone" required>
             <select
               id="timeZone"
+              aria-required="true"
               className={selectClass}
               value={timeZone}
               onChange={(e) => {
@@ -1131,9 +1412,10 @@ function SignupFlow() {
             </select>
           </Field>
 
-          <Field id="financialYearPolicy" label="Financial year">
+          <Field id="financialYearPolicy" label="Financial year" required>
             <select
               id="financialYearPolicy"
+              aria-required="true"
               className={selectClass}
               value={financialYearPolicy}
               onChange={(e) => setFinancialYearPolicy(e.target.value)}
@@ -1150,6 +1432,7 @@ function SignupFlow() {
           <Field
             id="urlSlug"
             label="Account URL"
+            required
             // No preview of a subdomain: workspace URLs are deferred and there
             // is no DNS or routing contract behind that shape yet, so showing
             // one would be promising an address nobody has agreed to serve.
@@ -1168,6 +1451,7 @@ function SignupFlow() {
           >
             <Input
               id="urlSlug"
+              aria-required="true"
               value={urlSlug}
               onChange={(e) => {
                 slugTouched.current = true;
@@ -1179,24 +1463,42 @@ function SignupFlow() {
           <Field
             id="tenantAdminMobile"
             label="Your mobile number"
+            required
             help={
-              selectedCountry
-                ? `Used to create your account inside the new workspace. Enter the number without the ${selectedCountry.dialCode} prefix.`
-                : 'Used to create your account inside the new workspace.'
+              <>
+                {t('signup.mobile_purpose', 'Used to create your account inside the new workspace.')}
+                {selectedCountry && mobileRule && <> {mobileHint(selectedCountry.name, mobileRule, t)}</>}
+              </>
+            }
+            status={
+              mobileError ? (
+                <p id="tenantAdminMobile-error" role="alert" className="mt-1 flex items-center gap-1 text-xs text-destructive">
+                  <AlertCircle className="h-3 w-3 shrink-0" /> {mobileError}
+                </p>
+              ) : null
             }
           >
             <div className="flex items-center gap-2">
-              {selectedCountry ? (
+              {mobileRule ? (
                 <span className="shrink-0 rounded border bg-muted px-3 py-2 text-sm text-muted-foreground">
-                  {selectedCountry.dialCode}
+                  {mobileRule.dialCode}
                 </span>
               ) : null}
               <Input
                 id="tenantAdminMobile"
+                aria-required="true"
                 className="flex-1"
+                inputMode="tel"
+                autoComplete="tel-national"
                 value={tenantAdminMobile}
-                onChange={(e) => setTenantAdminMobile(e.target.value)}
-                placeholder={selectedCountry?.nationalExample ?? 'National number'}
+                aria-invalid={mobileError ? true : undefined}
+                aria-describedby={mobileError ? 'tenantAdminMobile-help tenantAdminMobile-error' : 'tenantAdminMobile-help'}
+                onChange={(e) => {
+                  setTenantAdminMobile(e.target.value);
+                  setMobileError(null);
+                }}
+                onBlur={() => void checkMobile()}
+                placeholder={mobileRule?.example ?? 'National number'}
               />
             </div>
           </Field>
@@ -1233,7 +1535,7 @@ function SignupFlow() {
               // founder nothing to check against the number they meant.
               [
                 'Mobile number',
-                selectedCountry ? `${selectedCountry.dialCode} ${tenantAdminMobile}` : tenantAdminMobile,
+                mobileRule ? `${mobileRule.dialCode} ${mobileNational ?? tenantAdminMobile}` : tenantAdminMobile,
               ],
             ].map(([label, value], i) => (
               <div
@@ -1248,21 +1550,11 @@ function SignupFlow() {
             ))}
           </dl>
 
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
-            />
-            <span className="text-muted-foreground">I agree to the terms of service.</span>
-          </label>
-
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setStep('preferences')}>
               Back
             </Button>
-            <Button className="flex-1" disabled={!acceptedTerms || saving} onClick={submit}>
+            <Button className="flex-1" disabled={saving} onClick={submit}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Create account
             </Button>
           </div>

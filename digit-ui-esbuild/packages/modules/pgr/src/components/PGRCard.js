@@ -41,7 +41,8 @@ let propsForSandbox = [
     label: t("CONFIGURE_MASTER"),
     link: `/${window?.contextPath}/employee/sandbox/application-management/setup-master?module=PGR&key=about`,
     isOutsideModule : true,
-    roles: role
+    // An admin screen: every employee holds CSR (#2239), so it is gated on admin roles, not the create role.
+    roles: ["MDMS_ADMIN", "SUPERUSER"]
   }
 ];
 

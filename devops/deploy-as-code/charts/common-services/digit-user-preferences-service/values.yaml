@@ -19,14 +19,70 @@ initContainers:
   dbMigration:
     enabled: true
     schemaTable: "digit_user_preferences_service_schema"
+    # Same build as the app image below — see the tag note there.
     image:
       repository: "digit-user-preferences-service-db"
-      tag: "2.12-5137119"
+      tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> — the same tag as image.tag
+      pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
+    # The common chart's migration env, plus FLYWAY_VALIDATE_ON_MIGRATE=false.
+    # V20260205120000__create_user_preference.sql was edited after it shipped (#2081
+    # added the duplicate collapse ahead of the unique index), so a database whose
+    # Flyway history holds the earlier version records a different checksum: any
+    # cluster that ran this chart while it pinned the 2.12 -db image (2.12-5137119).
+    # With validation on, Flyway stops there ("Validate failed: Migration checksum
+    # mismatch for migration version 20260205120000") and the pod never leaves Init.
+    # The compose migrators have always run with validation off; this does the same
+    # for this service only. The alternative is a one-off `flyway repair` with this
+    # image and env against digit_user_preferences_service_schema, which rewrites the
+    # stored checksum; validation can then be switched back on.
+    env: |
+        - name: "DB_URL"
+          valueFrom:
+            configMapKeyRef:
+              name: egov-config
+              key: db-url
+        - name: "SCHEMA_TABLE"
+          value: {{ .Values.initContainers.dbMigration.schemaTable | quote }}
+        - name: "FLYWAY_USER"
+          valueFrom:
+            secretKeyRef:
+                name: db
+                key: flyway-username
+        - name: "FLYWAY_PASSWORD"
+          valueFrom:
+            secretKeyRef:
+                name: db
+                key: flyway-password
+        - name: "FLYWAY_LOCATIONS"
+          valueFrom:
+            configMapKeyRef:
+                name: egov-config
+                key: flyway-locations
+        - name: "FLYWAY_IGNORE_MIGRATION_PATTERNS"
+          value: "*:missing"
+        - name: "FLYWAY_OUT_OF_ORDER"
+          value: "true"
+        - name: "FLYWAY_BASELINE_ON_MIGRATE"
+          value: "true"
+        - name: "SCHEMA_NAME"
+          value: "public"
+        - name: "FLYWAY_VALIDATE_ON_MIGRATE"
+          value: "false"
 
 # Container Configs
+# The Spring Boot build (#1982) exists only on develop. Every 2.12 / master tag of
+# this image (2.12-5137119, v2.12, master-*) is the retired Go binary, which reads
+# DB_HOST/DB_USER and none of the datasource settings this chart and extraEnv.java
+# supply, so it cannot reach the database and the pod never turns ready.
+# This pair follows the notification stack's tag: global.notificationStackTag in
+# charts/environments/env.yaml, when set, moves it with pgr-services and novu-bridge
+# (templates/deployment.yaml); otherwise these chart defaults apply. `nightly-develop`
+# is the same stopgap as there — the release step (build/NIGHTLY-BUILDS.md) pins
+# develop-<sha8> here and in the other two stack charts at once.
 image:
   repository: "digit-user-preferences-service"
-  tag: "2.12-5137119"
+  tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> of the merge build
+  pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 replicas: "1"
 httpPort: 8080
 appType: "java-spring"

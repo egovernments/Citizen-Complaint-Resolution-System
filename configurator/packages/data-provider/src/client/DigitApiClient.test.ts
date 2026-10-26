@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { DigitApiClient } from './DigitApiClient.js';
+import { DigitApiClient, exactTenantRow, withCsrRole } from './DigitApiClient.js';
 import { ApiClientError, isSessionExpired } from './errors.js';
 
 describe('DigitApiClient', () => {
@@ -30,6 +30,27 @@ describe('DigitApiClient', () => {
     assert.equal(client.isAuthenticated(), true);
     const info = client.buildRequestInfo();
     assert.equal(info.authToken, 'test-token');
+  });
+
+  // egov-hrms drops its tenant filter on a code search unless someone in the tenant has the code as username (#2456).
+  it('keeps only the tenant\'s rows (and its cities\') from a code search, reading every page', async () => {
+    const urls: string[] = [];
+    const pages = [[{ tenantId: 'other' }, { tenantId: 'acme.city' }], [{ tenantId: 'acme' }]];
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async (url: unknown) => { urls.push(String(url)); return { Employees: pages.shift() ?? [] }; };
+    pages[0].push(...Array.from({ length: 98 }, () => ({ tenantId: 'other' })));
+    const rows = await client.employeeSearch('acme', { codes: ['EMP_0002'] });
+    assert.deepEqual(rows.map((r) => r.tenantId), ['acme.city', 'acme']);
+    assert.equal(urls.length, 2);
+    assert.match(urls[1], /offset=100/);
+  });
+
+  it('stops a code search at the page guard with an error, not a hang', async () => {
+    let calls = 0;
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async () => { calls += 1; return { Employees: Array.from({ length: DigitApiClient.SEARCH_PAGE_SIZE }, () => ({ tenantId: 'other' })) }; };
+    await assert.rejects(() => client.employeeSearch('acme', { codes: ['EMP_0002'] }), /truncated after 200 pages/);
+    assert.equal(calls, DigitApiClient.SEARCH_MAX_PAGES);
   });
 
   it('resolves endpoint with overrides', () => {
@@ -207,5 +228,73 @@ describe('isSessionExpired', () => {
       isSessionExpired(400, [{ code: 'INVALID_SEARCH', message: 'tenantId is required' }]),
       false,
     );
+  });
+});
+
+describe('DigitApiClient.pgrCreate geoLocation', () => {
+  const sentAddress = async (address: Record<string, unknown>) => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    let body: { service: { address: Record<string, unknown> } } | undefined;
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async (_path: unknown, sent: unknown) => {
+        body = sent as typeof body;
+        return { ServiceWrappers: [{}] };
+      };
+    await client.pgrCreate('pg.citya', 'StreetLightNotWorking', 'test', address);
+    return body!.service.address;
+  };
+
+  it('sends an empty geoLocation, not (0, 0), when there is no location (#1581)', async () => {
+    assert.deepEqual((await sentAddress({ locality: { code: 'L1' } })).geoLocation, {});
+    assert.deepEqual((await sentAddress({ locality: { code: 'L1' }, geoLocation: null })).geoLocation, {});
+  });
+
+  it('keeps a location the caller passes', async () => {
+    const geoLocation = { latitude: -1.29, longitude: 36.82 };
+    assert.deepEqual((await sentAddress({ locality: { code: 'L1' }, geoLocation })).geoLocation, geoLocation);
+  });
+});
+
+describe('withCsrRole — every new employee can file complaints (#2239)', () => {
+  const roles = (employee: Record<string, unknown>) =>
+    ((employee.user as Record<string, unknown>).roles as Array<{ code: string; tenantId?: string }>).map((r) => `${r.code}@${r.tenantId}`);
+
+  it('adds CSR on the tenant the other roles are tagged with', () => {
+    const out = withCsrRole({ code: 'E1', user: { tenantId: 'ke', roles: [{ code: 'GRO', name: 'GRO', tenantId: 'ke' }] } }, 'pg');
+    assert.deepEqual(roles(out), ['GRO@ke', 'CSR@ke']);
+  });
+
+  it('follows a state-root tag rather than the city tenant', () => {
+    const out = withCsrRole({ user: { tenantId: 'pg.citya', roles: [{ code: 'EMPLOYEE', tenantId: 'pg' }] } }, 'pg.citya');
+    assert.deepEqual(roles(out), ['EMPLOYEE@pg', 'CSR@pg']);
+  });
+
+  it('adds CSR on every role tenant, and CSR on another tenant does not count', () => {
+    const out = withCsrRole({ user: { tenantId: 'pg.citya', roles: [{ code: 'CSR', tenantId: 'pg.cityb' }, { code: 'GRO', tenantId: 'pg.citya' }] } }, 'pg.citya');
+    assert.deepEqual(roles(out), ['CSR@pg.cityb', 'GRO@pg.citya', 'CSR@pg.citya']);
+  });
+
+  it('falls back to the employee tenant and leaves an existing CSR alone', () => {
+    assert.deepEqual(roles(withCsrRole({ user: { tenantId: 'ke' } }, 'pg')), ['CSR@ke']);
+    assert.deepEqual(roles(withCsrRole({ user: {} }, 'ke')), ['CSR@ke']);
+    const has = { user: { roles: [{ code: 'CSR', tenantId: 'ke' }] } };
+    assert.equal(withCsrRole(has, 'ke'), has);
+  });
+
+  it('leaves an employee without a user untouched', () => {
+    const employee = { code: 'E1' };
+    assert.equal(withCsrRole(employee, 'ke'), employee);
+  });
+});
+
+describe('exactTenantRow — never a city\'s employee that shares the code (#2456)', () => {
+  const rows = [{ tenantId: 'acme.city', uuid: 'c' }, { tenantId: 'acme', uuid: 'w' }];
+  it('picks the row at exactly the tenant', () => {
+    assert.equal(exactTenantRow(rows, 'acme', 'EMP_0002')?.uuid, 'w');
+    assert.equal(exactTenantRow(rows, 'acme.city', 'EMP_0002')?.uuid, 'c');
+  });
+  it('has none for a tenant with no row, and refuses to guess between two', () => {
+    assert.equal(exactTenantRow(rows, 'other', 'EMP_0002'), undefined);
+    assert.throws(() => exactTenantRow([...rows, { tenantId: 'acme', uuid: 'x' }], 'acme', 'EMP_0002'), /More than one employee EMP_0002 in acme/);
   });
 });

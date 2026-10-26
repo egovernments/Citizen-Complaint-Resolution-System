@@ -1,0 +1,144 @@
+---
+# Turbopass boundary DB (#2600). Builds the offline boundary DB that
+# turbopass-search serves (Overture plus the official COD-AB / geoBoundaries
+# sets) on the target, for `turbopass_countries`, when the DB in
+# `turbopass_overture_data_dir` doesn't already hold all of them. Without it the
+# configurator's "Fetch boundaries" and "Preconfigured boundaries" options are
+# both unavailable, although the service itself answers.
+#
+# Included from playbook-deploy.yml after the turbopass source sync and before
+# turbopass-search is (re)created; the recreate opens whatever DB is there.
+#
+#   turbopass_countries            ISO 3166-1 alpha-2 codes; [] = never build here
+#   turbopass_overture_data_dir    directory holding boundaries.sqlite
+#   turbopass_rebuild_boundary_db  true = rebuild even when the DB covers them
+#   turbopass_overture_release     Overture release; blank = the newest one
+#   turbopass_official_sources     cod,geoboundaries; none = Overture only
+#   turbopass_bootstrap_memory     memory cap (swap included) for the build
+#                                  container, so it can't starve the DIGIT stack
+#                                  on the same box
+#
+# A failed build is a WARNING, not a failed deploy: the data comes from
+# Overture's S3 bucket, HDX and geoBoundaries, and bootstrap.sh swaps a new DB in
+# only after it verifies, so the DB that was there keeps being served.
+
+- name: "Turbopass — boundary DB directory"
+  ansible.builtin.file:
+    path: "{{ turbopass_overture_data_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: "Turbopass — countries the boundary DB holds"
+  ansible.builtin.command:
+    argv: [python3, -c, "{{ _turbopass_db_countries_py }}", "{{ turbopass_overture_data_dir }}/boundaries.sqlite"]
+  vars:
+    # meta.countries is written by overture-scraper/scrape.py. No DB, or one
+    # without that row, prints nothing.
+    _turbopass_db_countries_py: |
+      import sqlite3, sys
+      try:
+          db = sqlite3.connect('file:' + sys.argv[1] + '?mode=ro', uri=True)
+          print(db.execute("SELECT value FROM meta WHERE key = 'countries'").fetchone()[0])
+      except Exception:
+          pass
+  register: turbopass_db_have
+  changed_when: false
+  check_mode: false
+
+- name: "Turbopass — decide whether to build the boundary DB"
+  ansible.builtin.set_fact:
+    turbopass_db_build: >-
+      {{ (_wanted | length > 0)
+         and ((_wanted | difference(_have) | length > 0)
+              or (turbopass_rebuild_boundary_db | bool)) }}
+  vars:
+    _wanted: "{{ turbopass_countries | map('upper') | list }}"
+    _have: "{{ turbopass_db_have.stdout | trim | upper | split(',') | reject('equalto', '') | list }}"
+
+- name: "Turbopass — boundary DB already holds {{ turbopass_countries | join(', ') }}"
+  ansible.builtin.debug:
+    msg: >-
+      {{ turbopass_overture_data_dir }}/boundaries.sqlite holds {{ turbopass_db_have.stdout | trim }}.
+      Not rebuilding; pass -e '{"turbopass_rebuild_boundary_db": true}' to rebuild it.
+  when:
+    - not (turbopass_db_build | bool)
+    - turbopass_countries | length > 0
+
+- name: "Turbopass — build bootstrap image (turbopass-bootstrap:local)"
+  ansible.builtin.command: >-
+    docker build
+    -t turbopass-bootstrap:local
+    -f {{ digit_dir }}/.build/turbopass/overture-scraper/Dockerfile
+    {{ digit_dir }}/.build/turbopass/overture-scraper
+  register: turbopass_bootstrap_image
+  changed_when: true
+  failed_when: false
+  when: turbopass_db_build | bool
+
+# Several minutes per country, network-bound (Overture's parquet on S3, then HDX
+# and geoBoundaries). Builds into boundaries.sqlite.building and renames it into
+# place only after verify_db.py passes.
+- name: "Turbopass — build the boundary DB for {{ turbopass_countries | join(', ') }}"
+  ansible.builtin.shell: |
+    docker rm -f turbopass-bootstrap >/dev/null 2>&1 || true
+    docker run --rm --name turbopass-bootstrap \
+      --memory '{{ turbopass_bootstrap_memory }}' --memory-swap '{{ turbopass_bootstrap_memory }}' \
+      -e COUNTRIES='{{ turbopass_countries | map('upper') | join(',') }}' \
+      -e OVERTURE_RELEASE='{{ turbopass_overture_release | default('') }}' \
+      -e OFFICIAL_SOURCES='{{ turbopass_official_sources | default('cod,geoboundaries') }}' \
+      -v {{ turbopass_overture_data_dir }}:/overture-data \
+      turbopass-bootstrap:local
+  register: turbopass_bootstrap_run
+  changed_when: turbopass_bootstrap_run.rc == 0
+  failed_when: false
+  when:
+    - turbopass_db_build | bool
+    - turbopass_bootstrap_image.rc | default(1) == 0
+
+- name: "Turbopass — WARNING: the boundary DB was not built"
+  ansible.builtin.debug:
+    msg: >-
+      The turbopass boundary DB for {{ turbopass_countries | join(', ') }} was not built
+      ({{ 'bootstrap image build' if (turbopass_bootstrap_image.rc | default(1)) != 0 else 'bootstrap' }}
+      failed). {{ ('turbopass-search keeps serving the DB for ' ~ (turbopass_db_have.stdout | trim)
+      ~ ', so Fetch boundaries and Preconfigured boundaries cover only those countries.')
+      if (turbopass_db_have.stdout | trim) else
+      'turbopass-search serves no DB, so Fetch boundaries and Preconfigured boundaries stay unavailable.' }}
+      Last output:
+      {{ ((turbopass_bootstrap_run.stdout_lines | default(turbopass_bootstrap_image.stdout_lines | default([])))
+          + (turbopass_bootstrap_run.stderr_lines | default(turbopass_bootstrap_image.stderr_lines | default([]))))[-8:] }}.
+      Rerun with ./deploy.sh <tenant> --tags=turbopass.
+  when:
+    - turbopass_db_build | bool
+    - not ansible_check_mode
+    - (turbopass_bootstrap_image.rc | default(1)) != 0 or (turbopass_bootstrap_run.rc | default(1)) != 0
+
+# verify_db.py exits 0 when a country got no official set (it stays Overture
+# only) and says so in a WARNING line; surface those, or every later deploy just
+# reports "Not rebuilding". This shows once: the DB now lists the country, so
+# later deploys don't retry it.
+- name: "Turbopass — boundary DB built, with warnings"
+  ansible.builtin.debug:
+    msg: "{{ turbopass_bootstrap_run.stdout_lines | select('match', '^WARNING:') | list + [_retry_note] }}"
+  vars:
+    _retry_note: >-
+      Later deploys won't retry these countries: the DB now holds them, so they
+      report "Not rebuilding". Once the official source is back, rebuild with
+      ./deploy.sh <tenant> --tags=turbopass -e '{"turbopass_rebuild_boundary_db": true}'.
+  when:
+    - turbopass_db_build | bool
+    - turbopass_bootstrap_run.rc | default(1) == 0
+    - turbopass_bootstrap_run.stdout_lines | default([]) | select('match', '^WARNING:') | list | length > 0
+
+# The build image is only used for a build, and a build makes it again. This
+# removes its tag only: its layers (most of the ~720 MB is the pip install
+# layer) stay in BuildKit's build cache until the builder's GC or
+# `docker builder prune` frees them. No prune here, as that would also drop
+# other builds' cache on the box.
+- name: "Turbopass — remove the bootstrap image"
+  ansible.builtin.command: docker image rm turbopass-bootstrap:local
+  changed_when: true
+  failed_when: false
+  when:
+    - turbopass_db_build | bool
+    - turbopass_bootstrap_run.rc | default(1) == 0

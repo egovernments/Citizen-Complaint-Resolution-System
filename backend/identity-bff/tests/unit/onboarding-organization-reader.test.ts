@@ -13,7 +13,7 @@ const serve = (records: unknown[]) => vi.stubGlobal("fetch", vi.fn(async () => R
 describe("raw onboarding Organization reader", () => {
   it.each(["PROVISIONING", "ACTIVE", "FAILED"])("returns %s Organizations even when disabled", async (lifecycle) => {
     serve([record("org", { "digit.lifecycle": [lifecycle] }, false)]);
-    expect(await readOrganizationByTenant("tenant")).toEqual({ id: "org", alias: "org", name: "Workspace", lifecycle, enabled: false });
+    expect(await readOrganizationByTenant("tenant")).toEqual({ id: "org", alias: "org", name: "Workspace", lifecycle, enabled: false, trial: null });
   });
   it("preserves absent lifecycle as null and returns null only for absent tenants", async () => {
     serve([record("org")]);

@@ -10,7 +10,7 @@ if (inMonorepo) {
 }
 // Standalone packages receive data/ from CI/Ansible preparation before Docker build.
 const seed = JSON.parse(await readFile(staged, 'utf8'));
-if (seed.version !== '2' || !Array.isArray(seed.schemas) || !Array.isArray(seed.records)) {
+if (!/^[1-9][0-9]*$/.test(String(seed.version)) || !Array.isArray(seed.schemas) || !Array.isArray(seed.records)) {
   throw new Error('Missing or unsupported staged platform seed; prepare the canonical PGR resource before build');
 }
 for (const directory of ['src/data/', 'dist/data/']) {

@@ -8,6 +8,7 @@ import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 import useMapConfig from "../hooks/pgr/useMapConfig";
 import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
+import { translateOr } from "../utils/selectPlaceholder";
 import { hasUsableGeoLocation } from "../utils/geoLocation";
 
 // Fix default icon issue in React builds
@@ -212,7 +213,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
                     minWidth: "150px",
                     maxWidth: "300px"
                   }}>
-                    {isLoadingAddress ? "Loading address..." : displayAddress}
+                    {isLoadingAddress ? translateOr(t, "CS_LOADING_ADDRESS", "Loading address...") : displayAddress}
                   </div>
                 </Tooltip>
               )}
@@ -221,13 +222,17 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
 
           {/* Open in Google Maps Button */}
           <button
+            type="button"
+            className="cms-map-navigate"
             onClick={handleOpenInGoogleMaps}
             style={{
               position: "absolute",
               bottom: "20px",
               right: "20px",
               zIndex: 999,
-              backgroundColor: "#4285F4",
+              // White on Google's #4285F4 is 3.6:1; #1A73E8 is the same blue at
+              // 4.5:1 (WCAG 1.4.3).
+              backgroundColor: "#1A73E8",
               color: "white",
               padding: "12px 20px",
               borderRadius: "8px",
@@ -242,11 +247,11 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
               transition: "all 0.2s",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "#3367D6";
+              e.currentTarget.style.backgroundColor = "#1557B0";
               e.currentTarget.style.transform = "scale(1.05)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "#4285F4";
+              e.currentTarget.style.backgroundColor = "#1A73E8";
               e.currentTarget.style.transform = "scale(1)";
             }}
             title={t("CS_OPEN_IN_GOOGLE_MAPS")}
@@ -268,8 +273,8 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
             fontSize: "12px",
             color: "#505A5F"
           }}>
-            <div><strong>Lat:</strong> {latitude.toFixed(6)}</div>
-            <div><strong>Lng:</strong> {longitude.toFixed(6)}</div>
+            <div><strong>{translateOr(t, "CS_COMMON_LATITUDE_SHORT", "Lat:")}</strong> {latitude.toFixed(6)}</div>
+            <div><strong>{translateOr(t, "CS_COMMON_LONGITUDE_SHORT", "Lng:")}</strong> {longitude.toFixed(6)}</div>
           </div>
         </div>
       </div>

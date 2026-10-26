@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { keycloakify } from "keycloakify/vite-plugin";
+import { lostSessionThemeProperties } from "./src/digit/shared/lostSession";
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
 
@@ -76,7 +77,10 @@ export default defineConfig({
                 { name: "DIGIT_FOOTER_URL", default: "/digit-ui/brand/digit-footer.png" },
                 { name: "DIGIT_FOOTER_BW_URL", default: "/digit-ui/brand/digit-footer-bw.png" },
                 { name: "DIGIT_HOME_URL", default: "https://www.digit.org/" }
-            ]
+            ],
+            // Names the lost-session message keys so the server renders them
+            // for the error page to match against (src/digit/shared/lostSession.ts).
+            extraThemeProperties: lostSessionThemeProperties
         })
     ]
 });

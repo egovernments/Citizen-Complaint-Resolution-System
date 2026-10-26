@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
-import { createIdentitySession, createPhoneOtpSession, deleteIdentitySession, getIdentitySession, kcSessionSubjectKey, listPersonSessions } from "../../src/modules/sessions/session-store.js";
+import { createIdentitySession, createPhoneOtpSession, deleteIdentitySession, getIdentitySession, kcSessionSubjectKey, listPersonSessions, sessionKey } from "../../src/modules/sessions/session-store.js";
 import { applyKeycloakEvent } from "../../src/modules/revocation/event-effects.js";
 import { drainRevocationJobs } from "../../src/modules/revocation/index.js";
 import { getRedis } from "../../src/infrastructure/redis.js";
 import { startIdentityTestApp, stopIdentityTestApp } from "./identity-test-app.js";
 import { ACCOUNT_ACTIONS } from "../../src/modules/authentication/account-service.js";
+import { personLeaseKey } from "../../src/modules/accounts/person-lease.js";
 
 let base: string;
 const saved = { ...config };
@@ -22,7 +23,7 @@ beforeAll(async () => {
   Object.assign(config, { cachePrefix: prefix, keycloakOrganizationRealm: "self-service", keycloakBffClientSecret: "test-bff-secret", keycloakOidcBackchannelUrl: process.env.KEYCLOAK_ISSUER, identityCookieSecure: false });
   base = `http://localhost:${await startIdentityTestApp()}`;
   await admin("/clients/digit-identity-bff-uuid", { attributes: { "digit.auth.account.actions": ACCOUNT_ACTIONS.join(",") } });
-  await admin("/users", { id: "identity-user-1", username: "self-service-user", enabled: true, credentials: [{ id: "password-1", type: "password" }, { id: "otp-1", type: "otp" }], federatedIdentities: [{ identityProvider: "google", userId: "google-id" }] }, "POST");
+  await admin("/users", { id: "identity-user-1", username: "self-service-user", email: "changed@example.test", enabled: true, credentials: [{ id: "password-1", type: "password" }, { id: "otp-1", type: "otp" }], federatedIdentities: [{ identityProvider: "google", userId: "google-id" }] }, "POST");
 });
 afterAll(async () => {
   const keys = await getRedis().keys(`${prefix}:*`); if (keys.length) await getRedis().del(...keys);
@@ -36,6 +37,9 @@ describe("account self-service", () => {
     const body = await (await fetch(`${base}/identity/v1/session?include=account`, { headers })).json();
     expect(body.account).toMatchObject({ actions: ACCOUNT_ACTIONS, providers: [{ alias: "google" }], credentials: [{ id: "password-1", type: "password", label: "" }, { id: "otp-1", type: "otp", label: "" }] });
     expect(body.sessions).toContainEqual(expect.objectContaining({ current: true, surface: "configurator" }));
+    // A verified email change shows before the token's claims catch up (#2645).
+    expect(body.user.email).toBe("changed@example.test");
+    expect(body.account).not.toHaveProperty("email");
     expect(JSON.stringify(body)).not.toContain(sessionId);
     expect(body.account.credentials[0]).not.toHaveProperty("secretData");
   });
@@ -52,6 +56,14 @@ describe("account self-service", () => {
       expect(new URL(response.headers.get("location")!).searchParams.get("kc_action")).toBe(action);
     }
   });
+  it("never puts the person's username or email in the authorize URL (#2645)", async () => {
+    const { sessionId } = await createIdentitySession(tokens, { sub: "identity-user-1", email: "test@example.test", preferred_username: "self-service-user" }, config.keycloakBffClientId);
+    const response = await fetch(`${base}/identity/v1/authorize?action=UPDATE_PASSWORD`, { redirect: "manual", headers: { Cookie: cookie(sessionId) } });
+    const location = response.headers.get("location")!;
+    expect(new URL(location).searchParams.has("login_hint")).toBe(false);
+    expect(location).not.toContain("self-service-user");
+    expect(location).not.toContain("example.test");
+  });
   it.each(["success", "cancelled", "error"])("updates the same session for action result %s", async status => {
     const { sessionId } = await session();
     const count = (await listPersonSessions("identity-user-1")).length;
@@ -64,6 +76,33 @@ describe("account self-service", () => {
     expect(await getIdentitySession(sessionId)).not.toBeNull();
     expect((await listPersonSessions("identity-user-1")).length).toBe(count);
   });
+  it("a finished action moves the session's end (#2456)", async () => {
+    const { sessionId } = await session();
+    // A minute left, as if the last refresh was nearly the idle limit ago.
+    const record = (await getIdentitySession(sessionId))!;
+    await getRedis().set(sessionKey(sessionId), JSON.stringify({ ...record, sessionExpiresAt: Date.now() + 60_000 }), "KEEPTTL");
+    const response = await fetch(`${base}/identity/v1/authorize?action=UPDATE_PASSWORD&returnTo=/account`, { redirect: "manual", headers: { Cookie: cookie(sessionId) } });
+    const url = new URL(response.headers.get("location")!);
+    const callback = await fetch(`${base}/identity/v1/callback?state=${url.searchParams.get("state")}&code=valid-code:${url.searchParams.get("nonce")}&kc_action_status=success`, { redirect: "manual", headers: { Cookie: `${cookie(sessionId)}; ${response.headers.getSetCookie()[0].split(";")[0]}` } });
+    expect((await result(callback)).code).toBe("ACTION_COMPLETE");
+    // The mock's refresh lifetime is an hour.
+    expect((await getIdentitySession(sessionId))!.sessionExpiresAt).toBeGreaterThan(Date.now() + 3_000_000);
+  });
+  it("reports Keycloak's outcome when the session can't be saved after the action (#2456)", async () => {
+    const { sessionId } = await session();
+    const before = (await getIdentitySession(sessionId))!.sessionExpiresAt;
+    const response = await fetch(`${base}/identity/v1/authorize?action=UPDATE_PASSWORD&returnTo=/account`, { redirect: "manual", headers: { Cookie: cookie(sessionId) } });
+    const url = new URL(response.headers.get("location")!);
+    // Another tab's refresh holds the person lease throughout, so the save gives up (LeaseBusyError) after it read the session.
+    await getRedis().set(personLeaseKey("identity-user-1"), "another-tab", "PX", 30_000);
+    try {
+      const callback = await fetch(`${base}/identity/v1/callback?state=${url.searchParams.get("state")}&code=valid-code:${url.searchParams.get("nonce")}&kc_action_status=success`, { redirect: "manual", headers: { Cookie: `${cookie(sessionId)}; ${response.headers.getSetCookie()[0].split(";")[0]}` } });
+      expect((await result(callback)).code).toBe("ACTION_COMPLETE");
+      expect((await getIdentitySession(sessionId))!.sessionExpiresAt).toBe(before);
+    } finally {
+      await getRedis().del(personLeaseKey("identity-user-1"));
+    }
+  }, 25_000);
   it("refuses an action callback that changes person", async () => {
     const { sessionId } = await session("other-person");
     await admin("/users", { id: "other-person", username: "other-person", enabled: true, credentials: [{ id: "p", type: "password" }] }, "POST");
@@ -80,7 +119,8 @@ describe("account self-service", () => {
     const url = new URL(response.headers.get("location")!);
     await deleteIdentitySession(sessionId);
     const callback = await fetch(`${base}/identity/v1/callback?state=${url.searchParams.get("state")}&code=valid-code:${url.searchParams.get("nonce")}&kc_action_status=success`, { redirect: "manual", headers: { Cookie: `${cookie(sessionId)}; ${response.headers.getSetCookie()[0].split(";")[0]}` } });
-    expect((await result(callback)).code).toBe("ACTION_FAILED");
+    // Keycloak finished the action, so that is the outcome (#2456); the ended session stays ended.
+    expect((await result(callback)).code).toBe("ACTION_COMPLETE");
     expect(await getIdentitySession(sessionId)).toBeNull();
   });
   it("returns empty account arrays for a phone-only citizen", async () => {

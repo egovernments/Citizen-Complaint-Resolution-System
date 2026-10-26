@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useTranslate } from 'ra-core';
+import { T } from '@digit-ui/datagrid';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -172,7 +172,6 @@ function BreakdownTable({ rows }: { rows: BreakdownRow[] }) {
 // -- Main Dashboard ---------------------------------------------------------
 
 export default function PgrDashboard() {
-  const translate = useTranslate();
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
   const dateRange = useMemo(() => dateRangeFromPreset(datePreset), [datePreset]);
   const { stats, isLoading, error } = usePgrDashboardData(dateRange);
@@ -322,7 +321,7 @@ export default function PgrDashboard() {
       <div className="flex items-start justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-            {translate('app.nav.pgr_dashboard')}
+            <T i18nKey="app.nav.pgr_dashboard" />
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isLoading
@@ -369,7 +368,7 @@ export default function PgrDashboard() {
                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
             }`}
           >
-            {translate(`app.dashboard.date.${p.value}`, { _: p.label })}
+            <T i18nKey={`app.dashboard.date.${p.value}`}>{p.label}</T>
           </button>
         ))}
         {isLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-2" />}
@@ -534,11 +533,13 @@ export default function PgrDashboard() {
       <DigitCard className="!mb-0 !max-w-none">
         <h3 className="text-sm font-semibold text-foreground mb-4">Status by Tenant</h3>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
+          {/* data-testid follows the tab value, not its label: "Complaint Type" →
+              "Complaint Category" (#2243) broke the suite's tab locator. */}
           <TabsList>
-            <TabsTrigger value="boundary">Boundary</TabsTrigger>
-            <TabsTrigger value="department">Department</TabsTrigger>
-            <TabsTrigger value="type">Complaint Category</TabsTrigger>
-            <TabsTrigger value="channel">Channel</TabsTrigger>
+            <TabsTrigger value="boundary" data-testid="pgr-breakdown-tab-boundary">Boundary</TabsTrigger>
+            <TabsTrigger value="department" data-testid="pgr-breakdown-tab-department">Department</TabsTrigger>
+            <TabsTrigger value="type" data-testid="pgr-breakdown-tab-type">Complaint Category</TabsTrigger>
+            <TabsTrigger value="channel" data-testid="pgr-breakdown-tab-channel">Channel</TabsTrigger>
           </TabsList>
           <TabsContent value="boundary">
             <BreakdownTable rows={stats.byBoundary} />
