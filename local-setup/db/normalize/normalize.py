@@ -13,6 +13,7 @@ import yaml
 NOOP = "noop"
 RENAME = "rename"
 DROP = "drop"
+ADOPT = "adopt"
 ABORT = "abort"
 
 
@@ -73,17 +74,18 @@ def decide(
         return Decision(NOOP, service, canonical, reason="fresh install")
 
     populated = {t: row_counts.get(t, 0) for t in data_present if row_counts.get(t, 0) > 0}
+    detail = ", ".join(f"{t} has {n:,} rows" for t, n in sorted(populated.items()))
     if populated and spec.get("adopts_unversioned_tables"):
         # The map vouches that this service's migrations were written to run over
         # these very tables (CREATE ... IF NOT EXISTS, no DROP), and the migrator
         # baselines an empty history, so Flyway adopts the rows instead of
-        # replaying over them.
+        # replaying over them. Nothing to do here, but it is logged: the rows are
+        # taken over without history and the migrations then run over them.
         return Decision(
-            NOOP, service, canonical, tables=data_present,
-            reason="no history, but the migrator adopts the existing tables",
+            ADOPT, service, canonical, tables=data_present,
+            reason=f"{detail}, no history; the migrator adopts the existing tables",
         )
     if populated:
-        detail = ", ".join(f"{t} has {n:,} rows" for t, n in sorted(populated.items()))
         return Decision(
             ABORT, service, canonical, tables=data_present,
             reason=(f"{detail}, but no Flyway history table exists. Cannot prove "
@@ -215,6 +217,9 @@ COMMIT;
         # That is correct, and the integration test asserts it per path.
         print(f"  rebuilt  {d.service}: dropped empty {', '.join(d.tables)} (migrator will recreate)")
 
+    elif d.action == ADOPT:
+        print(f"  adopted  {d.service}: {d.reason}")
+
 
 def main() -> int:
     services = load_map(MAP_PATH)
@@ -248,10 +253,10 @@ def main() -> int:
     for orphan in sorted(history_tables() - known):
         print(f"  warning  unrecognised history table {orphan!r} — no migrator owns it, skipping")
 
-    tally = {a: sum(1 for d in decisions if d.action == a) for a in (NOOP, RENAME, DROP)}
+    tally = {a: sum(1 for d in decisions if d.action == a) for a in (NOOP, RENAME, DROP, ADOPT)}
     print(
         f"ok: renamed {tally[RENAME]}, rebuilt {tally[DROP]}, "
-        f"already-aligned {tally[NOOP]}"
+        f"adopted {tally[ADOPT]}, already-aligned {tally[NOOP]}"
     )
     return 0
 

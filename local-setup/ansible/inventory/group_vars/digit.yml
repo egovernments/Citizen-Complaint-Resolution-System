@@ -194,6 +194,8 @@ validate_health_warn_only:
   - digit-prometheus
   - digit-grafana
   - digit-otel-collector
+  - digit-node-exporter
+  - digit-postgres-exporter
 
 # SPA configuration — stable cross-tenant defaults.
 context_path: digit-ui

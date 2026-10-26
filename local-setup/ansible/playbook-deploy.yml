@@ -3736,6 +3736,20 @@
         executable: /bin/bash
       changed_when: false
 
+    # db-history-normalize is built on the box too (db/normalize/Dockerfile), and
+    # `up -d` does not rebuild an image it already has, so a changed normalize.py
+    # would never reach a box that built it once: a box that aborted on a 2.12
+    # Go user_preference table would abort again. Built here, before any `up -d`
+    # that runs it; a cache hit when nothing changed.
+    - name: "Flyway history normalize — build the image"
+      shell: |
+        set -o pipefail
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} build db-history-normalize 2>&1 | tee -a {{ compose_progress_file }}
+      args:
+        chdir: "{{ digit_dir }}"
+        executable: /bin/bash
+      changed_when: false
+
     # Upgrade order for the notification stack: the NEW novu-bridge (and its Flyway
     # migrator) before the new pgr-services. A new pgr-services publishes thin events;
     # a bridge from before the thin-event stack cannot resolve them and dead-letters
@@ -5906,9 +5920,13 @@
         bad=$(docker compose -f {{ digit_dir }}/docker-compose.egov-digit.yaml ps \
                 --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Status{{ "}}" }}' \
               | grep -E 'Restarting|\(unhealthy\)|Exited \([1-9]' || true)
-        warn_re='^({{ validate_health_warn_only | default([]) | join('|') }}) '
-        soft=$(echo "$bad" | grep -E "$warn_re" || true)
-        hard=$(echo "$bad" | grep -vE "$warn_re" | grep . || true)
+        warn_only='{{ validate_health_warn_only | default([]) | join(' ') }}'
+        # Exact match on the name field, so no name is read as a pattern.
+        pick() { echo "$bad" | awk -v names="$warn_only" -v want="$1" \
+          'BEGIN { n = split(names, list, " "); for (i = 1; i <= n; i++) warn[list[i]] = 1 }
+           NF && (($1 in warn) == want)'; }
+        soft=$(pick 1)
+        hard=$(pick 0)
         if [ -n "$soft" ]; then
           echo "WARN observability containers not healthy:"
           echo "$soft"
@@ -5930,8 +5948,9 @@
         msg: >-
           {{ container_health.stdout }}.
           Traces, logs or dashboards may be missing; the stack itself is unaffected.
-          Check the container's restart count and logs. To run without tracing,
-          set observability_level: logs.
+          Check each container's restart count and `docker logs <name>`.
+          {{ 'To run without tracing (Tempo), set observability_level: logs.' if 'digit-tempo ' in container_health.stdout else '' }}
+          {{ 'To run without log storage (Loki, promtail), set observability_level: metrics.' if ('digit-loki ' in container_health.stdout or 'digit-promtail ' in container_health.stdout) else '' }}
 
     # ── Service health through Kong ───────────────────────────────────────
     # Hit each core service's health endpoint via Kong (port 18000), not
