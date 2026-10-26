@@ -23,6 +23,8 @@ const CONFIRM_HEADINGS = new Map<string, LoginMessageKey>([
     ["UPDATE_EMAIL", "CORE_LOGIN_CONFIRM_UPDATE_EMAIL"]
 ]);
 
+type ResetState = "idle" | "sending" | "sent" | "failed";
+
 type LoginTexts = { header?: string; submitButtonLabel?: string; secondaryButtonLabel?: string };
 
 function textsOf(loginConfig: unknown): LoginTexts {
@@ -42,7 +44,9 @@ function textsOf(loginConfig: unknown): LoginTexts {
  *
  * "Forgot password?" is always shown, as in login.js. It opens an email form
  * that asks the identity BFF for a password link (shared/passwordHelp.ts);
- * the answer never reveals whether the account exists.
+ * the answer never reveals whether the account exists. Both forms sit in the
+ * one Template: keycloakify reloads the page when a Template mounts a second
+ * time, which threw the email form away before it showed (#2700).
  *
  * When the identity BFF sends someone already signed in here to change their
  * password, authenticator or email (`kc_action`), Keycloak first asks for the
@@ -60,6 +64,7 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
     const [consented, setConsented] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [forgot, setForgot] = useState(false);
+    const [resetState, setResetState] = useState<ResetState>("idle");
     const [accountAction] = useState(() => resolveAccountAction({ loginAction: url.loginAction }));
     const confirming = accountAction !== undefined;
     const accountPage = slug ? `${employeeReturnTo(slug)}user/account` : undefined;
@@ -79,12 +84,27 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
 
     if (forgot) {
         return (
-            <ForgotPassword
-                {...props}
-                returnTo={employeeReturnTo(slug)}
-                tenantSlug={slug}
-                onBack={() => setForgot(false)}
-            />
+            <Template
+                kcContext={kcContext}
+                i18n={i18n}
+                doUseDefaultCss={doUseDefaultCss}
+                classes={classes}
+                displayMessage={false}
+                headerNode={digit.t("CORE_COMMON_FORGOT_PASSWORD")}
+                toast={resetState === "failed" ? digit.t("CORE_LOGIN_RESET_LINK_FAILED") : undefined}
+            >
+                <ForgotPassword
+                    kcContext={kcContext}
+                    returnTo={employeeReturnTo(slug)}
+                    tenantSlug={slug}
+                    state={resetState}
+                    onStateChange={setResetState}
+                    onBack={() => {
+                        setForgot(false);
+                        setResetState("idle");
+                    }}
+                />
+            </Template>
         );
     }
 
@@ -183,82 +203,73 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
 }
 
 /**
- * The forgot-password card: email in, one non-committal confirmation out.
- * digit-ui's own forgot-password page resets the DIGIT (egov-user) password
- * by SMS OTP, but a Keycloak-managed employee signs in with the Keycloak
- * credential, so the link comes from Keycloak by email.
+ * The forgot-password card's body: email in, one non-committal confirmation
+ * out. digit-ui's own forgot-password page resets the DIGIT (egov-user)
+ * password by SMS OTP, but a Keycloak-managed employee signs in with the
+ * Keycloak credential, so the link comes from Keycloak by email. Login owns
+ * the Template and the request state, which drives its heading and toast.
  */
-function ForgotPassword(
-    props: DigitPageProps<Extract<KcContext, { pageId: "login.ftl" }>> & {
-        returnTo?: string;
-        tenantSlug?: string;
-        onBack: () => void;
-    }
-) {
-    const { kcContext, i18n, doUseDefaultCss, Template, classes } = props;
+function ForgotPassword(props: {
+    kcContext: Extract<KcContext, { pageId: "login.ftl" }>;
+    returnTo?: string;
+    tenantSlug?: string;
+    state: ResetState;
+    onStateChange: (state: ResetState) => void;
+    onBack: () => void;
+}) {
+    const { kcContext, state, onStateChange: setState } = props;
     const { i18n: digit } = useBranding();
     const [email, setEmail] = useState(kcContext.login.username?.includes("@") ? kcContext.login.username : "");
-    const [state, setState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
     const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
     return (
-        <Template
-            kcContext={kcContext}
-            i18n={i18n}
-            doUseDefaultCss={doUseDefaultCss}
-            classes={classes}
-            displayMessage={false}
-            headerNode={digit.t("CORE_COMMON_FORGOT_PASSWORD")}
-            toast={state === "failed" ? digit.t("CORE_LOGIN_RESET_LINK_FAILED") : undefined}
+        <form
+            id="kc-reset-password-form"
+            className="dg-form dg-form--employee"
+            noValidate
+            onSubmit={event => {
+                event.preventDefault();
+                if (!valid || state === "sending") return;
+                setState("sending");
+                void requestPasswordSetup({
+                    baseUrl: kcContext.properties.DIGIT_IDENTITY_BFF_BASE_URL,
+                    email,
+                    returnTo: props.returnTo,
+                    surface: "employee",
+                    tenantSlug: props.tenantSlug
+                }).then(ok =>
+                    setState(ok ? "sent" : "failed")
+                );
+            }}
         >
-            <form
-                id="kc-reset-password-form"
-                className="dg-form dg-form--employee"
-                noValidate
-                onSubmit={event => {
-                    event.preventDefault();
-                    if (!valid || state === "sending") return;
-                    setState("sending");
-                    void requestPasswordSetup({
-                        baseUrl: kcContext.properties.DIGIT_IDENTITY_BFF_BASE_URL,
-                        email,
-                        returnTo: props.returnTo,
-                        surface: "employee",
-                        tenantSlug: props.tenantSlug
-                    }).then(ok =>
-                        setState(ok ? "sent" : "failed")
-                    );
-                }}
-            >
-                {state === "sent" ? (
-                    <p className="dg-text" role="status">
-                        {digit.t("CORE_LOGIN_RESET_LINK_SENT")}
-                    </p>
-                ) : (
-                    <>
-                        <p className="dg-text">{digit.t("CORE_LOGIN_FORGOT_PASSWORD_TEXT")}</p>
-                        <TextField
-                            id="email"
-                            label={digit.t("CORE_LOGIN_EMAIL")}
-                            required
-                            input={{
-                                name: "email",
-                                type: "email",
-                                autoComplete: "email",
-                                value: email,
-                                onChange: event => setEmail(event.target.value)
-                            }}
-                        />
-                        <button className="dg-button" type="submit" disabled={!valid || state === "sending"}>
-                            {state === "sending" && <span className="dg-spinner" aria-hidden="true" />}
-                            {digit.t("CORE_COMMON_CONTINUE")}
-                        </button>
-                    </>
-                )}
-                <button type="button" className="dg-link dg-forgot" onClick={props.onBack}>
-                    {digit.t("CORE_COMMON_GO_BACK")}
-                </button>
-            </form>
-        </Template>
+            {state === "sent" ? (
+                <p className="dg-text" role="status">
+                    {digit.t("CORE_LOGIN_RESET_LINK_SENT")}
+                </p>
+            ) : (
+                <>
+                    <p className="dg-text">{digit.t("CORE_LOGIN_FORGOT_PASSWORD_TEXT")}</p>
+                    <TextField
+                        id="email"
+                        label={digit.t("CORE_LOGIN_EMAIL")}
+                        required
+                        input={{
+                            name: "email",
+                            type: "email",
+                            autoComplete: "email",
+                            value: email,
+                            onChange: event => setEmail(event.target.value)
+                        }}
+                    />
+                    <button className="dg-button" type="submit" disabled={!valid || state === "sending"}>
+                        {state === "sending" && <span className="dg-spinner" aria-hidden="true" />}
+                        {digit.t("CORE_COMMON_CONTINUE")}
+                    </button>
+                </>
+            )}
+            <button type="button" className="dg-link dg-forgot" onClick={props.onBack}>
+                {digit.t("CORE_COMMON_GO_BACK")}
+            </button>
+        </form>
     );
 }

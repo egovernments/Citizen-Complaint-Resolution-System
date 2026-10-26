@@ -28,3 +28,23 @@ describe("digit-employee login.ftl (#2646)", () => {
         expect(field).not.toHaveAttribute("aria-describedby");
     });
 });
+
+describe("digit-employee forgot password (#2700)", () => {
+    it("opens the email form in the page's one Template, so keycloakify does not reload the page", async () => {
+        vi.stubGlobal("fetch", () => Promise.reject(new Error("offline")));
+        const { container } = render(<EmployeeKcPage kcContext={getKcContextMock({ pageId: "login.ftl" }) as never} />);
+        await waitFor(() => expect(container.querySelector("#kc-forgot-password")).not.toBeNull());
+        // A second Template mount makes keycloakify call location.reload() in a real browser.
+        const title = container.querySelector("#kc-page-title")!;
+
+        fireEvent.click(container.querySelector("#kc-forgot-password")!);
+
+        await waitFor(() => expect(container.querySelector("#kc-reset-password-form")).not.toBeNull());
+        expect(title.isConnected).toBe(true);
+        expect(title).toHaveTextContent(/forgot password/i);
+
+        fireEvent.click(within(container).getByRole("button", { name: /go back/i }));
+        await waitFor(() => expect(container.querySelector("#kc-form-login")).not.toBeNull());
+        expect(title.isConnected).toBe(true);
+    });
+});
