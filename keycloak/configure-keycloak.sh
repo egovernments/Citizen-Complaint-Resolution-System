@@ -44,10 +44,9 @@ in_keycloak() {
   if [ -z "${KEYCLOAK_KCADM_SERVER:-}" ]; then
     docker exec ${opts[@]+"${opts[@]}"} "$KEYCLOAK_CONTAINER" "$@"
   else
-    (
-      for assignment in ${assignments[@]+"${assignments[@]}"}; do export "${assignment?}"; done
-      exec "$@"
-    )
+    # `env`, not `export`: the -e names include readonly script variables
+    # (KCADM_SERVER), and assigning one of those, even in a subshell, aborts.
+    env ${assignments[@]+"${assignments[@]}"} "$@"
   fi
 }
 readonly KC_CONFIG=/tmp/identity-bff-kcadm.config
