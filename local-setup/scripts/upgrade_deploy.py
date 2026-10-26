@@ -280,13 +280,13 @@ def materialize_redactions(candidate: str, live: str, path: str) -> str:
             output.append(line)
             continue
         candidate_line = line.rstrip("\r\n")
+        ending = line[len(candidate_line):]
         match = ASSIGNMENT.match(candidate_line)
         if (
             match
             and match.group("value") == REDACTED
             and match.group("key").lower() in live_values
         ):
-            ending = "\n" if line.endswith("\n") else ""
             output.append(match.group("prefix") + live_values[match.group("key").lower()] + ending)
             continue
 
@@ -319,7 +319,6 @@ def materialize_redactions(candidate: str, live: str, path: str) -> str:
             for live_line in live_lines
             if marker and live_line.startswith(prefix) and live_line.endswith(suffix)
         ]
-        ending = "\n" if line.endswith("\n") else ""
         if len(matching_lines) == 1:
             output.append(matching_lines[0] + ending)
             continue
@@ -422,6 +421,38 @@ def effective_deployment_changes(
     return changes
 
 
+def _tree_entry(path: Path) -> tuple[str, str] | None:
+    """Return a comparable (kind, value) for one path, or None if absent."""
+    if path.is_symlink():
+        return ("symlink", os.readlink(path))
+    if path.is_file():
+        return ("file", sha256_file(path))
+    if path.exists():
+        return ("other", "")
+    return None
+
+
+def live_drift(
+    report: dict[str, Any], live_digit: Path, source_backup: Path
+) -> list[str]:
+    """Return local-change paths whose live state differs from the analysed backup.
+
+    Analysis captured the operator's local changes from the backup.  If live
+    /opt/digit has moved on since then (a rotated secret, a further hand edit,
+    a deleted file reappearing), deploying the analysed candidate would
+    silently replace that newer state, so every such path is reported.
+    """
+    drifted: list[str] = []
+    for change in report.get("rebase", {}).get("local_changes", []):
+        rel_raw = str(change.get("path", ""))
+        rel = safe_relative(rel_raw)
+        if rel.parts[0] in RUNTIME_MANAGED:
+            continue
+        if _tree_entry(live_digit / rel) != _tree_entry(source_backup / rel):
+            drifted.append(rel.as_posix())
+    return sorted(drifted)
+
+
 def materialize_overlay(
     run_dir: Path, live_digit: Path, source_backup: Path, target_source: Path
 ) -> tuple[Path, list[str], dict[str, str]]:
@@ -466,7 +497,13 @@ def materialize_overlay(
                 target_path.read_text(encoding="utf-8") if target_path.is_file() else ""
             )
             failures: list[DeployError] = []
-            for restoration_source in (backup_text, target_text, live_text):
+            # Live is preferred: deploy_run has already verified that every
+            # local-change path in live still matches the analysed backup, so
+            # live is the current deployment state.  The backup covers
+            # candidate paths that do not exist in live (target-side renames),
+            # and the target source is the last resort for secret lines that
+            # come only from the target version.
+            for restoration_source in (live_text, backup_text, target_text):
                 try:
                     materialized = materialize_redactions(
                         candidate_text, restoration_source, rel_raw
@@ -1008,8 +1045,22 @@ class UpgradeDeployment:
             encoding="utf-8",
         )
 
+    def _check_live_drift(self) -> None:
+        report = json.loads((self.run_dir / "report.json").read_text(encoding="utf-8"))
+        drifted = live_drift(report, self.digit_dir, self.source_backup)
+        if drifted:
+            shown = ", ".join(drifted[:20])
+            more = f" (and {len(drifted) - 20} more)" if len(drifted) > 20 else ""
+            raise DeployError(
+                f"live {self.digit_dir} changed since analysis in {len(drifted)} "
+                f"locally changed path(s): {shown}{more}. Take a fresh backup of "
+                f"{self.digit_dir} and re-run the analysis so these changes are "
+                "carried into the candidate; production was not changed"
+            )
+
     def execute(self) -> dict[str, Any]:
         manifest = self.validate()
+        self._check_live_drift()
         overlay, deleted, overlay_hashes = materialize_overlay(
             self.run_dir,
             self.digit_dir,

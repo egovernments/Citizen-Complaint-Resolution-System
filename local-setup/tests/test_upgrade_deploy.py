@@ -347,6 +347,24 @@ class OverlayTests(unittest.TestCase):
         live = "mc alias set store http://minio live-user live-password;\n"
         self.assertEqual(live, deploy.materialize_redactions(candidate, live, "compose.yml"))
 
+    def test_multiple_secrets_on_one_line_after_unrelated_edit(self):
+        # The whole-file shortcut cannot apply because another line changed,
+        # so the per-line multi-secret path must restore the line itself.
+        candidate = "# new header\nmc alias set store http://minio <REDACTED> <REDACTED>;\n"
+        live = "# old header\nmc alias set store http://minio live-user live-password;\n"
+        self.assertEqual(
+            "# new header\nmc alias set store http://minio live-user live-password;\n",
+            deploy.materialize_redactions(candidate, live, "compose.yml"),
+        )
+
+    def test_restored_line_keeps_its_original_line_ending(self):
+        candidate = "# new\r\nrun -e A=<REDACTED> -e B=<REDACTED> x\r\nlast\r\n"
+        live = "# old\r\nrun -e A=one -e B=two x\r\nlast\r\n"
+        self.assertEqual(
+            "# new\r\nrun -e A=one -e B=two x\r\nlast\r\n",
+            deploy.materialize_redactions(candidate, live, "run.sh"),
+        )
+
     def test_materializes_unique_inline_json_field_after_target_edit(self):
         candidate = 'BODY="{\\"authToken\\":\\"<REDACTED>\\",\\"newField\\":true}"\n'
         live = 'BODY="{\\"authToken\\":\\"live-token\\",\\"oldField\\":true}"\n'
@@ -413,10 +431,104 @@ class OverlayTests(unittest.TestCase):
             self.assertIn("config.yml", hashes)
             self.assertIn("TOKEN=live-secret", (overlay / "config.yml").read_text())
 
+    def test_redacted_values_are_restored_from_live_before_backup(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as name:
+            root = Path(name)
+            run_dir = root / "run"
+            candidate = run_dir / "candidate"
+            live = root / "digit"
+            backup = root / "backup"
+            for directory in (candidate, live, backup):
+                directory.mkdir(parents=True)
+            (candidate / "config.yml").write_text("TOKEN=<REDACTED>\nvalue=new\n", encoding="utf-8")
+            (live / "config.yml").write_text("TOKEN=current-token\nvalue=old\n", encoding="utf-8")
+            (backup / "config.yml").write_text("TOKEN=stale-token\nvalue=old\n", encoding="utf-8")
+            (run_dir / "report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "READY",
+                        "rebase": {"local_changes": [{"status": "M", "path": "config.yml"}]},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            overlay, _, _ = deploy.materialize_overlay(run_dir, live, backup, root / "target")
+            text = (overlay / "config.yml").read_text(encoding="utf-8")
+            self.assertIn("TOKEN=current-token", text)
+            self.assertNotIn("stale-token", text)
+
     def test_unsafe_metadata_path_is_rejected(self):
         for value in ("../etc/passwd", "/etc/passwd", ""):
             with self.assertRaises(deploy.DeployError):
                 deploy.safe_relative(value)
+
+
+class LiveDriftTests(unittest.TestCase):
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory(dir=Path.cwd())
+        self.root = Path(self._temp.name)
+        self.live = self.root / "digit"
+        self.backup = self.root / "backup"
+        for tree in (self.live, self.backup):
+            (tree / "kong").mkdir(parents=True)
+            (tree / "kong/kong.yml").write_text("route: local\n", encoding="utf-8")
+            (tree / ".env").write_text("PASSWORD=one\n", encoding="utf-8")
+        self.report = {
+            "rebase": {
+                "local_changes": [
+                    {"status": "M", "path": "kong/kong.yml"},
+                    {"status": "M", "path": ".env"},
+                    {"status": "D", "path": "nginx/old.conf"},
+                ]
+            }
+        }
+
+    def tearDown(self):
+        self._temp.cleanup()
+
+    def test_unchanged_live_tree_has_no_drift(self):
+        self.assertEqual([], deploy.live_drift(self.report, self.live, self.backup))
+
+    def test_edit_after_analysis_is_drift(self):
+        (self.live / "kong/kong.yml").write_text("route: edited later\n", encoding="utf-8")
+        self.assertEqual(
+            ["kong/kong.yml"], deploy.live_drift(self.report, self.live, self.backup)
+        )
+
+    def test_recreated_local_deletion_is_drift(self):
+        (self.live / "nginx").mkdir()
+        (self.live / "nginx/old.conf").write_text("back\n", encoding="utf-8")
+        self.assertEqual(
+            ["nginx/old.conf"], deploy.live_drift(self.report, self.live, self.backup)
+        )
+
+    def test_runtime_managed_files_are_ignored(self):
+        (self.live / ".env").write_text("PASSWORD=rotated\n", encoding="utf-8")
+        self.assertEqual([], deploy.live_drift(self.report, self.live, self.backup))
+
+    def test_deploy_stops_before_backup_when_live_drifted(self):
+        run_dir = self.root / "run"
+        run_dir.mkdir()
+        (run_dir / "report.json").write_text(json.dumps(self.report), encoding="utf-8")
+        (self.live / "kong/kong.yml").write_text("route: edited later\n", encoding="utf-8")
+        upgrade = deploy.UpgradeDeployment(
+            run_dir,
+            self.root / "repo",
+            "mycity",
+            self.root / "tenant.yml",
+            self.backup,
+            self.root / "backups",
+            None,
+            runner=mock.Mock(),
+            digit_dir=self.live,
+        )
+        with mock.patch.object(upgrade, "validate", return_value={}), mock.patch.object(
+            upgrade, "backup"
+        ) as backup:
+            with self.assertRaisesRegex(deploy.DeployError, "kong/kong.yml"):
+                upgrade.execute()
+        backup.assert_not_called()
+        upgrade.runner.run.assert_not_called()
 
 
 class PlaybookCompatibilityTests(unittest.TestCase):
