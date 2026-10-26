@@ -111,6 +111,13 @@ Run deployment on the DIGIT server from a clean checkout whose `HEAD` is the
 exact `target_commit` recorded in `run-manifest.json`. The tenant YAML in
 `inventory/host_vars/<tenant>.yml` must exactly match `--tenant-vars`.
 
+Live `/opt/digit` must also still match the analysed backup for every locally
+changed path. If a file was edited, a secret rotated, or a deleted file
+recreated after the backup was taken, deployment stops before anything is
+backed up or stopped and lists the affected paths. Take a fresh backup and
+re-run the analysis so those changes are carried into the candidate. Secret
+values in the candidate are restored from live `/opt/digit` first.
+
 ```bash
 sudo python3 local-setup/scripts/upgrade-dry-run.py \
   --deploy-run /path/to/dry-run-output/digit-dry-run-YYYYMMDD-HHMMSS \
@@ -164,6 +171,25 @@ configuration failure stops the new stack, restores `/opt/digit` and every
 captured volume, starts the previous service set, and verifies the original
 MDMS and configuration fingerprints. A failed rollback leaves an explicit
 error and preserves the backup for manual recovery.
+
+## Normal deploys refuse to overwrite hand edits
+
+Every successful `./deploy.sh <tenant>` records SHA-256 hashes of the protected
+configuration under `/opt/digit/.digit-deploy-state/`. The protected set is
+`configs/`, `kong/`, `nginx/`, `seeds/`, `notification-seed/`, and the
+top-level `docker-compose.*.yml` files. The next deploy compares them before it
+writes anything. If any protected file was modified, added, or removed on the
+server, the deploy stops and lists them instead of silently replacing them.
+
+- To keep the edits, carry them forward with the analysis and guarded
+  deployment described above.
+- To discard them, rerun with `./deploy.sh <tenant> -e allow_local_drift=true`.
+
+The first deploy after this change has no baseline, so it only reports that
+and records one. If the previous deploy did not finish, its partial writes
+cannot be told apart from hand edits, so the guard reports that and records a
+fresh baseline. The guarded upgrade verifies local changes itself and skips
+this check. The state directory is excluded from upgrade analysis.
 
 ## Renderer maintenance
 

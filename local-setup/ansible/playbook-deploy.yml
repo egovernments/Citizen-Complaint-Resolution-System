@@ -56,6 +56,73 @@
       become: false
       when: upgrade_safe_mode | default(false) | bool
 
+    # ── Local-edit drift guard ─────────────────────────────────────────────
+    # A redeploy re-renders configs/, kong/, nginx/, seeds/, notification-seed/
+    # and the top-level Compose files from this checkout, so a hand edit made
+    # on the server since the last deploy is silently overwritten. Every
+    # successful deploy records their hashes (last task of this play); here,
+    # before anything is written, any difference stops the run.
+    #
+    # Carry intended edits forward with the upgrade workflow
+    # (docs/setup/local/UPGRADE-DRY-RUN.md), or discard them deliberately with
+    # `-e allow_local_drift=true`. The guarded upgrade itself verifies local
+    # changes on its own, so it skips this check.
+    #
+    # No manifest yet (first deploy, or a box deployed before this guard)
+    # cannot be checked; that is reported and the deploy continues.
+    - name: "drift guard — check for hand edits since the last deploy"
+      ansible.builtin.script:
+        cmd: "../scripts/deploy_drift.py check {{ digit_dir | quote }}"
+        executable: python3
+      register: deploy_drift_check
+      changed_when: false
+      failed_when: deploy_drift_check.rc not in [0, 3]
+      check_mode: false
+      tags: ['always']
+      when: not (upgrade_safe_mode | default(false) | bool)
+
+    - name: "drift guard — result"
+      ansible.builtin.debug:
+        msg: >-
+          {{ {
+            'CLEAN': 'No hand edits since the last deploy.',
+            'NO_DEPLOYMENT': 'No existing deployment directory; nothing to protect.',
+            'NO_BASELINE': 'WARNING: no record of the last deploy exists, so hand edits cannot be '
+                           ~ 'detected on this run. This deploy records one for next time.',
+            'INCOMPLETE_PREVIOUS': 'WARNING: the previous deploy did not finish, so hand edits made since '
+                                   ~ 'then cannot be told apart from its partial writes. '
+                                   ~ 'This deploy records a fresh baseline.',
+            'DRIFT': 'Hand edits found since the last deploy (see the next task).'
+          }[(deploy_drift_check.stdout | from_json).status] }}
+      tags: ['always']
+      when: not (upgrade_safe_mode | default(false) | bool)
+
+    - name: "drift guard — stop before overwriting hand edits"
+      ansible.builtin.fail:
+        msg: |
+          Files under {{ digit_dir }} changed since the last successful deploy
+          ({{ (deploy_drift_check.stdout | from_json).recorded_at }}). This deploy would overwrite them.
+            modified: {{ (deploy_drift_check.stdout | from_json).modified | join(', ') or 'none' }}
+            added:    {{ (deploy_drift_check.stdout | from_json).added | join(', ') or 'none' }}
+            removed:  {{ (deploy_drift_check.stdout | from_json).removed | join(', ') or 'none' }}
+          To keep these changes, carry them forward with the upgrade workflow:
+            docs/setup/local/UPGRADE-DRY-RUN.md
+          To discard them and redeploy from this checkout, rerun with:
+            ./deploy.sh {{ inventory_hostname }} -e allow_local_drift=true
+      tags: ['always']
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - deploy_drift_check.rc == 3
+        - not (allow_local_drift | default(false) | bool)
+
+    - name: "drift guard — mark this deploy as in progress"
+      ansible.builtin.script:
+        cmd: "../scripts/deploy_drift.py begin {{ digit_dir | quote }}"
+        executable: python3
+      changed_when: false
+      tags: ['always']
+      when: not ansible_check_mode
+
     # ── host_vars naming preflight ─────────────────────────────────────────
     # Ansible variables are lowercase (every key in inventory/host_vars/ is).
     # The env-var names on the LEFT of `=` in templates/digit.env.j2 are
@@ -10081,6 +10148,17 @@
       when:
         - run_ci_tests | default(false)
         - xlsx_rc|int != 0 or dl_rc|int != 0 or pw_rc|int != 0
+
+    # Keep this the LAST task: the manifest it writes is the baseline the
+    # drift guard (pre_tasks) compares against on the next deploy, so it must
+    # capture every file this run rendered or rewrote.
+    - name: "drift guard — record protected files after a successful deploy"
+      ansible.builtin.script:
+        cmd: "../scripts/deploy_drift.py record {{ digit_dir | quote }}"
+        executable: python3
+      changed_when: false
+      tags: ['always']
+      when: not ansible_check_mode
 
   handlers:
     - name: Reload nginx

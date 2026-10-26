@@ -47,6 +47,10 @@ EXCLUDED_PATTERNS = (
     ".build/**",
     ".openbao",
     ".openbao/**",
+    # Deploy-time drift manifest written by playbook-deploy.yml; it is
+    # deployment state, not a local configuration change.
+    ".digit-deploy-state",
+    ".digit-deploy-state/**",
     "configurator",
     "configurator/**",
     "digit-mcp",
