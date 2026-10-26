@@ -130,7 +130,8 @@ Applied per service in the map. This is the whole of the logic.
 | present | present | — | **abort** — ambiguous, cannot tell which is authoritative |
 | — | — | absent | no-op — genuine fresh install; migrator builds from scratch |
 | — | — | present, **0 rows** | **drop** them; migrator rebuilds (the `egov-otp` path) |
-| — | — | present, **has rows** | **abort** — cannot prove which migrations are applied |
+| — | — | present, **has rows**, map sets `adopts_unversioned_tables` | **adopt** — nothing is changed; logged, and the migrator baselines the tables and migrates over the rows |
+| — | — | present, **has rows**, any other service | **abort** — cannot prove which migrations are applied |
 
 Entries marked `embedded: true` are **skipped before the table is consulted** — they
 have no migration init container, so nothing would replay against them. They appear in
