@@ -41,7 +41,7 @@ public class OnboardingSteps {
     }
 
     /**
-     * mdms-v2 and boundary-service persist writes asynchronously, so a record read straight after its create is often not
+     * mdms-v2 persists writes asynchronously, so a record read straight after its create is often not
      * yet visible. Instead of failing the whole step (and waiting out the runner's retry backoff, which
      * made a signup take minutes), re-read a few times with these pauses first. Empty (the default for
      * directly constructed instances, e.g. tests) means a single read, as before.
@@ -286,14 +286,25 @@ public class OnboardingSteps {
         catch (java.util.regex.PatternSyntaxException invalid) { throw new OnboardingFailure("COUNTRY_MOBILE_RULE_INVALID", true); }
     }
 
+    /** boundary-service's "already exists": DUPLICATE_RECORD (hierarchy, relationship), DUPLICATE_CODE (boundary). */
+    private static final Set<String> BOUNDARY_EXISTS = Set.of("DUPLICATE_RECORD", "DUPLICATE_CODE");
+    /**
+     * boundary-relationships/_create looks the boundary and the hierarchy up in boundary-service's database, which its
+     * persister fills from Kafka after the earlier creates have answered. Not saved yet is not final: the run's retry outlives it.
+     */
+    private static final Set<String> BOUNDARY_NOT_YET_SAVED = Set.of("BOUNDARY_ENTITY_DOES_NOT_EXIST", "HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR");
+
     private void ensureBoundary(OnboardingProgress.WriteScope scope, String search, Map<String,Object> criteria, String field, String tenant, String create, Map<String,Object> body) {
         if (boundaryPresent(client.read("boundary", search, criteria), field, tenant)) return;
-        createProjectedRecord(scope, "boundary", create, body);
-        // boundary-service persists through Kafka, so the first read-back often races the persister (#2709).
-        // A malformed response still fails at once (BOUNDARY_INVALID_RESPONSE): waiting would not fix it.
-        JsonNode found = awaitVisible(() -> client.read("boundary", search, criteria), r -> boundaryPresent(r, field, tenant));
-        if (!boundaryPresent(found, field, tenant))
-            throw new OnboardingFailure("BOUNDARY_NOT_VISIBLE", true);
+        // boundary-service validates, queues the insert on Kafka and answers 202, so reading it back would race its
+        // persister (#2709). The create's own answer is the outcome: accepted, or it already exists.
+        try { client.write(scope, "boundary", create, body); }
+        catch (OnboardingFailure failure) {
+            if (failure.getCodes().stream().anyMatch(BOUNDARY_EXISTS::contains)) return;
+            if (failure.getCodes().stream().anyMatch(BOUNDARY_NOT_YET_SAVED::contains))
+                throw new OnboardingFailure(failure.getCode(), true, failure.getHttpStatus(), failure.getCodes());
+            throw failure;
+        }
     }
 
     private boolean boundaryPresent(JsonNode response, String field, String tenant) {

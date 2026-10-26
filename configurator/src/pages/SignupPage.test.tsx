@@ -1283,7 +1283,7 @@ describe('polling while the worker runs', () => {
     completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE', 'FOUNDER_HRMS', 'ORGANIZATION', 'MEMBERSHIP', 'BINDING'],
     lifecyclePublishedAt: 1,
   };
-  const failedOnce = { ...running, status: 'RETRYABLE_FAILED' as const, currentStep: 'TENANT_FOUNDATION', completedSteps: [], errorCode: 'BOUNDARY_NOT_VISIBLE' };
+  const failedOnce = { ...running, status: 'RETRYABLE_FAILED' as const, currentStep: 'PLATFORM_BASELINE', completedSteps: ['TENANT_FOUNDATION'], errorCode: 'BOUNDARY_ENTITY_DOES_NOT_EXIST' };
 
   it('keeps polling a retryable failure PGR still retries by itself, and continues once it succeeds (#2709)', async () => {
     vi.mocked(api.submitSignup).mockResolvedValue(failedOnce as never);
