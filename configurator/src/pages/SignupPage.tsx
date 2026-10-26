@@ -20,6 +20,7 @@ import {
   findSignup,
   isOperationReady,
   isOperationSettled,
+  isRetryingAutomatically,
   isValidAccountCode,
   isValidUrlSlug,
   newIdempotencyKey,
@@ -871,11 +872,13 @@ function SignupFlow() {
   // How the run ended, once per operation and outcome.
   const runStatus = operation?.status;
   const runError = operation?.errorCode;
+  // A failure PGR still retries by itself has not ended the run.
+  const runRetrying = !!operation && isRetryingAutomatically(operation);
   useEffect(() => {
-    if (runStatus === 'TERMINAL_FAILED' || runStatus === 'RETRYABLE_FAILED') {
+    if (runStatus === 'TERMINAL_FAILED' || (runStatus === 'RETRYABLE_FAILED' && !runRetrying)) {
       track('signup:provision_fail', { error_code: runError ?? 'UNKNOWN', retryable: runStatus === 'RETRYABLE_FAILED' });
     }
-  }, [operationId, runStatus, runError]);
+  }, [operationId, runStatus, runError, runRetrying]);
   useEffect(() => {
     if (ready) track('signup:provision_complete');
   }, [ready]);
@@ -1102,11 +1105,13 @@ function SignupFlow() {
 
   if (phase === 'provisioning' && operation) {
     const done = new Set(operation.completedSteps);
-    const failed = operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
+    // A retryable failure PGR will retry by itself is still setting up, not an error (#2709).
+    const retrying = isRetryingAutomatically(operation);
+    const failed = (operation.status === 'RETRYABLE_FAILED' && !retrying) || operation.status === 'TERMINAL_FAILED';
     // PGR runs the steps in order, so while the run is live the step in progress is the first one not
     // done. That holds for a step code this list does not know, and after a resubmit, which clears
     // completedSteps but leaves currentStep where the last attempt stopped. A settled run spins nothing.
-    const live = operation.status === 'PENDING' || operation.status === 'RUNNING';
+    const live = operation.status === 'PENDING' || operation.status === 'RUNNING' || retrying;
     const current = live ? PROVISIONING_STEPS.find((name) => !done.has(name)) : undefined;
     return (
       <div>
@@ -1147,7 +1152,16 @@ function SignupFlow() {
             </AlertDescription>
           </Alert>
         )}
-        {operation.status === 'RETRYABLE_FAILED' && (
+        {retrying && (
+          <Alert className="mt-6">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertTitle>{t('signup.still_setting_up', 'Still setting up')}</AlertTitle>
+            <AlertDescription>
+              {t('signup.still_setting_up_detail', 'This is taking a little longer than usual. We\'re retrying automatically, and this page will continue by itself.')}
+            </AlertDescription>
+          </Alert>
+        )}
+        {operation.status === 'RETRYABLE_FAILED' && !retrying && (
           <Button
             className="mt-4"
             disabled={saving}
@@ -1156,7 +1170,14 @@ function SignupFlow() {
               try {
                 setOperation(await retryOperation(operation.id));
               } catch (caught) {
-                setError(describe(caught).message);
+                // The run moved on since this page last looked, e.g. PGR's own retry succeeded (#2709):
+                // carry on from where it is now, as a reload would.
+                let latest: Operation | null = null;
+                if (caught instanceof OnboardingError && caught.code === 'ONBOARDING_OPERATION_NOT_RETRYABLE') {
+                  latest = await searchOperation({ id: operation.id }).catch(() => null);
+                }
+                if (latest && latest.status !== 'RETRYABLE_FAILED') setOperation(latest);
+                else setError(describe(caught).message);
               } finally {
                 setSaving(false);
               }

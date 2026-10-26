@@ -594,10 +594,26 @@ export function isOperationReady(operation: Pick<Operation, 'status' | 'lifecycl
   return operation.status === 'SUCCEEDED' && Boolean(operation.lifecyclePublishedAt);
 }
 
-/** Settled means nothing more will change, so a success still being published is not. */
-export function isOperationSettled(operation: Pick<Operation, 'status' | 'lifecyclePublishedAt'>): boolean {
-  return isOperationReady(operation) ||
-    operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
+/**
+ * PGR retries a RETRYABLE_FAILED run by itself until its 12th attempt has failed
+ * (OnboardingRepository, `retry_count < 12`), backing off from 1 s to 60 s.
+ */
+export const AUTOMATIC_ATTEMPTS = 12;
+
+/**
+ * A retryable failure that PGR will retry by itself, so the founder waits rather than
+ * acts (#2709). `attempt` counts runs from 1. A manual retry also counts but restarts
+ * PGR's own budget, so after one this reads "no more retries" early, which only means
+ * Try again is offered sooner.
+ */
+export function isRetryingAutomatically(operation: Pick<Operation, 'status'> & { attempt?: number }): boolean {
+  return operation.status === 'RETRYABLE_FAILED' && (operation.attempt ?? AUTOMATIC_ATTEMPTS) < AUTOMATIC_ATTEMPTS;
+}
+
+/** Settled means nothing more will change, so a success still being published, or a failure PGR still retries, is not. */
+export function isOperationSettled(operation: Pick<Operation, 'status' | 'lifecyclePublishedAt'> & { attempt?: number }): boolean {
+  return isOperationReady(operation) || operation.status === 'TERMINAL_FAILED' ||
+    (operation.status === 'RETRYABLE_FAILED' && !isRetryingAutomatically(operation));
 }
 
 /* -------------------------------------------------------------------------- */

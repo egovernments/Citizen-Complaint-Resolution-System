@@ -26,6 +26,7 @@ vi.mock('@/api/onboarding', async () => {
     checkIdentifier: vi.fn(),
     submitSignup: vi.fn(),
     searchOperation: vi.fn(),
+    retryOperation: vi.fn(),
     selectContext: vi.fn(),
     startSignIn: vi.fn(),
     requestMagicLinkSignup: vi.fn(),
@@ -422,6 +423,8 @@ describe('provisioning', () => {
   it('shows the worker steps and offers a retry only when the failure is retryable', async () => {
     await submitWith({
       status: 'RETRYABLE_FAILED',
+      // PGR's last automatic attempt: nothing more will happen unless the founder retries.
+      attempt: 12,
       currentStep: 'ORGANIZATION',
       completedSteps: ['TENANT_FOUNDATION'],
       errorCode: 'ONBOARDING_VALIDATION_ERROR',
@@ -1011,6 +1014,7 @@ describe('resuming a run that was already going', () => {
     vi.mocked(api.submitSignup).mockResolvedValue({
       ...runningOperation,
       status: 'RETRYABLE_FAILED',
+      attempt: 12,
       errorCode: 'DIGIT_UNAVAILABLE',
       errorMessage: 'DIGIT is not answering',
     } as never);
@@ -1269,6 +1273,48 @@ describe('polling while the worker runs', () => {
     await tick(3000);
     await waitFor(() => expect(screen.queryByText(/status check failed/i)).not.toBeInTheDocument());
     expect(findOperation).toHaveBeenCalledTimes(4);
+  });
+
+  const kisumu = { organizationAlias: 'kisumu-county', tenantId: 'kisumucounty', name: 'Kisumu County', roles: [] };
+  const published = {
+    ...running,
+    status: 'SUCCEEDED' as const,
+    currentStep: null,
+    completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE', 'FOUNDER_HRMS', 'ORGANIZATION', 'MEMBERSHIP', 'BINDING'],
+    lifecyclePublishedAt: 1,
+  };
+  const failedOnce = { ...running, status: 'RETRYABLE_FAILED' as const, currentStep: 'TENANT_FOUNDATION', completedSteps: [], errorCode: 'BOUNDARY_NOT_VISIBLE' };
+
+  it('keeps polling a retryable failure PGR still retries by itself, and continues once it succeeds (#2709)', async () => {
+    vi.mocked(api.submitSignup).mockResolvedValue(failedOnce as never);
+    vi.mocked(findOperation).mockResolvedValueOnce({ ...failedOnce, attempt: 2 } as never).mockResolvedValue(published as never);
+    await start();
+
+    expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
+    expect(screen.queryByText(/usually temporary/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    await tick(3000);
+    expect(screen.getByText(/still setting up/i)).toBeInTheDocument();
+
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
+    expect(findOperation).toHaveBeenCalledTimes(2);
+  });
+
+  it('continues to the workspace when Try again finds the run already succeeded (#2709)', async () => {
+    vi.mocked(api.submitSignup).mockResolvedValue({ ...failedOnce, attempt: 12 } as never);
+    vi.mocked(api.retryOperation).mockRejectedValue(
+      new api.OnboardingError(400, 'ONBOARDING_OPERATION_NOT_RETRYABLE', 'The operation is not retryable'));
+    vi.mocked(findOperation).mockResolvedValue(published as never);
+    await start();
+
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }));
+
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
+    expect(findOperation).toHaveBeenCalledWith('op1', undefined);
+    expect(screen.queryByText(/can’t be retried from here/i)).not.toBeInTheDocument();
   });
 });
 

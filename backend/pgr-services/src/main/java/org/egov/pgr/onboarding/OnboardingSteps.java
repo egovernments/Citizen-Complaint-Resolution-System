@@ -41,7 +41,7 @@ public class OnboardingSteps {
     }
 
     /**
-     * mdms-v2 persists writes asynchronously, so a record read straight after its create is often not
+     * mdms-v2 and boundary-service persist writes asynchronously, so a record read straight after its create is often not
      * yet visible. Instead of failing the whole step (and waiting out the runner's retry backoff, which
      * made a signup take minutes), re-read a few times with these pauses first. Empty (the default for
      * directly constructed instances, e.g. tests) means a single read, as before.
@@ -289,7 +289,10 @@ public class OnboardingSteps {
     private void ensureBoundary(OnboardingProgress.WriteScope scope, String search, Map<String,Object> criteria, String field, String tenant, String create, Map<String,Object> body) {
         if (boundaryPresent(client.read("boundary", search, criteria), field, tenant)) return;
         createProjectedRecord(scope, "boundary", create, body);
-        if (!boundaryPresent(client.read("boundary", search, criteria), field, tenant))
+        // boundary-service persists through Kafka, so the first read-back often races the persister (#2709).
+        // A malformed response still fails at once (BOUNDARY_INVALID_RESPONSE): waiting would not fix it.
+        JsonNode found = awaitVisible(() -> client.read("boundary", search, criteria), r -> boundaryPresent(r, field, tenant));
+        if (!boundaryPresent(found, field, tenant))
             throw new OnboardingFailure("BOUNDARY_NOT_VISIBLE", true);
     }
 

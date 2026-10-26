@@ -271,6 +271,16 @@ public class OnboardingStepsTest {
         prerequisites();assertEquals("DONE",op.getRecordProgress().get("boundary-hierarchy"));
         verify(client,times(1)).write(any(),eq("boundary"),eq("/boundary-service/boundary-hierarchy-definition/_create"),anyMap());
     }
+    /** #2709: boundary-service persists through Kafka; a root boundary seen on the second read-back does not fail the step. */
+    @Test public void aBoundaryVisibleOnTheSecondReadAfterCreateDoesNotFailTheStep() throws Exception {
+        steps.setVisibilityWaitsMs(new long[]{0,0,0});
+        String path="/boundary-service/boundary/_search?tenantId=newtown&codes=newtown";
+        when(client.read(eq("boundary"),eq(path),anyMap())).thenReturn(mapper.readTree("{\"Boundary\":null}"),mapper.readTree("{\"Boundary\":null}"),mapper.readTree("{\"Boundary\":[{\"code\":\"newtown\"}]}"));
+        prerequisites();
+        assertEquals("DONE",op.getRecordProgress().get("boundary-root"));
+        verify(client,times(3)).read(eq("boundary"),eq(path),anyMap());
+        verify(client,times(1)).write(any(),eq("boundary"),eq("/boundary-service/boundary/_create"),anyMap());
+    }
     @Test public void duplicateSchemaFromUncertainPriorWriteRetriesInsteadOfAbandoningSignup(){
         when(client.write(any(),eq("mdms"),eq("/egov-mdms-service/schema/v1/_create"),anyMap())).thenThrow(new OnboardingFailure("SCHEMA_ALREADY_EXISTS",false));
         OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress));

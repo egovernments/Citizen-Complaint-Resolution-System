@@ -10620,6 +10620,18 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.signup.still_setting_up",
+    "message": "Still setting up",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.still_setting_up_detail",
+    "message": "This is taking a little longer than usual. We're retrying automatically, and this page will continue by itself.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.signup.takes_a_minute",
     "message": "This usually takes a minute or two.",
     "module": "configurator-ui",
