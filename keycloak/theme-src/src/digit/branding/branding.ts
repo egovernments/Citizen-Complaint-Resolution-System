@@ -42,6 +42,14 @@ function safeSession(): Storage | undefined {
     }
 }
 
+function safeLocal(): Storage | undefined {
+    try {
+        return window.localStorage;
+    } catch {
+        return undefined;
+    }
+}
+
 /** Keycloak's `tab_id` for this login tab, read from the form action. */
 export function tabIdOf(loginAction: string | undefined, base = window.location.href): string | undefined {
     if (!loginAction) return undefined;
@@ -72,30 +80,38 @@ export function resolveTenantSlug(params: {
     const candidate = isValidSlug(params.digitTenant)
         ? params.digitTenant
         : new URLSearchParams(params.search ?? window.location.search).get("digit_tenant");
-    return rememberedPerTab(STORAGE_PREFIX, params.loginAction, candidate, isValidSlug);
+    return rememberedPerTab(STORAGE_PREFIX, params.loginAction, candidate, isValidSlug, true);
 }
 
 /**
  * A value that is valid now is remembered in sessionStorage under this tab's
  * `tab_id`; without one, the remembered value is returned, so the pages that
- * follow a form post (errors, further steps) still know it.
+ * follow a form post (errors, further steps) still know it. With `shared`,
+ * the latest value is also kept in localStorage, for a new tab of the same
+ * `tab_id`.
  */
 function rememberedPerTab(
     prefix: string,
     loginAction: string | undefined,
     candidate: string | null | undefined,
-    isValid: (value: string | null | undefined) => value is string
+    isValid: (value: string | null | undefined) => value is string,
+    shared = false
 ): string | undefined {
     const storage = safeSession();
+    const local = shared ? safeLocal() : undefined;
     // Error pages carry no form action; their tab_id is only in the page URL (#2644).
     const tabId = tabIdOf(loginAction) ?? tabIdOf(window.location.href);
     const key = tabId === undefined || storage === undefined ? undefined : prefix + tabId;
     try {
         if (isValid(candidate)) {
             if (key !== undefined) storage!.setItem(key, candidate);
+            // The link emailed by an email change opens a new tab with this
+            // tab_id but its own sessionStorage (#2645): keep the latest one here.
+            if (tabId !== undefined) local?.setItem(prefix, `${tabId} ${candidate}`);
             return candidate;
         }
-        const stored = key === undefined ? null : storage?.getItem(key);
+        const [sharedTab, sharedValue] = (local?.getItem(prefix) ?? "").split(" ");
+        const stored = (key === undefined ? null : storage?.getItem(key)) ?? (sharedTab === tabId ? sharedValue : null);
         return isValid(stored) ? stored : undefined;
     } catch {
         // Private mode or quota: later pages fall back to the default look.

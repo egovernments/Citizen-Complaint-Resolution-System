@@ -7,12 +7,19 @@ import { isLostSessionMessage } from "./lostSession";
 /**
  * info.ftl — "we have sent you something" / "you are done here", in the
  * legacy employee card. Keycloak's own text, since digit-ui has no screen
- * for these states.
+ * for these states. With no redirect, the way back is the tenant's own
+ * sign-in (`signInUrl`) when this tab knows the tenant.
  */
-export function Info(props: DigitPageProps<Extract<KcContext, { pageId: "info.ftl" }>>) {
-    const { kcContext, i18n, doUseDefaultCss, Template, classes } = props;
+export function Info(
+    props: DigitPageProps<Extract<KcContext, { pageId: "info.ftl" }>> & {
+        signInUrl?: (slug: string, baseUrl: string | undefined) => string | undefined;
+    }
+) {
+    const { kcContext, i18n, doUseDefaultCss, Template, classes, signInUrl } = props;
     const { messageHeader, message, requiredActions, skipLink, pageRedirectUri, actionUri, client } = kcContext;
     const { advancedMsgStr, msg } = i18n;
+    const { slug } = useBranding();
+    const baseUrl = (slug && signInUrl?.(slug, client.baseUrl)) || client.baseUrl;
 
     const bodyHtml = (() => {
         let html = message.summary?.trim() ?? "";
@@ -30,8 +37,8 @@ export function Info(props: DigitPageProps<Extract<KcContext, { pageId: "info.ft
           ? { href: pageRedirectUri, label: msg("backToApplication") }
           : actionUri
             ? { href: actionUri, label: msg("proceedWithAction") }
-            : client.baseUrl
-              ? { href: client.baseUrl, label: msg("backToApplication") }
+            : baseUrl
+              ? { href: baseUrl, label: msg("backToApplication") }
               : null;
 
     return (

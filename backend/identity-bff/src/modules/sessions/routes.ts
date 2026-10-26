@@ -64,7 +64,7 @@ export function registerSessionRoutes(app: express.Application): void {
       pendingInvitations: surfaceContextKind(surface) === "citizen" ? [] : await pendingInvitationsOrEmpty(claims.sub),
       user: {
         id: claims.sub,
-        email: claims.email,
+        email: account?.email ?? claims.email,
         name: claims.name,
         preferredUsername: claims.preferred_username,
         ...(surfaceContextKind(surface) === "citizen" && {

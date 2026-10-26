@@ -23,7 +23,7 @@ beforeAll(async () => {
   Object.assign(config, { cachePrefix: prefix, keycloakOrganizationRealm: "self-service", keycloakBffClientSecret: "test-bff-secret", keycloakOidcBackchannelUrl: process.env.KEYCLOAK_ISSUER, identityCookieSecure: false });
   base = `http://localhost:${await startIdentityTestApp()}`;
   await admin("/clients/digit-identity-bff-uuid", { attributes: { "digit.auth.account.actions": ACCOUNT_ACTIONS.join(",") } });
-  await admin("/users", { id: "identity-user-1", username: "self-service-user", enabled: true, credentials: [{ id: "password-1", type: "password" }, { id: "otp-1", type: "otp" }], federatedIdentities: [{ identityProvider: "google", userId: "google-id" }] }, "POST");
+  await admin("/users", { id: "identity-user-1", username: "self-service-user", email: "changed@example.test", enabled: true, credentials: [{ id: "password-1", type: "password" }, { id: "otp-1", type: "otp" }], federatedIdentities: [{ identityProvider: "google", userId: "google-id" }] }, "POST");
 });
 afterAll(async () => {
   const keys = await getRedis().keys(`${prefix}:*`); if (keys.length) await getRedis().del(...keys);
@@ -37,6 +37,8 @@ describe("account self-service", () => {
     const body = await (await fetch(`${base}/identity/v1/session?include=account`, { headers })).json();
     expect(body.account).toMatchObject({ actions: ACCOUNT_ACTIONS, providers: [{ alias: "google" }], credentials: [{ id: "password-1", type: "password", label: "" }, { id: "otp-1", type: "otp", label: "" }] });
     expect(body.sessions).toContainEqual(expect.objectContaining({ current: true, surface: "configurator" }));
+    // A verified email change shows before the token's claims catch up (#2645).
+    expect(body.user.email).toBe("changed@example.test");
     expect(JSON.stringify(body)).not.toContain(sessionId);
     expect(body.account.credentials[0]).not.toHaveProperty("secretData");
   });
