@@ -17,8 +17,9 @@ export const DASHBOARD_FONT_FAMILY =
 
 /**
  * On a tenant route (/{slug}/digit-ui/...) the tenant comes only from the URL,
- * as resolved by tenantRoute.js. Elsewhere (legacy routes, the public bundle)
- * it is the deployment's configured state tenant.
+ * as resolved by tenantRoute.js (the public bundle resolves it too, in
+ * src/publicDashboardTenant.js). Only on a tenantless legacy/dev route is it
+ * the deployment's configured state tenant.
  */
 export function getTenantId() {
   return (
