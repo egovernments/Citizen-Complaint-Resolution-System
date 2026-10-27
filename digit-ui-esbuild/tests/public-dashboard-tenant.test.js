@@ -1,7 +1,7 @@
 // The public dashboard shows the workspace named by its URL, never the
 // deployment's state tenant. Run from digit-ui-esbuild/:
 //   node --test tests/public-dashboard-tenant.test.js
-const { test, beforeEach } = require("node:test");
+const { test, before, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("path");
 const fs = require("fs");
@@ -137,10 +137,88 @@ test("only a tenantless dev route keeps the configured state tenant", async () =
   assert.equal(getTenantId(), STATE_TENANT);
 });
 
-test("the public entry resolves the tenant before it renders the dashboard", () => {
-  const entry = fs.readFileSync(path.join(__dirname, "../src/public-dashboard.js"), "utf8");
-  const resolveAt = entry.indexOf("resolvePublicDashboardTenant(window.location.pathname)");
-  const renderAt = entry.indexOf("ReactDOM.render(");
-  assert.ok(resolveAt > 0, "public entry must resolve the URL tenant");
-  assert.ok(renderAt > resolveAt, "dashboard must not render before the tenant is resolved");
+// The real entry, with only the render boundary stubbed: react-dom's render
+// records what it was given, AdminDashboard is a marker component, and the
+// theme is a no-op. Everything else (tenant resolution, ordering) is the code
+// that ships.
+const ENTRY_OUT = path.join(os.tmpdir(), `public-dashboard-entry.cjs.${process.pid}.js`);
+const stubs = {
+  name: "public-entry-stubs",
+  setup(build) {
+    build.onResolve({ filter: /^react-dom$/ }, () => ({ path: "react-dom", namespace: "stub" }));
+    build.onResolve({ filter: /\/AdminDashboard$/ }, () => ({ path: "AdminDashboard", namespace: "stub" }));
+    build.onResolve({ filter: /\/theme\/applyTheme$/ }, () => ({ path: "applyTheme", namespace: "stub" }));
+    build.onLoad({ filter: /.*/, namespace: "stub" }, ({ path: name }) => ({
+      loader: "js",
+      contents: {
+        "react-dom": `export function render(element) {
+            globalThis.__renders.push({ element, tenant: globalThis.window.__digitTenantContext });
+          }
+          export default { render };`,
+        AdminDashboard: "export default function AdminDashboard() { return null; }",
+        applyTheme: "export function applyTheme() {}",
+      }[name],
+    }));
+  },
+};
+// Plugins need the async API.
+before(() => esbuild.build({
+  entryPoints: [path.join(__dirname, "../src/public-dashboard.js")],
+  bundle: true,
+  format: "cjs",
+  platform: "neutral",
+  mainFields: ["main", "module"],
+  outfile: ENTRY_OUT,
+  loader: { ".js": "jsx" },
+  plugins: [stubs],
+  define: {
+    "process.env.NODE_ENV": '"production"',
+    "process.env.REACT_APP_STATE_LEVEL_TENANT_ID": '""',
+  },
+  logLevel: "silent",
+}));
+process.on("exit", () => {
+  try { fs.unlinkSync(ENTRY_OUT); } catch (_) { /* already removed */ }
+});
+
+async function bootEntry(pathname, respond) {
+  const requests = [];
+  global.__renders = [];
+  window.location = { pathname };
+  window.fetch = (url) => {
+    requests.push(String(url));
+    return respond(String(url));
+  };
+  global.document = { getElementById: () => ({}) };
+  delete require.cache[require.resolve(ENTRY_OUT)];
+  require(ENTRY_OUT);
+  for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  return { requests, renders: global.__renders };
+}
+
+const rendered = (render) => render.element.props.children.type?.name;
+
+test("the public entry renders nothing and asks nothing else while the workspace lookup is pending", async () => {
+  const { requests, renders } = await bootEntry("/testt-four/digit-ui/public-dashboard", () => new Promise(() => {}));
+
+  assert.deepEqual(requests, ["/identity/v1/tenant-contexts/testt-four"]);
+  assert.equal(renders.length, 0, "the dashboard must not render before the URL's workspace is resolved");
+});
+
+test("the public entry renders the dashboard only once the URL's workspace is installed", async () => {
+  const { renders } = await bootEntry("/testt-four/digit-ui/public-dashboard",
+    async () => ({ ok: true, status: 200, json: async () => ({ tenant: WORKSPACE }) }));
+
+  assert.equal(renders.length, 1);
+  assert.equal(rendered(renders[0]), "AdminDashboard");
+  assert.equal(renders[0].tenant?.tenantId, "testtfour");
+});
+
+test("the public entry renders the unavailable page, not the dashboard, for an unknown workspace", async () => {
+  const { renders } = await bootEntry("/testt-four/digit-ui/public-dashboard",
+    async () => ({ ok: false, status: 404, json: async () => ({}) }));
+
+  assert.equal(renders.length, 1);
+  assert.equal(rendered(renders[0]), "PublicTenantUnavailable");
+  assert.equal(renders[0].tenant, undefined);
 });

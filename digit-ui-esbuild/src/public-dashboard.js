@@ -21,9 +21,10 @@
  * an unavailable page and never falls back to STATE_LEVEL_TENANT_ID.
  *
  * Served from the same /digit-ui/ docroot as the employee build (so hashed
- * assets resolve against one publicPath) at public-dashboard.html. Nginx gives it the
- * canonical friendly URL /digit-ui/public-dashboard (with /dashboard retained as an alias)
- * rather than adding a second docroot.
+ * assets resolve against one publicPath) at public-dashboard.html. Its canonical
+ * URL is /<slug>/digit-ui/public-dashboard: nginx rewrites that to the page in
+ * place, and redirects the tenantless /digit-ui/public-dashboard and /dashboard
+ * aliases to the default slug (or 404s them) rather than adding a second docroot.
  *
  * The analytics read paths this page calls are explicitly auth-optional on Kong,
  * so anonymous access is a declared compose/Ansible contract rather than a side

@@ -55,16 +55,17 @@ public class KpiCatalogServicePublicDashboardTenantTest {
 
     @Test
     public void enablingOneWorkspaceEnablesOnlyThatWorkspace() {
-        assertTrue(service.isPublicDashboardEnabled("testtfour"));
+        // Cities first, while nothing is cached: their flag must be read at the root, never at the city itself.
         assertTrue(service.isPublicDashboardEnabled("testtfour.ward1"));
+        assertFalse(service.isPublicDashboardEnabled("ke.bomet"));
+        assertTrue(service.isPublicDashboardEnabled("testtfour"));
 
         assertFalse(service.isPublicDashboardEnabled("ke"), "deployment root must stay disabled");
-        assertFalse(service.isPublicDashboardEnabled("ke.bomet"));
         assertFalse(service.isPublicDashboardEnabled("testtone"), "sibling workspace must stay disabled");
         // A name that merely starts with the enabled id is a different tenant.
         assertFalse(service.isPublicDashboardEnabled("testtfourx"));
 
         assertEquals(List.of("testtfour", "ke", "testtone", "testtfourx"), fetchedTenants,
-                "each root's own DashboardConfig is read, once");
+                "each root's own DashboardConfig is read, once, and never at a city tenant");
     }
 }
