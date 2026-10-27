@@ -165,9 +165,10 @@ services:
   # note on that service in docker-compose.egov-digit.yaml). build-config.yml builds
   # this image from the service's src/main/resources/db in the same run, under the
   # same tag, as the app. DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE pins it alone.
-  # A table the Go service created (GORM, no Flyway history) never reaches this
-  # migrator: db-history-normalize drops it when empty and aborts the deploy when it
-  # holds rows (flyway-history-map.yml).
+  # A table the Go service created (GORM, no Flyway history) goes through
+  # db-history-normalize first: dropped when empty, so this migrator rebuilds it, and
+  # adopted when it holds rows (adopts_unversioned_tables in flyway-history-map.yml),
+  # so this migrator baselines it and migrates over the rows.
   digit-user-preferences-service-migration:
     image: ${DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE:-egovio/digit-user-preferences-service-db:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     container_name: digit-user-preferences-service-migration

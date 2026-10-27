@@ -203,8 +203,6 @@ export const CITY_TENANT = process.env.CITY_TENANT || PROFILE?.tenant.city || 'k
 export const KC_REALM = process.env.KC_REALM || ROOT_TENANT;
 export const KC_CLIENT_ID = process.env.KC_CLIENT_ID || 'digit-ui';
 export const KC_BASE = process.env.KC_BASE || `${BASE_URL}/auth`;
-export const TOKEN_EXCHANGE_BASE = process.env.TOKEN_EXCHANGE_BASE || `${BASE_URL}/token-exchange`;
-export const CITIZEN_BASENAME = process.env.CITIZEN_BASENAME || '/citizen';
 
 // ── Citizen-spec deployment parameters ──────────────────────────────────────
 // Additive vars owned by the citizen suite. Each defaults to a stock value so a

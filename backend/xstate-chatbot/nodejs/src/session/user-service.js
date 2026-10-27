@@ -219,8 +219,13 @@ class UserService {
         timeout: config.timeouts.request,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // egov-user's create DTO is @JsonProperty("requestInfo"), lowercase — unlike _search.
-          requestInfo: this.serviceRequestInfo(authToken, userInfo),
+          // Capital "RequestInfo", like every other DIGIT call. egov-user itself accepts
+          // either casing (ACCEPT_CASE_INSENSITIVE_PROPERTIES, EgovUserApplication), but the
+          // gateway reads body["RequestInfo"] ONLY, and _createnovalidate is deliberately not
+          // auth-optional there (it creates users with arbitrary roles). A lowercase key meant
+          // the gateway never saw the token and 401'd every registration before it reached
+          // egov-user — existing citizens were unaffected, so only new numbers failed.
+          RequestInfo: this.serviceRequestInfo(authToken, userInfo),
           user: {
             userName: cleanMobileNumber,
             mobileNumber: cleanMobileNumber,

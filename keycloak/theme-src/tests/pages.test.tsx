@@ -193,6 +193,7 @@ describe("digit-employee error.ftl", () => {
     afterEach(() => {
         vi.unstubAllGlobals();
         sessionStorage.clear();
+        localStorage.clear();
         window.history.replaceState(null, "", "/");
     });
 
@@ -229,6 +230,25 @@ describe("digit-employee error.ftl", () => {
         // Not Keycloak's origin (the page's): digit-ui may be elsewhere.
         expect(link).toHaveAttribute("href", TENANT_SIGN_IN);
         expect(document.querySelector("#backToApplication")).toBeNull();
+    });
+
+    it("info.ftl in the emailed link's new tab goes back to the tenant's sign-in (#2645)", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+        // The link's tab_id is on the page address; Keycloak may give the form a new one.
+        window.history.replaceState(null, "", "/auth/realms/digit/login-actions/action-token?tab_id=tab-1");
+        localStorage.setItem("digit_tenant:tab-1", `${Date.now()} testj01`);
+        const base = getKcContextMock({ pageId: "info.ftl" });
+        const kcContext = {
+            ...base,
+            themeName: "digit-employee",
+            url: { ...base.url, loginAction: "/auth/realms/digit/login-actions/authenticate?tab_id=tab-9" },
+            client: { ...base.client, baseUrl: BASE_URL },
+            pageRedirectUri: undefined,
+            actionUri: undefined,
+            skipLink: false
+        };
+        render(<KcPage kcContext={kcContext as never} />);
+        await waitFor(() => expect(document.querySelector("#kc-info-message a")).toHaveAttribute("href", TENANT_SIGN_IN));
     });
 
     it("starts it at the client's base URL when the tab's tenant is unknown", async () => {

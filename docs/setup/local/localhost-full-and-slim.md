@@ -37,7 +37,7 @@ delivery path that is not running.
 Everything else is byte-identical between the two files. Both give you:
 
 - all core DIGIT services and `pgr-services`
-- the employee UI at `/digit-ui/` and the citizen SPA at `/citizen/`
+- the employee UI at `/digit-ui/` and the citizen UI at `/<tenant-slug>/digit-ui/citizen/`
 - the configurator wizard at `/configurator/`
 - MCP, so the wizard's tenant bootstrap works
 - Kong, and the Gatus health dashboard at `/status/`
@@ -63,7 +63,6 @@ On the machine you are deploying to (which is also the controller):
 |---|---|---|
 | **Ansible** on `PATH` | runs the deploy | `ansible-playbook --version` |
 | **Python 3** | `scripts/preflight.py` runs before every deploy | `python3 --version` |
-| **Node.js 20+** | the citizen SPA (`enable_digit_ui_v2`) is built on the target | `node --version` |
 | **Docker + Compose v2** | the playbook installs Docker if it is missing | `docker compose version` |
 | **Root, or sudo** | almost every task uses `become` | see below |
 | RAM | see the table above | `free -h` |
@@ -156,11 +155,17 @@ watch -n5 "docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'healthy|Exite
 | What | URL |
 |---|---|
 | Employee UI | http://localhost/digit-ui/employee |
-| Citizen SPA | http://localhost/citizen/ |
+| Citizen UI | `http://localhost/<tenant-slug>/digit-ui/citizen/` |
 | Configurator wizard | http://localhost/configurator/ |
 | Gatus health dashboard | http://localhost/status/ |
 | Grafana | http://localhost/grafana/ |
 | Novu dashboard (**full only**) | http://localhost/novu/ |
+
+`<tenant-slug>` is the tenant's URL slug: the tenant id for a root the deploy
+seeds (`ke` gives `http://localhost/ke/digit-ui/citizen/`), or the slug chosen
+when a workspace signs up in the configurator. These presets seed the legacy
+`pg` root, which gets no slug, so only a workspace you create has a citizen URL
+([#2617](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2617)).
 
 Log in as `ADMIN` / `eGov@123`. That account belongs to the **state** tenant `pg` — it does
 not authenticate against `pg.citya` or any other city tenant.
@@ -221,7 +226,6 @@ If slim is still too heavy, the next things to look at, in order of what they co
 | `enable_search_stack: false` | ~2–3 GB | Already off in both presets. The inbox and search screens — pair it with `employee_module_denylist: ["IM"]` to hide the tab |
 | `observability_level: metrics` | ~1 GB | Loki logs and Tempo traces. Gatus and the OTel collector run at every level |
 | `enable_mcp: false` | two containers | The configurator wizard's tenant bootstrap. The rest of the wizard still loads |
-| `enable_digit_ui_v2: false` | build time, not RAM | The `/citizen/` SPA. The legacy citizen flow under `/digit-ui/` is unaffected |
 
 `observability_level` is cumulative — `metrics`, then `logs`, then `traces` (the default,
 meaning everything), each level including the ones before it. The budgeted footprints in

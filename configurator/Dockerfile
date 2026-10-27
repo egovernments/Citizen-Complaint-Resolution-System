@@ -1,5 +1,5 @@
 # Build from the repository root (`docker build -f configurator/Dockerfile .`)
-# so both SPAs consume the same ui-shared feature-flag parser.
+# so the build can read the ui-shared feature-flag parser.
 # digit-configurator — static SPA built with Vite, served by nginx under
 # /configurator/. Mirrors local-setup/ansible/files/configurator-build.sh so the
 # nightly image matches the proven on-box build:

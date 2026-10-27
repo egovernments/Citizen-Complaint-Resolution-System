@@ -6,7 +6,7 @@ Security scanning for this repository, published to one dashboard with a left-na
 | Module | Scans | How it runs | URL | Docs |
 | --- | --- | --- | --- | --- |
 | **Ansible** | the Ansible remote-server **deployment** (config posture) via the Claude CLI | on-demand, `curl … \| bash` | `/security_scan/ansible` | [ansible/docs/](ansible/docs/) |
-| **Code Base** | **dependency vulnerabilities** (Maven · npm · Go) in `backend/ frontend/ digit-ui-esbuild/ digit-ui-v2/` via OSV-Scanner | automated GitHub Action | `/security_scan/code` | [code-base/docs/](code-base/docs/) |
+| **Code Base** | **dependency vulnerabilities** (Maven · npm · Go) in `backend/ frontend/ digit-ui-esbuild/` via OSV-Scanner | automated GitHub Action | `/security_scan/code` | [code-base/docs/](code-base/docs/) |
 | Kubernetes | Helm / k8s path | coming soon | `/security_scan/kubernetes` | — |
 
 The root `/security_scan/` redirects to `/security_scan/ansible`.

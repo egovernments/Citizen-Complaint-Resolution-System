@@ -28,10 +28,11 @@ public class PlatformBaselineSeedTest {
      * v10 the employee email sign-in strings, under new keys, in the en_IN, hi_IN, fr_FR and pt_BR configurator-ui packs (#2646);
      * v11 the employee home's Dashboard card title in the en_IN, fr_FR and pt_BR rainmaker-common packs;
      * v12 the bulk-upload CSR-role note (en_IN configurator-ui) and the channel-neutral complaint success text (en_IN rainmaker-pgr);
-     * v13 the console Dashboard heading "DIGIT Complaint Management Studio", under the new key app.header.studio_title, in the en_IN, hi_IN, fr_FR and pt_BR configurator-ui packs.
+     * v13 the console Dashboard heading "DIGIT Complaint Management Studio", under the new key app.header.studio_title, in the en_IN, hi_IN, fr_FR and pt_BR configurator-ui packs;
+     * v14 the onboarding tour's Complaints Template text, under the new key app.onboarding.home.tour.complaints.body_choice (en_IN configurator-ui).
      */
-    private static final String VERSION = "13";
-    private static final String SHA256 = "9991cdf727eb5cf7a96629683f30392b71cd8b6b57e41f8c57b22b2c40d42c26";
+    private static final String VERSION = "14";
+    private static final String SHA256 = "15673da7a5a7d1e42f39de90473519d190dfde2b7a7f1366a2af05e8f647dba7";
     @Test public void contentChangesComeWithAVersionBump() throws Exception {
         byte[] bytes;
         try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }

@@ -4,15 +4,30 @@ import { useBranding } from "../branding/BrandingContext";
 import type { DigitPageProps } from "./kc";
 import { isLostSessionMessage } from "./lostSession";
 
+/** The surface's sign-in for a tenant slug, on the origin of the client's base URL. */
+type SignInUrl = (slug: string, baseUrl: string | undefined) => string | undefined;
+
+/** The tenant's own sign-in when this tab knows the tenant, else the client's base URL. */
+function useTenantSignInUrl(signInUrl: SignInUrl | undefined, baseUrl: string | undefined): string | undefined {
+    const { slug } = useBranding();
+    return (slug && signInUrl?.(slug, baseUrl)) || baseUrl;
+}
+
 /**
  * info.ftl — "we have sent you something" / "you are done here", in the
  * legacy employee card. Keycloak's own text, since digit-ui has no screen
- * for these states.
+ * for these states. With no redirect, the way back is the tenant's own
+ * sign-in (`signInUrl`) when this tab knows the tenant.
  */
-export function Info(props: DigitPageProps<Extract<KcContext, { pageId: "info.ftl" }>>) {
-    const { kcContext, i18n, doUseDefaultCss, Template, classes } = props;
+export function Info(
+    props: DigitPageProps<Extract<KcContext, { pageId: "info.ftl" }>> & {
+        signInUrl?: SignInUrl;
+    }
+) {
+    const { kcContext, i18n, doUseDefaultCss, Template, classes, signInUrl } = props;
     const { messageHeader, message, requiredActions, skipLink, pageRedirectUri, actionUri, client } = kcContext;
     const { advancedMsgStr, msg } = i18n;
+    const baseUrl = useTenantSignInUrl(signInUrl, client.baseUrl);
 
     const bodyHtml = (() => {
         let html = message.summary?.trim() ?? "";
@@ -30,8 +45,8 @@ export function Info(props: DigitPageProps<Extract<KcContext, { pageId: "info.ft
           ? { href: pageRedirectUri, label: msg("backToApplication") }
           : actionUri
             ? { href: actionUri, label: msg("proceedWithAction") }
-            : client.baseUrl
-              ? { href: client.baseUrl, label: msg("backToApplication") }
+            : baseUrl
+              ? { href: baseUrl, label: msg("backToApplication") }
               : null;
 
     return (
@@ -69,17 +84,17 @@ export function Info(props: DigitPageProps<Extract<KcContext, { pageId: "info.ft
  */
 export function ErrorPage(
     props: DigitPageProps<Extract<KcContext, { pageId: "error.ftl" }>> & {
-        signInUrl?: (slug: string, baseUrl: string | undefined) => string | undefined;
+        signInUrl?: SignInUrl;
     }
 ) {
     const { kcContext, i18n, doUseDefaultCss, Template, classes, signInUrl } = props;
     const { message, client, skipLink } = kcContext;
     const { msg, msgStr } = i18n;
-    const { slug } = useBranding();
+    const signIn = useTenantSignInUrl(signInUrl, client?.baseUrl);
     const next = isLostSessionMessage(message.summary, msgStr)
         ? {
               id: "restartSignIn",
-              href: (slug && signInUrl?.(slug, client?.baseUrl)) || client?.baseUrl,
+              href: signIn,
               label: msg("digitStartSignInAgain")
           }
         : { id: "backToApplication", href: client?.baseUrl, label: msg("backToApplication") };

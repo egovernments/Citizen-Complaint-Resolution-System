@@ -263,13 +263,75 @@ public class OnboardingStepsTest {
         op.setFounderDigitUuid("prior-uuid");assertEquals("FOUNDER_NOT_FOUND",assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress)).getCode());
         verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
     }
-    @Test public void asynchronousBoundaryWriteIsNotCheckpointedUntilVisible() throws Exception {
-        String path="/boundary-service/boundary-hierarchy-definition/_search";
-        when(client.read(eq("boundary"),eq(path),anyMap())).thenReturn(mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"WORKSPACE\"}]}"));
-        assertEquals("BOUNDARY_NOT_VISIBLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
-        assertEquals("STARTED",op.getRecordProgress().get("boundary-hierarchy"));
-        prerequisites();assertEquals("DONE",op.getRecordProgress().get("boundary-hierarchy"));
-        verify(client,times(1)).write(any(),eq("boundary"),eq("/boundary-service/boundary-hierarchy-definition/_create"),anyMap());
+    private static final List<String> BOUNDARY_CREATES=List.of("/boundary-service/boundary-hierarchy-definition/_create",
+            "/boundary-service/boundary/_create","/boundary-service/boundary-relationships/_create");
+    /** No boundary exists yet: every search answers boundary-service's empty result. */
+    private void noBoundariesYet() throws Exception {
+        JsonNode none=mapper.readTree("{\"BoundaryHierarchy\":null,\"Boundary\":null,\"TenantBoundary\":[]}");
+        when(client.read(eq("boundary"),anyString(),anyMap())).thenReturn(none);
+    }
+    /** #2709: boundary-service answers a create 202 and saves it later through Kafka; the answer is the outcome, never a read-back. */
+    @Test public void anAcceptedBoundaryCreateIsDoneWithoutReadingItBack() throws Exception {
+        noBoundariesYet();
+        prerequisites();
+        for(String key:List.of("boundary-hierarchy","boundary-root","boundary-relationship")) assertEquals("DONE",op.getRecordProgress().get(key));
+        for(String create:BOUNDARY_CREATES) verify(client,times(1)).write(any(),eq("boundary"),eq(create),anyMap());
+        // One search per step, the one before its create.
+        verify(client,times(3)).read(eq("boundary"),anyString(),anyMap());
+    }
+    /** A create the pre-check missed (still in Kafka, or a lost answer) is refused as a duplicate: it exists, so the step is done. */
+    @Test public void boundaryServicesDuplicateAnswerMeansTheBoundaryExists() throws Exception {
+        noBoundariesYet();
+        when(client.write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(0)),anyMap())).thenThrow(new OnboardingFailure("DUPLICATE_RECORD",false,400,List.of("DUPLICATE_RECORD")));
+        when(client.write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(1)),anyMap())).thenThrow(new OnboardingFailure("DUPLICATE_CODE",false,400,List.of("DUPLICATE_CODE")));
+        when(client.write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap())).thenThrow(new OnboardingFailure("DUPLICATE_RECORD",false,400,List.of("DUPLICATE_RECORD")));
+        prerequisites();
+        for(String key:List.of("boundary-hierarchy","boundary-root","boundary-relationship")) assertEquals("DONE",op.getRecordProgress().get(key));
+    }
+    /** The relationship create checks the root boundary and hierarchy in boundary-service's DB, which may not have them saved yet: retried, not final. */
+    @Test public void aRelationshipCreateBeforeItsPrerequisitesAreSavedFailsRetryably() throws Exception {
+        for(String code:List.of("BOUNDARY_ENTITY_DOES_NOT_EXIST","HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR")) {
+            op.getRecordProgress().clear();noBoundariesYet();
+            when(client.write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap())).thenThrow(new OnboardingFailure(code,false,400,List.of(code)));
+            OnboardingFailure failure=assertThrows(OnboardingFailure.class,this::prerequisites);
+            assertEquals(code,failure.getCode());assertTrue(code,failure.isRetryable());
+            assertEquals("DONE",op.getRecordProgress().get("boundary-root"));assertEquals("STARTED",op.getRecordProgress().get("boundary-relationship"));
+        }
+        // Any other refusal keeps its own classification.
+        op.getRecordProgress().clear();
+        when(client.write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap())).thenThrow(new OnboardingFailure("HIERARCHY_ERROR",false,400,List.of("HIERARCHY_ERROR")));
+        assertFalse(assertThrows(OnboardingFailure.class,this::prerequisites).isRetryable());
+    }
+    /** A root boundary boundary-service accepted (202) but its persister lost is made again by the relationship's next attempt, not skipped as DONE. */
+    @Test public void aRetriedRelationshipStepRecreatesARootBoundaryThePersisterLost() throws Exception {
+        noBoundariesYet();
+        doThrow(new OnboardingFailure("BOUNDARY_ENTITY_DOES_NOT_EXIST",false,400,List.of("BOUNDARY_ENTITY_DOES_NOT_EXIST"))).doReturn(mapper.createObjectNode())
+                .when(client).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap());
+        assertTrue(assertThrows(OnboardingFailure.class,this::prerequisites).isRetryable());
+        // A first attempt creates each once: nothing is re-ensured before the relationship has failed.
+        for(String create:BOUNDARY_CREATES) verify(client,times(1)).write(any(),eq("boundary"),eq(create),anyMap());
+        // The hierarchy got saved; the root boundary never did.
+        when(client.read(eq("boundary"),eq("/boundary-service/boundary-hierarchy-definition/_search"),anyMap()))
+                .thenReturn(mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"WORKSPACE\"}]}"));
+        prerequisites();
+        verify(client,times(1)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(0)),anyMap());
+        verify(client,times(2)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(1)),anyMap());
+        verify(client,times(2)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap());
+        assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
+    }
+    /** The same for a lost hierarchy: the retried relationship step re-creates it too. */
+    @Test public void aRetriedRelationshipStepRecreatesAHierarchyThePersisterLost() throws Exception {
+        noBoundariesYet();
+        doThrow(new OnboardingFailure("HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR",false,400,List.of("HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR"))).doReturn(mapper.createObjectNode())
+                .when(client).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap());
+        assertTrue(assertThrows(OnboardingFailure.class,this::prerequisites).isRetryable());
+        // The root boundary got saved; the hierarchy never did.
+        when(client.read(eq("boundary"),eq("/boundary-service/boundary/_search?tenantId=newtown&codes=newtown"),anyMap()))
+                .thenReturn(mapper.readTree("{\"Boundary\":[{\"code\":\"newtown\"}]}"));
+        prerequisites();
+        verify(client,times(2)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(0)),anyMap());
+        verify(client,times(1)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(1)),anyMap());
+        assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
     }
     @Test public void duplicateSchemaFromUncertainPriorWriteRetriesInsteadOfAbandoningSignup(){
         when(client.write(any(),eq("mdms"),eq("/egov-mdms-service/schema/v1/_create"),anyMap())).thenThrow(new OnboardingFailure("SCHEMA_ALREADY_EXISTS",false));
@@ -346,15 +408,19 @@ public class OnboardingStepsTest {
     }
 
     @Test public void foreignOrInactiveBoundaryEntriesDoNotProvePrerequisites() {
+        Map<String,String> creates=Map.of("BoundaryHierarchy",BOUNDARY_CREATES.get(0),"Boundary",BOUNDARY_CREATES.get(1),"TenantBoundary",BOUNDARY_CREATES.get(2));
         for(String field:List.of("BoundaryHierarchy","Boundary","TenantBoundary")) {
             for(String invalid:List.of("foreign","inactive")) {
-                op.getRecordProgress().clear();
+                op.getRecordProgress().clear();clearInvocations(client);
                 Map<String,Object> entry=new LinkedHashMap<>(Map.of("tenantId",invalid.equals("foreign")?"other":"newtown","hierarchyType","WORKSPACE","code","newtown","active",!invalid.equals("inactive"),"boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))));
                 when(client.read(eq("boundary"),contains("_search"),anyMap())).thenAnswer(call->mapper.valueToTree(Map.of(
                         "BoundaryHierarchy",field.equals("BoundaryHierarchy")?List.of(entry):List.of(Map.of("hierarchyType","WORKSPACE")),
                         "Boundary",field.equals("Boundary")?List.of(entry):List.of(Map.of("code","newtown")),
                         "TenantBoundary",field.equals("TenantBoundary")?List.of(entry):List.of(Map.of("boundary",List.of(Map.of("code","newtown","boundaryType","ROOT")))))));
-                assertEquals("BOUNDARY_NOT_VISIBLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
+                prerequisites();
+                // Not taken as present: the step creates its own.
+                verify(client,times(1)).write(any(),eq("boundary"),eq(creates.get(field)),anyMap());
+                verify(client,times(1)).write(any(),eq("boundary"),startsWith("/boundary-service/"),anyMap());
             }
         }
     }
