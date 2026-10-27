@@ -98,6 +98,18 @@ describe('sign-in gate', () => {
     expect(mark?.querySelector('path')).toHaveAttribute('fill', '#181717');
   });
 
+  it('labels a Keycloak provider "Sign up with" and shows the Google mark', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'google', label: 'Google', type: 'idp', idpHint: 'google' }],
+    });
+
+    render(<SignupPage />);
+
+    const google = await screen.findByRole('button', { name: /^sign up with google$/i });
+    expect(google.querySelector('svg[data-icon="inline-start"][data-provider="google"]')).not.toBeNull();
+  });
+
   it('collects the signup identity in Configurator and shows check-email without opening Keycloak', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({
@@ -317,6 +329,18 @@ describe('wizard', () => {
 
     await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County Government'));
     expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET');
+  });
+
+  it('offers English, French, Hindi and Portuguese, and drops a resumed language no longer offered', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue({ ...resumedDraft('KE-BOMET'), languages: ['en', 'sw', 'fr'] } as never);
+    render(<SignupPage />);
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    await screen.findByLabelText(/base country/i);
+
+    const pills = ['English', 'French', 'Hindi', 'Portuguese'].map((name) => screen.getByRole('button', { name }));
+    expect(pills.map((pill) => pill.getAttribute('aria-pressed'))).toEqual(['true', 'true', 'false', 'false']);
+    expect(screen.queryByRole('button', { name: /swahili/i })).toBeNull();
   });
 });
 

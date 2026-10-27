@@ -32,7 +32,7 @@ POST /identity/v1/authentication/magic-link-requests
 GET  /identity/v1/callback
 GET  /identity/v1/auth-results/:id
 POST /identity/v1/password/setup-requests
-GET  /identity/v1/password/setup-complete/:state
+GET  /identity/v1/password/setup-complete/:state{/:tenantSlug}
 GET  /identity/v1/session?surface=employee
 GET  /identity/v1/tenant-contexts/:urlSlug
 GET  /identity/v1/tenants

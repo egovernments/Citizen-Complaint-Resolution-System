@@ -114,7 +114,7 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
     await activate(binding, lease);
     await lease.assertHeld();
     await sendPasswordSetup({ userId: subject, hadPassword: false, emailVerified: fresh.emailVerified === true,
-      returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId });
+      returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId, tenantSlug: undefined });
     await mirrorPerson(subject);
     await updateKeycloakUser(subject, (current) => {
       if (pendingMarker(current)?.requestId !== requestId) return null;
@@ -158,7 +158,7 @@ async function resendActivation(input: { actor: string; tenantId: string; digitU
     try {
       await lease.assertHeld();
       if (needsPassword) await sendPasswordSetup({ userId: subject, hadPassword: account.hasPassword, emailVerified: account.emailVerified,
-        returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId });
+        returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId, tenantSlug: undefined });
       else await sendVerifyEmail(subject);
     } catch (error) { await window.release(); throw error; }
     return { binding: publicBinding(subject, binding), identityUserCreated: false, activationEmailSent: true,

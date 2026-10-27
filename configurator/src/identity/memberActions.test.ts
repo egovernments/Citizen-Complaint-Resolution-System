@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAndLink, deactivateAndRemove, isInviteUnfinished, type MemberEmployee } from './memberActions';
+import { createAndLink, deactivateAndRemove, isInviteUnfinished, throwawayPassword, type MemberEmployee } from './memberActions';
 import { linkMember, removeMember } from './api';
 import { session } from '@/api/onboarding';
 vi.mock('./api', () => ({ linkMember: vi.fn(), removeMember: vi.fn() }));
 vi.mock('@/api/onboarding', () => ({ session: vi.fn() }));
+// egov-user's default policy: a digit, a lowercase and an uppercase letter, one of @#$%, 8-15 long.
+const POLICY = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])[A-Za-z\d@#$%]{8,15}$/;
 const input: MemberEmployee = { tenantId: 'acme', code: 'E1', isActive: true, user: { emailId: ' PERSON@EXAMPLE.ORG ', password: 'must-not-send' } };
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(session).mockResolvedValue({ authenticated: true }); });
 
@@ -13,11 +15,19 @@ describe('member actions', () => {
     await expect(createAndLink({ ...input, user: {} }, search, create)).rejects.toThrow('valid email');
     expect(create).not.toHaveBeenCalled(); expect(search).not.toHaveBeenCalled();
   });
-  it('creates without a password and links the returned user uuid', async () => {
+  it('creates with a fresh policy-compliant password and links the returned user uuid', async () => {
     const create = vi.fn(async row => ({ ...row, user: { ...row.user, uuid: 'u1' } }));
-    await createAndLink(input, async () => [], create);
-    expect(create.mock.calls[0][0].user).not.toHaveProperty('password');
+    const saved = await createAndLink(input, async () => [], create);
+    // HRMS's own fallback can lack an uppercase letter, which egov-user refuses (#2713).
+    const password = create.mock.calls[0][0].user.password;
+    expect(password).not.toBe('must-not-send');
+    expect(password).toMatch(POLICY);
+    expect(saved.user).not.toHaveProperty('password');
     expect(linkMember).toHaveBeenCalledWith('acme', 'u1', 'person@example.org');
+  });
+  it('makes every throwaway password meet the policy, not just most of them', () => {
+    // One sample misses a dropped character class most of the time; a thousand do not.
+    for (let i = 0; i < 1000; i += 1) expect(throwawayPassword()).toMatch(POLICY);
   });
   it('retries linking after HRMS succeeds without creating another employee', async () => {
     const rows: MemberEmployee[] = [];
@@ -44,8 +54,9 @@ describe('member actions', () => {
   });
   it('recovers a lost HRMS create response by searching the immutable code', async () => {
     const create = vi.fn();
-    await createAndLink(input, async () => [{ ...input, uuid: 'u1' }], create);
+    const found = await createAndLink(input, async () => [{ ...input, uuid: 'u1' }], create);
     expect(create).not.toHaveBeenCalled(); expect(linkMember).toHaveBeenCalledWith('acme', 'u1', 'person@example.org');
+    expect(found.user).not.toHaveProperty('password');
   });
   it('does not bind a colliding employee code with a different email', async () => {
     await expect(createAndLink(input, async () => [{ ...input, uuid: 'u1', user: { emailId: 'other@example.org' } }], vi.fn())).rejects.toThrow('different or inactive');

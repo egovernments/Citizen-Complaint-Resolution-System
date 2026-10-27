@@ -1458,18 +1458,17 @@ services:
     # breaking MDMS mobile validation) has not been re-verified — check for
     # regressions in those specific behaviors before relying on this tag in
     # a multi-tenant deploy.
-    # EGOV_HRMS_DEV_MODE makes enrichUser() respect the password supplied in
-    # an employee-create request instead of overwriting it with the
-    # auto-generated one. That is what the onboarding paths (configurator
-    # wizard, XLSX onboarding, MCP employee_create) rely on to set a known
-    # first password — but it also means any caller authorised to create
-    # employees picks their passwords directly, bypassing generation and the
-    # credential-delivery notification.
+    # At this tag enrichUser() keeps a password supplied in an employee-create
+    # request in both modes (CCRS#482); it generates one only when none is
+    # sent. EGOV_HRMS_DEV_MODE only changes that fallback to HRMS's default
+    # password (`egov.hrms.employee.default.password`, env
+    # EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD) and skips the credential-delivery
+    # SMS that create otherwise sends.
     #
     # It used to be hardcoded 'true' on every deployment. It is now off unless
     # a tenant opts in with `hrms_dev_mode: true` in host_vars (rendered into
-    # .env by digit.env.j2). Turn it on for a box you are actively onboarding
-    # employees onto through those wizards; leave it off otherwise.
+    # .env by digit.env.j2). The configurator and onboarding paths send their
+    # own password, so they do not need it.
     image: egovio/egov-hrms:2.12-beta-dd641a6
     container_name: egov-hrms
     depends_on:
@@ -1518,10 +1517,10 @@ services:
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATELEVEL_TENANT: pg
       HRMS_SYSTEM_USERNAME: INTERNAL_USER
-      EGOV_HRMS_DEFAULT_PASSWORD: ${EGOV_HRMS_DEFAULT_PASSWORD:-eGov@123}
-      # Enables enrichUser() to honor passwords supplied in the create
-      # request rather than overwriting with the default/auto-generated
-      # one. Required by the CCRS#482 fix in :digit-common-boundary.
+      EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD: ${EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD:-eGov@123}
+      # Not needed for a supplied password: enrichUser() keeps it in both
+      # modes (CCRS#482). Dev mode makes the no-password fallback HRMS's
+      # default password and skips the credential SMS.
       EGOV_HRMS_DEV_MODE: ${EGOV_HRMS_DEV_MODE:-false}
     ports:
       - "${BIND_IP:-127.0.0.1}:18092:8092"

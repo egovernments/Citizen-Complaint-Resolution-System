@@ -1,0 +1,6 @@
+[
+{"code": "HR_DESG_LABEL", "message": "पद", "module": "rainmaker-hr", "locale": "hi_IN"},
+{"code": "HR_EMP_ID_LABEL", "message": "कर्मचारी आईडी", "module": "rainmaker-hr", "locale": "hi_IN"},
+{"code": "HR_EMP_NAME_LABEL", "message": "कर्मचारी का नाम", "module": "rainmaker-hr", "locale": "hi_IN"},
+{"code": "HR_ROLE_NO_LABEL", "message": "भूमिकाओं की संख्या", "module": "rainmaker-hr", "locale": "hi_IN"}
+]

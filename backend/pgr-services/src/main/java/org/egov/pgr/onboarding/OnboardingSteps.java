@@ -357,6 +357,21 @@ public class OnboardingSteps {
                 && (!node.has("active") || node.path("active").isBoolean() && node.path("active").booleanValue());
     }
 
+    private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
+    private static final String LOWER = "abcdefghijkmnopqrstuvwxyz", UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ", DIGITS = "23456789", SPECIAL = "@#$%";
+
+    /** Random password satisfying egov-user's default policy (digit, lower, upper, @#$%, 8-15), as identity-bff's oneTimePassword. */
+    static String throwawayPassword() {
+        String all = LOWER + UPPER + DIGITS + SPECIAL;
+        List<Character> chars = new ArrayList<>();
+        for (String set : List.of(LOWER, UPPER, DIGITS, SPECIAL)) chars.add(set.charAt(RANDOM.nextInt(set.length())));
+        while (chars.size() < 12) chars.add(all.charAt(RANDOM.nextInt(all.length())));
+        Collections.shuffle(chars, RANDOM);
+        StringBuilder password = new StringBuilder();
+        chars.forEach(password::append);
+        return password.toString();
+    }
+
     private void founder(OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress, OnboardingProgress.WriteScope scope) {
         String tenant = signup.getRequestedTenantId();
         // The old code too, so a run that created its founder under it before an upgrade finds them. If that
@@ -385,6 +400,9 @@ public class OnboardingSteps {
             user.put("mobileNumber", phone);
             if (!countryCode.isBlank()) user.put("countryCode", countryCode);
             user.put("type", "EMPLOYEE"); user.put("active", true); user.put("tenantId", tenant); user.put("roles", roles);
+            // HRMS's own fallback password can lack an uppercase letter, which egov-user refuses (#2713).
+            // A throwaway: the founder signs in through Keycloak and identity-bff replaces it at first sign-in.
+            user.put("password", throwawayPassword());
             if (signup.isFounderEmailVerified()) user.put("emailId", signup.getFounderEmail());
             var employee = new LinkedHashMap<String,Object>();
             employee.put("tenantId", tenant); employee.put("code", FOUNDER_CODE); employee.put("employeeStatus", "EMPLOYED");

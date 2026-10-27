@@ -656,16 +656,21 @@ repository — change them before anyone else can reach the machine.**
 |---|---|---|---|
 | Onboarding wizard (`/configurator/`) | `ADMIN` | `eGov@123` | your **root** — the field is pre-filled from `state_tenant_id` |
 | Employee app (`/digit-ui/employee`) | `ADMIN` | `eGov@123` | pick from the City dropdown; only tenants in `login_tenant_allowlist` appear |
-| Employees you onboard later | their **employee code** | `eGov@123` | their city tenant |
+| Employees added in the Configurator, or the founder from self-serve signup | their **email address**, through Keycloak | the one they set from their invitation or at signup | their city tenant |
+| Employees created through MCP `employee_create` | their **employee code** | MCP's `MCP_DEFAULT_PROVISIONING_PASSWORD` (default `eGov@123`) | their city tenant |
+| Employees created by other callers that send no password (scripts, dataloaders, direct HRMS calls) | their **employee code** | with `hrms_dev_mode: true`, HRMS's default password (`eGov@123` on a stock config); otherwise HRMS generates one and sends it by SMS | their city tenant |
 | Citizen app | a mobile number | OTP `123456` (only with `identity_dev_fixed_otp: true`) | — |
 | Grafana (`/grafana/`) | `admin` | generated — see below | — |
 
 To change the administrator credentials, set `bootstrap_user` and
-`bootstrap_password` in your config and redeploy. To change the default
-password every new employee gets, set
-`bootstrap_secrets.egov_hrms_default_password` — but only before the first
-deploy, because those secrets are written to the secret store once and then
-owned by it.
+`bootstrap_password` in your config and redeploy. Configurator and signup
+employees never use HRMS's default password: they get a random one that
+identity-bff replaces at their first Keycloak sign-in. HRMS's default password
+is `bootstrap_secrets.egov_hrms_default_password`, which the deploy passes to
+HRMS as `EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD`. Set it before the first deploy,
+because those secrets are written to the secret store once and then owned by
+it. After that, change it with
+`bao kv patch <secrets_path> egov_hrms_default_password=<value>` and redeploy.
 
 Grafana's password is generated on the first deploy and stored in OpenBao.
 Read it back on the deployment machine:

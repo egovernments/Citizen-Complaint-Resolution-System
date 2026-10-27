@@ -68,7 +68,7 @@ export const ROUTES: RouteContract[] = [
     codes: ["UNTRUSTED_ORIGIN", "INVALID_REQUEST", "UNSUPPORTED_RETURN_TO", "SIGNIN_METHODS_UNAVAILABLE", "SIGNUP_UNAVAILABLE"] },
   { method: "POST", path: "/identity/v1/password/setup-requests", auth: "none", state: "live", items: [],
     codes: ["UNTRUSTED_ORIGIN", "INVALID_REQUEST", "UNSUPPORTED_SURFACE", "UNSUPPORTED_RETURN_TO", "TENANT_ROUTE_NOT_FOUND", "TENANT_ROUTE_UNAVAILABLE"] },
-  { method: "GET", path: "/identity/v1/password/setup-complete/:state", auth: "login-attempt", state: "live", items: [], codes: [],
+  { method: "GET", path: "/identity/v1/password/setup-complete/:state{/:tenantSlug}", auth: "login-attempt", state: "live", items: [], codes: [],
     results: ["PASSWORD_SETUP_COMPLETE", "PASSWORD_SETUP_FAILED", "AUTH_ATTEMPT_EXPIRED"] },
   { method: "GET", path: "/identity/v1/tenant-contexts/:urlSlug", auth: "none", state: "changing", items: [11, 15],
     codes: ["TENANT_ROUTE_NOT_FOUND", "TENANT_ROUTE_UNAVAILABLE"] },

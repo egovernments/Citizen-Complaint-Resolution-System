@@ -9,10 +9,23 @@ every box, fresh or existing.
 
 ## Applying on an existing box
 
-`docker-compose.egov-digit.yaml` pulls a **pre-built** db-migrations image
-(`…/tilt-demo-db-migrations:latest`), so a new file here only reaches a box once
-that image is rebuilt and repushed. Until then, apply it by hand — the SQL is
-idempotent, so running it directly is equivalent to letting Flyway run it:
+`docker-compose.migrations.yml` **builds** the db-migrations image from
+`./docker/db-migrations`; it no longer pulls `…/tilt-demo-db-migrations:latest`.
+The deploy syncs that build context, but `up -d` reuses an image the box already
+built, so a new file here only reaches an existing box once the image is rebuilt,
+as in [migration guide §4](../../../../../docs/releases/2.20/migration-guide-v2.12-to-v2.20-beta.md#4-deploy):
+
+```sh
+cd /opt/digit
+COMPOSE_PROFILES=<profiles> docker compose <-f files> build db-migrations
+COMPOSE_PROFILES=<profiles> docker compose <-f files> up --no-deps db-migrations
+```
+
+Copy the profiles and `-f` files from the deploy log's `Active compose profiles for
+<tenant>:` and `compose files for <tenant>:` lines.
+
+Or apply one file by hand — the SQL is idempotent, so running it directly is
+equivalent to letting Flyway run it:
 
 ```sh
 # from the box, against the egov DB (adjust container/creds to the host)
@@ -122,7 +135,10 @@ tenant that defines the `ACCOUNT_ADMIN` role. A root seeded before v2.20 has no
 action or role-action for them, so the Configurator gets
 `AccessDeniedException` there. New roots already get them: `full-dump.sql` for
 `pg`, the platform baseline for signup workspaces, and the MCP root bootstrap
-when MCP is on. This reaches the rest on their next deploy.
+when MCP is on. On an existing Compose box the deploy rebuilds
+`db-history-normalize` but reuses the `db-migrations` image it built before, so
+this reaches the rest only once that image is rebuilt (see
+[migration guide §4](../../../../../docs/releases/2.20/migration-guide-v2.12-to-v2.20-beta.md#4-deploy)).
 
 The rows are `platform-baseline-v1.json`'s (ids 900000, 900001, 901000). The
 guards follow the MCP access floor:

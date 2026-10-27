@@ -191,7 +191,7 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | GET | `/identity/v1/auth-results/:id` | none | live | — |
 | POST | `/identity/v1/authentication/magic-link-requests` | none | live | — |
 | POST | `/identity/v1/password/setup-requests` | none (optional session) | live | — |
-| GET | `/identity/v1/password/setup-complete/:state` | login-attempt | live | — |
+| GET | `/identity/v1/password/setup-complete/:state{/:tenantSlug}` | login-attempt | live | — |
 | GET | `/identity/v1/tenant-contexts/:urlSlug` | none | changing | 11, 15 |
 | POST | `/identity/v1/citizen/otp/_send` | none (session for step-up and change) | changing | 3, 13 |
 | POST | `/identity/v1/citizen/otp/_verify` | none (session for step-up and change) | changing | 13 |
@@ -330,11 +330,11 @@ Body `{email?, returnTo?, surface?, tenantSlug?}`.
 - On `employee` and `citizen`, `tenantSlug` is required, and `returnTo` is checked against the surface prefix exactly as in `/authorize`.
 - A signed-in caller (the cookie of the chosen surface) may omit `email`.
 - Always `202 {message}`, also when rate-limited. Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE`, `UNSUPPORTED_RETURN_TO` (400); `UNTRUSTED_ORIGIN` 403; `TENANT_ROUTE_NOT_FOUND` 404; `TENANT_ROUTE_UNAVAILABLE` 503.
-- The same email is sent in-process by `workspace-members/_link` for a new user.
+- The same email is sent in-process by `workspace-members/_link` for a new user and by its `resend`, without a slug: it goes through the `digit-identity-bff` client, so its pages use the Configurator theme, which has no tenant branding.
 
-#### 3.2.7 `GET /identity/v1/password/setup-complete/:state`
+#### 3.2.7 `GET /identity/v1/password/setup-complete/:state{/:tenantSlug}`
 
-Answers `303` to the attempt's `returnTo` with a result: `PASSWORD_SETUP_COMPLETE`, `PASSWORD_SETUP_FAILED` or `AUTH_ATTEMPT_EXPIRED`. It doesn't burn the state during an Admin API outage.
+Answers `303` to the attempt's `returnTo` with a result: `PASSWORD_SETUP_COMPLETE`, `PASSWORD_SETUP_FAILED` or `AUTH_ATTEMPT_EXPIRED`. It doesn't burn the state during an Admin API outage. Only a `setup-requests` email for an `employee` or `citizen` surface ends this redirect with `/tenantSlug`. The `digit-employee` Keycloak theme reads it only to brand the emailed pages, and this route ignores it.
 
 #### 3.2.8 `GET /identity/v1/tenant-contexts/:urlSlug` (items 11, 15)
 
