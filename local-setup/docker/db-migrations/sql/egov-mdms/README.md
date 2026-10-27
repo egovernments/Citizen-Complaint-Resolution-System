@@ -21,8 +21,8 @@ COMPOSE_PROFILES=<profiles> docker compose <-f files> build db-migrations
 COMPOSE_PROFILES=<profiles> docker compose <-f files> up --no-deps db-migrations
 ```
 
-Use the profiles and `-f` files the deploy uses (`docker-compose.egov-digit.yaml`,
-`docker-compose.migrations.yml`, your overlay, and any others in host_vars).
+Copy the profiles and `-f` files from the deploy log's `Active compose profiles for
+<tenant>:` and `compose files for <tenant>:` lines.
 
 Or apply one file by hand — the SQL is idempotent, so running it directly is
 equivalent to letting Flyway run it:
