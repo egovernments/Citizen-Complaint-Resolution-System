@@ -22,7 +22,7 @@ CMS (Complaint Management System) v2.20 adds self-serve workspace onboarding, a 
 2. **One sign-in for everyone.** Citizens, employees and administrators sign in through one secure service. People can belong to several workspaces.
 3. **Better complaint handling.** Escalation follows the officer's reporting line, roles are clearer, and the citizen and employee screens are redesigned.
 4. **Notifications per workspace.** Each workspace chooses its own SMS, email and WhatsApp providers and its own message wording.
-5. **Security and safe operations.** A partner security audit is closed, and an upgrade can no longer wipe a database by accident.
+5. **Security and safe operations.** More than 30 partner security-audit findings are fixed (six remain open), and an upgrade can no longer wipe a database by accident.
 6. **More languages and channels.** French and Portuguese work out of the box, citizens can speak their complaint, and WhatsApp complaints are supported end to end.
 
 ## B. Highlights at a glance
@@ -39,7 +39,7 @@ CMS (Complaint Management System) v2.20 adds self-serve workspace onboarding, a 
 | French and Portuguese | Citizen and employee screens in French and Portuguese, and the chosen language is remembered. | Citizens, employees |
 | Workspace trial (optional) | Partners can put new workspaces on a 30-day trial, with reminder emails before it ends. | Partners, operators |
 | Readable on every theme | Text, field borders and focus outlines meet accessibility contrast standards on all themes. | All users |
-| Security audit closed | 30+ audit findings fixed, including two high-severity ones, plus hundreds of library vulnerabilities. | Everyone |
+| Security audit findings fixed | 30+ audit findings fixed, including two high-severity ones; six remain open (section H). Plus hundreds of library vulnerabilities. | Everyone |
 | Safer upgrades | An upgrade can no longer wipe an existing database. | Operations |
 
 ## C. New features
@@ -175,7 +175,7 @@ v2.20 is not a drop-in upgrade from v2.12: sign-in, web addresses and several se
 | The old citizen address (`/citizen`) no longer works. The citizen app is at `/<workspace>/digit-ui/citizen`. | Citizens with bookmarks, external links | Update links. |
 | Swahili is no longer offered when signing up a new workspace. Existing Kenyan workspaces keep it. | New Swahili-speaking workspaces | Plan translations if needed. |
 | Citizen sign-in is off until it is switched on. | Citizen-facing workspaces | Choose the citizen sign-in methods during the upgrade. |
-| Automatic escalation is off after upgrading, and escalation works differently. | Workspaces upgraded from v2.12 | Review escalation settings, then switch it on per workspace. |
+| Automatic escalation is off after upgrading, and escalation works differently. | Workspaces upgraded from v2.12 | Review escalation settings, and ask operations to turn automatic escalation back on. It is one switch for the whole installation, not per workspace. |
 | Notifications move to per-workspace settings. Existing workspaces send no complaint notifications until they are migrated. | Workspaces using notifications | Run the notification migration for each workspace. |
 | Only administrators can open the Configurator. | Staff who used it without an admin role | Grant admin roles where needed. |
 | Employee import templates use the employee code as the username. | Admins doing bulk imports | Use the new templates. |
@@ -188,7 +188,7 @@ v2.20 is not a drop-in upgrade from v2.12: sign-in, web addresses and several se
 
 **Security**
 
-- A partner security audit is closed: more than 30 findings are fixed, including both high-severity ones.
+- More than 30 findings from a partner security audit are fixed, including both high-severity ones. Six remain open (see below and section H).
 - Hundreds of known vulnerabilities in third-party libraries are fixed, including a critical database-driver issue.
 - Sign-in is hardened: security tokens stay on the server, sessions end when credentials change, and staff cannot grant themselves admin rights.
 - Each workspace's data stays within that workspace in search, look-ups and preferences. The public dashboard now does too; before this release it could show the state's data.
@@ -237,4 +237,4 @@ No performance measurements were available for this release.
 
 ## J. Acknowledgements
 
-Thanks to everyone who built this release: Kanav Dwevedi, Dhruv Baliyan, Prateek Jakhar, Karun Singhal, Karun Agarwal, Lokendra Tyagi, Subhashini Srinivasan, Feliciano Mazoio, vishalrathore8oct, vinothrallapalli-egov, Hari-egov, shivam-eGov, soniikajal, yashgoel1331 and rahuljose-egov. Thanks also to the partner security auditors and to Rahul for rounds of design feedback.
+Thanks to everyone who built this release: Kanav Dwevedi, Dhruv Baliyan, Prateek Jakhar, Karun Singhal, Lokendra Tyagi, Subhashini Srinivasan, Shivam Upadhyay, Feliciano Mazoio, vishalrathore8oct, vinothrallapalli-egov, Hari-egov, soniikajal, yashgoel1331, rahuljose-egov and pradeep-egov. Thanks also to the partner security auditors and to Rahul for rounds of design feedback.
