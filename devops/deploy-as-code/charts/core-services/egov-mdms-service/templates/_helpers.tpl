@@ -5,9 +5,12 @@
        annotation (values.yaml), so an upstream change rolls the pod: nginx does
        not reload a changed conf by itself. */ -}}
 {{- define "egov-mdms-service.conf" -}}
-{{- $up := merge (dict) ((index .Values .Chart.Name | default dict).upstream | default dict) (.Values.upstream | default dict) -}}
+{{- $over := index .Values .Chart.Name | default dict -}}
+{{- $up := merge (dict) ($over.upstream | default dict) (.Values.upstream | default dict) -}}
+{{- /* The port common's Deployment and Service use, override included. */ -}}
+{{- $port := $over.httpPort | default .Values.httpPort -}}
 server {
-  listen {{ .Values.httpPort }};
+  listen {{ $port }};
   # Re-resolve the upstream every 5 s: proxy_pass takes a variable, so nginx
   # does not pin the address it saw at startup.
   resolver {{ $up.resolver }} valid=5s ipv6=off;
