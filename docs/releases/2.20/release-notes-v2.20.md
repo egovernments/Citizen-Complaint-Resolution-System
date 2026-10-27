@@ -1,6 +1,6 @@
 # CMS v2.20 Release Notes
 
-**Covers:** v2.12 → v2.20 (including the v2.12.1 patch), as of `master` at `63472b4a1` and `develop` at `c05914039` (27 Oct 2026). **Who this is for:** citizens, government administrators, partners and anyone evaluating the release.
+**Covers:** v2.12 → v2.20 (including the v2.12.1 patch), as of `master` at `63472b4a1` and `develop` at `42e914005` (27 Oct 2026). **Who this is for:** citizens, government administrators, partners and anyone evaluating the release.
 
 **See also:** [Deployment changelog](release-config-changelog-v2.20.md) for the settings to change and the upgrade steps, and the [Migration guide](migration-guide-v2.12-to-v2.20-beta.md).
 
@@ -153,7 +153,7 @@ About 55 fixes, grouped by area.
 | Complaints | Assigned officers can always see their complaints. Complaints without a map pin no longer show a false location. Search never shows another tenant's complaints. A complaint filed by staff for a citizen now appears in that citizen's My Complaints. WhatsApp complaints show the real complainant. Labels, locked locations and category choices behave correctly. |
 | Employees | New employees can file complaints. A failed invitation no longer creates a duplicate. Employee look-ups stay within the workspace. Adding an employee no longer fails at random with a password error. |
 | Sign-in | Signing out of other sessions really ends them. Employees can use Forgot password again. The sign-in page asks for an email, unused social sign-in buttons are hidden, and a lost sign-in returns to the sign-in page. The two-step verification page footer no longer overlaps. |
-| Public dashboard | A workspace's public dashboard now shows that workspace's own data, not the state's. |
+| Public dashboard | A workspace's public dashboard now shows that workspace's own data, not the state's. Turning on the public dashboard in a self-serve workspace now shows the standard indicators; before, it had nothing to show. |
 | Configurator and onboarding | All boundary hierarchies are listed. Duplicate boundary codes are caught before saving. Jurisdictions and departments can be revoked. Settings save reliably, and setup progress keeps updating to the end. Older workspaces can use the new workspace screens. Branding finds the workspace in large installations. Sign-up no longer stops on a boundary timing error. Employee templates and screens are corrected. |
 | Notifications | Upgrading no longer fails when a workspace already uses the same internal permission numbers. |
 | Screens (both apps) | Long dropdown options, inbox cells, complaint numbers and statuses show in full. Text with a colon is no longer cut. Themes apply to the whole page, buttons keep readable labels, and screen text is translated. |

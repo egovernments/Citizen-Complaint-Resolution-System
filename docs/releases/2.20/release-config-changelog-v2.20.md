@@ -1,6 +1,6 @@
 # CMS v2.20 Deployment Changelog (v2.12 → v2.20)
 
-**Covers:** v2.12 → v2.20, as of `master` at `63472b4a1` (#2716) and `develop` at `c05914039` (27 Oct 2026). **Who this is for:** operators upgrading or deploying CMS.
+**Covers:** v2.12 → v2.20, as of `master` at `63472b4a1` (#2716) and `develop` at `42e914005` (27 Oct 2026). **Who this is for:** operators upgrading or deploying CMS.
 
 What an operator must change to move a CMS deployment from v2.12 to v2.20. It lists only what affects a deployment; feature details are in the [Release notes](release-notes-v2.20.md). The [Migration guide](migration-guide-v2.12-to-v2.20-beta.md) has the full identity and Keycloak cut-over; section numbers below (guide §n) point into it.
 
@@ -77,7 +77,7 @@ The deploy stops only if `enable_keycloak` is `false`, or if `auth_provider`, `c
 
 | What | v2.12 | v2.20 | To get the old behaviour |
 | --- | --- | --- | --- |
-| Self-serve workspace sign-up | n/a | Magic link, Google and GitHub are listed by default, but none works until `identity_magic_link_enabled: true` or the Google / GitHub client IDs are set. A 2.12 host that still has a Google client ID and secret lets any Google account create a workspace | Set `identity_signup_methods` to exactly the methods you want |
+| Self-serve workspace sign-up | n/a | Magic link, Google and GitHub are listed by default, but none works until `identity_magic_link_enabled: true` or the Google / GitHub client IDs are set. A 2.12 host that still has a Google client ID and secret lets any Google account create a workspace | To turn self-sign-up off, set `identity_signup_methods: [magic_link]` and keep `identity_magic_link_enabled: false`. An empty list turns all three methods back on |
 | Citizen Google sign-in | Available | Removed; citizens use phone and code | None |
 | Automatic escalation | On | Off for the whole deployment: `PGR_ESCALATION_ENABLED` is hard-coded to `'false'` in `docker-compose.egov-digit.yaml`. There is no per-tenant switch | After the escalation migration (section 4), set `PGR_ESCALATION_ENABLED: 'true'` for pgr-services in a `docker-compose.<tenant>.yml` overlay |
 | Fixed test OTP 123456 | On | Off | `identity_dev_fixed_otp: true` (test servers only) |
@@ -86,7 +86,7 @@ The deploy stops only if `enable_keycloak` is `false`, or if `auth_provider`, `c
 | `/citizen` | Old citizen app | 404; the app is at `/<tenant>/digit-ui/citizen` | None |
 | Container ports | Open on all interfaces | Localhost only, behind a host firewall | `manage_host_firewall: false` if you run your own firewall |
 | Browser CORS | Any origin | Your domain only | List every allowed origin, including `https://<domain>`, in `kong_cors_origins`; the list replaces the default |
-| `/status/` board | On (in `_example.yml`), no password | On, always behind HTTP basic auth; the password is generated into OpenBao (`bao kv get -field=status_basic_auth_password`) | None; `nginx_features.status: false` turns the board off |
+| `/status/` board | On (in `_example.yml`), no password | On, always behind HTTP basic auth; the password is generated into OpenBao (`bao kv get -field=status_basic_auth_password <secrets_path>`, for example `kv/digit/<tenant>`) | None; `nginx_features.status: false` turns the board off |
 | Fast-path database seed | Refused without `db_fast_path_ack_data_wipe: true`, and `_example.yml` shipped the ack as `true` | `_example.yml` ships the ack as `false`, and a Postgres storage guard checks the box first (#2101) | A host_vars copied from 2.12 still has `true` and gets no new protection: set it to `false` on any box with data |
 | Employee password reset | SMS | Email only | None; add staff email addresses |
 | HRMS dev-mode password (develop only, #2725) | `eGov@123` | OpenBao `egov_hrms_default_password` | Set that secret |
@@ -164,7 +164,7 @@ All off by default. Turn on only what you need.
 | Choose several boundaries at once in Geography | `configurator_geography_multiple_selections: true` |
 | Home-page banners | `citizen_banner_enabled`, `configurator_banner_enabled` |
 
-Self-serve workspaces are upgraded to the latest platform seed in the background (`pgr_onboarding_baseline_upgrade_enabled: true`, the default): v12 at the beta, v14 on master, v15 on develop. Deploy-seeded roots such as `ke` are not upgraded this way.
+Self-serve workspaces are upgraded to the latest platform seed in the background (`pgr_onboarding_baseline_upgrade_enabled: true`, the default): v12 at the beta, v14 on master, v16 on develop. Deploy-seeded roots such as `ke` are not upgraded this way.
 
 ## 7. Known deployment issues
 
@@ -173,11 +173,10 @@ Self-serve workspaces are upgraded to the latest platform seed in the background
 | master pins images to `master-b4adf0d`; develop still uses `nightly-develop` | Neither is a release tag | Pin a 2.20 tag before release |
 | Prometheus does not scrape Keycloak on develop, or on master when `enable_keycloak` is removed | No sign-in metrics in monitoring | Open |
 | The deploy's own message says to delete `enable_keycloak`, while the migration guide says to keep it | Conflicting advice | Fix one of them before release |
-| Migration guide §2.1 says the digit-ui-v2 keys stop the deploy; since #2290 they only warn | Misleading | Guide fix pending |
 | The identity SMTP check runs only after Keycloak has migrated | A bad SMTP setting is found late | Open (#2618) |
 | Setup can show a boundary "usually temporary" error, then fail on Try again, although setup succeeded | Confusing onboarding | Open (#2709) |
 | No tested rollback; the Keycloak and database migrations cannot be undone | Restore from backup only | Open |
 | The [migration guide](migration-guide-v2.12-to-v2.20-beta.md) file name still says "beta" | Readers may think it is not final | Rename for 2.20 |
 | `_example.yml` comments still say images default to `nightly-develop` | Misleading on master | Docs fix pending |
 
-Source: changes between tag `v2.12`, `master` at `63472b4a1` and `develop` at `c05914039`, checked on 27 October 2026.
+Source: changes between tag `v2.12`, `master` at `63472b4a1` and `develop` at `42e914005`, checked on 27 October 2026.
