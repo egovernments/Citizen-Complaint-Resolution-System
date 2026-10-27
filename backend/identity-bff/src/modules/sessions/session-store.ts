@@ -38,6 +38,8 @@ export interface LoginAttempt {
   surface?: IdentitySurface;
   /** Resolved before the redirect; required for employee/citizen attempts. */
   boundTenant?: BoundTenant;
+  /** The slugged callback this attempt was authorized with, if not the plain one (#2645). */
+  redirectUri?: string;
 }
 
 export interface PasswordSetupAttempt {
@@ -146,6 +148,7 @@ export async function createLoginAttempt(input: {
   accountAction?: { sid: string; sub: string; action: string };
   surface?: IdentitySurface;
   boundTenant?: BoundTenant;
+  redirectUri?: string;
 }): Promise<{
   state: string;
   codeVerifier: string;
@@ -203,6 +206,7 @@ function validLoginAttempt(attempt: LoginAttempt): boolean {
     typeof attempt.methodId === "string" &&
     typeof attempt.returnTo === "string" &&
     typeof attempt.requiresLoginCookie === "boolean" &&
+    (attempt.redirectUri === undefined || typeof attempt.redirectUri === "string") &&
     validProfileDraft;
 }
 

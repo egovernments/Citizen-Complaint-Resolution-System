@@ -118,6 +118,12 @@ const defaultValidationConfig = {
 
 const PREFERENCE_CODE = "USER_NOTIFICATION_PREFERENCES";
 
+/** A user record's email, unless it is missing or masked. */
+const unmaskedEmailOf = (record) => {
+  const value = record?.emailId;
+  return typeof value === "string" && value && !/\*{2,}/.test(value) ? value : undefined;
+};
+
 const UserProfile = ({ stateCode, userType, cityDetails }) => {
   const history = useHistory();
   const identityManaged = isIdentityBffAuth();
@@ -475,13 +481,25 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     setLoading(false);
   }, [userDetails !== null]);
 
+  // egov-user's current email for this person, read when the save is made: a
+  // page opened before an email change must not write the old one back, and
+  // egov-user stores `emailId` as sent (an absent one clears it) (#2645).
+  const currentEmailId = async () => {
+    try {
+      const response = await Digit.UserService.userSearch(userInfo?.tenantId || tenant, { uuid: [userInfo?.uuid] }, {});
+      return unmaskedEmailOf(response?.user?.[0]) || userInfo.emailId;
+    } catch (e) {
+      return userInfo.emailId;
+    }
+  };
+
   // A Keycloak-managed email changes on Account and security. The identity
   // BFF copies it to egov-user, but the session's user info keeps the email
   // of the sign-in (#2645). Show the live record's, and keep it in the session
   // so a save sends it back unchanged rather than the old one.
   useEffect(() => {
-    const liveEmail = userDetails?.emailId;
-    if (!identityManaged || typeof liveEmail !== "string" || !liveEmail || /\*{2,}/.test(liveEmail)) return;
+    const liveEmail = unmaskedEmailOf(userDetails);
+    if (!identityManaged || !liveEmail) return;
     setEmail(liveEmail);
     const user = Digit.UserService.getUser();
     if (user?.info && user.info.emailId !== liveEmail) {
@@ -593,6 +611,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
       }
 
       let responseInfo;
+      let savedEmail = email;
       const individualServicePath = window?.globalConfigs?.getConfig("INDIVIDUAL_SERVICE_CONTEXT_PATH");
 
       if (individualServicePath) {
@@ -642,11 +661,12 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         // the stale session mobile no matter what the operator typed
         // into the form. The Individual branch above already passes
         // the form-state mobile; mirror that here.
+        if (identityManaged) savedEmail = await currentEmailId();
         const requestData = {
           ...userInfo,
           name,
           gender: gender?.value,
-          emailId: identityManaged ? userInfo.emailId : email,
+          emailId: savedEmail,
           mobileNumber: identityManaged ? userInfo.mobileNumber : mobileNumber,
           photo: profilePic,
         };
@@ -673,7 +693,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
               ...user.info,
               name,
               mobileNumber,
-              emailId: email,
+              emailId: savedEmail,
               permanentCity: city,
               ...(profilePic ? { photo: profilePic } : {}),
             },

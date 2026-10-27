@@ -392,7 +392,7 @@ for (const surface of ["employee", "citizen"]) {
 
 // #2645: an email changed on Account and security reaches egov-user, not the
 // session's user info, which keeps the email of the sign-in.
-test("employee profile shows and saves the live record's email, not the session's", async () => {
+test("employee profile shows the live record's email and saves the one egov-user has at save time", async () => {
   const state = browser("employee", () => assert.fail("profile page must not depend on the BFF"));
   let live = "new@example.test";
   Digit.UserService.userSearch = async () => ({ user: [{ uuid: "same-uuid", emailId: live }] });
@@ -402,8 +402,11 @@ test("employee profile shows and saves the live record's email, not the session'
   const email = () => view.root.findAllByType("input").find((node) => node.props.id === "profile-email");
   assert.equal(email().props.value, "new@example.test");
   assert.equal(state.getUser().info.emailId, "new@example.test");
+  // Changed again while this page was open: the save sends egov-user's current email.
+  live = "newer@example.test";
   await click(button(view, "Save"));
-  assert.equal(writes[0].emailId, "new@example.test");
+  assert.equal(writes[0].emailId, "newer@example.test");
+  assert.equal(state.getUser().info.emailId, "newer@example.test");
   view.unmount();
 
   // A masked value is never shown or written back.
@@ -413,6 +416,23 @@ test("employee profile shows and saves the live record's email, not the session'
   assert.equal(email().props.value, "old@example.test");
   await click(button(view, "Save"));
   assert.equal(writes[1].emailId, "old@example.test");
+  view.unmount();
+});
+
+test("legacy (non-Keycloak) profile still edits and saves the typed email", async () => {
+  browser("employee", () => assert.fail("no BFF reads"));
+  window.location.pathname = "/digit-ui/employee/user/profile";
+  window.location.href = "https://app.test/digit-ui/employee/user/profile";
+  Digit.UserService.userSearch = async () => ({ user: [{ uuid: "same-uuid", emailId: "live@example.test" }] });
+  const writes = [];
+  Digit.UserService.updateUser = async (details) => { writes.push(details); return { responseInfo: { status: "200" } }; };
+  const view = await render(ui.Profile, { userType: "employee", stateCode: "ke", cityDetails: { name: "Bomet" } });
+  const email = view.root.findAllByType("input").find((node) => node.props.id === "profile-email");
+  assert.notEqual(email.props.readOnly, true);
+  assert.equal(email.props.value, "old@example.test");
+  await ui.act(async () => { email.props.onChange({ target: { value: "typed@example.test" } }); });
+  await click(button(view, "Save"));
+  assert.equal(writes[0].emailId, "typed@example.test");
   view.unmount();
 });
 

@@ -1567,28 +1567,43 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     const cookie = await signIn("employee");
     const client = "/clients/digit-ui-employee-uuid";
     const returnTo = "/bomet-county/digit-ui/employee/user/account";
+    // Authorize at the BFF, then at the mock Keycloak, which binds the code to the redirect_uri.
     const changeEmail = async () => {
       const response = await fetch(`${app()}/identity/v1/authorize?surface=employee&tenantSlug=bomet-county&action=UPDATE_EMAIL&returnTo=${encodeURIComponent(returnTo)}`,
         { redirect: "manual", headers: { Cookie: cookie } });
       expect(response.status).toBe(302);
-      return { url: new URL(response.headers.get("location")!), loginCookie: response.headers.get("set-cookie")!.split(";", 1)[0] };
+      const url = new URL(response.headers.get("location")!);
+      const keycloak = await fetch(url, { redirect: "manual" });
+      expect(keycloak.status).toBe(302);
+      const back = new URL(keycloak.headers.get("location")!);
+      return { url, callback: `${back.pathname}${back.search}`, loginCookie: response.headers.get("set-cookie")!.split(";", 1)[0] };
+    };
+    const finish = async (callback: string, loginCookie: string) => {
+      const response = await fetch(`${app()}${callback}`, { redirect: "manual", headers: { Cookie: `${cookie}; ${loginCookie}` } });
+      expect(response.status).toBe(303);
+      const location = new URL(response.headers.get("location")!, "http://localhost");
+      expect(location.pathname).toBe(returnTo);
+      return (await (await fetch(`${app()}/identity/v1/auth-results/${encodeURIComponent(location.searchParams.get("authResult")!)}`)).json()).code;
     };
     await kcUpdate(client, { attributes: { "digit.auth.account.actions": "UPDATE_EMAIL" } });
     try {
       // A client configured before #2645 keeps the plain callback.
-      expect((await changeEmail()).url.searchParams.get("redirect_uri")).toBe(config.identityRedirectUri);
+      const plain = await changeEmail();
+      expect(plain.url.searchParams.get("redirect_uri")).toBe(config.identityRedirectUri);
+      expect(await finish(plain.callback, plain.loginCookie)).toBe("ACTION_COMPLETE");
+
       await kcUpdate(client, { redirectUris: [config.identityRedirectUri, `${config.identityRedirectUri}/*`] });
-      const { url, loginCookie } = await changeEmail();
-      expect(url.searchParams.get("kc_action")).toBe("UPDATE_EMAIL");
-      expect(url.searchParams.get("redirect_uri")).toBe(`${config.identityRedirectUri}/bomet-county`);
-      const callback = await fetch(`${app()}/identity/v1/callback/bomet-county?code=valid-code:${encodeURIComponent(url.searchParams.get("nonce")!)}` +
-        `&state=${encodeURIComponent(url.searchParams.get("state")!)}&kc_action_status=success`,
-        { redirect: "manual", headers: { Cookie: `${cookie}; ${loginCookie}` } });
-      expect(callback.status).toBe(303);
-      const location = new URL(callback.headers.get("location")!, "http://localhost");
-      expect(location.pathname).toBe(returnTo);
-      const result = await fetch(`${app()}/identity/v1/auth-results/${encodeURIComponent(location.searchParams.get("authResult")!)}`);
-      expect(await result.json()).toMatchObject({ code: "ACTION_COMPLETE" });
+      const slugged = await changeEmail();
+      expect(slugged.url.searchParams.get("kc_action")).toBe("UPDATE_EMAIL");
+      expect(slugged.url.searchParams.get("redirect_uri")).toBe(`${config.identityRedirectUri}/bomet-county`);
+      expect(slugged.callback).toMatch(/^\/identity\/v1\/callback\/bomet-county\?/);
+      expect(await finish(slugged.callback, slugged.loginCookie)).toBe("ACTION_COMPLETE");
+
+      // A path slug that differs from the attempt's redirect fails without asking Keycloak.
+      for (const path of ["/identity/v1/callback", "/identity/v1/callback/other-county"]) {
+        const attempt = await changeEmail();
+        expect(await finish(attempt.callback.replace(/^[^?]+/, path), attempt.loginCookie)).toBe("ACTION_FAILED");
+      }
     } finally {
       await kcUpdate(client, { redirectUris: [], attributes: { "digit.auth.account.actions": "" } });
     }
