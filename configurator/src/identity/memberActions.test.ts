@@ -13,10 +13,13 @@ describe('member actions', () => {
     await expect(createAndLink({ ...input, user: {} }, search, create)).rejects.toThrow('valid email');
     expect(create).not.toHaveBeenCalled(); expect(search).not.toHaveBeenCalled();
   });
-  it('creates without a password and links the returned user uuid', async () => {
+  it('creates with a fresh policy-compliant password and links the returned user uuid', async () => {
     const create = vi.fn(async row => ({ ...row, user: { ...row.user, uuid: 'u1' } }));
     await createAndLink(input, async () => [], create);
-    expect(create.mock.calls[0][0].user).not.toHaveProperty('password');
+    // HRMS's own fallback can lack an uppercase letter, which egov-user refuses (#2713).
+    const password = create.mock.calls[0][0].user.password;
+    expect(password).not.toBe('must-not-send');
+    expect(password).toMatch(/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])[A-Za-z\d@#$%]{8,15}$/);
     expect(linkMember).toHaveBeenCalledWith('acme', 'u1', 'person@example.org');
   });
   it('retries linking after HRMS succeeds without creating another employee', async () => {

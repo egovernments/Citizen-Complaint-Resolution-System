@@ -86,7 +86,9 @@ public class OnboardingStepsTest {
     @Test public void completePrerequisitesUseCountryRuleEveryLanguageAndVerifiedFounderPolicy(){
         prerequisites();steps.perform("FOUNDER_HRMS",signup,op,progress);
         assertEquals("founder-uuid",op.getFounderDigitUuid());assertEquals("9876543210",createdUser.get("mobileNumber"));assertEquals("+91",createdUser.get("countryCode"));
-        assertFalse(createdUser.containsKey("emailId"));assertFalse(createdUser.containsKey("password"));
+        assertFalse(createdUser.containsKey("emailId"));
+        // HRMS's own fallback can lack an uppercase letter, which egov-user refuses (#2713).
+        assertTrue(((String)createdUser.get("password")).matches("^(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])[A-Za-z\\d@#$%]{8,15}$"));
         assertTrue(mapper.valueToTree(createdUser.get("roles")).toString().contains("SUPERUSER"));
         boolean csr=false;for(var r:mapper.valueToTree(createdUser.get("roles")))csr|="CSR".equals(r.path("code").asText())&&"newtown".equals(r.path("tenantId").asText());
         assertTrue("every employee files complaints (#2239)",csr);

@@ -289,7 +289,7 @@ public class OnboardingPostgresTest {
                     .withProperty("pgr.onboarding.provisioner.username","fixture").withProperty("pgr.onboarding.provisioner.password","fixture-only").withProperty("pgr.onboarding.provisioner.tenant-id","pg");
             var steps=new OnboardingSteps(new OnboardingProvisionerClient(http,mapper,env),new PlatformBaseline(mapper),mapper);
             var lease=claim();lease.getOperation().setCurrentStep("FOUNDER_HRMS");repository.checkpoint(lease.getOperation(),lease.getLeaseToken(),System.currentTimeMillis());steps.perform("FOUNDER_HRMS",snapshot,lease.getOperation(),new OnboardingProgress(repository,lease.getOperation(),lease.getLeaseToken()));
-            assertEquals("trusted@example.test",employee.get().path("user").path("emailId").asText());assertFalse(employee.get().path("user").has("password"));
+            assertEquals("trusted@example.test",employee.get().path("user").path("emailId").asText());assertTrue(employee.get().path("user").path("password").isTextual());
             failRetry(lease,System.currentTimeMillis());verified.set(false);email.set("unverified-change@example.test");
             mvc.perform(post("/v2/onboarding/operations/_retry").header("Cookie","identity=fixture").contentType("application/json").content(mapper.writeValueAsString(Map.of("Operation",Map.of("id",operation.getId().toString()))))).andExpect(status().isAccepted());
             var same=repository.findOperation(operation.getId()).orElseThrow();assertEquals("stable-founder",same.getFounderDigitUuid());assertEquals(0,same.getRestartNo());

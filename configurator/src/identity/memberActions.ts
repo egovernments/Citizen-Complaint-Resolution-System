@@ -21,6 +21,33 @@ export function employeeUuid(employee: MemberEmployee): string {
   return uuid;
 }
 
+const LOWER = 'abcdefghijkmnopqrstuvwxyz';
+const UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const DIGITS = '23456789';
+const SPECIAL = '@#$%';
+/** Unbiased integer in [0, max) from the browser CSPRNG. */
+function randomInt(max: number): number {
+  const limit = 2 ** 32 - (2 ** 32 % max);
+  const word = new Uint32Array(1);
+  do crypto.getRandomValues(word); while (word[0] >= limit);
+  return word[0] % max;
+}
+/**
+ * Throwaway password satisfying egov-user's default policy (digit, lower, upper, @#$%, 8-15), as identity-bff's
+ * oneTimePassword. Without one HRMS generates its own, which can lack an uppercase letter and is refused (#2713).
+ * Staff sign in through Keycloak; identity-bff replaces it at first sign-in.
+ */
+export function throwawayPassword(length = 12): string {
+  const all = LOWER + UPPER + DIGITS + SPECIAL;
+  const chars = [LOWER, UPPER, DIGITS, SPECIAL].map(set => set[randomInt(set.length)]);
+  while (chars.length < length) chars.push(all[randomInt(all.length)]);
+  for (let index = chars.length - 1; index > 0; index -= 1) {
+    const swap = randomInt(index + 1);
+    [chars[index], chars[swap]] = [chars[swap], chars[index]];
+  }
+  return chars.join('');
+}
+
 /** HRMS has the employee, but linking their sign-in failed. `employee` is the saved record, so the invite can be sent from it. */
 export type InviteUnfinished = MessageError & { employee: MemberEmployee; reason: unknown };
 export const isInviteUnfinished = (err: unknown): err is InviteUnfinished =>
@@ -38,8 +65,7 @@ export async function createAndLink<T extends MemberEmployee>(input: T, search: 
   if (!existing && !(await session()).authenticated) {
     throw new MessageError('members.signin_ended', 'Your sign-in has ended, so nobody was added. Sign out, sign in again, and add them again.');
   }
-  const user: MemberEmployee['user'] = { ...input.user, emailId: email };
-  delete user.password;
+  const user: MemberEmployee['user'] = { ...input.user, emailId: email, password: throwawayPassword() };
   const employee = existing ?? await create({ ...input, user });
   try {
     await linkMember(input.tenantId, employeeUuid(employee), email);
