@@ -1061,6 +1061,8 @@
 {"code": "app.onboarding.signup.session_expired", "message": "Your sign-in expired. Sign in again to pick up where you left off.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.signup.setting_up", "message": "Setting up %{name}", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.signup.setup_failed", "message": "Setup did not finish", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.signup.signed_in_as", "message": "Signed in as %{email}.", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.signup.sign_out_other_email", "message": "Sign out and use a different email", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.signup.setup_failed_detail", "message": "The setup could not be completed.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.signup.setup_failed_retryable", "message": "Setup hit a problem that’s usually temporary. Try again.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.signup.setup_reference", "message": "Reference: %{code}", "module": "configurator-ui", "locale": "en_IN"},

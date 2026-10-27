@@ -10596,6 +10596,18 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.signup.signed_in_as",
+    "message": "Signed in as %{email}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.sign_out_other_email",
+    "message": "Sign out and use a different email",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.signup.setup_failed_detail",
     "message": "The setup could not be completed.",
     "module": "configurator-ui",

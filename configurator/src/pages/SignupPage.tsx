@@ -45,7 +45,7 @@ import { Stepper } from '@/components/ui/stepper';
 import { AuthShell } from '@/components/signup/AuthPanel';
 import { WorkspaceTrialDialog } from '@/components/WorkspaceTrialDialog';
 import { useAuthResult } from '@/hooks/useAuthResult';
-import { clearSignOutIncomplete, signOutIncomplete } from '@/lib/session';
+import { clearSignOutIncomplete, signOutIncomplete, signOutThisDevice } from '@/lib/session';
 import { track } from '@/lib/analytics';
 import { useOnboardingT } from '@/onboarding/i18n';
 import { MOBILE_RULES, mobileHint, nationalMobile } from '@/onboarding/signup/mobileRules';
@@ -264,6 +264,34 @@ function AvailabilityNote({
  * the provisioning screen and the workspace picker all read as one product
  * instead of a form floating on an empty page.
  */
+/**
+ * The way out of a signed-in signup: to start again under another email, or to leave a setup that
+ * did not finish. The signup stays with this email, so signing in with it again picks it up where
+ * it stopped.
+ */
+function SignOutLine({ email }: { email?: string }) {
+  const t = useOnboardingT();
+  const [busy, setBusy] = useState(false);
+  return (
+    <p className="mt-6 text-center text-sm text-muted-foreground">
+      {email && <>{t('signup.signed_in_as', 'Signed in as %{email}.', { email })} </>}
+      <button
+        type="button"
+        disabled={busy}
+        className="font-medium text-primary underline-offset-4 hover:underline disabled:opacity-60"
+        onClick={async () => {
+          setBusy(true);
+          await signOutThisDevice('current');
+          // A full load, so the page starts from the sign-in gate instead of this session.
+          window.location.assign('/configurator/signup');
+        }}
+      >
+        {t('signup.sign_out_other_email', 'Sign out and use a different email')}
+      </button>
+    </p>
+  );
+}
+
 function SignupFlow() {
   const t = useOnboardingT();
   const authResult = useAuthResult();
@@ -1245,6 +1273,7 @@ function SignupFlow() {
             </AlertDescription>
           </Alert>
         )}
+        <SignOutLine email={sessionUser?.email} />
       </div>
     );
   }
@@ -1262,6 +1291,7 @@ function SignupFlow() {
             <span className="font-mono">{signup?.id}</span>.
           </AlertDescription>
         </Alert>
+        <SignOutLine email={sessionUser?.email} />
       </div>
     );
   }
@@ -1275,6 +1305,7 @@ function SignupFlow() {
         >
           <RefreshCw className="mr-2 h-4 w-4" /> Try again
         </Button>
+        <SignOutLine email={sessionUser?.email} />
       </div>
     );
   }
@@ -1604,6 +1635,7 @@ function SignupFlow() {
           </div>
         </section>
       )}
+      <SignOutLine email={email} />
     </>
   );
 }
