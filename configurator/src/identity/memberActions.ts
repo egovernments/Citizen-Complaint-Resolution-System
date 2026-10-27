@@ -21,6 +21,30 @@ export function employeeUuid(employee: MemberEmployee): string {
   return uuid;
 }
 
+const PASSWORD_SETS = ['ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz', '0123456789', '@#$%'];
+function randomIndex(size: number): number {
+  // Rejection sampling: no modulo bias.
+  const limit = Math.floor(0x100000000 / size) * size;
+  const value = new Uint32Array(1);
+  do crypto.getRandomValues(value); while (value[0] >= limit);
+  return value[0] % size;
+}
+/**
+ * A throwaway password for the DIGIT account HRMS creates (#2713). Nobody sees or keeps it: the
+ * member sets their own from the invitation. Sent because HRMS's own generator ignores
+ * egov-user's policy (a digit, a lower- and an upper-case letter, one of @#$%, 8-15 characters),
+ * so a few rows in a hundred failed. One from each set, then 11 from any, shuffled.
+ */
+export function throwawayPassword(): string {
+  const all = PASSWORD_SETS.join('');
+  const chars = [...PASSWORD_SETS, ...Array<string>(11).fill(all)].map(set => set[randomIndex(set.length)]);
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomIndex(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
+
 /** HRMS has the employee, but linking their sign-in failed. `employee` is the saved record, so the invite can be sent from it. */
 export type InviteUnfinished = MessageError & { employee: MemberEmployee; reason: unknown };
 export const isInviteUnfinished = (err: unknown): err is InviteUnfinished =>
@@ -38,8 +62,8 @@ export async function createAndLink<T extends MemberEmployee>(input: T, search: 
   if (!existing && !(await session()).authenticated) {
     throw new MessageError('members.signin_ended', 'Your sign-in has ended, so nobody was added. Sign out, sign in again, and add them again.');
   }
-  const user: MemberEmployee['user'] = { ...input.user, emailId: email };
-  delete user.password;
+  // Never a password the admin typed; a throwaway one so HRMS doesn't generate one (#2713).
+  const user: MemberEmployee['user'] = { ...input.user, emailId: email, password: throwawayPassword() };
   const employee = existing ?? await create({ ...input, user });
   try {
     await linkMember(input.tenantId, employeeUuid(employee), email);

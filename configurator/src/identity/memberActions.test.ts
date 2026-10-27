@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAndLink, deactivateAndRemove, isInviteUnfinished, type MemberEmployee } from './memberActions';
+import { createAndLink, deactivateAndRemove, isInviteUnfinished, throwawayPassword, type MemberEmployee } from './memberActions';
 import { linkMember, removeMember } from './api';
 import { session } from '@/api/onboarding';
 vi.mock('./api', () => ({ linkMember: vi.fn(), removeMember: vi.fn() }));
 vi.mock('@/api/onboarding', () => ({ session: vi.fn() }));
 const input: MemberEmployee = { tenantId: 'acme', code: 'E1', isActive: true, user: { emailId: ' PERSON@EXAMPLE.ORG ', password: 'must-not-send' } };
+// egov-user's egov.user.pwd.pattern, with its 8-15 length bounds.
+const EGOV_USER_PASSWORD = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])(?=\S+$).{8,15}$/;
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(session).mockResolvedValue({ authenticated: true }); });
 
 describe('member actions', () => {
@@ -13,10 +15,11 @@ describe('member actions', () => {
     await expect(createAndLink({ ...input, user: {} }, search, create)).rejects.toThrow('valid email');
     expect(create).not.toHaveBeenCalled(); expect(search).not.toHaveBeenCalled();
   });
-  it('creates without a password and links the returned user uuid', async () => {
+  it('creates with a throwaway password, never the submitted one, and links the returned user uuid', async () => {
     const create = vi.fn(async row => ({ ...row, user: { ...row.user, uuid: 'u1' } }));
     await createAndLink(input, async () => [], create);
-    expect(create.mock.calls[0][0].user).not.toHaveProperty('password');
+    expect(create.mock.calls[0][0].user.password).not.toBe('must-not-send');
+    expect(create.mock.calls[0][0].user.password).toMatch(EGOV_USER_PASSWORD);
     expect(linkMember).toHaveBeenCalledWith('acme', 'u1', 'person@example.org');
   });
   it('retries linking after HRMS succeeds without creating another employee', async () => {
@@ -67,5 +70,14 @@ describe('member actions', () => {
     const update = vi.fn();
     await expect(deactivateAndRemove(async () => ({ ...input, uuid: 'self' }), update, 'self')).rejects.toThrow('own membership');
     expect(update).not.toHaveBeenCalled();
+  });
+  it('makes throwaway passwords egov-user accepts, every time (#2713)', () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 2000; i++) {
+      const password = throwawayPassword();
+      expect(password).toMatch(EGOV_USER_PASSWORD);
+      seen.add(password);
+    }
+    expect(seen.size).toBe(2000);
   });
 });
