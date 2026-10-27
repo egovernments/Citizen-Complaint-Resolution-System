@@ -241,6 +241,11 @@ export interface Operation {
    * the identity side does not list the new tenant.
    */
   lifecyclePublishedAt?: number | null;
+  /**
+   * When PGR retries a RETRYABLE_FAILED run by itself; null once its automatic retries are used up.
+   * Absent from a pgr-services older than this field.
+   */
+  nextRetryAt?: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -594,10 +599,30 @@ export function isOperationReady(operation: Pick<Operation, 'status' | 'lifecycl
   return operation.status === 'SUCCEEDED' && Boolean(operation.lifecyclePublishedAt);
 }
 
-/** Settled means nothing more will change, so a success still being published is not. */
-export function isOperationSettled(operation: Pick<Operation, 'status' | 'lifecyclePublishedAt'>): boolean {
-  return isOperationReady(operation) ||
-    operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
+/**
+ * PGR retries a RETRYABLE_FAILED run by itself until its 12th attempt has failed
+ * (OnboardingRepository, `retry_count < 12`), backing off from 1 s to 60 s.
+ */
+export const AUTOMATIC_ATTEMPTS = 12;
+
+type RetryState = Pick<Operation, 'status'> & Partial<Pick<Operation, 'attempt' | 'nextRetryAt'>>;
+
+/**
+ * A retryable failure that PGR will retry by itself, so the founder waits rather than
+ * acts (#2709). `nextRetryAt` says so. `attempt` (counted from 1) is not enough alone:
+ * PGR restarts its budget on progress and on a manual retry, so a run can be past
+ * attempt 12 and still retried. Below attempt 12 a retry is always still due, which is
+ * all a pgr-services without `nextRetryAt` can tell.
+ */
+export function isRetryingAutomatically(operation: RetryState): boolean {
+  return operation.status === 'RETRYABLE_FAILED' &&
+    (operation.nextRetryAt != null || (operation.attempt ?? AUTOMATIC_ATTEMPTS) < AUTOMATIC_ATTEMPTS);
+}
+
+/** Settled means nothing more will change, so a success still being published, or a failure PGR still retries, is not. */
+export function isOperationSettled(operation: Pick<Operation, 'status' | 'lifecyclePublishedAt'> & RetryState): boolean {
+  return isOperationReady(operation) || operation.status === 'TERMINAL_FAILED' ||
+    (operation.status === 'RETRYABLE_FAILED' && !isRetryingAutomatically(operation));
 }
 
 /* -------------------------------------------------------------------------- */

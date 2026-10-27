@@ -11,6 +11,7 @@ import {
   findSignup,
   isOperationReady,
   isOperationSettled,
+  isRetryingAutomatically,
   isValidAccountCode,
   isValidUrlSlug,
   RESERVED_URL_SLUGS,
@@ -211,9 +212,24 @@ describe('operation readiness (CCRS#2303)', () => {
   });
 
   it('settles failures without waiting for publication', () => {
-    expect(isOperationSettled({ status: 'RETRYABLE_FAILED' })).toBe(true);
+    expect(isOperationSettled({ status: 'RETRYABLE_FAILED', attempt: 12 })).toBe(true);
     expect(isOperationSettled({ status: 'TERMINAL_FAILED' })).toBe(true);
     expect(isOperationReady({ status: 'TERMINAL_FAILED', lifecyclePublishedAt: 1 })).toBe(false);
     expect(isOperationSettled({ status: 'RUNNING' })).toBe(false);
+  });
+
+  it('does not settle a retryable failure PGR will still retry by itself (#2709)', () => {
+    expect(isOperationSettled({ status: 'RETRYABLE_FAILED', attempt: 1 })).toBe(false);
+    expect(isOperationSettled({ status: 'RETRYABLE_FAILED', attempt: 11 })).toBe(false);
+    expect(isRetryingAutomatically({ status: 'RETRYABLE_FAILED', attempt: 11 })).toBe(true);
+    expect(isRetryingAutomatically({ status: 'RETRYABLE_FAILED', attempt: 12 })).toBe(false);
+    expect(isRetryingAutomatically({ status: 'TERMINAL_FAILED', attempt: 1 })).toBe(false);
+  });
+
+  it('follows nextRetryAt past attempt 12, since PGR restarts its budget on progress', () => {
+    expect(isRetryingAutomatically({ status: 'RETRYABLE_FAILED', attempt: 13, nextRetryAt: 1 })).toBe(true);
+    expect(isOperationSettled({ status: 'RETRYABLE_FAILED', attempt: 13, nextRetryAt: 1 })).toBe(false);
+    expect(isRetryingAutomatically({ status: 'RETRYABLE_FAILED', attempt: 13, nextRetryAt: null })).toBe(false);
+    expect(isOperationSettled({ status: 'RETRYABLE_FAILED', attempt: 13, nextRetryAt: null })).toBe(true);
   });
 });

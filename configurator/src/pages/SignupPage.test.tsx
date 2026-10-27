@@ -26,6 +26,7 @@ vi.mock('@/api/onboarding', async () => {
     checkIdentifier: vi.fn(),
     submitSignup: vi.fn(),
     searchOperation: vi.fn(),
+    retryOperation: vi.fn(),
     selectContext: vi.fn(),
     startSignIn: vi.fn(),
     requestMagicLinkSignup: vi.fn(),
@@ -34,6 +35,9 @@ vi.mock('@/api/onboarding', async () => {
 });
 
 import * as api from '@/api/onboarding';
+
+const track = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/analytics', async () => ({ ...(await vi.importActual<typeof import('@/lib/analytics')>('@/lib/analytics')), track }));
 
 const signedIn = { authenticated: true, user: { id: 'u', email: 'f@x.test', name: 'F', preferredUsername: 'f' } };
 
@@ -422,6 +426,8 @@ describe('provisioning', () => {
   it('shows the worker steps and offers a retry only when the failure is retryable', async () => {
     await submitWith({
       status: 'RETRYABLE_FAILED',
+      // PGR's last automatic attempt: nothing more will happen unless the founder retries.
+      attempt: 12,
       currentStep: 'ORGANIZATION',
       completedSteps: ['TENANT_FOUNDATION'],
       errorCode: 'ONBOARDING_VALIDATION_ERROR',
@@ -433,6 +439,7 @@ describe('provisioning', () => {
     expect(screen.getByText('Reference: ONBOARDING_VALIDATION_ERROR')).toBeInTheDocument();
     expect(screen.queryByText(/could not create the organization/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+    expect(track).toHaveBeenCalledWith('signup:provision_fail', { error_code: 'ONBOARDING_VALIDATION_ERROR', retryable: true });
   });
 
   it('hands a rejected founder number back to be corrected, rather than closing the signup (#2353)', async () => {
@@ -1011,6 +1018,7 @@ describe('resuming a run that was already going', () => {
     vi.mocked(api.submitSignup).mockResolvedValue({
       ...runningOperation,
       status: 'RETRYABLE_FAILED',
+      attempt: 12,
       errorCode: 'DIGIT_UNAVAILABLE',
       errorMessage: 'DIGIT is not answering',
     } as never);
@@ -1269,6 +1277,109 @@ describe('polling while the worker runs', () => {
     await tick(3000);
     await waitFor(() => expect(screen.queryByText(/status check failed/i)).not.toBeInTheDocument());
     expect(findOperation).toHaveBeenCalledTimes(4);
+  });
+
+  const kisumu = { organizationAlias: 'kisumu-county', tenantId: 'kisumucounty', name: 'Kisumu County', roles: [] };
+  const published = {
+    ...running,
+    status: 'SUCCEEDED' as const,
+    currentStep: null,
+    completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE', 'FOUNDER_HRMS', 'ORGANIZATION', 'MEMBERSHIP', 'BINDING'],
+    lifecyclePublishedAt: 1,
+  };
+  const failedOnce = { ...running, status: 'RETRYABLE_FAILED' as const, currentStep: 'PLATFORM_BASELINE', completedSteps: ['TENANT_FOUNDATION'], errorCode: 'BOUNDARY_ENTITY_DOES_NOT_EXIST' };
+
+  it('keeps polling a retryable failure PGR still retries by itself, and continues once it succeeds (#2709)', async () => {
+    vi.mocked(api.submitSignup).mockResolvedValue(failedOnce as never);
+    vi.mocked(findOperation).mockResolvedValueOnce({ ...failedOnce, attempt: 2 } as never).mockResolvedValue(published as never);
+    await start();
+
+    expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
+    expect(screen.queryByText(/usually temporary/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    // The step being retried keeps spinning, and a run that has not ended reports no failure.
+    expect(screen.getByText(/setting up the basics/i).closest('li')?.querySelector('.animate-spin')).not.toBeNull();
+    expect(track).not.toHaveBeenCalledWith('signup:provision_fail', expect.anything());
+    await tick(3000);
+    expect(screen.getByText(/still setting up/i)).toBeInTheDocument();
+
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
+    expect(findOperation).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps polling a run past attempt 12 that PGR will still retry (nextRetryAt)', async () => {
+    // PGR restarts its budget on progress, so attempt alone can pass 12 while a retry is still due.
+    const pastTwelve = { ...failedOnce, attempt: 13, nextRetryAt: 5000 };
+    vi.mocked(api.submitSignup).mockResolvedValue(pastTwelve as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...pastTwelve }) as never);
+    await start();
+
+    expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
+    expect(screen.queryByText(/usually temporary/i)).not.toBeInTheDocument();
+    await tick(3000);
+    await tick(3000);
+    expect(findOperation).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows "Still setting up" when Try again finds PGR already retrying the run again', async () => {
+    vi.mocked(api.submitSignup).mockResolvedValue({ ...failedOnce, attempt: 12 } as never);
+    vi.mocked(api.retryOperation).mockRejectedValue(
+      new api.OnboardingError(400, 'ONBOARDING_OPERATION_NOT_RETRYABLE', 'The operation is not retryable'));
+    // Claimed and failed again between this page's last look and the click.
+    vi.mocked(findOperation).mockResolvedValue({ ...failedOnce, attempt: 13, nextRetryAt: 5000 } as never);
+    await start();
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }));
+    expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
+    expect(screen.queryByText(/can’t be retried from here/i)).not.toBeInTheDocument();
+  });
+
+  it('offers Try again next to "Still setting up" once the retrying run stops changing, and keeps polling', async () => {
+    // Nobody works the run (a stopped runner): every poll brings back the same run.
+    vi.mocked(api.submitSignup).mockResolvedValue(failedOnce as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...failedOnce }) as never);
+    vi.mocked(api.retryOperation).mockResolvedValue({ ...failedOnce, status: 'PENDING', attempt: 2, errorCode: null } as never);
+    await start();
+
+    expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
+    await tick(170_000);
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    await tick(10_000);
+    expect(screen.getByText(/longer than it should/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    await waitFor(() => expect(api.retryOperation).toHaveBeenCalledWith('op1'));
+
+    const calls = vi.mocked(findOperation).mock.calls.length;
+    await tick(3000);
+    expect(vi.mocked(findOperation).mock.calls.length).toBeGreaterThan(calls);
+  });
+
+  it('does not offer Try again while the retrying run keeps changing', async () => {
+    let updatedAt = 0;
+    vi.mocked(api.submitSignup).mockResolvedValue(failedOnce as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...failedOnce, updatedAt: ++updatedAt }) as never);
+    await start();
+
+    await tick(240_000);
+    expect(screen.getByText(/still setting up/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+  });
+
+  it('continues to the workspace when Try again finds the run already succeeded (#2709)', async () => {
+    vi.mocked(api.submitSignup).mockResolvedValue({ ...failedOnce, attempt: 12 } as never);
+    vi.mocked(api.retryOperation).mockRejectedValue(
+      new api.OnboardingError(400, 'ONBOARDING_OPERATION_NOT_RETRYABLE', 'The operation is not retryable'));
+    vi.mocked(findOperation).mockResolvedValue(published as never);
+    await start();
+
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }));
+
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
+    expect(findOperation).toHaveBeenCalledWith('op1', undefined);
+    expect(screen.queryByText(/can’t be retried from here/i)).not.toBeInTheDocument();
   });
 });
 

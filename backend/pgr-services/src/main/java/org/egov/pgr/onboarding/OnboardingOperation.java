@@ -31,6 +31,8 @@ public class OnboardingOperation {
     private String lifecycleDecision;
     private Integer lifecycleRestartNo;
     private Long lifecyclePublishedAt;
+    /** When PGR retries a RETRYABLE_FAILED run by itself; null once its automatic retries are used up (#2709). */
+    private Long nextRetryAt;
     private long createdAt;
     private long updatedAt;
 }
