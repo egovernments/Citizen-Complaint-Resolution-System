@@ -21,7 +21,7 @@
 {"code": "COMMON_TABLE_SORT", "message": "क्रम में जमाएं", "module": "rainmaker-common", "locale": "hi_IN"},
 {"code": "COMMON_VALIDITY", "message": "वैधता", "module": "rainmaker-common", "locale": "hi_IN"},
 {"code": "COMMON_WORKFLOW_STATES", "message": "वर्कफ़्लो स्थिति", "module": "rainmaker-common", "locale": "hi_IN"},
-{"code": "CORE_COMMON_CANCEL", "message": "रद्द करना", "module": "rainmaker-common", "locale": "hi_IN"},
+{"code": "CORE_COMMON_CANCEL", "message": "रद्द करें", "module": "rainmaker-common", "locale": "hi_IN"},
 {"code": "CORE_COMMON_CHANGE_PHOTO", "message": "फ़ोटो बदलें", "module": "rainmaker-common", "locale": "hi_IN"},
 {"code": "CORE_COMMON_CONTINUE", "message": "जारी रखें", "module": "rainmaker-common", "locale": "hi_IN"},
 {"code": "CORE_COMMON_DISABLED", "message": "बंद", "module": "rainmaker-common", "locale": "hi_IN"},
