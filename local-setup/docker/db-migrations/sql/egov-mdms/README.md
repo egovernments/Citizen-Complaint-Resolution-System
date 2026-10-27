@@ -9,10 +9,23 @@ every box, fresh or existing.
 
 ## Applying on an existing box
 
-`docker-compose.egov-digit.yaml` pulls a **pre-built** db-migrations image
-(`…/tilt-demo-db-migrations:latest`), so a new file here only reaches a box once
-that image is rebuilt and repushed. Until then, apply it by hand — the SQL is
-idempotent, so running it directly is equivalent to letting Flyway run it:
+`docker-compose.migrations.yml` **builds** the db-migrations image from
+`./docker/db-migrations`; it no longer pulls `…/tilt-demo-db-migrations:latest`.
+The deploy syncs that build context, but `up -d` reuses an image the box already
+built, so a new file here only reaches an existing box once the image is rebuilt,
+as in [migration guide §4](../../../../../docs/releases/2.20/migration-guide-v2.12-to-v2.20-beta.md#4-deploy):
+
+```sh
+cd /opt/digit
+COMPOSE_PROFILES=<profiles> docker compose <-f files> build db-migrations
+COMPOSE_PROFILES=<profiles> docker compose <-f files> up --no-deps db-migrations
+```
+
+Use the profiles and `-f` files the deploy uses (`docker-compose.egov-digit.yaml`,
+`docker-compose.migrations.yml`, your overlay, and any others in host_vars).
+
+Or apply one file by hand — the SQL is idempotent, so running it directly is
+equivalent to letting Flyway run it:
 
 ```sh
 # from the box, against the egov DB (adjust container/creds to the host)
