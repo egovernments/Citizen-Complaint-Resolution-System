@@ -47,6 +47,17 @@ final class DashboardCatalogProbe {
         assertTrue("every public tile resolves to a public KPI", ids.containsAll(pack.get().getTiles()));
         assertEquals("the public pack loses no tile to a missing definition",
                 rows.get(tenant + "|dss.DashboardPack|public-default").path("data").path("tiles").size(), pack.get().getTiles().size());
+
+        // The signed-in dashboard's pack, from the same catalog: every tile and layout entry names a published KPI.
+        JsonNode supervisor = rows.get(tenant + "|dss.DashboardPack|supervisor-default");
+        assertNotNull("onboarding writes the supervisor-default pack", supervisor);
+        assertFalse(supervisor.path("data").path("tiles").isEmpty());
+        List<String> refs = new ArrayList<>();
+        supervisor.path("data").path("tiles").forEach(t -> refs.add(t.asText()));
+        supervisor.path("data").path("layout").forEach(l -> refs.add(l.path("kpiId").asText()));
+        for (String kpiId : refs)
+            assertTrue("supervisor-default tile " + kpiId + " has no published definition",
+                    service.getDef(kpiId, tenant).map(KpiDefinition::isPublished).orElse(false));
     }
 
     @SuppressWarnings("unchecked")

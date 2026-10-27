@@ -43,7 +43,10 @@ public class OnboardingStepsTest {
                     if(ids!=null&&ids.size()==1&&lagging.merge(prefix+ids.get(0),-1,Integer::sum)>=0) return mapper.valueToTree(Map.of("mdms",List.of()));
                     return mapper.valueToTree(Map.of("mdms",rows.entrySet().stream().filter(e->e.getKey().startsWith(prefix)&&(ids==null||ids.contains(e.getKey().substring(prefix.length())))).map(Map.Entry::getValue).toList()));
                 }
-                Map<String,Object> row=(Map<String,Object>)body.get("Mdms");String key=row.get("tenantId")+"|"+row.get("schemaCode")+"|"+row.get("uniqueIdentifier");rows.put(key,mapper.valueToTree(row));if(path.contains("/v2/_create/"))lagging.put(key,lagReads);writes.add("record:"+row.get("schemaCode"));return mapper.createObjectNode();
+                Map<String,Object> row=(Map<String,Object>)body.get("Mdms");
+                // As mdms-v2 does: a record can only be created once its schema exists.
+                if(path.contains("/v2/_create/")&&!schemas.contains(String.valueOf(row.get("schemaCode"))))throw new OnboardingFailure("SCHEMA_DEFINITION_NOT_FOUND",false);
+                String key=row.get("tenantId")+"|"+row.get("schemaCode")+"|"+row.get("uniqueIdentifier");rows.put(key,mapper.valueToTree(row));if(path.contains("/v2/_create/"))lagging.put(key,lagReads);writes.add("record:"+row.get("schemaCode"));return mapper.createObjectNode();
             }
             if(service.equals("hrms")) {
                 if(path.contains("_search")) {
@@ -85,13 +88,13 @@ public class OnboardingStepsTest {
         verify(client,never()).identity(anyString(),anyMap());
     }
     private void prerequisites(){steps.perform("TENANT_FOUNDATION",signup,op,progress);steps.perform("PLATFORM_BASELINE",signup,op,progress);}
-    /** One sample misses a dropped character class most of the time; a thousand do not (#2713). */
     /** A new workspace carries its own dashboard catalog, so turning its public dashboard on serves its own data. */
     @Test public void freshWorkspaceGetsTheDashboardCatalogItsPublicDashboardNeeds(){
-        prerequisites();
+        prerequisites(); // the fixture refuses a record whose schema has not been created yet
         for(String schema:List.of("dss.KpiDefinition","dss.DashboardPack"))assertTrue(schema,writes.contains("schema:"+schema));
         DashboardCatalogProbe.assertPublicDashboardServed(rows,"newtown",mapper);
     }
+    /** One sample misses a dropped character class most of the time; a thousand do not (#2713). */
     @Test public void everyFounderThrowawayPasswordMeetsEgovUserPolicy(){
         for(int i=0;i<1000;i++)assertTrue(OnboardingSteps.throwawayPassword().matches(PASSWORD_POLICY));
     }
