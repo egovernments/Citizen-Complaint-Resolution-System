@@ -98,6 +98,18 @@ describe('sign-in gate', () => {
     expect(mark?.querySelector('path')).toHaveAttribute('fill', '#181717');
   });
 
+  it('labels a Keycloak provider "Sign up with" and shows the Google mark', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'google', label: 'Google', type: 'idp', idpHint: 'google' }],
+    });
+
+    render(<SignupPage />);
+
+    const google = await screen.findByRole('button', { name: /^sign up with google$/i });
+    expect(google.querySelector('svg[data-icon="inline-start"][data-provider="google"]')).not.toBeNull();
+  });
+
   it('collects the signup identity in Configurator and shows check-email without opening Keycloak', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({

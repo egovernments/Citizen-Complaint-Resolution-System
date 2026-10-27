@@ -242,6 +242,7 @@
 {"code": "app.workspace_links.copied", "message": "लिंक कॉपी हो गया।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.workspace_links.copy_failed", "message": "लिंक कॉपी नहीं हो सका। इसे चुनें और स्वयं कॉपी करें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.workspace_links.open", "message": "खोलें", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.onboarding.signup.with_provider", "message": "%{provider} से साइन अप करें", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.employees.signs_in_with_email", "message": "वे %{email} से साइन इन करते हैं।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.bulk_employees.got_account_email", "message": "उपयोगकर्ता खाता (ईमेल से साइन इन)", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.providers.admin_only", "message": "केवल देखने के लिए: प्रदाता जोड़ने, बदलने या परखने के लिए राज्य टेनेंट पर SUPERUSER, MDMS_ADMIN या ACCOUNT_ADMIN भूमिका आवश्यक है।", "module": "configurator-ui", "locale": "hi_IN"},

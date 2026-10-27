@@ -25764,6 +25764,30 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.signup.with_provider",
+    "message": "Sign up with %{provider}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.with_provider",
+    "message": "%{provider} से साइन अप करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.with_provider",
+    "message": "S’inscrire avec %{provider}",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.with_provider",
+    "message": "Cadastrar-se com %{provider}",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.step.back",
     "message": "Back",
     "module": "configurator-ui",

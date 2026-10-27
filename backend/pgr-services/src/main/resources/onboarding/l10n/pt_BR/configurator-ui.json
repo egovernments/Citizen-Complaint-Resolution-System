@@ -242,6 +242,7 @@
 {"code": "app.workspace_links.copied", "message": "Link copiado.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.workspace_links.copy_failed", "message": "Não foi possível copiar o link. Selecione-o e copie manualmente.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.workspace_links.open", "message": "Abrir", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.onboarding.signup.with_provider", "message": "Cadastrar-se com %{provider}", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.employees.signs_in_with_email", "message": "Eles entram com %{email}.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.bulk_employees.got_account_email", "message": "Conta de usuário (entrar com o e-mail)", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.providers.admin_only", "message": "Somente leitura: adicionar, alterar ou testar um provedor exige a função SUPERUSER, MDMS_ADMIN ou ACCOUNT_ADMIN na entidade estadual.", "module": "configurator-ui", "locale": "pt_BR"},
