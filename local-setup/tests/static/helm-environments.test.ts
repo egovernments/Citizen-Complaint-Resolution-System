@@ -112,7 +112,7 @@ describe('the bare domain lands on the Configurator on both tiers', () => {
 
   test('Helm: root-ingress redirects /$ (exact under regex) to /configurator/ when no slug is set', () => {
     const tpl = read(`${DEPLOY}/charts/core-services/configmaps/templates/root-ingress.yaml`);
-    expect(tpl).toContain('{{- else if ne (toString (index . "configuratorRedirect")) "false" }}');
+    expect(tpl).toContain('{{- else if and (ne (toString (index . "configuratorRedirect")) "false")');
     expect(tpl).toContain('nginx.ingress.kubernetes.io/temporal-redirect: {{ printf "%s://%s/configurator/" $scheme $.Values.global.domain | quote }}');
     expect(tpl).toMatch(/path: \/\$\n\s+pathType: ImplementationSpecific/);
     expect(read(`${DEPLOY}/charts/core-services/configmaps/values.yaml`)).toMatch(/^ {2}configuratorRedirect: true$/m);
@@ -185,7 +185,55 @@ describe('the /turbopass proxy keeps this site\'s credentials', () => {
 describe('cms-saas-secrets-from-cluster.sh', () => {
   test('lets the most recently upgraded release win instead of stopping', () => {
     const script = read(`${DEPLOY}/scripts/cms-saas-secrets-from-cluster.sh`);
-    expect(script).toContain('key=lambda r: r["updated"]');
+    expect(script).toContain('for r in sorted(json.load(open(sys.argv[1])), key=updated):');
     expect(script).not.toContain('resolve it by hand');
+  });
+});
+
+describe('review round 4', () => {
+  test('turbopass-proxy verifies the upstream certificate', () => {
+    const conf = read(`${DEPLOY}/charts/urban/turbopass-proxy/templates/_helpers.tpl`);
+    expect(conf).toContain('proxy_ssl_verify on;');
+    expect(conf).toContain('proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;');
+  });
+
+  test.each(['urban/turbopass-proxy', 'core-services/egov-mdms-service'])(
+    '%s: nginx listens on the merged httpPort, as common\'s Deployment and Service do', (chart) => {
+      const conf = read(`${DEPLOY}/charts/${chart}/templates/_helpers.tpl`);
+      expect(conf).toContain('{{- $port := $over.httpPort | default .Values.httpPort -}}');
+      expect(conf).toContain('listen {{ $port }};');
+      expect(conf).not.toContain('listen {{ .Values.httpPort }};');
+    });
+
+  test('the bare-domain redirect needs configurator installed', () => {
+    expect(read(`${DEPLOY}/charts/core-services/configmaps/templates/root-ingress.yaml`))
+      .toContain('(not (has "configurator" ($.Values.disabledReleases | default list)))');
+  });
+
+  test('every release-backed status check follows disabledReleases', () => {
+    const tpl = read(`${DEPLOY}/charts/monitoring/gatus/templates/configmap.yaml`);
+    expect(tpl).toContain('{{- $disabled := .Values.disabledReleases | default list }}');
+    // Each check whose host is an egov/backbone/novu Service sits in a release guard.
+    const blocks = tpl.split(/\n(?= {6}- name: )/).slice(1);
+    for (const b of blocks) {
+      const url = /url: "([a-z]+):\/\/([a-z0-9-]+)\.(egov|backbone|novu)\b/.exec(b);
+      if (!url) continue;
+      const before = tpl.slice(0, tpl.indexOf(b));
+      expect([url[2], /\{\{- if not \(has "[\w.-]+" \$disabled\) \}\}\n(?:\s*#.*\n)*$/.test(before)]).toEqual([url[2], true]);
+    }
+  });
+
+  test('the secrets script orders releases in UTC and will not trust a stale copy', () => {
+    const script = read(`${DEPLOY}/scripts/cms-saas-secrets-from-cluster.sh`);
+    expect(script).toContain('t.astimezone(timezone.utc)');
+    expect(script).toContain('--force');
+    expect(script).toContain('differs from the cluster on:');
+  });
+
+  test('identity-bootstrap RBAC goes after a failed run too, the Job keeps its logs', () => {
+    const rbac = read(`${DEPLOY}/charts/identity/identity-bootstrap/templates/rbac.yaml`);
+    expect(rbac.match(/hook-delete-policy: before-hook-creation,hook-succeeded,hook-failed/g)).toHaveLength(3);
+    const job = read(`${DEPLOY}/charts/identity/identity-bootstrap/templates/job.yaml`);
+    expect(job).not.toContain('hook-failed');
   });
 });

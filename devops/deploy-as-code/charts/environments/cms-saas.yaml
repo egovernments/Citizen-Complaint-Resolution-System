@@ -77,7 +77,8 @@ turbopass-proxy:
 # did index every PGR event, but only into Elasticsearch, which nothing reads
 # with inbox off, so the search stack (indexer, Elasticsearch, Kibana) goes
 # together, as Ansible's enable_search_stack: false. The auxiliary releases
-# and otel-collector were never installed here. Remove a name to bring it back.
+# and otel-collector were never installed here. Remove a name to bring it
+# back; its status-page check (charts/monitoring/gatus) follows this list.
 disabledReleases:
   - egov-otp                # citizen phone OTP is off (identity-bff)
   - user-otp                # legacy citizen OTP login
@@ -92,15 +93,6 @@ disabledReleases:
   - pgadmin
   - playground
   - otel-collector
-
-# Status-page checks of the releases above.
-gatus:
-  groups:
-    otp: false
-    search: false
-  checks:
-    elasticsearch: false
-    userEvent: false
 
 monitoring:
   metrics: true      # kube-prometheus-stack
