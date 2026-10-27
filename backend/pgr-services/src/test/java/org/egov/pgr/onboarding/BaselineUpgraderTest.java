@@ -190,6 +190,19 @@ public class BaselineUpgraderTest {
         assertEquals(1, writes.stream().filter(w -> w.startsWith("schema:")).count());
     }
 
+    /** v16 adds the dashboard catalog: a v15 workspace gets its schemas and records, so its public dashboard can be served. */
+    @Test public void v15WorkspaceGetsTheDashboardCatalogItsPublicDashboardNeeds() {
+        List<String> catalog = List.of("dss.KpiDefinition", "dss.DashboardPack");
+        for (String schema : catalog) { schemas.remove(schema); rows.keySet().removeIf(key -> key.startsWith("walkone|" + schema + "|")); }
+        upgrader.upgrade("walkone", 15, new LinkedHashMap<>(), UUID.randomUUID());
+        for (String schema : catalog) assertTrue(schema, writes.contains("schema:" + schema));
+        long expected = 0; for (JsonNode row : seed.records()) if (catalog.contains(row.path("schemaCode").asText())) expected++;
+        assertEquals(expected, writes.stream().filter(w -> catalog.stream().anyMatch(c -> w.startsWith("create:" + c + ":"))).count());
+        assertFalse("existing records are not rewritten", writes.stream().anyMatch(w -> w.startsWith("create:") && catalog.stream().noneMatch(c -> w.startsWith("create:" + c + ":"))));
+        assertEquals("15", finished.get("from")); assertEquals(seed.version(), finished.get("to"));
+        DashboardCatalogProbe.assertPublicDashboardServed(rows, "walkone", mapper);
+    }
+
     @Test public void workspaceWithoutStateInfoFinishesAndLeavesItAbsent() {
         // Pre-baseline tenant: no StateInfo and none of the baseline masters. Step 1 creates the masters, never StateInfo.
         rows.keySet().removeIf(key -> key.contains("|common-masters.StateInfo|") || key.contains("|DataSecurity.") || key.contains("|egov-hrms.")

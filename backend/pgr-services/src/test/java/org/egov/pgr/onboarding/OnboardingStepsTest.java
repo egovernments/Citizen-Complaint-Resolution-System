@@ -86,6 +86,12 @@ public class OnboardingStepsTest {
     }
     private void prerequisites(){steps.perform("TENANT_FOUNDATION",signup,op,progress);steps.perform("PLATFORM_BASELINE",signup,op,progress);}
     /** One sample misses a dropped character class most of the time; a thousand do not (#2713). */
+    /** A new workspace carries its own dashboard catalog, so turning its public dashboard on serves its own data. */
+    @Test public void freshWorkspaceGetsTheDashboardCatalogItsPublicDashboardNeeds(){
+        prerequisites();
+        for(String schema:List.of("dss.KpiDefinition","dss.DashboardPack"))assertTrue(schema,writes.contains("schema:"+schema));
+        DashboardCatalogProbe.assertPublicDashboardServed(rows,"newtown",mapper);
+    }
     @Test public void everyFounderThrowawayPasswordMeetsEgovUserPolicy(){
         for(int i=0;i<1000;i++)assertTrue(OnboardingSteps.throwawayPassword().matches(PASSWORD_POLICY));
     }
