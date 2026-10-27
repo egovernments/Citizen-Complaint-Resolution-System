@@ -2,7 +2,7 @@
 
 **Covers:** v2.12 → v2.20, as of `master` at `63472b4a1` (#2716) and `develop` at `42e914005` (27 Oct 2026). **Who this is for:** operators upgrading or deploying CMS.
 
-What an operator must change to move a CMS deployment from v2.12 to v2.20. It lists only what affects a deployment; feature details are in the [Release notes](release-notes-v2.20.md). The [Migration guide](migration-guide-v2.12-to-v2.20-beta.md) has the full identity and Keycloak cut-over; section numbers below (guide §n) point into it.
+What an operator must change to move a CMS deployment from v2.12 to v2.20. It lists only what affects a deployment; feature details are in the [Release notes](release-notes-v2.20.md), and escalation known issues in [Known issues](known_issues_2.20.md). The [Migration guide](migration-guide-v2.12-to-v2.20-beta.md) has the full identity and Keycloak cut-over; section numbers below (guide §n) point into it.
 
 **The six things that matter most**
 
@@ -25,7 +25,7 @@ The deploy stops only if `enable_keycloak` is `false`, or if `auth_provider`, `c
 
 | Setting | Action | Why |
 | --- | --- | --- |
-| `enable_keycloak` | **master:** keep it `true`. **develop:** no effect; safe to remove | On master it still decides whether Prometheus scrapes Keycloak; removing it drops Keycloak metrics. Setting it to `false` stops the deploy on both |
+| `enable_keycloak` | Remove | Keycloak is always on. Setting it to `false` stops the deploy. On master, removing it also stops Prometheus scraping Keycloak (section 7) |
 | `auth_provider`, `citizen_auth_provider`, `employee_auth_provider` | Remove | Replaced by the Identity BFF; the value `keycloak` stops the deploy |
 | `enable_digit_ui_v2`, `nginx_features.digit_ui_v2`, `digit_ui_v2_repo`, `digit_ui_v2_branch` | Remove | The old `/citizen/` app is retired (#2290); these only print a warning |
 | `keycloak_client_id`, `login_tenant_allowlist`, `token_exchange_system_username`, `token_exchange_system_user_type` | Remove | No longer used |
@@ -172,7 +172,7 @@ Self-serve workspaces are upgraded to the latest platform seed in the background
 | --- | --- | --- |
 | master pins images to `master-b4adf0d`; develop still uses `nightly-develop` | Neither is a release tag | Pin a 2.20 tag before release |
 | Prometheus does not scrape Keycloak on develop, or on master when `enable_keycloak` is removed | No sign-in metrics in monitoring | Open |
-| The deploy's own message says to delete `enable_keycloak`, while the migration guide says to keep it | Conflicting advice | Fix one of them before release |
+| The migration guide (§2.1, §2.2) still says to keep `enable_keycloak: true`; this changelog and the deploy's own message say to delete it | Conflicting advice | Guide to be updated |
 | The identity SMTP check runs only after Keycloak has migrated | A bad SMTP setting is found late | Open (#2618) |
 | Setup can show a boundary "usually temporary" error, then fail on Try again, although setup succeeded | Confusing onboarding | Open (#2709) |
 | No tested rollback; the Keycloak and database migrations cannot be undone | Restore from backup only | Open |
