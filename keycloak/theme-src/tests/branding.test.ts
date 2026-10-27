@@ -195,6 +195,13 @@ describe("public MDMS branding (replacement for the BFF relay)", () => {
         expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=c" })).toBe("other-county");
     });
 
+    it("clears a landing page's tenant once a tab_id page names its own (#2645)", () => {
+        resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru })}.s` });
+        expect(resolveTenantSlug({ search: "?digit_tenant=other-county", loginAction: "/login?tab_id=g" })).toBe("other-county");
+        expect(sessionStorage.getItem("digit_tenant:")).toBeNull();
+        expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=h" })).toBeUndefined();
+    });
+
     it("lets a page's own tenant win over an earlier landing page's (#2645)", () => {
         resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru })}.s` });
         // An email-change link for another tenant: its tab_id's shared copy names that tenant.
