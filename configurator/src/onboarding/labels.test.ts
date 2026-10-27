@@ -138,6 +138,33 @@ describe('onboarding labels', () => {
     expect([...shared.keys()].filter((code) => !codes.has(code))).toEqual([]);
   });
 
+  // Onboarding offers English, French, Hindi and Portuguese, so each translated copy carries every key in its
+  // locale: the workspace pack all of en_IN's configurator-ui, the ansible bundle (the signup screen, before
+  // there is a workspace) every onboarding string. Placeholders and plural forms stay as in English.
+  const TRANSLATED = ['fr_FR', 'hi_IN', 'pt_BR'];
+  const tokens = (text: string) => [...text.matchAll(/%\{[^}]*\}|\|\|\|\||<\/?[a-z][^>]*>/gi)].map(([token]) => token).sort();
+  it.each(TRANSLATED)('%s carries every onboarding string, with the English placeholders', (locale) => {
+    const inLocale = (file: string, wanted: string) =>
+      new Map(read(file).filter((m) => m.locale === wanted).map((m) => [m.code, m.message]));
+    // The workspace pack keeps one file per locale; the bundle holds every locale in one.
+    const packFile = path.join(path.dirname(PACK), '..', locale, path.basename(PACK));
+    const wanted: [string, string, string[]][] = [
+      [PACK, packFile, [...inLocale(PACK, 'en_IN').keys()]],
+      [ANSIBLE, ANSIBLE, [...own.keys(), ...shared.keys()]],
+    ];
+    const problems = wanted.flatMap(([englishFile, file, codes]) => {
+      const english = inLocale(englishFile, 'en_IN');
+      const messages = inLocale(file, locale);
+      return codes.flatMap((code) => {
+        const message = messages.get(code);
+        const where = `${path.relative(REPO, file)} ${code}`;
+        if (!message?.trim()) return [`${where}: missing`];
+        return tokens(message).join() === tokens(english.get(code) ?? '').join() ? [] : [`${where}: placeholders differ`];
+      });
+    });
+    expect(problems).toEqual([]);
+  });
+
   it('found the strings', () => {
     expect(own.size).toBeGreaterThan(100);
     expect(own.get('app.onboarding.step.save_continue')).toBe('Save and continue');

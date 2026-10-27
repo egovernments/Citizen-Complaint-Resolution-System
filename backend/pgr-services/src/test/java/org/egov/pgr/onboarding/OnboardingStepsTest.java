@@ -93,8 +93,8 @@ public class OnboardingStepsTest {
         assertEquals("New Town",rows.get("newtown|tenant.tenants|newtown").path("data").path("name").asText());
         assertEquals(2,rows.get("newtown|common-masters.StateInfo|newtown").path("data").path("languages").size());
         assertEquals(336,rows.get("newtown|identity.invitationPolicy|default").path("data").path("invitationExpiryHours").asInt());
-        // hi_IN carries no rainmaker-common pack, so of en and hi only en_IN gets the tenant-name key.
-        verify(client,times(1)).write(any(),eq("localization"),eq("/localization/messages/v1/_upsert"),argThat(b->b.toString().contains("New Town")));
+        // en_IN and hi_IN both carry the rainmaker-common pack, so each gets the tenant-name key.
+        verify(client,times(2)).write(any(),eq("localization"),eq("/localization/messages/v1/_upsert"),argThat(b->b.toString().contains("New Town")));
         verify(client,never()).read(eq("mdms"),anyString(),argThat(b->!b.toString().contains("tenantId=newtown")));
         var order=inOrder(client);order.verify(client).read(eq("hrms"),contains("_search"),anyMap());order.verify(client).write(any(),eq("hrms"),contains("_create"),anyMap());
         steps.perform("FOUNDER_HRMS",signup,op,progress);verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
@@ -442,7 +442,7 @@ public class OnboardingStepsTest {
         var baseline=new PlatformBaseline(mapper);Map<String,Integer> expected=new TreeMap<>();
         for(String locale:List.of("en_IN","hi_IN"))baseline.localizationPacks(locale).forEach((module,pack)->expected.put(locale+"/"+module,pack.size()));
         assertEquals(expected,seeded); // signup languages en,hi (+ en_IN always); no fr_FR/pt_BR
-        assertTrue(seeded.keySet().containsAll(List.of("en_IN/rainmaker-common","en_IN/rainmaker-pgr","en_IN/rainmaker-hr","en_IN/configurator-ui","hi_IN/configurator-ui")));
+        assertTrue(seeded.keySet().containsAll(List.of("en_IN/rainmaker-common","en_IN/rainmaker-pgr","en_IN/rainmaker-hr","en_IN/configurator-ui","hi_IN/rainmaker-common","hi_IN/configurator-ui")));
     }
     @SuppressWarnings({"unchecked","rawtypes"}) private Map<String,Object> localeOutcome(String country,List<String> languages) {
         signup.setCountryCode(country);signup.setLanguages(languages);op.getRecordProgress().clear();clearInvocations(client);
@@ -458,7 +458,7 @@ public class OnboardingStepsTest {
     }
     /** #2269 item 6: a signup language maps to the locale its pack uses, never language_COUNTRY when a pack exists. */
     @Test public void signupLanguagesMapToPackLocalesAndTheNameKeyOnlyGoesWhereTenantOwnsRainmakerCommon() {
-        assertEquals(Map.of("stateInfo",List.of("en_IN=en","hi_IN=hi"),"packs",Set.of("en_IN","hi_IN"),"names",Set.of("en_IN")),localeOutcome("IN",List.of("en","hi")));
+        assertEquals(Map.of("stateInfo",List.of("en_IN=en","hi_IN=hi"),"packs",Set.of("en_IN","hi_IN"),"names",Set.of("en_IN","hi_IN")),localeOutcome("IN",List.of("en","hi")));
         // Kenya: en is en_IN, not en_KE; Swahili has no pack, keeps the country code and is served from default.
         assertEquals(Map.of("stateInfo",List.of("en_IN=en","sw_KE=sw"),"packs",Set.of("en_IN"),"names",Set.of("en_IN")),localeOutcome("KE",List.of("en","sw")));
         // Mozambique: pt is pt_BR (the committed pack), not pt_MZ; en_IN still leads although pt was chosen first.
@@ -470,8 +470,8 @@ public class OnboardingStepsTest {
     @Test public void explicitRegionIsKeptAndNormalized() {
         assertEquals("pt_BR",steps.locale("pt-br","MZ"));assertEquals("en_KE",steps.locale("en-ke","KE"));
         assertEquals("en_IN",steps.locale("en","KE"));assertEquals("sw_KE",steps.locale("sw","ke"));
-        for(String locale:List.of("en_IN","fr_FR","pt_BR"))assertTrue(locale,steps.seedsTenantNameModule(locale));
-        for(String locale:List.of("hi_IN","en_KE","sw_KE"))assertFalse(locale,steps.seedsTenantNameModule(locale));
+        for(String locale:List.of("en_IN","fr_FR","hi_IN","pt_BR"))assertTrue(locale,steps.seedsTenantNameModule(locale));
+        for(String locale:List.of("en_KE","sw_KE"))assertFalse(locale,steps.seedsTenantNameModule(locale));
     }
     @Test public void localizationPacksAreTenantNeutral() throws Exception {
         var forbidden=java.util.regex.Pattern.compile("(^|_)(PG|PB|STATEA|CITYA)(_|$)|^TENANT_TENANTS_|^CS_SELECT_CITY_(?!CHOOSE_CITY$)|^SUN\\d+_|^DDR_",java.util.regex.Pattern.CASE_INSENSITIVE);
