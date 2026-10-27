@@ -462,8 +462,9 @@ Give at least one person `EMPLOYEE,CSR` if you want to test the whole flow.
 > Configurator set their own password from the invitation email. HRMS
 > still overwrites whatever `userName` you supplied with the employee code, but
 > that is the HRMS record's identifier, not the sign-in name. The HRMS account
-> itself gets a random password that nobody sees; identity-bff replaces it at
-> their first Keycloak sign-in. HRMS's default password (`eGov@123` unless you
+> itself gets a random password that is not shown in the Configurator; with
+> `hrms_dev_mode` off, HRMS still sends it by SMS where SMS is configured, as it
+> always has. identity-bff replaces it at their first Keycloak sign-in. HRMS's default password (`eGov@123` unless you
 > changed `bootstrap_secrets.egov_hrms_default_password` before the first
 > deploy) applies only in `hrms_dev_mode`, to employees whose create request
 > carries no password, such as scripts or dataloaders calling HRMS directly.

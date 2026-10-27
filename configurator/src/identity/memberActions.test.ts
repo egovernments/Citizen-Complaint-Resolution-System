@@ -54,8 +54,9 @@ describe('member actions', () => {
   });
   it('recovers a lost HRMS create response by searching the immutable code', async () => {
     const create = vi.fn();
-    await createAndLink(input, async () => [{ ...input, uuid: 'u1' }], create);
+    const found = await createAndLink(input, async () => [{ ...input, uuid: 'u1' }], create);
     expect(create).not.toHaveBeenCalled(); expect(linkMember).toHaveBeenCalledWith('acme', 'u1', 'person@example.org');
+    expect(found.user).not.toHaveProperty('password');
   });
   it('does not bind a colliding employee code with a different email', async () => {
     await expect(createAndLink(input, async () => [{ ...input, uuid: 'u1', user: { emailId: 'other@example.org' } }], vi.fn())).rejects.toThrow('different or inactive');
