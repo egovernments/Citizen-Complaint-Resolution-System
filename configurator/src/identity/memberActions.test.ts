@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAndLink, deactivateAndRemove, isInviteUnfinished, type MemberEmployee } from './memberActions';
+import { createAndLink, deactivateAndRemove, isInviteUnfinished, throwawayPassword, type MemberEmployee } from './memberActions';
 import { linkMember, removeMember } from './api';
 import { session } from '@/api/onboarding';
 vi.mock('./api', () => ({ linkMember: vi.fn(), removeMember: vi.fn() }));
 vi.mock('@/api/onboarding', () => ({ session: vi.fn() }));
+// egov-user's default policy: a digit, a lowercase and an uppercase letter, one of @#$%, 8-15 long.
+const POLICY = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])[A-Za-z\d@#$%]{8,15}$/;
 const input: MemberEmployee = { tenantId: 'acme', code: 'E1', isActive: true, user: { emailId: ' PERSON@EXAMPLE.ORG ', password: 'must-not-send' } };
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(session).mockResolvedValue({ authenticated: true }); });
 
@@ -19,8 +21,12 @@ describe('member actions', () => {
     // HRMS's own fallback can lack an uppercase letter, which egov-user refuses (#2713).
     const password = create.mock.calls[0][0].user.password;
     expect(password).not.toBe('must-not-send');
-    expect(password).toMatch(/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])[A-Za-z\d@#$%]{8,15}$/);
+    expect(password).toMatch(POLICY);
     expect(linkMember).toHaveBeenCalledWith('acme', 'u1', 'person@example.org');
+  });
+  it('makes every throwaway password meet the policy, not just most of them', () => {
+    // One sample misses a dropped character class most of the time; a thousand do not.
+    for (let i = 0; i < 1000; i += 1) expect(throwawayPassword()).toMatch(POLICY);
   });
   it('retries linking after HRMS succeeds without creating another employee', async () => {
     const rows: MemberEmployee[] = [];
