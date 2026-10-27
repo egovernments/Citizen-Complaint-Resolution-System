@@ -71,6 +71,37 @@ configurator:
   turbopassProxy:
     host: naipepea.digit.org
 
+# Not run here (2026-10-27). Before switching off, each was checked on the
+# cluster: no request in 30 days (Loki) and no gateway or ingress traffic; the
+# Kafka-driven ones never received a message (consumer offsets). egov-indexer
+# did index every PGR event, but only into Elasticsearch, which nothing reads
+# with inbox off, so the search stack (indexer, Elasticsearch, Kibana) goes
+# together, as Ansible's enable_search_stack: false. The auxiliary releases
+# and otel-collector were never installed here. Remove a name to bring it back.
+disabledReleases:
+  - egov-otp                # citizen phone OTP is off (identity-bff)
+  - user-otp                # legacy citizen OTP login
+  - egov-user-event
+  - egov-notification-mail  # mail goes through Keycloak SMTP and Novu
+  - boundary-bulk-bff
+  - egov-indexer
+  - elasticsearch
+  - elasticsearch-data
+  - kibana
+  - kafka-connect
+  - pgadmin
+  - playground
+  - otel-collector
+
+# Status-page checks of the releases above.
+gatus:
+  groups:
+    otp: false
+    search: false
+  checks:
+    elasticsearch: false
+    userEvent: false
+
 monitoring:
   metrics: true      # kube-prometheus-stack
   logs: true         # loki-stack

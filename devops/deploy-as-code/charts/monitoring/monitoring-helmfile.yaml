@@ -58,6 +58,9 @@ environments:
       - ../environments/env.yaml
       - ../environments/cms-saas.yaml
 ---
+{{- /* Releases this environment turns off by name (env values `disabledReleases`,
+       empty by default): every release that is otherwise always installed reads it. */ -}}
+{{- $disabled := index .Values "disabledReleases" | default list }}
 {{- /* Toggle lookup, written defensively on purpose (#1619).
 
        `.Values.monitoring.x` written directly is a HARD PARSE ERROR ("map has
@@ -207,7 +210,7 @@ releases:
 # service. Deploying this is inert until the agent is switched on in the common
 # chart (otel.enabled), so it is safe to land first.
 - name: otel-collector
-  installed: true
+  installed: {{ not (has "otel-collector" $disabled) }}
   namespace: {{ .Values.namespace | default "default-namespace" }}
   chart: open-telemetry/opentelemetry-collector
   version: 0.108.0
@@ -321,7 +324,7 @@ releases:
   # ungated here only because that toggle block does not exist on this branch.
   # Deploying it unconditionally is harmless in the meantime -- they are inert
   # ConfigMaps until a Grafana with the sidecar reads them.
-  installed: true
+  installed: {{ not (has "dashboards" $disabled) }}
   namespace: {{ .Values.namespace | default "default-namespace" }}
   chart: ./dashboards
   version: 0.1.0

@@ -78,6 +78,7 @@ data:
       # auth), so an unauthenticated http probe gets an EOF and https gets 401.
       # A TCP check reports reachability without coupling this dashboard to the
       # elastic credentials -- the same treatment Redis and Kafka get.
+{{- if .Values.gatus.checks.elasticsearch }}
       - name: Elasticsearch
         group: Infrastructure
         url: "tcp://elasticsearch-master.backbone:9200"
@@ -86,6 +87,7 @@ data:
           - "[CONNECTED] == true"
         alerts:
           - type: slack
+{{- end }}
 
       # ==================== Core Services ====================
       - name: MDMS Service
@@ -236,6 +238,7 @@ data:
         alerts:
           - type: slack
 
+{{- if .Values.gatus.checks.userEvent }}
       - name: User Event Service
         group: Core Services
         url: "http://egov-user-event.egov:8080/egov-user-event/health"
@@ -244,6 +247,7 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
 {{- if .Values.gatus.groups.otp }}
       # ==================== OTP / Notifications ====================

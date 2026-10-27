@@ -12,6 +12,9 @@ environments:
       - ../environments/env.yaml
       - ../environments/cms-saas.yaml
 ---
+{{- /* Releases this environment turns off by name (env values `disabledReleases`,
+       empty by default): every release that is otherwise always installed reads it. */ -}}
+{{- $disabled := index .Values "disabledReleases" | default list }}
 templates:
   default: &default
     chart: ./{{`{{ .Release.Name }}`}}
@@ -28,11 +31,11 @@ templates:
 
 releases:
   - name: pgr-services # Replace with your desired namespace
-    installed: true
+    installed: {{ not (has "pgr-services" $disabled) }}
     <<: *default
 
   - name: digit-ui # Replace with your desired namespace
-    installed: true
+    installed: {{ not (has "digit-ui" $disabled) }}
     <<: *default
 
   # Boundary management (bulk boundary upload/generation from Excel): not used
@@ -44,6 +47,6 @@ releases:
     <<: *default
 
   - name: configurator # DIGIT Studio tenant onboarding/management SPA
-    installed: true
+    installed: {{ not (has "configurator" $disabled) }}
     <<: *default
   # Frontend services end

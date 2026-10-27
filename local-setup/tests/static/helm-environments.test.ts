@@ -128,3 +128,32 @@ describe('pods roll when their mounted config changes', () => {
     expect(templates).toContain(`{{- include "${tpl}" . | nindent 4 }}`);
   });
 });
+
+describe('releases an environment leaves out (disabledReleases)', () => {
+  const always = [
+    'backbone-services/backboneservices-helmfile.yaml', 'core-services/coreservices-helmfile.yaml',
+    'common-services/common-services-helmfile.yaml', 'auxiliary-services/auxiliary-helmfile.yaml',
+    'urban/urban-helmfile.yaml', 'monitoring/monitoring-helmfile.yaml',
+  ];
+  test.each(always)('%s: no release is unconditionally installed; each reads $disabled', (f) => {
+    const text = read(`${DEPLOY}/charts/${f}`);
+    expect(text).toContain('{{- $disabled := index .Values "disabledReleases" | default list }}');
+    expect(text).not.toMatch(/^\s*installed: true\s*(#.*)?$/m);
+    for (const m of text.matchAll(/^\s*installed: \{\{ not \(has "([\w.-]+)" \$disabled\) \}\}/gm)) {
+      // the name it checks is the release it belongs to
+      const before = text.slice(0, m.index);
+      const owner = [...before.matchAll(/^\s*- name:\s*([\w.-]+)/gm)].pop();
+      expect([m[1], owner?.[1]]).toEqual([m[1], m[1]]);
+    }
+  });
+
+  test('env.yaml disables nothing; every name cms-saas disables is a real release', () => {
+    expect(read(`${DEPLOY}/charts/environments/env.yaml`)).toMatch(/^disabledReleases: \[\]$/m);
+    const cms = read(`${DEPLOY}/charts/environments/cms-saas.yaml`);
+    const block = /^disabledReleases:\n((?: {2}- [\w.-]+.*\n)+)/m.exec(cms);
+    expect(block).not.toBeNull();
+    const names = [...block![1].matchAll(/- ([\w.-]+)/g)].map((m) => m[1]);
+    const all = always.map((f) => read(`${DEPLOY}/charts/${f}`)).join('\n');
+    for (const n of names) expect([n, all.includes(`(has "${n}" $disabled)`)]).toEqual([n, true]);
+  });
+});

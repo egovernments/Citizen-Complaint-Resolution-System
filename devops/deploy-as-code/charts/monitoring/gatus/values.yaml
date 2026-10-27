@@ -104,3 +104,7 @@ gatus:
   checks:
     boundaryManagement: false  # urban/urban-helmfile.yaml: egov-bndry-mgmnt
     inbox: false               # analytics/analytics-helmfile.yaml: inbox
+    # Installed by default; off where the environment lists the release in
+    # disabledReleases (charts/environments/<env>.yaml sets both).
+    elasticsearch: true        # backbone-services: elasticsearch
+    userEvent: true            # common-services: egov-user-event
