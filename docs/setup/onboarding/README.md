@@ -465,8 +465,8 @@ Give at least one person `EMPLOYEE,CSR` if you want to test the whole flow.
 > itself gets a random password that nobody sees; identity-bff replaces it at
 > their first Keycloak sign-in. HRMS's default password (`eGov@123` unless you
 > changed `bootstrap_secrets.egov_hrms_default_password` before the first
-> deploy) applies only to employees created another way, such as MCP,
-> dataloaders or direct HRMS calls without a password.
+> deploy) applies only in `hrms_dev_mode`, to employees whose create request
+> carries no password, such as scripts or dataloaders calling HRMS directly.
 
 <details>
 <summary><b>Under the hood — dates and phone numbers</b></summary>

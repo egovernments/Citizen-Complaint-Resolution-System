@@ -1322,7 +1322,9 @@ status_basic_auth_user: digit-status
 # password instead of generating one, and sends no credential SMS. A supplied
 # password is kept in both modes. The configurator, XLSX onboarding and
 # self-serve signup always send one, so they do not need it; it matters only
-# for callers that send none (MCP, dataloaders, direct HRMS calls).
+# for callers that send none (scripts or dataloaders calling HRMS directly).
+# The default is bootstrap_secrets.egov_hrms_default_password, passed to HRMS
+# as EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD.
 hrms_dev_mode: false
 
 # ==================== Deploy SSH account ====================

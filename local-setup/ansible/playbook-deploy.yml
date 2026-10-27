@@ -3135,7 +3135,7 @@
           # 500s with InvalidAccessKeyId. The "strip stale AWS_KEY" task below
           # guarantees no such line survives. (Root-caused by @dhruv-1001.)
           ELASTICSEARCH_MASTER_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_master_password }}
-          EGOV_HRMS_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
+          EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
           ELASTICSEARCH_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_password | default('', true) }}
           {# Opt-in Novu stack. default('') so a tenant without these keys writes
              an empty value, which compose's ${NOVU_*:-dev-default} treats as

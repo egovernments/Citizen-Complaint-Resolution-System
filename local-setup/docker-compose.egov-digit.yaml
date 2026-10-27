@@ -1511,7 +1511,7 @@ services:
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATELEVEL_TENANT: pg
       HRMS_SYSTEM_USERNAME: INTERNAL_USER
-      EGOV_HRMS_DEFAULT_PASSWORD: ${EGOV_HRMS_DEFAULT_PASSWORD:-eGov@123}
+      EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD: ${EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD:-eGov@123}
       # Not needed for a supplied password: enrichUser() keeps it in both
       # modes (CCRS#482). Dev mode makes the no-password fallback HRMS's
       # default password and skips the credential SMS.
