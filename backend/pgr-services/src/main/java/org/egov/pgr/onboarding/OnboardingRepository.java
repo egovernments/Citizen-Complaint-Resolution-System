@@ -25,7 +25,7 @@ public class OnboardingRepository {
             "account_code, organization_alias, requested_tenant_id, url_slug, country_code, languages, time_zone, " +
             "financial_year_policy, accepted_terms_version, tenant_metadata, version, created_at, updated_at, founder_name, founder_email, founder_email_verified";
     private static final String OPERATION_COLUMNS = "id, signup_id, status, current_step, completed_steps, " +
-            "error_code, error_message, attempt, created_at, updated_at, restart_no, record_progress, founder_digit_uuid, lifecycle_decision, lifecycle_restart_no, lifecycle_published_at, organization_ensure_started";
+            "error_code, error_message, attempt, created_at, updated_at, restart_no, record_progress, founder_digit_uuid, lifecycle_decision, lifecycle_restart_no, lifecycle_published_at, organization_ensure_started, next_retry_at";
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
@@ -172,6 +172,7 @@ public class OnboardingRepository {
         operation.setErrorCode(null);
         operation.setErrorMessage(null);
         operation.setAttempt(operation.getAttempt() + 1);
+        operation.setNextRetryAt(null);
         operation.setUpdatedAt(now);
         return operation;
     }
@@ -201,6 +202,7 @@ public class OnboardingRepository {
         operation.setErrorCode(null);
         operation.setErrorMessage(null);
         operation.setAttempt(operation.getAttempt() + 1);
+        operation.setNextRetryAt(null);
         operation.setUpdatedAt(now);
         return operation;
     }
@@ -375,7 +377,8 @@ public class OnboardingRepository {
                 .recordProgress(map(rs.getString("record_progress"))).founderDigitUuid(rs.getString("founder_digit_uuid"))
                 .lifecycleDecision(rs.getString("lifecycle_decision"))
                 .lifecycleRestartNo((Integer) rs.getObject("lifecycle_restart_no"))
-                .lifecyclePublishedAt((Long) rs.getObject("lifecycle_published_at")).createdAt(rs.getLong("created_at"))
+                .lifecyclePublishedAt((Long) rs.getObject("lifecycle_published_at")).nextRetryAt((Long) rs.getObject("next_retry_at"))
+                .createdAt(rs.getLong("created_at"))
                 .updatedAt(rs.getLong("updated_at")).build();
     }
 

@@ -18,7 +18,7 @@ code directories, published to Google Drive + the gh-pages **Code Base** dashboa
 
 ## Scope
 
-`backend/` · `frontend/` · `digit-ui-esbuild/` · `digit-ui-v2/` (extensible via the config). The
+`backend/` · `frontend/` · `digit-ui-esbuild/` (extensible via the config). The
 deployment / infra trees are intentionally out of scope — this is the code-base view.
 
 ## Data model (`run.json`)

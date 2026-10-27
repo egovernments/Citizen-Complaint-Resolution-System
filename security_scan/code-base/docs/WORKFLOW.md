@@ -8,7 +8,7 @@ The Code Base scan runs entirely in CI as a GitHub Action — `.github/workflows
 ## Triggers
 
 - **`push` to `master`** touching code paths — `backend/**`, `frontend/**`, `digit-ui-esbuild/**`,
-  `digit-ui-v2/**`, `security_scan/code-base/**`, or the workflow file.
+  `security_scan/code-base/**`, or the workflow file.
 - **weekly `schedule`** (Monday 02:30 UTC) — catches newly disclosed CVEs even with no code change.
 - **manual `workflow_dispatch`** — Actions → *Code-Base Security Scan* → **Run workflow**.
 
