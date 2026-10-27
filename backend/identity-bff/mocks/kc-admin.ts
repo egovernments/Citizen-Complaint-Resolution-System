@@ -470,7 +470,7 @@ export function createKcAdminMock() {
       : undefined;
     if (redirectUri) {
       const redirect = new URL(redirectUri);
-      if (redirect.search || !/\/password\/setup-complete\/[^/]+$/.test(redirect.pathname)) {
+      if (redirect.search || !/\/password\/setup-complete\/[^/]+(\/[^/]+)?$/.test(redirect.pathname)) {
         return res.status(400).json({ errorMessage: "Invalid redirect uri." });
       }
     }

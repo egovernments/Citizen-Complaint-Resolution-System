@@ -73,16 +73,46 @@ export function tabIdOf(loginAction: string | undefined, base = window.location.
  *    form post (errors, further steps) still know it. A page Keycloak gives
  *    no form action (error.ftl when the sign-in session is gone, #2644) is
  *    the answer to that tab's form post, so its own address carries `tab_id`.
+ * 3. The slug at the end of an emailed password link's redirect (below).
  */
 export function resolveTenantSlug(params: {
     digitTenant?: string;
     loginAction?: string;
     search?: string;
 }): string | undefined {
-    const candidate = isValidSlug(params.digitTenant)
-        ? params.digitTenant
-        : new URLSearchParams(params.search ?? window.location.search).get("digit_tenant");
+    const search = new URLSearchParams(params.search ?? window.location.search);
+    const fromQuery = search.get("digit_tenant");
+    const candidate = isValidSlug(params.digitTenant) ? params.digitTenant
+        : isValidSlug(fromQuery) ? fromQuery : emailedLinkSlug(search);
     return rememberedPerTab(STORAGE_PREFIX, params.loginAction, candidate, isValidSlug, true);
+}
+
+/**
+ * The identity BFF ends a tenant's password setup redirect with its slug
+ * (`/password/setup-complete/<state>/<slug>`). An emailed link starts a new
+ * Keycloak session in whatever browser opens it, so this is all its pages
+ * can learn the tenant from (#2645). Keycloak carries the redirect in the
+ * link's action token (`key`), then in `client_data` on every page after.
+ */
+function emailedLinkSlug(search: URLSearchParams): string | undefined {
+    for (const uri of [
+        base64UrlJsonField(search.get("client_data"), "ru"),
+        base64UrlJsonField(search.get("key")?.split(".")[1], "reduri"),
+    ]) {
+        if (typeof uri !== "string") continue;
+        const slug = /\/password\/setup-complete\/[^/?#]+\/([^/?#]+)$/.exec(uri)?.[1];
+        if (isValidSlug(slug)) return slug;
+    }
+    return undefined;
+}
+
+/** One field of a base64url-encoded JSON value (`client_data`, a JWT payload), or undefined. */
+function base64UrlJsonField(value: string | null | undefined, field: string): unknown {
+    try {
+        return value ? JSON.parse(atob(value.replace(/-/g, "+").replace(/_/g, "/")))[field] : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 /**
@@ -105,9 +135,15 @@ function rememberedPerTab(
     const pageTabId = tabIdOf(window.location.href);
     const tabId = tabIdOf(loginAction) ?? pageTabId;
     const key = tabId === undefined || storage === undefined ? undefined : prefix + tabId;
+    // A page with no tab_id at all (an emailed link's landing page, #2645) keeps
+    // only its own value under the bare prefix; the first page with a tab_id
+    // takes it over, after anything that tab_id already has.
+    const landing = shared && storage !== undefined ? prefix : undefined;
     try {
+        const carried = landing === undefined ? null : storage!.getItem(landing);
+        if (landing !== undefined && (key !== undefined || !isValid(candidate))) storage!.removeItem(landing);
         if (isValid(candidate)) {
-            if (key !== undefined) storage!.setItem(key, candidate);
+            if (key !== undefined || landing !== undefined) storage!.setItem(key ?? landing!, candidate);
             // The link emailed by an email change opens a new tab with this
             // tab_id but its own sessionStorage (#2645).
             if (local && tabId !== undefined) {
@@ -126,6 +162,7 @@ function rememberedPerTab(
             local.removeItem(prefix + id);
             if (isValid(stored) && key !== undefined) storage!.setItem(key, stored);
         }
+        if (!isValid(stored) && key !== undefined && isValid(carried)) storage!.setItem(key, (stored = carried));
         return isValid(stored) ? stored : undefined;
     } catch {
         // Private mode or quota: later pages fall back to the default look.
