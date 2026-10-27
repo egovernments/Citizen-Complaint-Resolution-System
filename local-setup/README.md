@@ -656,13 +656,16 @@ repository — change them before anyone else can reach the machine.**
 |---|---|---|---|
 | Onboarding wizard (`/configurator/`) | `ADMIN` | `eGov@123` | your **root** — the field is pre-filled from `state_tenant_id` |
 | Employee app (`/digit-ui/employee`) | `ADMIN` | `eGov@123` | pick from the City dropdown; only tenants in `login_tenant_allowlist` appear |
-| Employees you onboard later | their **employee code** | `eGov@123` | their city tenant |
+| Employees added in the Configurator, or the founder from self-serve signup | their **email address**, through Keycloak | the one they set from their invitation or at signup | their city tenant |
+| Employees created another way (MCP, dataloaders, direct HRMS calls without a password) | their **employee code** | `eGov@123` (HRMS's default; with `hrms_dev_mode: false` HRMS generates one and sends it by SMS) | their city tenant |
 | Citizen app | a mobile number | OTP `123456` (only with `identity_dev_fixed_otp: true`) | — |
 | Grafana (`/grafana/`) | `admin` | generated — see below | — |
 
 To change the administrator credentials, set `bootstrap_user` and
-`bootstrap_password` in your config and redeploy. To change the default
-password every new employee gets, set
+`bootstrap_password` in your config and redeploy. Configurator and signup
+employees never use HRMS's default password: they get a random one that
+identity-bff replaces at their first Keycloak sign-in. To change the default
+password that employees created another way get, set
 `bootstrap_secrets.egov_hrms_default_password` — but only before the first
 deploy, because those secrets are written to the secret store once and then
 owned by it.

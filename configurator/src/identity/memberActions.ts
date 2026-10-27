@@ -65,8 +65,10 @@ export async function createAndLink<T extends MemberEmployee>(input: T, search: 
   if (!existing && !(await session()).authenticated) {
     throw new MessageError('members.signin_ended', 'Your sign-in has ended, so nobody was added. Sign out, sign in again, and add them again.');
   }
-  const user: MemberEmployee['user'] = { ...input.user, emailId: email, password: throwawayPassword() };
-  const employee = existing ?? await create({ ...input, user });
+  const saved = existing ?? await create({ ...input, user: { ...input.user, emailId: email, password: throwawayPassword() } });
+  // HRMS nulls the password in its response; strip it here too so callers never hold it.
+  const employee: T = { ...saved, user: { ...saved.user } };
+  delete employee.user.password;
   try {
     await linkMember(input.tenantId, employeeUuid(employee), email);
   } catch (error) {

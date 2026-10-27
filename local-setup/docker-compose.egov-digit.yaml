@@ -1454,9 +1454,10 @@ services:
     # a multi-tenant deploy.
     # At this tag enrichUser() keeps a password supplied in an employee-create
     # request in both modes (CCRS#482); it generates one only when none is
-    # sent. EGOV_HRMS_DEV_MODE only changes that fallback to
-    # EGOV_HRMS_DEFAULT_PASSWORD and skips the credential-delivery SMS that
-    # create otherwise sends.
+    # sent. EGOV_HRMS_DEV_MODE only changes that fallback to HRMS's default
+    # password (`egov.hrms.employee.default.password`, env
+    # EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD) and skips the credential-delivery
+    # SMS that create otherwise sends.
     #
     # It used to be hardcoded 'true' on every deployment. It is now off unless
     # a tenant opts in with `hrms_dev_mode: true` in host_vars (rendered into
@@ -1512,8 +1513,8 @@ services:
       HRMS_SYSTEM_USERNAME: INTERNAL_USER
       EGOV_HRMS_DEFAULT_PASSWORD: ${EGOV_HRMS_DEFAULT_PASSWORD:-eGov@123}
       # Not needed for a supplied password: enrichUser() keeps it in both
-      # modes (CCRS#482). Dev mode makes the no-password fallback this
-      # default and skips the credential SMS.
+      # modes (CCRS#482). Dev mode makes the no-password fallback HRMS's
+      # default password and skips the credential SMS.
       EGOV_HRMS_DEV_MODE: ${EGOV_HRMS_DEV_MODE:-false}
     ports:
       - "${BIND_IP:-127.0.0.1}:18092:8092"

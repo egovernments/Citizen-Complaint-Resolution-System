@@ -255,7 +255,7 @@ bootstrap_secrets:
   minio_root_user: minioadmin
   minio_root_password: change-me-strong
   elasticsearch_master_password: "asd@#$@$!132123"   # do not change while db_fast_path is true
-  egov_hrms_default_password: "eGov@123"             # first password for every employee you onboard
+  egov_hrms_default_password: "eGov@123"             # HRMS default for employees created without a password (MCP, dataloaders); not Configurator/signup ones
   keycloak_admin_password: change-me-strong          # Keycloak master-realm admin
   keycloak_db_password: change-me-strong             # Keycloak's own Postgres
   identity_digit_admin_password: change-me-strong    # the Identity BFF's DIGIT admin login

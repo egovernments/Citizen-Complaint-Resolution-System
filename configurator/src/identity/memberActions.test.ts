@@ -17,11 +17,12 @@ describe('member actions', () => {
   });
   it('creates with a fresh policy-compliant password and links the returned user uuid', async () => {
     const create = vi.fn(async row => ({ ...row, user: { ...row.user, uuid: 'u1' } }));
-    await createAndLink(input, async () => [], create);
+    const saved = await createAndLink(input, async () => [], create);
     // HRMS's own fallback can lack an uppercase letter, which egov-user refuses (#2713).
     const password = create.mock.calls[0][0].user.password;
     expect(password).not.toBe('must-not-send');
     expect(password).toMatch(POLICY);
+    expect(saved.user).not.toHaveProperty('password');
     expect(linkMember).toHaveBeenCalledWith('acme', 'u1', 'person@example.org');
   });
   it('makes every throwaway password meet the policy, not just most of them', () => {

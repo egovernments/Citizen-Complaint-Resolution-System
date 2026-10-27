@@ -1318,14 +1318,11 @@ status_basic_auth_user: digit-status
 # nginx_csp_policy: "default-src 'self'; ..."   # override the shipped policy
 
 # ==================== HRMS dev mode ====================
-# Lets employee-create honour a password supplied in the request rather than
-# generating one. The configurator / XLSX onboarding wizards need it to set a
-# known first password for the employees they create. It was previously ON for
-# every deployment, which means anyone authorised to create employees chose
-# their credentials directly and bypassed the generated-password flow.
-#
-# Turn it on while you are onboarding employees through those wizards, then
-# turn it back off.
+# When an employee-create request carries no password, HRMS uses its default
+# password instead of generating one, and sends no credential SMS. A supplied
+# password is kept in both modes. The configurator, XLSX onboarding and
+# self-serve signup always send one, so they do not need it; it matters only
+# for callers that send none (MCP, dataloaders, direct HRMS calls).
 hrms_dev_mode: false
 
 # ==================== Deploy SSH account ====================
