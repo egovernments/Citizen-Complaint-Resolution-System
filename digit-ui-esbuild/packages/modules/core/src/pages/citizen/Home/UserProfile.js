@@ -375,23 +375,27 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     }
   }, [mdmsValidationData]);
 
+  // The user-service /_search filters strictly on the tenantId field
+  // in the body — i.e. it returns only users whose own tenantId
+  // matches. `Digit.ULBService.getCurrentTenantId()` returns the
+  // *city* tenant the citizen is currently navigating (e.g.
+  // "ke.nairobi"), which is not necessarily the tenant the user
+  // record itself lives in. Naipepea provisions citizen accounts at
+  // the state tenant ("ke"), so searching at "ke.nairobi" came back
+  // with zero results, userDetails stayed null, and gender + photo
+  // never populated — making the Edit Profile form look like the
+  // saved values had been lost (CCRS#556 follow-up). Use the user's
+  // own tenantId from the session (falling back to the city tenant
+  // for tenants that *do* provision at city level).
+  const searchTenant = userInfo?.tenantId || tenant;
+  // This person's egov-user record. The profile load and the save's email
+  // re-read share it, so both search the same tenant (#2645).
+  const searchEgovUser = async () =>
+    (await Digit.UserService.userSearch(searchTenant, { uuid: [userInfo?.uuid] }, {}))?.user?.[0];
+
   const getUserInfo = async () => {
     const uuid = userInfo?.uuid;
     const individualServicePath = window?.globalConfigs?.getConfig("INDIVIDUAL_SERVICE_CONTEXT_PATH");
-
-    // The user-service /_search filters strictly on the tenantId field
-    // in the body — i.e. it returns only users whose own tenantId
-    // matches. `Digit.ULBService.getCurrentTenantId()` returns the
-    // *city* tenant the citizen is currently navigating (e.g.
-    // "ke.nairobi"), which is not necessarily the tenant the user
-    // record itself lives in. Naipepea provisions citizen accounts at
-    // the state tenant ("ke"), so searching at "ke.nairobi" came back
-    // with zero results, userDetails stayed null, and gender + photo
-    // never populated — making the Edit Profile form look like the
-    // saved values had been lost (CCRS#556 follow-up). Use the user's
-    // own tenantId from the session (falling back to the city tenant
-    // for tenants that *do* provision at city level).
-    const searchTenant = userInfo?.tenantId || tenant;
 
     if (uuid) {
       if (individualServicePath) {
@@ -419,9 +423,9 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         }
       } else {
         // Old API
-        const usersResponse = await Digit.UserService.userSearch(searchTenant, { uuid: [uuid] }, {});
-        if (usersResponse?.user?.length) {
-          setUserDetails(usersResponse.user[0]);
+        const user = await searchEgovUser();
+        if (user) {
+          setUserDetails(user);
         }
       }
     }
@@ -486,8 +490,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   // egov-user stores `emailId` as sent (an absent one clears it) (#2645).
   const currentEmailId = async () => {
     try {
-      const response = await Digit.UserService.userSearch(userInfo?.tenantId || tenant, { uuid: [userInfo?.uuid] }, {});
-      return unmaskedEmailOf(response?.user?.[0]) || userInfo.emailId;
+      return unmaskedEmailOf(await searchEgovUser()) || userInfo.emailId;
     } catch (e) {
       return userInfo.emailId;
     }
@@ -496,16 +499,24 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   // A Keycloak-managed email changes on Account and security. The identity
   // BFF copies it to egov-user, but the session's user info keeps the email
   // of the sign-in (#2645). Show the live record's, and keep it in the session
-  // so a save sends it back unchanged rather than the old one.
+  // so a save sends it back unchanged rather than the old one. Where the
+  // Individual service is wired, `userDetails` is an Individual record, which
+  // the BFF does not write: the email is then egov-user's, read separately.
   useEffect(() => {
-    const liveEmail = unmaskedEmailOf(userDetails);
-    if (!identityManaged || !liveEmail) return;
-    setEmail(liveEmail);
-    const user = Digit.UserService.getUser();
-    if (user?.info && user.info.emailId !== liveEmail) {
-      Digit.UserService.setUser({ ...user, info: { ...user.info, emailId: liveEmail } });
-    }
-  }, [userDetails?.emailId]);
+    if (!identityManaged || !userDetails) return;
+    let active = true;
+    const individualServicePath = window?.globalConfigs?.getConfig("INDIVIDUAL_SERVICE_CONTEXT_PATH");
+    (async () => {
+      const liveEmail = individualServicePath ? await currentEmailId() : unmaskedEmailOf(userDetails);
+      if (!active || !liveEmail) return;
+      setEmail(liveEmail);
+      const user = Digit.UserService.getUser();
+      if (user?.info && user.info.emailId !== liveEmail) {
+        Digit.UserService.setUser({ ...user, info: { ...user.info, emailId: liveEmail } });
+      }
+    })();
+    return () => { active = false; };
+  }, [userDetails !== null, userDetails?.emailId]);
 
   let validation = {};
   const editScreen = false; // To-do: Deubug and make me dynamic or remove if not needed
@@ -611,7 +622,8 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
       }
 
       let responseInfo;
-      let savedEmail = email;
+      // egov-user's email at save time, on both write paths (#2645).
+      const savedEmail = identityManaged ? await currentEmailId() : email;
       const individualServicePath = window?.globalConfigs?.getConfig("INDIVIDUAL_SERVICE_CONTEXT_PATH");
 
       if (individualServicePath) {
@@ -635,8 +647,8 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
           individualPayload.gender = gender.value;
         }
 
-        if (email) {
-          individualPayload.email = identityManaged ? userInfo.emailId : email;
+        if (savedEmail) {
+          individualPayload.email = savedEmail;
         }
 
         if (profilePic) {
@@ -661,7 +673,6 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         // the stale session mobile no matter what the operator typed
         // into the form. The Individual branch above already passes
         // the form-state mobile; mirror that here.
-        if (identityManaged) savedEmail = await currentEmailId();
         const requestData = {
           ...userInfo,
           name,

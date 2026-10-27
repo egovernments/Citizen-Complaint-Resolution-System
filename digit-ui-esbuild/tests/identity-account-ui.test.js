@@ -447,6 +447,29 @@ test("legacy (non-Keycloak) profile still edits and saves the typed email", asyn
   view.unmount();
 });
 
+// The BFF writes the new email to egov-user, not to the Individual record.
+test("Individual-service profile shows and saves egov-user's live email", async () => {
+  const state = browser("employee", () => assert.fail("profile page must not depend on the BFF"));
+  window.globalConfigs.getConfig = (key) => (key === "INDIVIDUAL_SERVICE_CONTEXT_PATH" ? "/individual" : undefined);
+  let live = "new@example.test";
+  Digit.UserService.userSearch = async () => ({ user: [{ uuid: "same-uuid", emailId: live }] });
+  const writes = [];
+  Digit.CustomService = { getResponse: async ({ url, body }) => {
+    if (url.endsWith("/_search")) return { Individual: [{ id: "ind-1", userUuid: "same-uuid", email: "old@example.test" }] };
+    writes.push(body.Individual);
+    return { responseInfo: { status: "200" } };
+  } };
+  const view = await render(ui.Profile, { userType: "employee", stateCode: "ke", cityDetails: { name: "Bomet" } });
+  const email = () => view.root.findAllByType("input").find((node) => node.props.id === "profile-email");
+  assert.equal(email().props.value, "new@example.test");
+  assert.equal(state.getUser().info.emailId, "new@example.test");
+  live = "newer@example.test";
+  await click(button(view, "Save"));
+  assert.equal(writes[0].email, "newer@example.test");
+  assert.equal(email().props.value, "newer@example.test");
+  view.unmount();
+});
+
 test("logout dialog keeps a failed sign-out visible for retry", async () => {
   browser("employee", () => assert.fail("dialog delegates to UserService"));
   const view = await render(ui.LogoutDialog, { onSelect: async () => { throw new Error("offline"); } });
