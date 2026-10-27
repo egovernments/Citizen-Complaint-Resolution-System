@@ -10,6 +10,8 @@ import static org.mockito.ArgumentMatchers.*;
 
 /** Production step orchestration against deterministic DIGIT API responses. */
 public class OnboardingStepsTest {
+    /** egov-user's default policy: a digit, a lowercase and an uppercase letter, one of @#$%, 8-15 long. */
+    private static final String PASSWORD_POLICY="^(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])[A-Za-z\\d@#$%]{8,15}$";
     private ObjectMapper mapper=new ObjectMapper(); private OnboardingProvisionerClient client;
     private OnboardingSteps steps; private OnboardingSignup signup; private OnboardingOperation op; private OnboardingProgress progress;
     private Map<String,JsonNode> rows=new LinkedHashMap<>();private Set<String> schemas=new HashSet<>();
@@ -83,10 +85,16 @@ public class OnboardingStepsTest {
         verify(client,never()).identity(anyString(),anyMap());
     }
     private void prerequisites(){steps.perform("TENANT_FOUNDATION",signup,op,progress);steps.perform("PLATFORM_BASELINE",signup,op,progress);}
+    /** One sample misses a dropped character class most of the time; a thousand do not (#2713). */
+    @Test public void everyFounderThrowawayPasswordMeetsEgovUserPolicy(){
+        for(int i=0;i<1000;i++)assertTrue(OnboardingSteps.throwawayPassword().matches(PASSWORD_POLICY));
+    }
     @Test public void completePrerequisitesUseCountryRuleEveryLanguageAndVerifiedFounderPolicy(){
         prerequisites();steps.perform("FOUNDER_HRMS",signup,op,progress);
         assertEquals("founder-uuid",op.getFounderDigitUuid());assertEquals("9876543210",createdUser.get("mobileNumber"));assertEquals("+91",createdUser.get("countryCode"));
-        assertFalse(createdUser.containsKey("emailId"));assertFalse(createdUser.containsKey("password"));
+        assertFalse(createdUser.containsKey("emailId"));
+        // HRMS's own fallback can lack an uppercase letter, which egov-user refuses (#2713).
+        assertTrue(((String)createdUser.get("password")).matches(PASSWORD_POLICY));
         assertTrue(mapper.valueToTree(createdUser.get("roles")).toString().contains("SUPERUSER"));
         boolean csr=false;for(var r:mapper.valueToTree(createdUser.get("roles")))csr|="CSR".equals(r.path("code").asText())&&"newtown".equals(r.path("tenantId").asText());
         assertTrue("every employee files complaints (#2239)",csr);

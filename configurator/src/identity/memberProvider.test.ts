@@ -14,9 +14,11 @@ it('preserves fresh identity identifiers and discards submitted password on edit
   await provider().update('employees', { id: 'u', data: { user: { name: 'New description', emailId: 'stale@example.org', userName: 'changed', password: 'do-not-write' } }, previousData: row });
   expect(base.update.mock.calls[0][1].data.user).toEqual({ ...row.user, name: 'New description' });
 });
-it('routes management creates through HRMS then link without a password', async () => {
+it('routes management creates through HRMS then link, replacing a submitted password', async () => {
   await provider().create('employees', { data: { ...row, user: { ...row.user, password: 'do-not-write' } } });
-  expect(base.create.mock.calls[0][1].data.user).not.toHaveProperty('password');
+  const { password } = base.create.mock.calls[0][1].data.user;
+  expect(password).not.toBe('do-not-write');
+  expect(password).toMatch(/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])[A-Za-z\d@#$%]{8,15}$/);
   expect(linkMember).toHaveBeenCalledWith('acme', 'u', 'fresh@example.org');
 });
 it('routes edit-form deactivation through both HRMS and BFF removal', async () => {
