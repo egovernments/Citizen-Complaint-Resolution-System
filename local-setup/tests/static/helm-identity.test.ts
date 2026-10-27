@@ -309,6 +309,20 @@ describe('identity helmfile wiring', () => {
     expect(script).toContain('for pair in "digit-provisioner-password provisioner-password" "identity-onboarding-token onboarding-token"; do');
   });
 
+  test('identity-bootstrap leaves no standing RBAC, keeps passwords off argv, and patches a Secret without data', () => {
+    expect(read(`${CHARTS}/identity-bootstrap/templates/rbac.yaml`).match(/hook-delete-policy: before-hook-creation,hook-succeeded/g)).toHaveLength(3);
+    const accounts = read(`${CHARTS}/identity-bootstrap/files/accounts.sh`);
+    expect(accounts).toContain('-d @-');
+    expect(accounts).toContain('--data-urlencode password@-');
+    expect(accounts).not.toMatch(/-d "\$body"/);
+    expect(accounts).not.toContain('"password=$password"');
+    expect(read(`${CHARTS}/identity-bootstrap/files/secrets.sh`)).toContain("else printf '{}'; fi ;;");
+  });
+
+  test('the BFF reaches egov-user directly by default, as the Ansible tier does', () => {
+    expect(read(`${BFF}/values.yaml`)).toMatch(/^ {2}DIGIT_USER_SERVICE_URL: "http:\/\/egov-user\.egov:8080\/user"$/m);
+  });
+
   test('Keycloak is ready, and its realm configured, before the BFF starts', () => {
     expect(helmfile).toMatch(/- name: keycloak\n[\s\S]*?wait: true/);
     expect(helmfile).toMatch(/- name: identity-bff\n[\s\S]*?needs:\n\s+- keycloak/);

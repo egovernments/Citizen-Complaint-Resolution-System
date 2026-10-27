@@ -19,16 +19,22 @@ const helmfiles = [
   ...fs.readdirSync(path.join(REPO_ROOT, DEPLOY, 'charts'))
     .flatMap((dir) => {
       const full = path.join(REPO_ROOT, DEPLOY, 'charts', dir);
-      return fs.statSync(full).isDirectory()
+      // charts/environments holds values and the shared base, not helmfiles.
+      return dir !== 'environments' && fs.statSync(full).isDirectory()
         ? fs.readdirSync(full).filter((f) => /helmfile.*\.ya?ml$/.test(f)).map((f) => `${DEPLOY}/charts/${dir}/${f}`)
         : [];
     })
-    .filter((f) => /^environments:/m.test(read(f))),
+    .filter((f) => /^(environments:|bases:)/m.test(read(f))),
 ];
 
-/** The value file list of one environment, in order. */
+const BASE = `${DEPLOY}/charts/environments/helmfile-environments.yaml`;
+
+/** The value file list of one environment, in order: the helmfile's own
+ *  `environments:`, or the shared base it lists under `bases:`. */
 const environmentValues = (helmfile: string, env: string): string[] => {
-  const text = read(helmfile);
+  const own = read(helmfile);
+  const text = /^bases:\n {2}- \.\.\/environments\/helmfile-environments\.yaml$/m.test(own) && !/^environments:/m.test(own)
+    ? read(BASE) : own;
   const start = text.indexOf(`\n  ${env}:\n    values:\n`);
   if (start < 0) return [];
   const rest = text.slice(start + `\n  ${env}:\n    values:\n`.length);
@@ -155,5 +161,31 @@ describe('releases an environment leaves out (disabledReleases)', () => {
     const names = [...block![1].matchAll(/- ([\w.-]+)/g)].map((m) => m[1]);
     const all = always.map((f) => read(`${DEPLOY}/charts/${f}`)).join('\n');
     for (const n of names) expect([n, all.includes(`(has "${n}" $disabled)`)]).toEqual([n, true]);
+  });
+});
+
+
+describe('environments are defined once where helmfile allows', () => {
+  test('every charts/<tier> helmfile without pre-defaults uses the shared base; the rest keep their own block', () => {
+    const own = helmfiles.filter((f) => /^environments:/m.test(read(f))).map((f) => path.basename(f)).sort();
+    expect(own).toEqual(['digit-helmfile.yaml', 'identity-helmfile.yaml', 'monitoring-helmfile.yaml']);
+  });
+});
+
+describe('the /turbopass proxy keeps this site\'s credentials', () => {
+  test('nginx clears Cookie and Authorization and hides upstream Set-Cookie', () => {
+    const conf = read(`${DEPLOY}/charts/urban/turbopass-proxy/templates/_helpers.tpl`);
+    expect(conf).toContain('proxy_set_header Cookie "";');
+    expect(conf).toContain('proxy_set_header Authorization "";');
+    expect(conf).toContain('proxy_hide_header Set-Cookie;');
+    expect(read(`${DEPLOY}/charts/urban/urban-helmfile.yaml`)).toContain('installed: {{ ne (index $turbopassUpstream "host" | default "") "" }}');
+  });
+});
+
+describe('cms-saas-secrets-from-cluster.sh', () => {
+  test('lets the most recently upgraded release win instead of stopping', () => {
+    const script = read(`${DEPLOY}/scripts/cms-saas-secrets-from-cluster.sh`);
+    expect(script).toContain('key=lambda r: r["updated"]');
+    expect(script).not.toContain('resolve it by hand');
   });
 });
