@@ -1,4 +1,4 @@
-# Migration Guide: v2.12 → v2.20-beta (identity and Keycloak)
+# Migration Guide: v2.12 → v2.20 (identity and Keycloak)
 
 **For:** an existing v2.12.x install deployed with Ansible (`local-setup/ansible`,
 stack under `/opt/digit`). If you are still on 2.12.0, do
@@ -17,7 +17,7 @@ in only once they are linked to a Keycloak account and have set a password**
 
 ## 0. What changes
 
-| Who | v2.12 | v2.20-beta |
+| Who | v2.12 | v2.20 |
 |---|---|---|
 | **Staff** | `/digit-ui/employee/user/login`: city, username, password, checked by egov-user | Keycloak login page. Staff sign in with their **email** (not their employee code) and a password held in Keycloak. Only **linked** employees can sign in. |
 | **Staff password reset** | SMS OTP | Email only. An employee without an email address cannot reset their password. |
