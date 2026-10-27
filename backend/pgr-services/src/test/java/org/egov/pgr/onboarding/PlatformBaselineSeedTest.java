@@ -30,10 +30,12 @@ public class PlatformBaselineSeedTest {
      * v12 the bulk-upload CSR-role note (en_IN configurator-ui) and the channel-neutral complaint success text (en_IN rainmaker-pgr);
      * v13 the console Dashboard heading "DIGIT Complaint Management Studio", under the new key app.header.studio_title, in the en_IN, hi_IN, fr_FR and pt_BR configurator-ui packs;
      * v14 the onboarding tour's Complaints Template text, under the new key app.onboarding.home.tour.complaints.body_choice (en_IN configurator-ui);
-     * v15 every configurator-ui key in the fr_FR, hi_IN and pt_BR packs, and hi_IN rainmaker-common, -pgr and -hr packs.
+     * v15 every configurator-ui key in the fr_FR, hi_IN and pt_BR packs, and hi_IN rainmaker-common, -pgr and -hr packs;
+     * v16 the dashboard catalog (dss.KpiDefinition and dss.DashboardPack schemas and records), so a workspace that turns
+     * its public dashboard on serves its own curated public pack.
      */
-    private static final String VERSION = "15";
-    private static final String SHA256 = "8d1077290baa9ad0fedbfe130d3c8dcd1c1d5a7ef6e33128c34d73cf217e4c0b";
+    private static final String VERSION = "16";
+    private static final String SHA256 = "016d35140da1e44e312a0c6d1156852b5f0f80b231a43dd0f449232fc3e930f0";
     @Test public void contentChangesComeWithAVersionBump() throws Exception {
         byte[] bytes;
         try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }
@@ -93,6 +95,27 @@ public class PlatformBaselineSeedTest {
         Pattern pattern = Pattern.compile(hierarchy.path("pattern").asText());
         assertFalse(pattern.matcher("WORKSPACE").find());
         for (String ok : List.of("ADMIN", "REVENUE", "WORKSPACE_X", "MY_WORKSPACE")) assertTrue(ok, pattern.matcher(ok).find());
+    }
+
+    /**
+     * The dashboard catalog is copied from its repository source of truth (the files digit-mcp's catalog floor also
+     * embeds): schemas from local-setup/db/dss-mdms-seed/schemas, records from ansible/nairobi-mdms/mdms/dss, with the
+     * source tenant dropped because onboarding writes each record at the workspace. A source edit must be copied here
+     * (with a version bump) or this fails.
+     */
+    @Test public void dashboardCatalogMatchesItsRepositorySource() throws Exception {
+        ObjectMapper mapper = new ObjectMapper(); java.nio.file.Path repo = java.nio.file.Path.of("../..");
+        for (String master : List.of("KpiDefinition", "DashboardPack")) {
+            String code = "dss." + master;
+            JsonNode schema = null;
+            for (JsonNode s : seed.schemas()) if (code.equals(s.path("code").asText())) schema = s.path("definition");
+            assertEquals(code, mapper.readTree(repo.resolve("local-setup/db/dss-mdms-seed/schemas/" + code + ".json").toFile()), schema);
+            List<JsonNode> expected = new ArrayList<>(), seeded = new ArrayList<>();
+            for (JsonNode r : mapper.readTree(repo.resolve("ansible/nairobi-mdms/mdms/dss/" + master + ".json").toFile()))
+                expected.add(mapper.createObjectNode().put("schemaCode", code).put("uniqueIdentifier", r.path("data").path("id").asText()).set("data", r.path("data")));
+            for (JsonNode row : seed.records()) if (code.equals(row.path("schemaCode").asText())) seeded.add(row);
+            assertEquals(code, expected, seeded);
+        }
     }
 
     @Test public void everyRecordHasASeededSchema() {
