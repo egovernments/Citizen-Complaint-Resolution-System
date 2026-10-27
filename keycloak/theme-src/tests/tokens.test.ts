@@ -20,12 +20,13 @@ describe("palettes generated from the Configurator", () => {
 });
 
 describe("primary button labels per state (#2645)", () => {
-    it("judges the hover and pressed labels on their own fill (Green and Gold)", () => {
+    it("judges the hover label on its own fill (Green and Gold)", () => {
         const result = computeThemeVars({ version: "1", colors: { primary: { main: "#FEC931", dark: "#204F37" } } });
         const vars = result?.vars ?? {};
-        // Dark text on the gold resting fill, white on the dark-green hover/pressed fill.
+        // Dark text on the gold resting fill, white on the dark-green hover fill.
         expect(vars["--color-button-primary-text"]?.toUpperCase()).toBe("#0B0C0C");
         expect(vars["--color-button-primary-text-hover"]?.toUpperCase()).toBe("#FFFFFF");
-        expect(vars["--color-button-primary-text-pressed"]?.toUpperCase()).toBe("#FFFFFF");
+        // No pressed rule reads one in this theme.
+        expect(vars["--color-button-primary-text-pressed"]).toBeUndefined();
     });
 });
