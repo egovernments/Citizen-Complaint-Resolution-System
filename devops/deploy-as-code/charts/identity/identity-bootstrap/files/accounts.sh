@@ -14,9 +14,9 @@ done
 
 role() { printf '{"code":"%s","name":"%s","tenantId":"%s"}' "$1" "$1" "$TENANT"; }
 
-# account USER MOBILE PASSWORD ROLE...
+# account TENANT USER MOBILE PASSWORD ROLE...
 account() {
-  user=$1; mobile=$2; password=$3; shift 3
+  TENANT=$1; user=$2; mobile=$3; password=$4; shift 4
   roles=""; for r in "$@"; do roles="$roles${roles:+,}$(role "$r")"; done
   body=$(printf '{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"%s","name":"%s","mobileNumber":"%s","gender":"MALE","active":true,"type":"EMPLOYEE","tenantId":"%s","password":"%s","roles":[%s]}}' \
     "$user" "$user" "$mobile" "$TENANT" "$password" "$roles")
@@ -39,5 +39,8 @@ account() {
   echo "$user: signs in with $*"
 }
 
-account "$ADMIN_USERNAME" "$ADMIN_MOBILE" "$ADMIN_PASSWORD" ACCOUNT_ADMIN
-account "$PROVISIONER_USERNAME" "$PROVISIONER_MOBILE" "$PROVISIONER_PASSWORD" MDMS_ADMIN ACCOUNT_ADMIN LOC_ADMIN HRMS_ADMIN EMPLOYEE
+# Each on the tenant its service signs in on; empty = the state tenant, which is
+# also what the BFF and pgr-services fall back to.
+account "${ADMIN_TENANT:-$STATE_TENANT}" "$ADMIN_USERNAME" "$ADMIN_MOBILE" "$ADMIN_PASSWORD" ACCOUNT_ADMIN
+account "${PROVISIONER_TENANT:-$STATE_TENANT}" "$PROVISIONER_USERNAME" "$PROVISIONER_MOBILE" "$PROVISIONER_PASSWORD" \
+  MDMS_ADMIN ACCOUNT_ADMIN LOC_ADMIN HRMS_ADMIN EMPLOYEE

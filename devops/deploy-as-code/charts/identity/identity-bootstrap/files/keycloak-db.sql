@@ -1,7 +1,7 @@
--- Keycloak's role and database (helm-identity.md "Before enabling" step 1).
--- Run with psql -v kcuser=... -v kcpw=... -v kcdb=...; every statement is a
--- no-op when its object exists. The password is (re)set to identity-secrets'
--- keycloak-db-password, which this Job never rotates once generated.
+-- Keycloak's role and database. Run by keycloak-db.sh only when Keycloak cannot
+-- sign in yet. :kcuser and :kcdb are names; the password comes from the
+-- environment (\getenv), never from psql's argv.
+\getenv kcpw KC_PASSWORD
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'kcuser', :'kcpw')
   WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'kcuser') \gexec
 SELECT format('ALTER ROLE %I LOGIN PASSWORD %L', :'kcuser', :'kcpw') \gexec

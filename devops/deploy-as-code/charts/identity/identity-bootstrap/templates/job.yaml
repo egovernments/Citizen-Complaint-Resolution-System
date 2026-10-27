@@ -16,6 +16,8 @@ metadata:
 data:
   secrets.sh: |
 {{ .Files.Get "files/secrets.sh" | indent 4 }}
+  keycloak-db.sh: |
+{{ .Files.Get "files/keycloak-db.sh" | indent 4 }}
   keycloak-db.sql: |
 {{ .Files.Get "files/keycloak-db.sql" | indent 4 }}
   accounts.sh: |
@@ -57,15 +59,19 @@ spec:
             - {name: scripts, mountPath: /scripts}
         - name: keycloak-db
           image: {{ .Values.images.psql | quote }}
-          command: ["sh", "-ec"]
-          args:
-            - psql -v ON_ERROR_STOP=1 -q -v kcuser="$KC_USER" -v kcpw="$KC_PASSWORD" -v kcdb="$KC_DB" -f /scripts/keycloak-db.sql && echo "keycloak role and database present"
+          command: ["sh", "/scripts/keycloak-db.sh"]
           env:
+            {{- if .Values.keycloakDb.host }}
+            - {name: PGHOST, value: {{ .Values.keycloakDb.host | quote }}}
+            - {name: PGDATABASE, value: postgres}
+            {{- else }}
             - {name: PGHOST, valueFrom: {configMapKeyRef: {name: egov-config, key: db-host}}}
             - {name: PGDATABASE, valueFrom: {configMapKeyRef: {name: egov-config, key: db-name}}}
+            {{- end }}
+            - {name: PGPORT, value: {{ .Values.keycloakDb.port | quote }}}
             - {name: PGUSER, valueFrom: {secretKeyRef: {name: {{ .Values.platformDbSecret }}, key: {{ .Values.platformDbUserKey }}}}}
             - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: {{ .Values.platformDbSecret }}, key: {{ .Values.platformDbPasswordKey }}}}}
-            - {name: PGSSLMODE, value: {{ .Values.platformDbSslMode | quote }}}
+            - {name: PGSSLMODE, value: {{ .Values.dbSslMode | quote }}}
             - {name: KC_USER, value: {{ .Values.keycloakDb.username | quote }}}
             - {name: KC_DB, value: {{ .Values.keycloakDb.database | quote }}}
             - {name: KC_PASSWORD, valueFrom: {secretKeyRef: {name: {{ .Values.identitySecret }}, key: keycloak-db-password}}}
@@ -77,7 +83,9 @@ spec:
           command: ["sh", "/scripts/accounts.sh"]
           env:
             - {name: EGOV_USER_HOST, value: {{ .Values.egovUserHost | quote }}}
-            - {name: TENANT, valueFrom: {configMapKeyRef: {name: egov-config, key: state-level-tenant-id}}}
+            - {name: STATE_TENANT, valueFrom: {configMapKeyRef: {name: egov-config, key: state-level-tenant-id}}}
+            - {name: ADMIN_TENANT, value: {{ .Values.adminTenant | quote }}}
+            - {name: PROVISIONER_TENANT, value: {{ .Values.provisionerTenant | quote }}}
             - {name: ADMIN_USERNAME, value: {{ .Values.adminUsername | quote }}}
             - {name: ADMIN_MOBILE, value: {{ .Values.adminMobile | quote }}}
             - {name: ADMIN_PASSWORD, valueFrom: {secretKeyRef: {name: {{ .Values.identitySecret }}, key: digit-admin-password}}}

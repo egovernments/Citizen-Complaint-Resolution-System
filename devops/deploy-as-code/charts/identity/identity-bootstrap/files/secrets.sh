@@ -84,3 +84,18 @@ ensure "$ONBOARDING_SECRET" \
   "provisioner-password=value \"\$identity\" digit-provisioner-password" \
   "onboarding-token=value \"\$identity\" identity-onboarding-token" \
   "oauth-client-secret=printf ''"
+
+# A pgr-onboarding that predates this Job (or was edited by hand) keeps its own
+# values, and pgr-services reads those, not identity-secrets'. accounts.sh
+# checks the provisioner against identity-secrets, so a mismatch would pass
+# here and pause the onboarding runner with CREDENTIALS_REJECTED. Stop instead.
+onboarding=$(get "$ONBOARDING_SECRET")
+same() { [ "$(printf '%s' "$identity" | sed -n "s/.*\"$1\": *\"\([^\"]*\)\".*/\1/p")" = "$(printf '%s' "$onboarding" | sed -n "s/.*\"$2\": *\"\([^\"]*\)\".*/\1/p")" ]; }
+for pair in "digit-provisioner-password provisioner-password" "identity-onboarding-token onboarding-token"; do
+  set -- $pair
+  if ! same "$1" "$2"; then
+    echo "$ONBOARDING_SECRET's $2 differs from $IDENTITY_SECRET's $1; pgr-services and the BFF would disagree." >&2
+    echo "Make them equal (copy $IDENTITY_SECRET's value into $ONBOARDING_SECRET), then rerun." >&2
+    exit 1
+  fi
+done

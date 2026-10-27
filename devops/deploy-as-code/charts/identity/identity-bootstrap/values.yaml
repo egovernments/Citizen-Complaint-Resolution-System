@@ -31,23 +31,33 @@ smtpAuth: false
 # The keycloak-google-client-secret key is required (identity.keycloak.configure.googleClientId).
 googleSignin: false
 
-# Keycloak's database, as the keycloak chart's db values.
+# Keycloak's database, as the keycloak chart's db values (the helmfile passes
+# identity.keycloak.db). Empty host = egov-config's db-host.
 keycloakDb:
+  host: ""
+  port: "5432"
   database: keycloak
   username: keycloak
 
-# The platform Postgres user that creates it: the `db` Secret's keys.
+# The Postgres user that creates them: the `db` Secret's keys, connected to the
+# platform database (egov-config's db-name), or to `postgres` on a Keycloak host
+# of its own. prefer: TLS where the server offers it (RDS), plain otherwise (the
+# in-cluster backbone postgresql).
 platformDbSecret: db
 platformDbUserKey: username
 platformDbPasswordKey: password
-platformDbSslMode: require
+dbSslMode: prefer
 
-# DIGIT employees on egov-config's state-level-tenant-id. Their passwords are
-# identity-secrets' digit-admin-password and digit-provisioner-password.
+# The DIGIT employees, each on the tenant its service signs in on: the BFF's
+# DIGIT_ADMIN_TENANT_ID and pgr-services' onboarding.provisionerTenantId, as
+# the helmfile passes them; empty = egov-config's state-level-tenant-id.
+# Passwords: identity-secrets' digit-admin-password and digit-provisioner-password.
 egovUserHost: "http://egov-user.egov:8080"
 adminUsername: "IDENTITY_ADMIN"
+adminTenant: ""
 adminMobile: "7777777776"
 provisionerUsername: "PGR_PROVISIONER"
+provisionerTenant: ""
 provisionerMobile: "7777777777"
 
 # Ceiling for the whole Job, egov-user's start included. Below the release

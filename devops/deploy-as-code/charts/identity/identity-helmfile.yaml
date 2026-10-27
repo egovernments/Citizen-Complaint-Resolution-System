@@ -89,6 +89,10 @@ environments:
 {{- $kcConfigure := index $kcOverrides "configure" | default dict }}
 {{- $kcSmtp := index $kcConfigure "smtp" | default dict }}
 {{- $kcDb := index $kcOverrides "db" | default dict }}
+{{- $bootstrapAdmin := index $bffConfig "DIGIT_ADMIN_USERNAME" | default "" }}
+{{- if and $bootstrap (or (eq $bootstrapAdmin "") (eq $bootstrapAdmin "ADMIN")) }}
+{{-   fail "identity.bootstrap.enabled needs identity.identity-bff.config.DIGIT_ADMIN_USERNAME set to a dedicated ACCOUNT_ADMIN employee (e.g. IDENTITY_ADMIN): ADMIN is the platform admin core-services/user-bootstrap already creates, with another password" }}
+{{- end }}
 
 releases:
   # Keycloak's database and identity-secrets must exist before Keycloak starts.
@@ -105,11 +109,19 @@ releases:
         onboardingSecret: {{ index $pgrOnboarding "secretName" | default "pgr-onboarding" | quote }}
         smtpAuth: {{ index $kcSmtp "auth" | default false }}
         googleSignin: {{ ne (index $kcConfigure "googleClientId" | default "") "" }}
+        # Where Keycloak's own chart connects: identity.keycloak.db (empty host =
+        # egov-config's db-host).
         keycloakDb:
+          host: {{ index $kcDb "host" | default "" | quote }}
+          port: {{ index $kcDb "port" | default "5432" | quote }}
           database: {{ index $kcDb "database" | default "keycloak" | quote }}
           username: {{ index $kcDb "username" | default "keycloak" | quote }}
-        adminUsername: {{ index $bffConfig "DIGIT_ADMIN_USERNAME" | default "ADMIN" | quote }}
+        # Each employee on the tenant its service signs in on (empty = egov-config's
+        # state-level-tenant-id, the services' own default).
+        adminUsername: {{ $bootstrapAdmin | quote }}
+        adminTenant: {{ index $bffConfig "DIGIT_ADMIN_TENANT_ID" | default "" | quote }}
         provisionerUsername: {{ index $pgrOnboarding "provisionerUsername" | default "PGR_PROVISIONER" | quote }}
+        provisionerTenant: {{ index $pgrOnboarding "provisionerTenantId" | default "" | quote }}
       - {{ omit $boot "enabled" | toYaml | nindent 8 }}
 
   # Ready before the BFF starts: the BFF's readiness needs the realm the
