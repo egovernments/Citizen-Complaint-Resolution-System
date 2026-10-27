@@ -281,6 +281,34 @@ describe('identity helmfile wiring', () => {
     expect(script).toContain('"provisioner-password=value \\"\\$identity\\" digit-provisioner-password"');
   });
 
+  test('identity-bootstrap refuses the platform ADMIN and creates each employee where its service signs in', () => {
+    expect(helmfile).toMatch(/if and \$bootstrap \(or \(eq \$bootstrapAdmin ""\) \(eq \$bootstrapAdmin "ADMIN"\)\)/);
+    expect(helmfile).toContain('adminTenant: {{ index $bffConfig "DIGIT_ADMIN_TENANT_ID" | default "" | quote }}');
+    expect(helmfile).toContain('provisionerTenant: {{ index $pgrOnboarding "provisionerTenantId" | default "" | quote }}');
+    const accounts = read(`${CHARTS}/identity-bootstrap/files/accounts.sh`);
+    expect(accounts).toContain('account "${ADMIN_TENANT:-$STATE_TENANT}"');
+    expect(accounts).toContain('account "${PROVISIONER_TENANT:-$STATE_TENANT}"');
+  });
+
+  test("identity-bootstrap creates Keycloak's database where the keycloak chart connects, without the password on argv or in every run's SQL", () => {
+    expect(helmfile).toContain('host: {{ index $kcDb "host" | default "" | quote }}');
+    const job = read(`${CHARTS}/identity-bootstrap/templates/job.yaml`);
+    expect(job).toContain('- {name: PGPORT, value: {{ .Values.keycloakDb.port | quote }}}');
+    expect(job).toContain('- {name: PGSSLMODE, value: {{ .Values.dbSslMode | quote }}}');
+    expect(read(`${CHARTS}/identity-bootstrap/values.yaml`)).toMatch(/^dbSslMode: prefer$/m);
+    const sh = read(`${CHARTS}/identity-bootstrap/files/keycloak-db.sh`);
+    const sql = read(`${CHARTS}/identity-bootstrap/files/keycloak-db.sql`);
+    expect(sh).not.toMatch(/-v kcpw/);
+    expect(sql).toContain('\\getenv kcpw KC_PASSWORD');
+    // The plaintext CREATE/ALTER runs only when Keycloak cannot already sign in.
+    expect(sh.indexOf('exit 0')).toBeLessThan(sh.indexOf('-f /scripts/keycloak-db.sql'));
+  });
+
+  test("identity-bootstrap stops when pgr-onboarding disagrees with identity-secrets", () => {
+    const script = read(`${CHARTS}/identity-bootstrap/files/secrets.sh`);
+    expect(script).toContain('for pair in "digit-provisioner-password provisioner-password" "identity-onboarding-token onboarding-token"; do');
+  });
+
   test('Keycloak is ready, and its realm configured, before the BFF starts', () => {
     expect(helmfile).toMatch(/- name: keycloak\n[\s\S]*?wait: true/);
     expect(helmfile).toMatch(/- name: identity-bff\n[\s\S]*?needs:\n\s+- keycloak/);

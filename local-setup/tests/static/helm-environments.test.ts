@@ -79,7 +79,7 @@ describe('the configurator chart renders the same runtime config as Ansible', ()
   test('config.js carries exactly the keys of configurator-config.js.j2', () => {
     const ansible = read('local-setup/ansible/templates/configurator-config.js.j2');
     const keysAnsible = [...ansible.matchAll(/^ {2}([A-Z_]+): \{\{/gm)].map((m) => m[1]).sort();
-    const chart = read(`${DEPLOY}/charts/urban/configurator/templates/runtime-config.yaml`);
+    const chart = read(`${DEPLOY}/charts/urban/configurator/templates/_helpers.tpl`);
     const list = /range \$key := list ((?:"[A-Z_]+" ?)+)/.exec(chart);
     expect(list).not.toBeNull();
     const keysChart = [...list![1].matchAll(/"([A-Z_]+)"/g)].map((m) => m[1]).sort();
@@ -99,6 +99,8 @@ describe('the bare domain lands on the Configurator on both tiers', () => {
     expect(digitUi).toBeGreaterThan(-1);
     expect(configurator).toBeGreaterThan(digitUi);
     expect(nginx.slice(configurator)).toMatch(/^ {2}location = \/ \{ return 302 \/configurator\/; \}$/m);
+    // In every digit_ui_mode: each mode's `location /` is a catch-all to Kong.
+    expect(nginx.match(/^\{\{ root_location\(\) \}\}$/gm)).toHaveLength(3);
     expect(read('local-setup/ansible/inventory/group_vars/digit.yml')).toMatch(/^ {2}root_to_configurator: true\b/m);
   });
 
@@ -108,5 +110,21 @@ describe('the bare domain lands on the Configurator on both tiers', () => {
     expect(tpl).toContain('nginx.ingress.kubernetes.io/temporal-redirect: {{ printf "%s://%s/configurator/" $scheme $.Values.global.domain | quote }}');
     expect(tpl).toMatch(/path: \/\$\n\s+pathType: ImplementationSpecific/);
     expect(read(`${DEPLOY}/charts/core-services/configmaps/values.yaml`)).toMatch(/^ {2}configuratorRedirect: true$/m);
+  });
+});
+
+describe('pods roll when their mounted config changes', () => {
+  // common sets no deployment-timestamp (disableAnnotationTimestamp: true), a
+  // subPath mount never sees a ConfigMap update and nginx does not reload.
+  test.each([
+    ['urban/configurator', 'configurator.runtimeConfigJs'],
+    ['core-services/egov-mdms-service', 'egov-mdms-service.conf'],
+  ])('%s carries checksum/config of the content it mounts', (chart, tpl) => {
+    const values = read(`${DEPLOY}/charts/${chart}/values.yaml`);
+    expect(values).toContain(`checksum/config: {{ include "${tpl}" . | sha256sum | quote }}`);
+    const templates = fs.readdirSync(path.join(REPO_ROOT, DEPLOY, 'charts', chart, 'templates'))
+      .map((f) => read(`${DEPLOY}/charts/${chart}/templates/${f}`)).join('\n');
+    expect(templates).toContain(`{{- define "${tpl}" -}}`);
+    expect(templates).toContain(`{{- include "${tpl}" . | nindent 4 }}`);
   });
 });

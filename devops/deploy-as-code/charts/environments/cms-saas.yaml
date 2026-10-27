@@ -71,9 +71,6 @@ configurator:
   turbopassProxy:
     host: naipepea.digit.org
 
-digit-ui-v2:
-  distUrl: "https://ccrs-prod-assets-bucket.s3.ap-south-1.amazonaws.com/deploy/digit-ui-v2-pg.tgz"
-
 monitoring:
   metrics: true      # kube-prometheus-stack
   logs: true         # loki-stack
@@ -84,7 +81,13 @@ identity:
   enabled: true
   keycloak:
     # One immutable build for Keycloak and the BFF (helm-identity.md); the
-    # charts' own default is the rolling nightly-develop.
+    # charts' own default is the rolling nightly-develop. This file is the last
+    # values layer, so THIS is the tag cms-saas runs. master-b4adf0d's
+    # configure-keycloak.sh aborts in the realm-configure hook (readonly
+    # KCADM_SERVER; fixed in keycloak/configure-keycloak.sh), so the keycloak
+    # release stays `failed` and a full apply skips identity-bff. Once an
+    # identity-keycloak build with that fix is published, set it here and in
+    # identity-bff below, then `helmfile -e cms-saas -l name=keycloak sync`.
     image:
       tag: "master-b4adf0d"
     configure:
