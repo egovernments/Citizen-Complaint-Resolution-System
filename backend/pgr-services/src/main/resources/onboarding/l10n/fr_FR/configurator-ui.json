@@ -242,6 +242,7 @@
 {"code": "app.workspace_links.copied", "message": "Lien copié.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.workspace_links.copy_failed", "message": "Impossible de copier le lien. Sélectionnez-le et copiez-le manuellement.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.workspace_links.open", "message": "Ouvrir", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.signup.with_provider", "message": "S’inscrire avec %{provider}", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.employees.signs_in_with_email", "message": "Ils se connectent avec %{email}.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.bulk_employees.got_account_email", "message": "Compte utilisateur (connexion avec l’e-mail)", "module": "configurator-ui", "locale": "fr_FR"}
 ]
