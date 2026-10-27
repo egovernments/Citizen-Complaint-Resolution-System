@@ -38,7 +38,7 @@ The core DIGIT services and the config model (tenants, MDMS, boundaries, brandin
 - **No tenant orchestration.** Onboarding a city meant many manual steps — infra → cluster → charts → secrets → tenant → boundaries → MDMS → users — with no idempotent runner. We built **digit-mcp** to make it programmatic, repeatable, and callable from AI agents.
 - **No coherent data-model view of the platform or products.** DIGIT's data surface is spread across MDMS masters, boundary hierarchies, workflow business services, PGR, HRMS, user, access-control, localization, filestore — each with its own schema, read pattern, and access model. To understand what DIGIT actually holds, you had to read multiple service codebases and stitch it together. Two things we built to ease that:
  **@digit-mcp/data-provider** is a shared TypeScript client library for talking to DIGIT. It wraps DIGIT's REST APIs into typed, easy-to-call
-  functions, handles auth and tenant scoping, and keeps a single list of every DIGIT resource we consume — schema, id field, access rule, all in one place. Used by our admin console (Configurator), our citizen + officer UI (digit-ui-v2), and our automation server (digit-mcp). Adding a new DIGIT resource is one entry.
+  functions, handles auth and tenant scoping, and keeps a single list of every DIGIT resource we consume — schema, id field, access rule, all in one place. Used by our admin console (Configurator) and our automation server (digit-mcp). Adding a new DIGIT resource is one entry.
 
   **@digit-mcp** is an MCP server that exposes DIGIT operations as typed, discoverable tools. Any MCP client — a CLI, an AI agent, or CI — can list the tools, read the schemas, and call them without reading service source. Tenant setup, boundary loads, complaint lifecycle, master validation all sit here.
 
@@ -46,7 +46,7 @@ The core DIGIT services and the config model (tenants, MDMS, boundaries, brandin
 
   - One source of truth for DIGIT's data surface. DIGIT knowledge used to live scattered across Java service code. Now it's one registry + one
   tool catalogue. New engineers, new partners, and new AI agents learn from the same artifact.
-  - Humans and AI agents share the same layer. Configurator uses it for admin flows. Officers and citizens go through it via digit-ui-v2. Agents use it for onboarding, validation, automation. A change to how DIGIT is accessed lands in one place.
+  - Humans and AI agents share the same layer. Configurator uses it for admin flows. Agents use it for onboarding, validation, automation. A change to how DIGIT is accessed lands in one place.
   - Account automation is real. A new city onboarding — tenant, boundaries, masters, employees, validation — is scriptable and agent-driveable.
   What was multi-week manual configuration is a series of tool calls.
 
@@ -63,7 +63,7 @@ The core DIGIT services and the config model (tenants, MDMS, boundaries, brandin
 - **RBAC is not always enough.** DIGIT's baseline access model is coarse-grained RBAC. However, most implementations need finer grained access control with jurisdictions/departments similar to the Andhra stack. CMS designed and built a simple ABAC framework — see `docs/reference/architecture/access-control/generic-abac-policy-framework-design.md`, `composable-scope-policies-design.md`, `field-level-attribute-access-design.md`, and `masters-configurator-access-policy-design.md`. 
 - **No config-service abstraction beyond MDMS.** Anything that wasn't a master had no home. It was scattered between Helm env files (credentials for SMS, WhatsApp etc..) and the configs repo. Config resolution rules per tenant, defaults & fallbacks per tenant etc.. were not explicitly mapped.
 - **Notifications required a full redesign.** egov-notification-* per-channel services meant every new channel was a new service. Templates, routing, retries and provider mapping had no shipped model. We adopted Novu and built `novu-bridge` plus provider-template mapping (`[docs/releases/2.12/notifications/README.md](../../releases/2.12/notifications/README.md)`) to give notifications a workflow / template / channel model.
-- **Frontend framework friction.** digit-ui (webpack, multi-repo) was slow to build and expensive to theme per tenant. `digit-ui-v2` (esbuild, monorepo) closed most of that gap. We build in about 5 minutes and deploy quickly. That sped up development and iteration. While a lot of workflow is configuration in the backend, the FE hardcodes states and is not as dynamic. We had to change the hard coding. 
+- **Frontend framework friction.** digit-ui (webpack, multi-repo) was slow to build and expensive to theme per tenant. `digit-ui-esbuild` (esbuild, monorepo) closed most of that gap. We build in about 5 minutes and deploy quickly. That sped up development and iteration. While a lot of workflow is configuration in the backend, the FE hardcodes states and is not as dynamic. We had to change the hard coding. 
 
 ## What we invested in
 

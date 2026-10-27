@@ -89,19 +89,6 @@ def r_fastpath_master_password(cfg):
                    + ("(unset)" if got is None else "a different value") + ".")
 
 
-@rule(
-    "digit-ui-v2-combo",
-    "nginx_features.digit_ui_v2 renders /citizen/ location blocks pointing at "
-    "a bundle that nothing builds unless enable_digit_ui_v2 is also on — "
-    "users get 404s; historically also a playbook NPE (fixed in 317ec44d4) "
-    "when the repo/branch vars were missing.",
-)
-def r_digit_ui_v2(cfg):
-    if get(cfg, "nginx_features.digit_ui_v2") is True and get(cfg, "enable_digit_ui_v2") is not True:
-        yield (FAIL, "nginx_features.digit_ui_v2: true serves /citizen/ but nothing builds it "
-                     "(enable_digit_ui_v2 is off, and retired since D26) — set it false.")
-
-
 def as_bool(val):
     """Ansible's `| bool`: true, 'yes', 'on', 'true', '1' and 1 are true."""
     if isinstance(val, bool):
@@ -109,11 +96,10 @@ def as_bool(val):
     return str(val).strip().lower() in ("yes", "on", "true", "1")
 
 
-# The three rules below mirror refusals in playbook-deploy.yml ("preflight —
-# Keycloak is mandatory (refuse enable_keycloak: false)", "preflight — refuse
-# retired digit-ui-v2 citizen identity" and "preflight — refuse the retired
-# auth_provider: keycloak"), so a host_vars copied from an example fails here in
-# seconds instead of at the start of the play. Keep them in step.
+# The two rules below mirror refusals in playbook-deploy.yml ("preflight —
+# Keycloak is mandatory (refuse enable_keycloak: false)" and "preflight —
+# refuse the retired auth_provider: keycloak"), so a host_vars copied from an
+# example fails here in seconds instead of at the start of the play. Keep them in step.
 @rule(
     "identity-needs-keycloak",
     "Since D26 every DIGIT UI sign-in goes through Keycloak and the Identity "
@@ -129,18 +115,6 @@ def r_identity_needs_keycloak(cfg):
 
 
 @rule(
-    "digit-ui-v2-retired",
-    "D26 removed digit-ui-v2's fixed-OTP citizen login, direct egov-user "
-    "account creation and profile writes; the playbook refuses "
-    "enable_digit_ui_v2: true (#2271).",
-)
-def r_digit_ui_v2_retired(cfg):
-    if as_bool(get(cfg, "enable_digit_ui_v2", False)):
-        yield (FAIL, "enable_digit_ui_v2 is no longer supported (D26). Set it false and publish "
-                     "/<tenant-slug>/digit-ui/citizen instead.")
-
-
-@rule(
     "auth-provider-retired",
     "auth_provider: keycloak selected the browser Keycloak adapter that #2088 "
     "and D26 removed; the playbook refuses it on any of the three keys.",
@@ -151,6 +125,23 @@ def r_auth_provider_retired(cfg):
     if keys:
         yield (FAIL, ", ".join(keys) + ": keycloak is retired (D26). Delete the key(s); every sign-in "
                      "already goes through Keycloak and the Identity BFF.")
+
+
+@rule(
+    "digit-ui-v2-removed",
+    "The digit-ui-v2 citizen SPA (/citizen) was removed. Tenant host_vars are "
+    "gitignored, so existing boxes still carry enable_digit_ui_v2 / "
+    "nginx_features.digit_ui_v2 — warn (never fail) so the operator can drop "
+    "the stale keys. The citizen app at /<tenant-slug>/digit-ui/citizen is unaffected.",
+)
+def r_digit_ui_v2_removed(cfg):
+    stale = [k for k in ("enable_digit_ui_v2", "nginx_features.digit_ui_v2")
+             if as_bool(get(cfg, k))]
+    stale += [k for k in ("digit_ui_v2_repo", "digit_ui_v2_branch")
+              if get(cfg, k) not in (None, False, "")]
+    if stale:
+        yield (WARN, f"{', '.join(stale)} ignored: digit-ui-v2 was removed and /citizen is no "
+                     "longer served (use /<tenant-slug>/digit-ui/citizen). Delete these keys.")
 
 
 @rule(
@@ -448,17 +439,20 @@ SELF_TEST_CASES = [
     ("enable_keycloak null fires", {"enable_keycloak": None},
      {"identity-needs-keycloak"}),
     ("enable_keycloak as the string 'true' is clean", {"enable_keycloak": "true"}, set()),
-    ("enable_digit_ui_v2 true fires", {"enable_digit_ui_v2": True},
-     {"digit-ui-v2-retired"}),
-    ("enable_digit_ui_v2 'yes' fires", {"enable_digit_ui_v2": "yes"},
-     {"digit-ui-v2-retired"}),
-    ("enable_digit_ui_v2 false is clean", {"enable_digit_ui_v2": False}, set()),
     ("auth_provider keycloak fires", {"auth_provider": "keycloak"}, {"auth-provider-retired"}),
     ("employee_auth_provider keycloak fires", {"employee_auth_provider": "keycloak"},
      {"auth-provider-retired"}),
     ("auth_provider digit is clean", {"auth_provider": "digit"}, set()),
-    ("ui-v2 nginx without enable fires", {"nginx_features": {"digit_ui_v2": True}},
-     {"digit-ui-v2-combo"}),
+    ("leftover enable_digit_ui_v2 warns", {"enable_digit_ui_v2": True},
+     {"digit-ui-v2-removed"}),
+    ("leftover nginx_features.digit_ui_v2 warns", {"nginx_features": {"digit_ui_v2": True}},
+     {"digit-ui-v2-removed"}),
+    ("digit-ui-v2 explicitly off is clean",
+     {"enable_digit_ui_v2": False, "nginx_features": {"digit_ui_v2": False}},
+     set()),
+    ("digit-ui-v2 off as a string is clean",
+     {"enable_digit_ui_v2": "false", "nginx_features": {"digit_ui_v2": "no"}},
+     set()),
     ("mcp without registry fires", {"enable_mcp": True, "docker_registry": ""},
      {"mcp-needs-registry"}),
     ("non-compiling mobileNumberRegex fires",

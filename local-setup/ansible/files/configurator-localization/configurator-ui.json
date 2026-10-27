@@ -138,8 +138,8 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.header.title",
-    "message": "DIGIT Management Studio",
+    "code": "app.header.studio_title",
+    "message": "DIGIT Complaint Management Studio",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -1338,8 +1338,8 @@
     "locale": "hi_IN"
   },
   {
-    "code": "app.header.title",
-    "message": "DIGIT Management Studio",
+    "code": "app.header.studio_title",
+    "message": "DIGIT Complaint Management Studio",
     "module": "configurator-ui",
     "locale": "hi_IN"
   },
@@ -2538,8 +2538,8 @@
     "locale": "fr_FR"
   },
   {
-    "code": "app.header.title",
-    "message": "DIGIT Management Studio",
+    "code": "app.header.studio_title",
+    "message": "DIGIT Complaint Management Studio",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
@@ -3738,8 +3738,8 @@
     "locale": "pt_BR"
   },
   {
-    "code": "app.header.title",
-    "message": "DIGIT Management Studio",
+    "code": "app.header.studio_title",
+    "message": "DIGIT Complaint Management Studio",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -9702,8 +9702,8 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.home.tour.complaints.body",
-    "message": "Pick from our template offerings with pre-loaded setup for issues ranging from Electricity-related complaints to Local Governance Complaints.",
+    "code": "app.onboarding.home.tour.complaints.body_choice",
+    "message": "Pick our pre-loaded Local Governance template or create specific complaint categories for your account.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -10596,6 +10596,18 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.signup.signed_in_as",
+    "message": "Signed in as %{email}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.sign_out_other_email",
+    "message": "Sign out and use a different email",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.signup.setup_failed_detail",
     "message": "The setup could not be completed.",
     "module": "configurator-ui",
@@ -10616,6 +10628,24 @@
   {
     "code": "app.onboarding.signup.slug_clashes",
     "message": "This URL clashes with an existing workspace (“%{tenant}”). Choose a different one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.still_setting_up",
+    "message": "Still setting up",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.still_setting_up_detail",
+    "message": "This is taking a little longer than usual. We're retrying automatically, and this page will continue by itself.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.still_setting_up_stalled",
+    "message": "This is taking longer than it should. You can try again now.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

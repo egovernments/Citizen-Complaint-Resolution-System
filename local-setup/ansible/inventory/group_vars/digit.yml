@@ -184,6 +184,19 @@ opensre_max_investigations_per_day: 12
 # be able to say so.
 observability_level: traces
 
+# Containers whose bad health "validate — no container is restarting / unhealthy"
+# reports without failing the deploy. Only the observability tier: none of them
+# serves a request, and failing the gate skips everything after it.
+validate_health_warn_only:
+  - digit-tempo
+  - digit-loki
+  - digit-promtail
+  - digit-prometheus
+  - digit-grafana
+  - digit-otel-collector
+  - digit-node-exporter
+  - digit-postgres-exporter
+
 # SPA configuration — stable cross-tenant defaults.
 context_path: digit-ui
 gmaps_api_key: ""

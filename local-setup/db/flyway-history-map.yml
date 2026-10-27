@@ -19,6 +19,13 @@
 #                  Materialized views are excluded: they can always be rebuilt.
 #   baseline_fresh true = legitimately absent from the dump (migrates from empty).
 #                  Consumed by .github/scripts/check-flyway-dump-alignment.py.
+#   adopts_unversioned_tables
+#                  true = populated data_tables with no history are expected (a
+#                  pre-Flyway implementation created them) and the migrations are
+#                  written to run over them: CREATE ... IF NOT EXISTS, no DROP, and
+#                  migrate.sh passes -baselineOnMigrate=true. Normalize then lets
+#                  the migrator adopt them instead of aborting. Never set this for
+#                  a service whose migrations could replace or drop the tables.
 #
 # INVARIANT: every service with a schema has a migration init container. There is
 # no `embedded` escape hatch — if you are tempted to add one, you are re-opening
@@ -139,6 +146,8 @@ digit-user-preferences-service:
                              # AutoMigrate and never wrote a Flyway history
   data_tables: [user_preference]
   baseline_fresh: true
+  adopts_unversioned_tables: true  # V20260205120000 creates IF NOT EXISTS and
+                                   # de-duplicates the Go rows (2.12 → 2.20 upgrade)
 
 audit-service:
   canonical: audit_service_schema

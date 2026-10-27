@@ -101,7 +101,7 @@ export function DigitDashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-        <T i18nKey="app.header.title" />
+        <T i18nKey="app.header.studio_title" />
       </h1>
       <WorkspaceLinksCard />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">

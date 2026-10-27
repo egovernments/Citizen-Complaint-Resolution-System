@@ -169,7 +169,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-5 text-foreground truncate">DIGIT</p>
-                  <p className="text-xs leading-4 text-muted-foreground truncate">
+                  <p className="text-xs leading-4 text-muted-foreground break-words">
                     <T i18nKey="app.header.product_name">Complaint Management System</T>
                   </p>
                 </div>

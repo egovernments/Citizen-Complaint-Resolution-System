@@ -73,8 +73,8 @@ export function welcomeSlides(t: OnboardingT): WelcomeSlide[] {
       title: t('home.tour.complaints.title', 'Complaints Template'),
       paragraphs: [
         t(
-          'home.tour.complaints.body',
-          'Pick from our template offerings with pre-loaded setup for issues ranging from Electricity-related complaints to Local Governance Complaints.',
+          'home.tour.complaints.body_choice',
+          'Pick our pre-loaded Local Governance template or create specific complaint categories for your account.',
         ),
       ],
       image: complaintsImage,

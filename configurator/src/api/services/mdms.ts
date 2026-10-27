@@ -136,11 +136,17 @@ export const mdmsService = {
   async searchRecords(
     tenantId: string,
     schemaCode: string,
-    options?: { limit?: number }
+    options?: { limit?: number; uniqueIdentifiers?: string[] }
   ): Promise<MdmsRecord[]> {
     const response = await apiClient.post(ENDPOINTS.MDMS_SEARCH, {
       RequestInfo: apiClient.buildRequestInfo(),
-      MdmsCriteria: { tenantId, schemaCode, limit: options?.limit || 100, offset: 0 },
+      MdmsCriteria: {
+        tenantId,
+        schemaCode,
+        limit: options?.limit || 100,
+        offset: 0,
+        uniqueIdentifiers: options?.uniqueIdentifiers,
+      },
     });
     return (response.mdms || []) as MdmsRecord[];
   },

@@ -94,7 +94,7 @@ const customEnglishMessages: TranslationMessages = {
     },
     header: {
       management_mode: 'Management Mode',
-      title: 'DIGIT Management Studio',
+      studio_title: 'DIGIT Complaint Management Studio',
       product_name: 'Complaint Management System',
       help: 'Help',
       account: 'Account',

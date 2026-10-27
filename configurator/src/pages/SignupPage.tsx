@@ -20,6 +20,7 @@ import {
   findSignup,
   isOperationReady,
   isOperationSettled,
+  isRetryingAutomatically,
   isValidAccountCode,
   isValidUrlSlug,
   newIdempotencyKey,
@@ -44,7 +45,7 @@ import { Stepper } from '@/components/ui/stepper';
 import { AuthShell } from '@/components/signup/AuthPanel';
 import { WorkspaceTrialDialog } from '@/components/WorkspaceTrialDialog';
 import { useAuthResult } from '@/hooks/useAuthResult';
-import { clearSignOutIncomplete, signOutIncomplete } from '@/lib/session';
+import { clearSignOutIncomplete, signOutIncomplete, signOutThisDevice } from '@/lib/session';
 import { track } from '@/lib/analytics';
 import { useOnboardingT } from '@/onboarding/i18n';
 import { MOBILE_RULES, mobileHint, nationalMobile } from '@/onboarding/signup/mobileRules';
@@ -140,6 +141,13 @@ const POLL_FAILURES_BEFORE_ERROR = 3;
  */
 const PUBLISH_WAIT_MS = 120_000;
 const SLOW_POLL_MS = 15_000;
+
+/**
+ * A run PGR retries by itself changes (updatedAt, at least) every minute or so: its longest backoff is
+ * 60 s and the worker polls every 5 s. Unchanged for three times that, nobody is working it (the
+ * runner is stopped, say), so Try again is offered next to "Still setting up" (#2710 review).
+ */
+const STALLED_RETRY_MS = 180_000;
 
 function SignupMethodIcon({ method }: { method: AuthMethod }) {
   if (method.id.toLowerCase() !== 'github') return null;
@@ -256,6 +264,34 @@ function AvailabilityNote({
  * the provisioning screen and the workspace picker all read as one product
  * instead of a form floating on an empty page.
  */
+/**
+ * The way out of a signed-in signup: to start again under another email, or to leave a setup that
+ * did not finish. The signup stays with this email, so signing in with it again picks it up where
+ * it stopped.
+ */
+function SignOutLine({ email }: { email?: string }) {
+  const t = useOnboardingT();
+  const [busy, setBusy] = useState(false);
+  return (
+    <p className="mt-6 text-center text-sm text-muted-foreground">
+      {email && <>{t('signup.signed_in_as', 'Signed in as %{email}.', { email })} </>}
+      <button
+        type="button"
+        disabled={busy}
+        className="font-medium text-primary underline-offset-4 hover:underline disabled:opacity-60"
+        onClick={async () => {
+          setBusy(true);
+          await signOutThisDevice('current');
+          // A full load, so the page starts from the sign-in gate instead of this session.
+          window.location.assign('/configurator/signup');
+        }}
+      >
+        {t('signup.sign_out_other_email', 'Sign out and use a different email')}
+      </button>
+    </p>
+  );
+}
+
 function SignupFlow() {
   const t = useOnboardingT();
   const authResult = useAuthResult();
@@ -275,6 +311,8 @@ function SignupFlow() {
   const [signup, setSignup] = useState<Signup | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
   const [publishSlow, setPublishSlow] = useState(false);
+  /** The automatically retrying run as it was when it stopped changing (STALLED_RETRY_MS). */
+  const [stalledRun, setStalledRun] = useState<string | null>(null);
   const [step, setStep] = useState<string>('account');
   const [saving, setSaving] = useState(false);
 
@@ -669,6 +707,18 @@ function SignupFlow() {
     return () => clearTimeout(timer);
   }, [awaitingPublication]);
 
+  // While PGR retries the run by itself, any change to it restarts the stall timer; a poll that
+  // brings back the same run does not.
+  const retryingRun = phase === 'provisioning' && !!operation && isRetryingAutomatically(operation)
+    ? `${operation.id}|${operation.status}|${operation.attempt}|${operation.currentStep}|${operation.updatedAt}`
+    : null;
+  useEffect(() => {
+    if (!retryingRun) return;
+    const timer = setTimeout(() => setStalledRun(retryingRun), STALLED_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [retryingRun]);
+  const retryStalled = !!retryingRun && stalledRun === retryingRun;
+
   // Poll while the worker runs, on a fixed cadence keyed to the operation, not
   // its contents: an answer that changes nothing, an empty answer or a check
   // that never returns must not stop the loop (a stalled checklist once read
@@ -871,11 +921,13 @@ function SignupFlow() {
   // How the run ended, once per operation and outcome.
   const runStatus = operation?.status;
   const runError = operation?.errorCode;
+  // A failure PGR still retries by itself has not ended the run.
+  const runRetrying = !!operation && isRetryingAutomatically(operation);
   useEffect(() => {
-    if (runStatus === 'TERMINAL_FAILED' || runStatus === 'RETRYABLE_FAILED') {
+    if (runStatus === 'TERMINAL_FAILED' || (runStatus === 'RETRYABLE_FAILED' && !runRetrying)) {
       track('signup:provision_fail', { error_code: runError ?? 'UNKNOWN', retryable: runStatus === 'RETRYABLE_FAILED' });
     }
-  }, [operationId, runStatus, runError]);
+  }, [operationId, runStatus, runError, runRetrying]);
   useEffect(() => {
     if (ready) track('signup:provision_complete');
   }, [ready]);
@@ -1102,11 +1154,13 @@ function SignupFlow() {
 
   if (phase === 'provisioning' && operation) {
     const done = new Set(operation.completedSteps);
-    const failed = operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
+    // A retryable failure PGR will retry by itself is still setting up, not an error (#2709).
+    const retrying = isRetryingAutomatically(operation);
+    const failed = (operation.status === 'RETRYABLE_FAILED' && !retrying) || operation.status === 'TERMINAL_FAILED';
     // PGR runs the steps in order, so while the run is live the step in progress is the first one not
     // done. That holds for a step code this list does not know, and after a resubmit, which clears
     // completedSteps but leaves currentStep where the last attempt stopped. A settled run spins nothing.
-    const live = operation.status === 'PENDING' || operation.status === 'RUNNING';
+    const live = operation.status === 'PENDING' || operation.status === 'RUNNING' || retrying;
     const current = live ? PROVISIONING_STEPS.find((name) => !done.has(name)) : undefined;
     return (
       <div>
@@ -1147,7 +1201,18 @@ function SignupFlow() {
             </AlertDescription>
           </Alert>
         )}
-        {operation.status === 'RETRYABLE_FAILED' && (
+        {retrying && (
+          <Alert className="mt-6">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertTitle>{t('signup.still_setting_up', 'Still setting up')}</AlertTitle>
+            <AlertDescription>
+              {retryStalled
+                ? t('signup.still_setting_up_stalled', 'This is taking longer than it should. You can try again now.')
+                : t('signup.still_setting_up_detail', 'This is taking a little longer than usual. We\'re retrying automatically, and this page will continue by itself.')}
+            </AlertDescription>
+          </Alert>
+        )}
+        {operation.status === 'RETRYABLE_FAILED' && (!retrying || retryStalled) && (
           <Button
             className="mt-4"
             disabled={saving}
@@ -1156,7 +1221,14 @@ function SignupFlow() {
               try {
                 setOperation(await retryOperation(operation.id));
               } catch (caught) {
-                setError(describe(caught).message);
+                // The run moved on since this page last looked, e.g. PGR's own retry succeeded or is
+                // under way again (#2709): carry on from where it is now, as a reload would.
+                let latest: Operation | null = null;
+                if (caught instanceof OnboardingError && caught.code === 'ONBOARDING_OPERATION_NOT_RETRYABLE') {
+                  latest = await searchOperation({ id: operation.id }).catch(() => null);
+                }
+                if (latest) setOperation(latest);
+                else setError(describe(caught).message);
               } finally {
                 setSaving(false);
               }
@@ -1201,6 +1273,7 @@ function SignupFlow() {
             </AlertDescription>
           </Alert>
         )}
+        <SignOutLine email={sessionUser?.email} />
       </div>
     );
   }
@@ -1218,6 +1291,7 @@ function SignupFlow() {
             <span className="font-mono">{signup?.id}</span>.
           </AlertDescription>
         </Alert>
+        <SignOutLine email={sessionUser?.email} />
       </div>
     );
   }
@@ -1231,6 +1305,7 @@ function SignupFlow() {
         >
           <RefreshCw className="mr-2 h-4 w-4" /> Try again
         </Button>
+        <SignOutLine email={sessionUser?.email} />
       </div>
     );
   }
@@ -1560,6 +1635,7 @@ function SignupFlow() {
           </div>
         </section>
       )}
+      <SignOutLine email={email} />
     </>
   );
 }

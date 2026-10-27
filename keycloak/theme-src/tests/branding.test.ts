@@ -25,7 +25,10 @@ function fixture(localized = translations) {
         .mockResolvedValueOnce(new Response(JSON.stringify(localized)));
 }
 
-beforeEach(() => sessionStorage.clear());
+beforeEach(() => {
+    sessionStorage.clear();
+    localStorage.clear();
+});
 
 describe("public MDMS branding (replacement for the BFF relay)", () => {
     it("resolves only the tenant through the BFF, then reads public masters and localization without credentials", async () => {
@@ -134,6 +137,20 @@ describe("public MDMS branding (replacement for the BFF relay)", () => {
         expect(resolveTenantSlug({ search: "?digit_tenant=bomet-county", loginAction: "/login?tab_id=a" })).toBe("bomet-county");
         expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=a" })).toBe("bomet-county");
         expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=b" })).toBeUndefined();
+    });
+
+    it("gives a new tab of the same login its slug once, per tab_id and only while fresh (#2645)", () => {
+        resolveTenantSlug({ search: "?digit_tenant=bomet-county", loginAction: "/login?tab_id=a" });
+        // Another sign-in in the same browser does not take tab a's entry.
+        resolveTenantSlug({ search: "?digit_tenant=other-county", loginAction: "/login?tab_id=b" });
+        sessionStorage.clear();
+        expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=a" })).toBe("bomet-county");
+        expect(localStorage.getItem("digit_tenant:a")).toBeNull();
+        // That tab keeps it in its own sessionStorage.
+        expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=a" })).toBe("bomet-county");
+        sessionStorage.clear();
+        localStorage.setItem("digit_tenant:c", `${Date.now() - 13 * 60 * 60 * 1000} bomet-county`);
+        expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=c" })).toBeUndefined();
     });
 
     it("maps language tags and degrades unsupported tags to the deployment default", () => {
