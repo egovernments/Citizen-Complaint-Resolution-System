@@ -198,7 +198,9 @@ public class BaselineUpgraderTest {
         for (String schema : catalog) assertTrue(schema, writes.contains("schema:" + schema));
         long expected = 0; for (JsonNode row : seed.records()) if (catalog.contains(row.path("schemaCode").asText())) expected++;
         assertEquals(expected, writes.stream().filter(w -> catalog.stream().anyMatch(c -> w.startsWith("create:" + c + ":"))).count());
-        assertFalse("existing records are not rewritten", writes.stream().anyMatch(w -> w.startsWith("create:") && catalog.stream().noneMatch(c -> w.startsWith("create:" + c + ":"))));
+        // The fixture's workspace also predates the 4560 grants (v2), which the same pass creates.
+        assertFalse("existing records are not rewritten", writes.stream().anyMatch(w -> w.startsWith("create:") && !w.contains("4560")
+                && catalog.stream().noneMatch(c -> w.startsWith("create:" + c + ":"))));
         assertEquals("15", finished.get("from")); assertEquals(seed.version(), finished.get("to"));
         DashboardCatalogProbe.assertPublicDashboardServed(rows, "walkone", mapper);
     }
