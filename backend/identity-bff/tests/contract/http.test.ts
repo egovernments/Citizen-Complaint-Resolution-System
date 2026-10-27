@@ -87,7 +87,7 @@ describe("sign-in results", () => {
   });
 
   it("GET /identity/v1/password/setup-complete/:state hands an unknown state to auth-results as AUTH_ATTEMPT_EXPIRED", async () => {
-    const route = contractRoute("GET", "/identity/v1/password/setup-complete/:state");
+    const route = contractRoute("GET", "/identity/v1/password/setup-complete/:state{/:tenantSlug}");
     const body = await resultOf(await fetch(`${base}/identity/v1/password/setup-complete/unknown-state`, { redirect: "manual" }));
     expect(route.results).toContain(body.code);
     expect(body).toMatchObject({ status: "failed", code: "AUTH_ATTEMPT_EXPIRED" });

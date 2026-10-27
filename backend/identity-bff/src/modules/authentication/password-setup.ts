@@ -35,11 +35,13 @@ export function normalizedEmail(value: unknown): string | null {
     : null;
 }
 
-function completionRedirectUri(state: string): string {
+function completionRedirectUri(state: string, tenantSlug?: string): string {
   const callback = new URL(config.identityRedirectUri);
   // Keycloak 26 does not apply a trailing redirect wildcard to a query string
   // for execute-actions-email. A path segment is both allowlistable and opaque.
-  callback.pathname = `${callback.pathname.replace(/\/callback$/, "/password/setup-complete")}/${encodeURIComponent(state)}`;
+  // The tenant's slug after it lets the Keycloak theme brand the emailed pages (#2645).
+  callback.pathname = `${callback.pathname.replace(/\/callback$/, "/password/setup-complete")}/${encodeURIComponent(state)}${
+    tenantSlug ? `/${encodeURIComponent(tenantSlug)}` : ""}`;
   callback.search = "";
   return callback.toString();
 }
@@ -55,13 +57,14 @@ export async function sendPasswordSetup(input: {
   emailVerified: boolean;
   returnTo: string;
   clientId: string;
+  tenantSlug?: string;
 }): Promise<void> {
   const state = await createPasswordSetupAttempt({
     returnTo: input.returnTo, userId: input.userId, hadPassword: input.hadPassword,
   });
   await sendPasswordSetupEmail({
     userId: input.userId, emailVerified: input.emailVerified,
-    redirectUri: completionRedirectUri(state), clientId: input.clientId,
+    redirectUri: completionRedirectUri(state, input.tenantSlug), clientId: input.clientId,
   });
 }
 
@@ -70,6 +73,7 @@ async function processPasswordSetup(input: {
   authenticatedUserId: string | null;
   returnTo: string;
   clientId: string;
+  tenantSlug?: string;
 }): Promise<void> {
   try {
     const account = input.authenticatedUserId
@@ -90,7 +94,7 @@ async function processPasswordSetup(input: {
     }
     await sendPasswordSetup({
       userId: account.userId, hadPassword: account.hasPassword, emailVerified: account.emailVerified,
-      returnTo: input.returnTo, clientId: input.clientId,
+      returnTo: input.returnTo, clientId: input.clientId, tenantSlug: input.tenantSlug,
     });
     console.info("Password setup request processed", {
       outcome: "sent",
@@ -116,9 +120,11 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
       return response.status(400).json(errorBody("UNSUPPORTED_SURFACE", "Unsupported sign-in surface"));
     }
     let returnTo: string | null;
+    let tenantSlug: string | undefined;
     if (isTenantBoundSurface(surface)) {
       const tenant = await routeForSlug(request.body?.tenantSlug);
       if ("status" in tenant) return response.status(tenant.status).json(errorBody(tenant.code, tenant.error));
+      tenantSlug = tenant.urlSlug;
       returnTo = returnDestination(request.body?.returnTo, surfaceReturnPrefix(surface, tenant.urlSlug));
     } else {
       returnTo = returnDestination(request.body?.returnTo);
@@ -151,10 +157,11 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
       authenticatedUserId: signedIn?.session.claims.sub || null,
       returnTo,
       clientId: client.clientId,
+      tenantSlug,
     }));
   }));
 
-  app.get("/identity/v1/password/setup-complete/:state", asyncRoute(async (request, response) => {
+  app.get("/identity/v1/password/setup-complete/:state{/:tenantSlug}", asyncRoute(async (request, response) => {
     const rawState = request.params.state;
     const state = typeof rawState === "string" ? rawState : "";
     const preview = state ? await getPasswordSetupAttempt(state) : null;

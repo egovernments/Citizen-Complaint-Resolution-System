@@ -1398,6 +1398,8 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       credentials: [{ id: "password-employee-setup-2", type: "password" }],
     })).status).toBe(204);
     const completion = new URL(user.lastActionRedirectUri);
+    // The slug after the state lets the theme brand the emailed pages (#2645).
+    expect(completion.pathname).toMatch(/\/password\/setup-complete\/[^/]+\/bomet-county$/);
     const complete = await fetch(`${app()}${completion.pathname}`, { redirect: "manual" });
     expect(complete.status).toBe(303);
     const location = new URL(complete.headers.get("location")!, "http://localhost");

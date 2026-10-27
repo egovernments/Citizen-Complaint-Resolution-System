@@ -73,16 +73,41 @@ export function tabIdOf(loginAction: string | undefined, base = window.location.
  *    form post (errors, further steps) still know it. A page Keycloak gives
  *    no form action (error.ftl when the sign-in session is gone, #2644) is
  *    the answer to that tab's form post, so its own address carries `tab_id`.
+ * 3. The slug at the end of an emailed password link's redirect (below).
  */
 export function resolveTenantSlug(params: {
     digitTenant?: string;
     loginAction?: string;
     search?: string;
 }): string | undefined {
+    const search = new URLSearchParams(params.search ?? window.location.search);
     const candidate = isValidSlug(params.digitTenant)
         ? params.digitTenant
-        : new URLSearchParams(params.search ?? window.location.search).get("digit_tenant");
+        : search.get("digit_tenant") ?? emailedLinkSlug(search);
     return rememberedPerTab(STORAGE_PREFIX, params.loginAction, candidate, isValidSlug, true);
+}
+
+/**
+ * The identity BFF ends a tenant's password setup redirect with its slug
+ * (`/password/setup-complete/<state>/<slug>`). An emailed link starts a new
+ * Keycloak session in whatever browser opens it, so this is all its pages
+ * can learn the tenant from (#2645). Keycloak carries the redirect in the
+ * link's action token (`key`), then in `client_data` on every page after.
+ */
+function emailedLinkSlug(search: URLSearchParams): string | undefined {
+    const redirect = (value: string | null | undefined, field: string): unknown => {
+        try {
+            return value ? JSON.parse(atob(value.replace(/-/g, "+").replace(/_/g, "/")))[field] : undefined;
+        } catch {
+            return undefined;
+        }
+    };
+    for (const uri of [redirect(search.get("client_data"), "ru"), redirect(search.get("key")?.split(".")[1], "reduri")]) {
+        if (typeof uri !== "string") continue;
+        const slug = /\/password\/setup-complete\/[^/?#]+\/([^/?#]+)$/.exec(uri)?.[1];
+        if (slug !== undefined) return slug;
+    }
+    return undefined;
 }
 
 /**

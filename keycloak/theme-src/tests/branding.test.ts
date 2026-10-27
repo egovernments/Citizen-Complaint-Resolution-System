@@ -153,6 +153,15 @@ describe("public MDMS branding (replacement for the BFF relay)", () => {
         expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=c" })).toBeUndefined();
     });
 
+    it("reads an emailed password link's tenant from its redirect, in any browser (#2645)", () => {
+        const b64 = (value: object) => btoa(JSON.stringify(value)).replace(/=+$/, "");
+        const ru = "https://x.test/identity/v1/password/setup-complete/state123/bomet-county";
+        expect(resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru })}.s` })).toBe("bomet-county");
+        expect(resolveTenantSlug({ search: `?client_data=${b64({ ru, rt: "code" })}` })).toBe("bomet-county");
+        expect(resolveTenantSlug({ search: `?client_data=${b64({ ru: "https://x.test/identity/v1/callback" })}` })).toBeUndefined();
+        expect(resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru.replace("/bomet-county", "") })}.s` })).toBeUndefined();
+    });
+
     it("maps language tags and degrades unsupported tags to the deployment default", () => {
         expect(digitLocaleOf("fr-FR")).toBe("fr_FR");
         expect(digitLocaleOf("en")).toBeUndefined();
