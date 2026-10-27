@@ -167,7 +167,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             const el = e.currentTarget as HTMLButtonElement;
             if (isPrimary) {
               el.style.backgroundColor = PRIMARY_HOVER_BG;
-              el.style.color = PRIMARY_HOVER_TEXT;
+              // A caller's own label colour is kept.
+              if (style?.color === undefined) el.style.color = PRIMARY_HOVER_TEXT;
             }
             // Secondary and tertiary take a tint of the brand rather than a
             // fill, so the outline still reads as an outline while hovered.
@@ -178,7 +179,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         onMouseLeave={(e) => {
           const el = e.currentTarget as HTMLButtonElement;
           if (isPrimary) {
-            el.style.backgroundColor = PRIMARY_INLINE_STYLE.backgroundColor as string;
+            // Back to the rendered style, including a caller's own fill.
+            el.style.backgroundColor = (mergedStyle.backgroundColor ?? PRIMARY_INLINE_STYLE.backgroundColor) as string;
             el.style.color = (mergedStyle.color ?? PRIMARY_INLINE_STYLE.color) as string;
           } else if (isSecondary || isTertiary) {
             el.style.backgroundColor = "transparent";
