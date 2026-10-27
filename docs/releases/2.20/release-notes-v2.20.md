@@ -1,6 +1,6 @@
 # CMS v2.20 Release Notes
 
-**Covers:** v2.12 → v2.20 (including the v2.12.1 patch), up to `master` at `5dc402e09` (23 Oct 2026). **Who this is for:** citizens, government administrators, partners and anyone evaluating the release.
+**Covers:** v2.12 → v2.20 (including the v2.12.1 patch), as of `master` at `63472b4a1` and `develop` at `c05914039` (27 Oct 2026). **Who this is for:** citizens, government administrators, partners and anyone evaluating the release.
 
 **See also:** [Deployment changelog](release-config-changelog-v2.20.md) for the settings to change and the upgrade steps, and the [Migration guide](migration-guide-v2.12-to-v2.20-beta.md).
 
@@ -13,7 +13,7 @@ CMS (Complaint Management System) v2.20 adds self-serve workspace onboarding, a 
 | Product | CMS (Complaint Management System), built on the DIGIT platform |
 | Release | v2.20, the self-serve SaaS release |
 | Builds on | v2.12 (September 2026) and its v2.12.1 patch (October 2026) |
-| Release date | To be confirmed (work completed 23 October 2026) |
+| Release date | To be confirmed |
 | For upgrades | See the [Deployment changelog](release-config-changelog-v2.20.md) |
 
 **Themes**
@@ -29,7 +29,7 @@ CMS (Complaint Management System) v2.20 adds self-serve workspace onboarding, a 
 
 | Change | What it means | Who benefits |
 | --- | --- | --- |
-| Self-serve workspace onboarding | A new government signs up and sets up in five guided steps (Geography, Departments, Employees, Complaint types, Branding), then opens the complaint desk. | Administrators, partners |
+| Self-serve workspace onboarding | A new government signs up and sets up in five guided steps (Branding, Geography, Departments, Employees, Complaint types), then opens the complaint desk. | Administrators, partners |
 | One secure sign-in | One sign-in for citizens, employees and admins, with invitations, sessions that stay alive while you work, and sign-out of other devices. | All users, security teams |
 | Reliable escalation | Complaints move up the officer's reporting line on time and once per level. Admins set the timings. | Citizens, officers, admins |
 | Clearer complaint roles | Only the officer holding a complaint can escalate it. A Grievance Routing Officer assigns or rejects. | Employees |
@@ -46,11 +46,11 @@ CMS (Complaint Management System) v2.20 adds self-serve workspace onboarding, a 
 
 ### 1. Self-serve workspace onboarding
 
-A city or organisation can sign up on its own and get a working complaint system. A founder creates an account, then goes through five guided steps: Geography, Departments, Employees, Complaint types (with a resolution time per category) and Branding. When setup is done, the console opens the complaint desk. Employees get invitations, and admins can see whether each invite was accepted. Older workspaces pick up new defaults in the background without losing their own changes. This cuts the engineering work needed to launch a new city.
+A city or organisation can sign up on its own and get a working complaint system. A founder creates an account, then goes through five guided steps: Branding, Geography, Departments, Employees and Complaint types (with a resolution time per category). When setup is done, the console opens the complaint desk. Employees get invitations, and admins can see whether each invite was accepted. Self-serve workspaces created earlier pick up new defaults in the background without losing their own changes; workspaces set up by the deployment itself are not upgraded this way. Sign-up is offered in English, French, Hindi and Portuguese, and admins can sign up with their Google account. This cuts the engineering work needed to launch a new city.
 
 ### 2. One secure sign-in
 
-Citizens, employees and administrators sign in through one secure service. A person can belong to several workspaces and pick one after signing in. Admins can invite people, resend activations and end sessions when credentials change; invitees can decline. Sessions stay alive while the person is active instead of ending 30 minutes after sign-in. Employees sign in with their email address, and "sign out other sessions" really signs out every other device.
+Citizens, employees and administrators sign in through one secure service. A person can belong to several workspaces and pick one after signing in. Admins can invite people and resend activations; invitees can decline. Sessions end automatically when a person's credentials change, and otherwise stay alive while the person is active instead of ending 30 minutes after sign-in. Employees sign in with their email address and reset forgotten passwords by email, and "sign out other sessions" really signs out every other device. Existing staff must be linked to the new sign-in service before they can sign in (section F).
 
 ### 3. Notifications per workspace
 
@@ -62,7 +62,7 @@ Citizens file a complaint in three steps and can speak the description instead o
 
 ### 5. French and Portuguese out of the box
 
-Citizen and employee screens ship in French and Portuguese. The device remembers the chosen language. The onboarding pages and the Geography step are translated too.
+Citizen and employee screens ship in French and Portuguese. The device remembers the chosen language. The onboarding pages and the Geography step are translated too, and sign-up offers English, French, Hindi and Portuguese. Swahili is no longer offered for new sign-ups; existing Kenyan workspaces keep it. The French, Hindi and Portuguese onboarding text is machine-translated and still needs a native-speaker review, and some sign-up screen text is still in English.
 
 ### 6. Complaints on WhatsApp
 
@@ -102,8 +102,8 @@ These improve existing screens. The benefits are what each change is designed to
 - Inbox search and filters line up, scroll correctly and work on tablets and phones.
 - A tenant switcher for staff who work across tenants.
 - The product is named "Complaint Management System" throughout.
-- The password-reset screen shows where the one-time password was sent.
-- Account and security settings read as one tidy page.
+- Account and security settings read as one tidy page, and changing your email returns you to your workspace.
+- Password-reset pages keep the workspace's colours.
 
 **Citizen app**
 
@@ -151,9 +151,10 @@ About 55 fixes, grouped by area.
 | Escalation | Manual and automatic escalation now follow the same rule: the officer's reporting manager. A complaint type's own timings win over the default. Reopening keeps the escalation level. Escalate is hidden when there is nobody to escalate to. |
 | Roles | A Grievance Routing Officer can only assign or reject. Assigning always names an employee. |
 | Complaints | Assigned officers can always see their complaints. Complaints without a map pin no longer show a false location. Search never shows another tenant's complaints. A complaint filed by staff for a citizen now appears in that citizen's My Complaints. WhatsApp complaints show the real complainant. Labels, locked locations and category choices behave correctly. |
-| Employees | New employees can file complaints. A failed invitation no longer creates a duplicate. Employee look-ups stay within the workspace. Password-reset codes go to the right phone. |
-| Sign-in | Signing out of other sessions really ends them. Staff who also sign in as citizens stay one person. The sign-in page asks for an email, unused social sign-in buttons are hidden, and a lost sign-in returns to the sign-in page. |
-| Configurator and onboarding | All boundary hierarchies are listed. Duplicate boundary codes are caught before saving. Jurisdictions and departments can be revoked. Settings save reliably, and setup progress keeps updating to the end. Older workspaces can use the new workspace screens. Employee templates and screens are corrected. |
+| Employees | New employees can file complaints. A failed invitation no longer creates a duplicate. Employee look-ups stay within the workspace. Adding an employee no longer fails at random with a password error. |
+| Sign-in | Signing out of other sessions really ends them. Employees can use Forgot password again. The sign-in page asks for an email, unused social sign-in buttons are hidden, and a lost sign-in returns to the sign-in page. The two-step verification page footer no longer overlaps. |
+| Public dashboard | A workspace's public dashboard now shows that workspace's own data, not the state's. |
+| Configurator and onboarding | All boundary hierarchies are listed. Duplicate boundary codes are caught before saving. Jurisdictions and departments can be revoked. Settings save reliably, and setup progress keeps updating to the end. Older workspaces can use the new workspace screens. Branding finds the workspace in large installations. Sign-up no longer stops on a boundary timing error. Employee templates and screens are corrected. |
 | Notifications | Upgrading no longer fails when a workspace already uses the same internal permission numbers. |
 | Screens (both apps) | Long dropdown options, inbox cells, complaint numbers and statuses show in full. Text with a colon is no longer cut. Themes apply to the whole page, buttons keep readable labels, and screen text is translated. |
 | WhatsApp | Long complaint menus work, and tenants without a complaint template can file. |
@@ -168,7 +169,11 @@ v2.20 is not a drop-in upgrade from v2.12: sign-in, web addresses and several se
 | --- | --- | --- |
 | Everyone signs in through the new sign-in service; the old login pages are gone. | All users, custom app versions | Use the new sign-in. Update any customised login screens. |
 | App addresses now include the workspace name. Old bookmarks stop working unless a default workspace is set. | Users with bookmarks, external links | Update links, or ask operations to set a default workspace. |
+| Existing staff can sign in only after they are linked to the new sign-in service. Staff whose home is a city tenant cannot be linked and lose sign-in unless they are re-created at the state level. | All existing employees | Ask operations to link staff during the upgrade. Plan for city-tenant staff. |
 | Employees reset passwords by email; reset by SMS is removed. | Employees without an email address | Add email addresses to staff records before upgrading. |
+| Citizens can no longer sign in with Google; they sign in with their phone and a one-time code. | Citizens who used Google | Tell citizens about the change. |
+| The old citizen address (`/citizen`) no longer works. The citizen app is at `/<workspace>/digit-ui/citizen`. | Citizens with bookmarks, external links | Update links. |
+| Swahili is no longer offered when signing up a new workspace. Existing Kenyan workspaces keep it. | New Swahili-speaking workspaces | Plan translations if needed. |
 | Citizen sign-in is off until it is switched on. | Citizen-facing workspaces | Choose the citizen sign-in methods during the upgrade. |
 | Automatic escalation is off after upgrading, and escalation works differently. | Workspaces upgraded from v2.12 | Review escalation settings, then switch it on per workspace. |
 | Notifications move to per-workspace settings. Existing workspaces send no complaint notifications until they are migrated. | Workspaces using notifications | Run the notification migration for each workspace. |
@@ -186,7 +191,7 @@ v2.20 is not a drop-in upgrade from v2.12: sign-in, web addresses and several se
 - A partner security audit is closed: more than 30 findings are fixed, including both high-severity ones.
 - Hundreds of known vulnerabilities in third-party libraries are fixed, including a critical database-driver issue.
 - Sign-in is hardened: security tokens stay on the server, sessions end when credentials change, and staff cannot grant themselves admin rights.
-- Each workspace's data stays within that workspace in search, look-ups and preferences.
+- Each workspace's data stays within that workspace in search, look-ups and preferences. The public dashboard now does too; before this release it could show the state's data.
 - Servers expose fewer network ports, run a firewall, and send stricter browser security headers.
 - Six audit items are still open (section H).
 
@@ -208,24 +213,27 @@ No performance measurements were available for this release.
 | Escalation | Complaints rejected and then reopened do not escalate automatically. | Open |
 | Access | Limiting the Configurator to administrators covers the screens only; some staff data can still be read by non-admin roles through the system's interfaces. | Open |
 | Sign-in | Workspace branding can disappear when a timed-out sign-in restarts. The new email sign-in wording is English only. | Open |
+| Sign-in | The setup email for non-admin staff opens the Configurator instead of the employee app. | Open |
+| Sign-in | Signing in as staff right after a Configurator session can fail with "already authenticated as a different user". | Open |
+| Sign-in | Staff who also use the citizen app with the same phone number count as two people; joining them is optional and off by default. | Open |
+| Onboarding | Setup can show a "usually temporary" boundary error and then fail on Try again, although the setup succeeded. | Open |
 | Notifications | One provider per channel per workspace, with no automatic failover. | By design in this release |
 | Notifications | WhatsApp messages need each workspace's own approved templates. | Register templates with the provider |
 | Notifications | Twilio messages show "Sent" even after delivery. The new notification screens are English only. | Open |
 | Notifications | Citizen sign-in by phone does not use the new notification service yet. | Needs a separate SMS sender |
-| Upgrade | Upgrading the user-preferences data on single-server installs that already hold data has no automated path yet. | To be confirmed before release |
-| Monitoring | Sign-in service metrics are not collected yet. | Fix planned before release |
+| Monitoring | Sign-in service metrics may not be collected, depending on the deployment settings. | Open |
 | Security | Six audit items remain open, including a seeded default password and anonymous file downloads. | Open |
 
 ## I. Impact and action required
 
 | Audience | What changes for them | Action |
 | --- | --- | --- |
-| Citizens and employees | New sign-in, workspace-specific links, a three-step complaint form with voice input, a new employee console. Employees reset passwords by email. | Update bookmarks. Make sure every employee has an email address. |
+| Citizens and employees | New sign-in, workspace-specific links, a three-step complaint form with voice input, a new employee console. Employees reset passwords by email. Citizens sign in with phone and code. | Update bookmarks. Make sure every employee has an email address. |
 | Government administrators | Self-serve onboarding, the escalation policy editor, notification settings, branding, public dashboard controls, app links. Automatic escalation is off after upgrading. | Review escalation settings. Set up notification providers and messages. Use the new employee templates. |
 | Partners | Many governments on one installation, each set up without eGov support, with an optional 30-day trial. | Decide on trial use and analytics accounts per deployment. |
 | Developers and integrators | Sign-in goes through the new sign-in service; old user endpoints are closed. New onboarding and notification services. | Follow the [deployment changelog](release-config-changelog-v2.20.md). Update custom login code. |
 | QA teams | Wide changes to screens and workflows. | Regression-test sign-in for every role, onboarding end to end, the complaint lifecycle including escalation and reopen, notifications per channel, French and Portuguese, phone layouts, and WhatsApp if used. |
-| Operations teams | New and retired services, new settings and secrets, data migrations. | Follow the upgrade steps in the [deployment changelog](release-config-changelog-v2.20.md). Back up all databases first. |
+| Operations teams | New and retired services, new settings and secrets, data migrations, linking existing staff to the new sign-in. | Follow the upgrade steps in the [deployment changelog](release-config-changelog-v2.20.md). Back up all databases first. |
 
 ## J. Acknowledgements
 
