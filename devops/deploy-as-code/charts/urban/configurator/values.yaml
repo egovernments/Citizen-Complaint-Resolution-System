@@ -60,6 +60,10 @@ turbopassProxy:
   host: ""
   path: "/turbopass"
 
+# Rolls the pods when config.js changes (common sets no deployment timestamp).
+additionalAnnotations: |
+  checksum/config: {{ include "configurator.runtimeConfigJs" . | sha256sum | quote }}
+
 extraVolumes: |
   - name: runtime-config
     configMap:

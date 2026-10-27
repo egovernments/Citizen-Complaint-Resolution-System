@@ -16,8 +16,7 @@ ingress:
 
 initContainers: {}
 
-# A pinned nginx, as charts/urban/digit-ui-v2 uses (not a rolling tag, so
-# IfNotPresent is safe).
+# A pinned nginx (not a rolling tag, so IfNotPresent is safe).
 image:
   repository: "docker.io/library/nginx"
   tag: "1.27-alpine"
@@ -48,6 +47,10 @@ upstream:
   host: "mdms-v2.egov.svc.cluster.local"
   port: 8080
   resolver: "kube-dns.kube-system.svc.cluster.local"
+
+# Rolls the pod when the nginx conf changes (common sets no deployment timestamp).
+additionalAnnotations: |
+  checksum/config: {{ include "egov-mdms-service.conf" . | sha256sum | quote }}
 
 extraVolumes: |
   - name: conf
