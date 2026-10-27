@@ -87,7 +87,7 @@
 {"code": "CS_COMMON_RESOLVEDBYSUPERVISOR", "message": "पर्यवेक्षक द्वारा हल किया गया", "module": "rainmaker-pgr", "locale": "hi_IN"},
 {"code": "CS_COMMON_SEARCH", "message": "खोजें", "module": "rainmaker-pgr", "locale": "hi_IN"},
 {"code": "CS_COMMON_SELECT_EMPLOYEE", "message": "कर्मचारी चुनें", "module": "rainmaker-pgr", "locale": "hi_IN"},
-{"code": "CS_COMMON_SUBMIT", "message": "जमा करे", "module": "rainmaker-pgr", "locale": "hi_IN"},
+{"code": "CS_COMMON_SUBMIT", "message": "जमा करें", "module": "rainmaker-pgr", "locale": "hi_IN"},
 {"code": "CS_COMMON_THANK_YOU", "message": "धन्यवाद ", "module": "rainmaker-pgr", "locale": "hi_IN"},
 {"code": "CS_COMMON_TRACK_COMPLAINT_TEXT", "message": "शिकायत नंबर के साथ सूचना आपके पंजीकृत मोबाइल नंबर पर भेज दी गयी है। आप मोबाइल या वेब एप्लिकेशन का उपयोग करके शिकायत की स्थिति पर नज़र रख सकते हैं।", "module": "rainmaker-pgr", "locale": "hi_IN"},
 {"code": "CS_COMMON_TRY_AGAIN", "message": "पुनः प्रयास करें", "module": "rainmaker-pgr", "locale": "hi_IN"},
