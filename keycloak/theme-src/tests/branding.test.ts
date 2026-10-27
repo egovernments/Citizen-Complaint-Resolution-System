@@ -187,6 +187,9 @@ describe("public MDMS branding (replacement for the BFF relay)", () => {
         expect(resolveTenantSlug({ search: `?client_data=${b64({ ru: callback, rt: "code", st: "s" })}&tab_id=t1` })).toBe("bomet-county");
         sessionStorage.clear();
         expect(resolveTenantSlug({ search: `?key=h.${b64({ reduri: `${callback}/extra` })}.s` })).toBeUndefined();
+        sessionStorage.clear();
+        // Another client's callback is not the BFF's.
+        expect(resolveTenantSlug({ search: `?client_data=${b64({ ru: "https://app.test/auth/callback/keycloak" })}` })).toBeUndefined();
     });
 
     it("keeps the link's landing-page tenant until a page with a tab_id takes it over (#2645)", () => {

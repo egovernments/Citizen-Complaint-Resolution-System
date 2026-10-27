@@ -101,7 +101,8 @@ function emailedLinkSlug(search: URLSearchParams): string | undefined {
         base64UrlJsonField(search.get("key")?.split(".")[1], "reduri"),
     ]) {
         if (typeof uri !== "string") continue;
-        const slug = /\/(?:password\/setup-complete\/[^/?#]+|callback)\/([^/?#]+)$/.exec(uri)?.[1];
+        // Only the BFF's own routes: another client's `/callback/<x>` is no slug.
+        const slug = /\/identity\/v1\/(?:password\/setup-complete\/[^/?#]+|callback)\/([^/?#]+)$/.exec(uri)?.[1];
         if (isValidSlug(slug)) return slug;
     }
     return undefined;
