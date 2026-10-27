@@ -1077,5 +1077,10 @@
 {"code": "app.onboarding.steps.departments", "message": "विभाग", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.steps.employees", "message": "कर्मचारी", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.steps.geography", "message": "भूगोल", "module": "configurator-ui", "locale": "hi_IN"},
-{"code": "app.onboarding.bulk_employees.csr_role_note", "message": "हर कर्मचारी को शिकायत रजिस्ट्रार (CSR) भूमिका भी मिलती है, ताकि वे नागरिकों की ओर से शिकायतें दर्ज कर सकें।", "module": "configurator-ui", "locale": "hi_IN"}
+{"code": "app.onboarding.bulk_employees.csr_role_note", "message": "हर कर्मचारी को शिकायत रजिस्ट्रार (CSR) भूमिका भी मिलती है, ताकि वे नागरिकों की ओर से शिकायतें दर्ज कर सकें।", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.onboarding.signup.signed_in_as", "message": "%{email} के रूप में साइन इन हैं।", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.onboarding.signup.sign_out_other_email", "message": "साइन आउट करें और दूसरा ईमेल उपयोग करें", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.onboarding.signup.still_setting_up", "message": "सेटअप अभी जारी है", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.onboarding.signup.still_setting_up_detail", "message": "इसमें सामान्य से थोड़ा अधिक समय लग रहा है। हम अपने आप पुनः प्रयास कर रहे हैं, और यह पेज अपने आप आगे बढ़ जाएगा।", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.onboarding.signup.still_setting_up_stalled", "message": "इसमें अपेक्षा से अधिक समय लग रहा है। आप अभी पुनः प्रयास कर सकते हैं।", "module": "configurator-ui", "locale": "hi_IN"}
 ]

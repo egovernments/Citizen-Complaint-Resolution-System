@@ -1077,5 +1077,10 @@
 {"code": "app.onboarding.steps.departments", "message": "Services", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.steps.employees", "message": "Employés", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.steps.geography", "message": "Géographie", "module": "configurator-ui", "locale": "fr_FR"},
-{"code": "app.onboarding.bulk_employees.csr_role_note", "message": "Chaque employé reçoit également le rôle d’enregistreur de réclamations (CSR), afin de pouvoir déposer des réclamations au nom des citoyens.", "module": "configurator-ui", "locale": "fr_FR"}
+{"code": "app.onboarding.bulk_employees.csr_role_note", "message": "Chaque employé reçoit également le rôle d’enregistreur de réclamations (CSR), afin de pouvoir déposer des réclamations au nom des citoyens.", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.signup.signed_in_as", "message": "Connecté en tant que %{email}.", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.signup.sign_out_other_email", "message": "Se déconnecter et utiliser une autre adresse e-mail", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.signup.still_setting_up", "message": "Configuration en cours", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.signup.still_setting_up_detail", "message": "Cela prend un peu plus de temps que d’habitude. Nous réessayons automatiquement et cette page continuera d’elle-même.", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.signup.still_setting_up_stalled", "message": "Cela prend plus de temps que prévu. Vous pouvez réessayer maintenant.", "module": "configurator-ui", "locale": "fr_FR"}
 ]

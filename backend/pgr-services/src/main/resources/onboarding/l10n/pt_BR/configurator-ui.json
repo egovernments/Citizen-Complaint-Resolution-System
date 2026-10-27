@@ -1077,5 +1077,10 @@
 {"code": "app.onboarding.steps.departments", "message": "Departamentos", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.steps.employees", "message": "Funcionários", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.steps.geography", "message": "Geografia", "module": "configurator-ui", "locale": "pt_BR"},
-{"code": "app.onboarding.bulk_employees.csr_role_note", "message": "Todo funcionário também recebe a função de Registrador de Reclamações (CSR), para poder registrar reclamações em nome dos cidadãos.", "module": "configurator-ui", "locale": "pt_BR"}
+{"code": "app.onboarding.bulk_employees.csr_role_note", "message": "Todo funcionário também recebe a função de Registrador de Reclamações (CSR), para poder registrar reclamações em nome dos cidadãos.", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.onboarding.signup.signed_in_as", "message": "Conectado como %{email}.", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.onboarding.signup.sign_out_other_email", "message": "Sair e usar outro e-mail", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.onboarding.signup.still_setting_up", "message": "Ainda configurando", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.onboarding.signup.still_setting_up_detail", "message": "Isso está demorando um pouco mais do que o normal. Estamos tentando novamente automaticamente, e esta página continuará sozinha.", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.onboarding.signup.still_setting_up_stalled", "message": "Isso está demorando mais do que deveria. Você pode tentar novamente agora.", "module": "configurator-ui", "locale": "pt_BR"}
 ]
