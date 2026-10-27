@@ -1,0 +1,96 @@
+{{- /*
+  A post-install/post-upgrade hook, unlike core-services/user-bootstrap: Keycloak
+  cannot start without its database and identity-secrets, so the identity
+  helmfile installs this release first and keycloak `needs` it. Helm waits for
+  the hook, which is the point here. Steps run as init containers, in order.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: identity-bootstrap
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  secrets.sh: |
+{{ .Files.Get "files/secrets.sh" | indent 4 }}
+  keycloak-db.sh: |
+{{ .Files.Get "files/keycloak-db.sh" | indent 4 }}
+  keycloak-db.sql: |
+{{ .Files.Get "files/keycloak-db.sql" | indent 4 }}
+  accounts.sh: |
+{{ .Files.Get "files/accounts.sh" | indent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: identity-bootstrap
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: identity-bootstrap
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+      volumes:
+        - name: scripts
+          configMap:
+            name: identity-bootstrap
+      initContainers:
+        - name: secrets
+          image: {{ .Values.images.curl | quote }}
+          command: ["sh", "/scripts/secrets.sh"]
+          env:
+            - {name: IDENTITY_SECRET, value: {{ .Values.identitySecret | quote }}}
+            - {name: ONBOARDING_SECRET, value: {{ .Values.onboardingSecret | quote }}}
+            - {name: SMTP_AUTH, value: {{ .Values.smtpAuth | toString | quote }}}
+            - {name: GOOGLE_SIGNIN, value: {{ .Values.googleSignin | toString | quote }}}
+          volumeMounts:
+            - {name: scripts, mountPath: /scripts}
+        - name: keycloak-db
+          image: {{ .Values.images.psql | quote }}
+          command: ["sh", "/scripts/keycloak-db.sh"]
+          env:
+            {{- if .Values.keycloakDb.host }}
+            - {name: PGHOST, value: {{ .Values.keycloakDb.host | quote }}}
+            - {name: PGDATABASE, value: postgres}
+            {{- else }}
+            - {name: PGHOST, valueFrom: {configMapKeyRef: {name: egov-config, key: db-host}}}
+            - {name: PGDATABASE, valueFrom: {configMapKeyRef: {name: egov-config, key: db-name}}}
+            {{- end }}
+            - {name: PGPORT, value: {{ .Values.keycloakDb.port | quote }}}
+            - {name: PGUSER, valueFrom: {secretKeyRef: {name: {{ .Values.platformDbSecret }}, key: {{ .Values.platformDbUserKey }}}}}
+            - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: {{ .Values.platformDbSecret }}, key: {{ .Values.platformDbPasswordKey }}}}}
+            - {name: PGSSLMODE, value: {{ .Values.dbSslMode | quote }}}
+            - {name: KC_USER, value: {{ .Values.keycloakDb.username | quote }}}
+            - {name: KC_DB, value: {{ .Values.keycloakDb.database | quote }}}
+            - {name: KC_PASSWORD, valueFrom: {secretKeyRef: {name: {{ .Values.identitySecret }}, key: keycloak-db-password}}}
+          volumeMounts:
+            - {name: scripts, mountPath: /scripts}
+      containers:
+        - name: accounts
+          image: {{ .Values.images.curl | quote }}
+          command: ["sh", "/scripts/accounts.sh"]
+          env:
+            - {name: EGOV_USER_HOST, value: {{ .Values.egovUserHost | quote }}}
+            - {name: STATE_TENANT, valueFrom: {configMapKeyRef: {name: egov-config, key: state-level-tenant-id}}}
+            - {name: ADMIN_TENANT, value: {{ .Values.adminTenant | quote }}}
+            - {name: PROVISIONER_TENANT, value: {{ .Values.provisionerTenant | quote }}}
+            - {name: ADMIN_USERNAME, value: {{ .Values.adminUsername | quote }}}
+            - {name: ADMIN_MOBILE, value: {{ .Values.adminMobile | quote }}}
+            - {name: ADMIN_PASSWORD, valueFrom: {secretKeyRef: {name: {{ .Values.identitySecret }}, key: digit-admin-password}}}
+            - {name: PROVISIONER_USERNAME, value: {{ .Values.provisionerUsername | quote }}}
+            - {name: PROVISIONER_MOBILE, value: {{ .Values.provisionerMobile | quote }}}
+            - {name: PROVISIONER_PASSWORD, valueFrom: {secretKeyRef: {name: {{ .Values.identitySecret }}, key: digit-provisioner-password}}}
+          volumeMounts:
+            - {name: scripts, mountPath: /scripts}

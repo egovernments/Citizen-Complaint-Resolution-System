@@ -44,10 +44,14 @@ in_keycloak() {
   if [ -z "${KEYCLOAK_KCADM_SERVER:-}" ]; then
     docker exec ${opts[@]+"${opts[@]}"} "$KEYCLOAK_CONTAINER" "$@"
   else
-    (
-      for assignment in ${assignments[@]+"${assignments[@]}"}; do export "${assignment?}"; done
-      exec "$@"
-    )
+    # The -e names include readonly script variables (KCADM_SERVER), which a
+    # subshell inherits and cannot assign, so `export` there aborts. `env
+    # NAME=VALUE cmd` would put the values (KCADM_PASSWORD) on env's argv, i.e.
+    # /proc/<pid>/cmdline. Instead a fresh bash, which inherits no readonly
+    # declarations, reads them as `export` lines from a pipe on fd 3: printf is
+    # a builtin, so no value reaches any argv, and stdin stays free for -i.
+    bash -c 'set -a; . /dev/fd/3; set +a; exec 3<&-; exec "$@"' in_keycloak "$@" \
+      3< <(for assignment in ${assignments[@]+"${assignments[@]}"}; do printf 'export %q\n' "$assignment"; done)
   fi
 }
 readonly KC_CONFIG=/tmp/identity-bff-kcadm.config

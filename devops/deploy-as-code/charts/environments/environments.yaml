@@ -1,0 +1,22 @@
+# The helmfile environments of every charts/<tier>/ helmfile that needs nothing
+# before env.yaml, as a shared `bases:` entry. Paths resolve from the including
+# helmfile (charts/<tier>/), hence ../environments.
+#
+# Not used by digit-helmfile.yaml (one level up, so its paths differ) or by the
+# identity and monitoring helmfiles: they list default values before env.yaml,
+# and a helmfile's own `environments:` replaces a base's rather than merging
+# with it. Keep those three in step with this file;
+# local-setup/tests/static/helm-environments.test.ts checks they are.
+environments:
+  env:
+    values:
+      - ../environments/env-secrets.yaml
+      - ../environments/env.yaml
+  # cms-saas.digit.org: env.yaml + environments/cms-saas.yaml, and the real
+  # secrets from the git-ignored cms-saas-secrets.yaml (scripts/cms-saas-secrets-from-cluster.sh).
+  cms-saas:
+    values:
+      - ../environments/env-secrets.yaml
+      - ../environments/cms-saas-secrets.yaml
+      - ../environments/env.yaml
+      - ../environments/cms-saas.yaml

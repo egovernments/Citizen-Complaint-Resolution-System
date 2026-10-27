@@ -20,8 +20,10 @@ The import also deleted the original README, which is why this file exists.
 digit-helmfile.yaml          # entrypoint — lists the tiers to install
 charts/
   environments/
-    env.yaml                 # per-deployment values (non-secret)
-    env-secrets.yaml         # per-deployment secrets (SOPS-encrypted)
+    env.yaml                 # template values (non-secret), the `env` environment
+    env-secrets.yaml         # template secrets (SOPS-encrypted when real)
+    cms-saas.yaml            # cms-saas.digit.org, layered over env.yaml (`-e cms-saas`)
+    cms-saas-secrets.yaml    # its real secrets: git-ignored, from scripts/cms-saas-secrets-from-cluster.sh
   common/                    # library chart every DIGIT service builds on
   backbone-services/         # kafka, redis, elasticsearch, ingress-nginx, ...
   core-services/             # user, workflow, mdms, idgen, ...
@@ -36,6 +38,23 @@ helmfile -f digit-helmfile.yaml -e env apply
 ```
 
 That is what `.github/workflows/digit_install.yml` runs (manually triggered).
+
+### cms-saas.digit.org
+
+cms-saas (EKS `ccrs-prod`) is its own environment: `charts/environments/cms-saas.yaml`
+holds what is specific to it and every helmfile layers it over `env.yaml`.
+
+```bash
+scripts/cms-saas-secrets-from-cluster.sh        # before EVERY apply: refreshes it, or stops on a stale copy
+helmfile -f digit-helmfile.yaml -e cms-saas diff
+helmfile -f digit-helmfile.yaml -e cms-saas apply
+```
+
+The environment lists `cms-saas-secrets.yaml` explicitly, so without it helmfile
+stops instead of deploying `env-secrets.yaml`'s placeholders over production.
+The identity stack's own Secrets (`identity-secrets`, `pgr-onboarding`) are not
+in that file: `identity-bootstrap` creates them in the cluster
+([helm-identity.md](../../docs/setup/deployment/helm-identity.md)).
 
 ## Monitoring is not installed by default
 

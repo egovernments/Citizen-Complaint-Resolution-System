@@ -19,6 +19,12 @@
          except the root. %BASE_URL% is substituted at build time and always
          resolves to /configurator/telemetry-config.js. -->
     <script src="%BASE_URL%telemetry-config.js"></script>
+    <!-- Runtime deployment config (src/api/runtimeConfig.ts): window.__CONFIGURATOR_CONFIG__,
+         rendered per deployment (Ansible's configurator-config.js.j2, the Helm
+         chart's runtimeConfig). Classic and before the module, like the line above,
+         and %BASE_URL% for the same deep-link reason. Without it every TURBOPASS_URL,
+         OVERPASS_URL or STATE_TENANT_ID a deployment sets is silently ignored. -->
+    <script src="%BASE_URL%config.js"></script>
   </head>
   <body>
     <div id="root"></div>

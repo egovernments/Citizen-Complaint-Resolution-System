@@ -57,6 +57,27 @@
 {{ indent }}if ($request_uri ~ "{{ html_route }}") { return 404; }
 {% endif %}
 {%- endmacro %}
+{#
+   ==================== The bare domain ====================
+   `location = /` for every digit_ui_mode: each mode's own `location /` is a
+   catch-all to Kong, which answers / with a 404. root_to_digit_ui (explicit)
+   wins; otherwise root_to_configurator (default on) sends / to the
+   Configurator, where people sign in or sign up a workspace, when this box
+   serves it. Exact match, so no other path is redirected.
+#}
+{% macro root_location() %}
+{% if nginx_features.root_to_digit_ui | default(false) %}
+  # Bare domain enters the canonical tenant route. Without a configured
+  # default, fail closed instead of resurrecting tenantless legacy login.
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+  location = / { return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/citizen/login; }
+{% else %}
+  location = / { return 404; }
+{% endif %}
+{% elif (nginx_features.root_to_configurator | default(true)) and nginx_features.configurator %}
+  location = / { return 302 /configurator/; }
+{% endif %}
+{%- endmacro %}
 server {
   server_name {{ domain }};
 
@@ -775,16 +796,7 @@ server {
     proxy_buffering off;
   }
 
-{% if nginx_features.root_to_digit_ui | default(false) %}
-  # Bare domain enters the canonical tenant route. Without a configured
-  # default, fail closed instead of resurrecting tenantless legacy login.
-{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
-  location = / { return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/citizen/login; }
-{% else %}
-  location = / { return 404; }
-{% endif %}
-{% endif %}
-
+{{ root_location() }}
   # API calls go to Kong directly.
   location / {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_kong_port }};
@@ -851,6 +863,7 @@ server {
     proxy_buffering off;
   }
 
+{{ root_location() }}
   # Everything else (ALL API) → Kong. THE fix for the login 504.
   location / {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_kong_port }};
@@ -882,6 +895,7 @@ server {
     proxy_read_timeout 120s;
     proxy_buffering off;
   }
+{{ root_location() }}
   location / {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
     proxy_set_header Host $host;

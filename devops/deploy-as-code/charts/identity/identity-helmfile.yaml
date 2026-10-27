@@ -20,6 +20,19 @@ environments:
           enabled: false
       - ../environments/env-secrets.yaml
       - ../environments/env.yaml
+  # cms-saas.digit.org: env.yaml + environments/cms-saas.yaml, and the real
+  # secrets from the git-ignored cms-saas-secrets.yaml (scripts/cms-saas-secrets-from-cluster.sh).
+  cms-saas:
+    values:
+      # Defaults for the keys read below, listed BEFORE env.yaml so it
+      # overrides them and so they always exist (same reason as
+      # charts/monitoring/monitoring-helmfile.yaml).
+      - identity:
+          enabled: false
+      - ../environments/env-secrets.yaml
+      - ../environments/cms-saas-secrets.yaml
+      - ../environments/env.yaml
+      - ../environments/cms-saas.yaml
 ---
 {{- /* Read defensively, as monitoring-helmfile.yaml does: helmfile renders
        with missingkey=error and CI pins helmfile v0.140.0 (no sprig `dig`). An
@@ -59,8 +72,58 @@ environments:
 {{-   $sec = index .Values.secrets "identity" }}
 {{- end }}
 {{- $secret := dict "existingSecret" (index $sec "existingSecret" | default "") "values" (index $sec "values" | default dict) }}
+{{- /* identity-bootstrap (identity.bootstrap.enabled, off by default): creates
+       identity-secrets, pgr-onboarding, Keycloak's database and the two DIGIT
+       employees instead of the manual "Before enabling" steps. It needs the
+       existingSecret path: it writes the Secret the charts then read. The
+       employees are the BFF's DIGIT_ADMIN_USERNAME and pgr-services'
+       onboarding provisioner, read from where those are configured. */ -}}
+{{- $boot := index $id "bootstrap" | default dict }}
+{{- $bootstrap := and $enabled (index $boot "enabled" | default false) }}
+{{- if and $bootstrap (eq $secret.existingSecret "") }}
+{{-   fail "identity.bootstrap.enabled needs secrets.identity.existingSecret: the bootstrap writes that Secret" }}
+{{- end }}
+{{- $bffConfig := index (index $id "identity-bff" | default dict) "config" | default dict }}
+{{- $pgr := index .Values "pgr-services" | default dict }}
+{{- $pgrOnboarding := index $pgr "onboarding" | default dict }}
+{{- $kcConfigure := index $kcOverrides "configure" | default dict }}
+{{- $kcSmtp := index $kcConfigure "smtp" | default dict }}
+{{- $kcDb := index $kcOverrides "db" | default dict }}
+{{- $bootstrapAdmin := index $bffConfig "DIGIT_ADMIN_USERNAME" | default "" }}
+{{- if and $bootstrap (or (eq $bootstrapAdmin "") (eq $bootstrapAdmin "ADMIN")) }}
+{{-   fail "identity.bootstrap.enabled needs identity.identity-bff.config.DIGIT_ADMIN_USERNAME set to a dedicated ACCOUNT_ADMIN employee (e.g. IDENTITY_ADMIN): ADMIN is the platform admin core-services/user-bootstrap already creates, with another password" }}
+{{- end }}
 
 releases:
+  # Keycloak's database and identity-secrets must exist before Keycloak starts.
+  - name: identity-bootstrap
+    chart: ./identity-bootstrap
+    namespace: {{ $namespace }}
+    installed: {{ $bootstrap }}
+    missingFileHandler: Warn
+    wait: true
+    # Above the Job's activeDeadlineSeconds (900 s, egov-user's start included).
+    timeout: 1200
+    values:
+      - identitySecret: {{ $secret.existingSecret | quote }}
+        onboardingSecret: {{ index $pgrOnboarding "secretName" | default "pgr-onboarding" | quote }}
+        smtpAuth: {{ index $kcSmtp "auth" | default false }}
+        googleSignin: {{ ne (index $kcConfigure "googleClientId" | default "") "" }}
+        # Where Keycloak's own chart connects: identity.keycloak.db (empty host =
+        # egov-config's db-host).
+        keycloakDb:
+          host: {{ index $kcDb "host" | default "" | quote }}
+          port: {{ index $kcDb "port" | default "5432" | quote }}
+          database: {{ index $kcDb "database" | default "keycloak" | quote }}
+          username: {{ index $kcDb "username" | default "keycloak" | quote }}
+        # Each employee on the tenant its service signs in on (empty = egov-config's
+        # state-level-tenant-id, the services' own default).
+        adminUsername: {{ $bootstrapAdmin | quote }}
+        adminTenant: {{ index $bffConfig "DIGIT_ADMIN_TENANT_ID" | default "" | quote }}
+        provisionerUsername: {{ index $pgrOnboarding "provisionerUsername" | default "PGR_PROVISIONER" | quote }}
+        provisionerTenant: {{ index $pgrOnboarding "provisionerTenantId" | default "" | quote }}
+      - {{ omit $boot "enabled" | toYaml | nindent 8 }}
+
   # Ready before the BFF starts: the BFF's readiness needs the realm the
   # keycloak release's post-install Job creates.
   - name: keycloak
@@ -68,6 +131,10 @@ releases:
     namespace: {{ $namespace }}
     installed: {{ $enabled }}
     missingFileHandler: Warn
+    {{- if $bootstrap }}
+    needs:
+      - identity-bootstrap
+    {{- end }}
     wait: true
     # Helm applies this to each wait in turn: the Deployment's readiness (a
     # first start runs Keycloak's database migrations), then the realm-configure
