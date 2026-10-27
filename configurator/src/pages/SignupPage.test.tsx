@@ -1302,6 +1302,37 @@ describe('polling while the worker runs', () => {
     expect(findOperation).toHaveBeenCalledTimes(2);
   });
 
+  it('offers Try again next to "Still setting up" once the retrying run stops changing, and keeps polling', async () => {
+    // Nobody works the run (a stopped runner): every poll brings back the same run.
+    vi.mocked(api.submitSignup).mockResolvedValue(failedOnce as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...failedOnce }) as never);
+    vi.mocked(api.retryOperation).mockResolvedValue({ ...failedOnce, status: 'PENDING', attempt: 2, errorCode: null } as never);
+    await start();
+
+    expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
+    await tick(170_000);
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    await tick(10_000);
+    expect(screen.getByText(/longer than it should/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    await waitFor(() => expect(api.retryOperation).toHaveBeenCalledWith('op1'));
+
+    const calls = vi.mocked(findOperation).mock.calls.length;
+    await tick(3000);
+    expect(vi.mocked(findOperation).mock.calls.length).toBeGreaterThan(calls);
+  });
+
+  it('does not offer Try again while the retrying run keeps changing', async () => {
+    let updatedAt = 0;
+    vi.mocked(api.submitSignup).mockResolvedValue(failedOnce as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...failedOnce, updatedAt: ++updatedAt }) as never);
+    await start();
+
+    await tick(240_000);
+    expect(screen.getByText(/still setting up/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+  });
+
   it('continues to the workspace when Try again finds the run already succeeded (#2709)', async () => {
     vi.mocked(api.submitSignup).mockResolvedValue({ ...failedOnce, attempt: 12 } as never);
     vi.mocked(api.retryOperation).mockRejectedValue(

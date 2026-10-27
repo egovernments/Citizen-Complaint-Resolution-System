@@ -302,6 +302,23 @@ public class OnboardingStepsTest {
         when(client.write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap())).thenThrow(new OnboardingFailure("HIERARCHY_ERROR",false,400,List.of("HIERARCHY_ERROR")));
         assertFalse(assertThrows(OnboardingFailure.class,this::prerequisites).isRetryable());
     }
+    /** A root boundary boundary-service accepted (202) but its persister lost is made again by the relationship's next attempt, not skipped as DONE. */
+    @Test public void aRetriedRelationshipStepRecreatesARootBoundaryThePersisterLost() throws Exception {
+        noBoundariesYet();
+        doThrow(new OnboardingFailure("BOUNDARY_ENTITY_DOES_NOT_EXIST",false,400,List.of("BOUNDARY_ENTITY_DOES_NOT_EXIST"))).doReturn(mapper.createObjectNode())
+                .when(client).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap());
+        assertTrue(assertThrows(OnboardingFailure.class,this::prerequisites).isRetryable());
+        // A first attempt creates each once: nothing is re-ensured before the relationship has failed.
+        for(String create:BOUNDARY_CREATES) verify(client,times(1)).write(any(),eq("boundary"),eq(create),anyMap());
+        // The hierarchy got saved; the root boundary never did.
+        when(client.read(eq("boundary"),eq("/boundary-service/boundary-hierarchy-definition/_search"),anyMap()))
+                .thenReturn(mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"WORKSPACE\"}]}"));
+        prerequisites();
+        verify(client,times(1)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(0)),anyMap());
+        verify(client,times(2)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(1)),anyMap());
+        verify(client,times(2)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap());
+        assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
+    }
     @Test public void duplicateSchemaFromUncertainPriorWriteRetriesInsteadOfAbandoningSignup(){
         when(client.write(any(),eq("mdms"),eq("/egov-mdms-service/schema/v1/_create"),anyMap())).thenThrow(new OnboardingFailure("SCHEMA_ALREADY_EXISTS",false));
         OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress));

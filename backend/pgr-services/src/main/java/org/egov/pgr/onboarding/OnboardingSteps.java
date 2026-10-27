@@ -259,22 +259,32 @@ public class OnboardingSteps {
 
     private void rootBoundary(OnboardingProgress.WriteScope scope, String tenant, OnboardingProgress progress) {
         Map<String,Object> root = new LinkedHashMap<>(); root.put("boundaryType", "ROOT"); root.put("parentBoundaryType", null); root.put("active", true);
-        progress.record("boundary-hierarchy", () -> ensureBoundary(scope, "/boundary-service/boundary-hierarchy-definition/_search",
+        Runnable hierarchy = () -> ensureBoundary(scope, "/boundary-service/boundary-hierarchy-definition/_search",
                 Map.of("BoundaryTypeHierarchySearchCriteria",Map.of("tenantId",tenant,"hierarchyType",WORKSPACE_HIERARCHY)), "BoundaryHierarchy", tenant,
                 "/boundary-service/boundary-hierarchy-definition/_create", Map.of("BoundaryHierarchy",
-                        Map.of("tenantId", tenant, "hierarchyType", WORKSPACE_HIERARCHY, "boundaryHierarchy", List.of(root)))));
+                        Map.of("tenantId", tenant, "hierarchyType", WORKSPACE_HIERARCHY, "boundaryHierarchy", List.of(root))));
         // Technical root placeholder only; operational geography is workspace-owned (Geography step).
         var geometry = Map.of("type", "Point", "coordinates", List.of(0,0));
-        progress.record("boundary-root", () -> ensureBoundary(scope, "/boundary-service/boundary/_search?tenantId=" + tenant + "&codes=" + tenant,
+        Runnable rootEntity = () -> ensureBoundary(scope, "/boundary-service/boundary/_search?tenantId=" + tenant + "&codes=" + tenant,
                 Map.of(), "Boundary", tenant, "/boundary-service/boundary/_create",
-                Map.of("Boundary", List.of(Map.of("tenantId", tenant, "code", tenant, "geometry", geometry)))));
+                Map.of("Boundary", List.of(Map.of("tenantId", tenant, "code", tenant, "geometry", geometry))));
+        // Those two are DONE on boundary-service's 202, before its persister saves them. A relationship step that an
+        // earlier attempt left STARTED re-ensures both first (each is a search, then a create only if missing), so a
+        // write the persister lost is made again, by the automatic retries and a manual one alike. The checkpoints
+        // stay DONE, so this does not count as progress and the run's retry budget still bounds it.
+        boolean relationshipRetried = progress.started("boundary-relationship");
+        progress.record("boundary-hierarchy", hierarchy);
+        progress.record("boundary-root", rootEntity);
         // Stock boundary-service reads relationship search criteria from the query
         // string only; criteria in the body were ignored (8c gate 2).
-        progress.record("boundary-relationship", () -> ensureBoundary(scope,
+        progress.record("boundary-relationship", () -> {
+            if (relationshipRetried) { hierarchy.run(); rootEntity.run(); }
+            ensureBoundary(scope,
                 "/boundary-service/boundary-relationships/_search?tenantId=" + tenant + "&hierarchyType=" + WORKSPACE_HIERARCHY,
                 Map.of(), "TenantBoundary", tenant,
                 "/boundary-service/boundary-relationships/_create", Map.of("BoundaryRelationship",
-                        Map.of("tenantId", tenant, "code", tenant, "hierarchyType", WORKSPACE_HIERARCHY, "boundaryType", "ROOT"))));
+                        Map.of("tenantId", tenant, "code", tenant, "hierarchyType", WORKSPACE_HIERARCHY, "boundaryType", "ROOT")));
+        });
     }
 
     private void validateMobileRule(JsonNode rule) {

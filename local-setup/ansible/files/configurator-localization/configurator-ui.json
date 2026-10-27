@@ -10632,6 +10632,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.signup.still_setting_up_stalled",
+    "message": "This is taking longer than it should. You can try again now.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.signup.takes_a_minute",
     "message": "This usually takes a minute or two.",
     "module": "configurator-ui",

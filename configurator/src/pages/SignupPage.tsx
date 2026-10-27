@@ -142,6 +142,13 @@ const POLL_FAILURES_BEFORE_ERROR = 3;
 const PUBLISH_WAIT_MS = 120_000;
 const SLOW_POLL_MS = 15_000;
 
+/**
+ * A run PGR retries by itself changes (updatedAt, at least) every minute or so: its longest backoff is
+ * 60 s and the worker polls every 5 s. Unchanged for three times that, nobody is working it (the
+ * runner is stopped, say), so Try again is offered next to "Still setting up" (#2710 review).
+ */
+const STALLED_RETRY_MS = 180_000;
+
 function SignupMethodIcon({ method }: { method: AuthMethod }) {
   if (method.id.toLowerCase() !== 'github') return null;
   return (
@@ -276,6 +283,8 @@ function SignupFlow() {
   const [signup, setSignup] = useState<Signup | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
   const [publishSlow, setPublishSlow] = useState(false);
+  /** The automatically retrying run as it was when it stopped changing (STALLED_RETRY_MS). */
+  const [stalledRun, setStalledRun] = useState<string | null>(null);
   const [step, setStep] = useState<string>('account');
   const [saving, setSaving] = useState(false);
 
@@ -669,6 +678,18 @@ function SignupFlow() {
     const timer = setTimeout(() => setPublishSlow(true), PUBLISH_WAIT_MS);
     return () => clearTimeout(timer);
   }, [awaitingPublication]);
+
+  // While PGR retries the run by itself, any change to it restarts the stall timer; a poll that
+  // brings back the same run does not.
+  const retryingRun = phase === 'provisioning' && !!operation && isRetryingAutomatically(operation)
+    ? `${operation.id}|${operation.status}|${operation.attempt}|${operation.currentStep}|${operation.updatedAt}`
+    : null;
+  useEffect(() => {
+    if (!retryingRun) return;
+    const timer = setTimeout(() => setStalledRun(retryingRun), STALLED_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [retryingRun]);
+  const retryStalled = !!retryingRun && stalledRun === retryingRun;
 
   // Poll while the worker runs, on a fixed cadence keyed to the operation, not
   // its contents: an answer that changes nothing, an empty answer or a check
@@ -1157,11 +1178,13 @@ function SignupFlow() {
             <Loader2 className="h-4 w-4 animate-spin" />
             <AlertTitle>{t('signup.still_setting_up', 'Still setting up')}</AlertTitle>
             <AlertDescription>
-              {t('signup.still_setting_up_detail', 'This is taking a little longer than usual. We\'re retrying automatically, and this page will continue by itself.')}
+              {retryStalled
+                ? t('signup.still_setting_up_stalled', 'This is taking longer than it should. You can try again now.')
+                : t('signup.still_setting_up_detail', 'This is taking a little longer than usual. We\'re retrying automatically, and this page will continue by itself.')}
             </AlertDescription>
           </Alert>
         )}
-        {operation.status === 'RETRYABLE_FAILED' && !retrying && (
+        {operation.status === 'RETRYABLE_FAILED' && (!retrying || retryStalled) && (
           <Button
             className="mt-4"
             disabled={saving}
