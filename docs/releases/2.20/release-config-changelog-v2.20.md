@@ -42,9 +42,9 @@ The deploy stops only if `enable_keycloak` is `false`, or if `auth_provider`, `c
 | --- | --- | --- |
 | `identity_digit_admin_password` | Yes | DIGIT admin the BFF uses |
 | `keycloak_admin_password` | Yes | If Keycloak 24 already runs, it must match its current admin password, or realm setup fails after the one-way migration |
-| `keycloak_db_password` | Only if Keycloak never ran on this box | |
+| `keycloak_db_password` | Yes (not enforced yet, #2618) | If it is unset, Keycloak's database keeps the compose default password `keycloak`. If it is set, the deploy changes the Keycloak database user's password to match, so it is safe to add on a box where Keycloak already ran |
 | `identity_smtp_password` | Yes, unless `identity_smtp_auth: false` | |
-| `keycloak_google_client_secret` | Only with Google sign-in | A `keycloak_google_client_id` without this secret fails the deploy |
+| `keycloak_google_client_secret`, `keycloak_github_client_secret` | Only with Google or GitHub sign-in | A `keycloak_google_client_id` or `keycloak_github_client_id` without its secret fails the deploy |
 
 **Add** (needed for sign-in to work)
 
@@ -66,7 +66,7 @@ The deploy stops only if `enable_keycloak` is `false`, or if `auth_provider`, `c
 
 | Setting | When |
 | --- | --- |
-| `keycloak_google_client_id` (+ secret above), `google` in `identity_signin_methods` / `identity_signup_methods` | Google sign-in or sign-up. Set the Google OAuth redirect URI to `https://<domain>/auth/realms/digit/broker/google/endpoint` (the realm is now `digit`) |
+| `keycloak_google_client_id` or `keycloak_github_client_id` (+ secret above), and `google` / `github` in `identity_signin_methods` / `identity_signup_methods` | Google or GitHub sign-in or sign-up. Register the redirect URI `https://<domain>/auth/realms/digit/broker/google/endpoint` (or `.../broker/github/endpoint`) with the provider (the realm is now `digit`) |
 | `configurator_posthog_key`, `configurator_posthog_host`, `configurator_sentry_dsn` | You track Configurator usage or errors |
 | `identity_configurator_roles` | Roles other than the admin defaults need the Configurator |
 | `kong_cors_origins` | Browsers call the APIs from a domain other than your own. The list replaces the default, so include `https://<domain>` too |
@@ -95,7 +95,7 @@ The deploy stops only if `enable_keycloak` is `false`, or if `auth_provider`, `c
 
 | Change | Service | What you need to do |
 | --- | --- | --- |
-| Added, always on | Keycloak 26.7.3 + Identity BFF (sign-in) | Plan resources for Keycloak, its database, the BFF and Redis; set the secrets and SMTP settings |
+| Upgraded or added, always on | Keycloak (24 → 26.7.3) + Identity BFF (new, sign-in) | Plan resources for Keycloak, its database, the BFF and Redis; set the secrets and SMTP settings |
 | Added, always on | Host firewall, status board, container metrics | Nothing, unless you manage your own firewall |
 | Removed, **not** cleaned up | token-exchange-svc | Keeps running as an orphan. Remove it by hand after the cut-over (guide §3, §6) |
 | Removed, cleaned up only sometimes | otp-publisher, novu-bridge-endpoint, egov-notification-sms | The deploy removes them only when `enable_novu` is on and novu-bridge has taken over the OTP topic, and never on macOS. Remove them by hand only after the deploy reports that novu-bridge has taken over. With `enable_novu` off nothing is sent twice; removing them during a deferred handoff loses OTPs |
@@ -122,7 +122,7 @@ pgr-services, novu-bridge, user-preferences and chatbot migrations run automatic
 2. If the server is on v2.12, upgrade to v2.12.1 first (including the escalation migration).
 3. Update host_vars and OpenBao secrets as in section 1.
 4. Move any hand-edited `.env` values into host_vars; the notification services read host_vars only.
-5. Run a **full** deploy with one tag: `./deploy.sh <tenant> --image-tag=<tag>`. Never use `--tags` for this upgrade: `configure-identity-keycloak.sh` runs only in a full deploy and sets the clients, redirect URIs, social-provider visibility and SMTP. Use `identity-keycloak` and `identity-bff` images that include the latest fixes.
+5. Run a **full** deploy with one tag: `./deploy.sh <tenant> --image-tag=<tag>`. Never use `--tags` for this upgrade: `configure-identity-keycloak.sh` runs only in a full deploy and sets the clients, redirect URIs, social-provider visibility and SMTP. Use `identity-keycloak` and `identity-bff` images built from master `f106328719` or later (`master-f106328`): the `master-b4adf0d` defaults predate the sign-in fixes in the release notes (#2700, #2704, #2714, #2724).
 6. Rebuild and run db-migrations (section 4).
 7. Link the first admin, then the other staff (section 4).
 8. Run the notification migration for each tenant.

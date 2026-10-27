@@ -46,7 +46,7 @@ CMS (Complaint Management System) v2.20 adds self-serve workspace onboarding, a 
 
 ### 1. Self-serve workspace onboarding
 
-A city or organisation can sign up on its own and get a working complaint system. A founder creates an account, then goes through five guided steps: Branding, Geography, Departments, Employees and Complaint types (with a resolution time per category). When setup is done, the console opens the complaint desk. Employees get invitations, and admins can see whether each invite was accepted. Self-serve workspaces created earlier pick up new defaults in the background without losing their own changes; workspaces set up by the deployment itself are not upgraded this way. Sign-up is offered in English, French, Hindi and Portuguese, and admins can sign up with their Google account. This cuts the engineering work needed to launch a new city.
+A city or organisation can sign up on its own and get a working complaint system. A founder creates an account, then goes through five guided steps: Branding, Geography, Departments, Employees and Complaint types (with a resolution time per category). When setup is done, the console opens the complaint desk. Employees get invitations, and admins can see whether each invite was accepted. Self-serve workspaces created earlier pick up new defaults in the background without losing their own changes; workspaces set up by the deployment itself are not upgraded this way. Sign-up is offered in English, French, Hindi and Portuguese, and, where the deployment has set up Google, admins can sign up with their Google account. This cuts the engineering work needed to launch a new city.
 
 ### 2. One secure sign-in
 
@@ -102,7 +102,7 @@ These improve existing screens. The benefits are what each change is designed to
 - Inbox search and filters line up, scroll correctly and work on tablets and phones.
 - A tenant switcher for staff who work across tenants.
 - The product is named "Complaint Management System" throughout.
-- Account and security settings read as one tidy page, and changing your email returns you to your workspace.
+- Account and security settings read as one tidy page, and changing your email returns you to your workspace when the emailed link is opened in the same browser.
 - Password-reset pages keep the workspace's colours.
 
 **Citizen app**
@@ -217,6 +217,7 @@ Escalation issues are tracked in detail in [Known issues](known_issues_2.20.md).
 | Sign-in | Workspace branding can disappear when a timed-out sign-in restarts. The new email sign-in wording is English only. | Open |
 | Sign-in | The setup email for non-admin staff opens the Configurator instead of the employee app. | Open |
 | Sign-in | Signing in as staff right after a Configurator session can fail with "already authenticated as a different user". | Open |
+| Sign-in | An emailed email-change link opened in another browser, a private window or another device returns to the default workspace instead of the person's own. | Fix in review (#2731) |
 | Sign-in | Staff who also use the citizen app with the same phone number count as two people; joining them is optional and off by default. | Open |
 | Onboarding | Setup can show a "usually temporary" boundary error and then fail on Try again, although the setup succeeded. | Open |
 | Notifications | One provider per channel per workspace, with no automatic failover. | By design in this release |
