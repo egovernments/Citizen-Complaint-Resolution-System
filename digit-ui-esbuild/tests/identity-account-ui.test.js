@@ -407,7 +407,18 @@ test("employee profile shows the live record's email and saves the one egov-user
   await click(button(view, "Save"));
   assert.equal(writes[0].emailId, "newer@example.test");
   assert.equal(state.getUser().info.emailId, "newer@example.test");
+  assert.equal(email().props.value, "newer@example.test");
   view.unmount();
+
+  // The re-read at save fails: the page's email is sent, never the field cleared.
+  view = await render(ui.Profile, { userType: "employee", stateCode: "ke", cityDetails: { name: "Bomet" } });
+  assert.equal(email().props.value, "newer@example.test");
+  Digit.UserService.userSearch = async () => { throw new Error("egov-user unavailable"); };
+  await click(button(view, "Save"));
+  assert.equal(writes[1].emailId, "newer@example.test");
+  assert.equal(email().props.value, "newer@example.test");
+  view.unmount();
+  Digit.UserService.userSearch = async () => ({ user: [{ uuid: "same-uuid", emailId: live }] });
 
   // A masked value is never shown or written back.
   state.replaceUser({ ...state.getUser(), info: { ...state.getUser().info, emailId: "old@example.test" } });
@@ -415,7 +426,7 @@ test("employee profile shows the live record's email and saves the one egov-user
   view = await render(ui.Profile, { userType: "employee", stateCode: "ke", cityDetails: { name: "Bomet" } });
   assert.equal(email().props.value, "old@example.test");
   await click(button(view, "Save"));
-  assert.equal(writes[1].emailId, "old@example.test");
+  assert.equal(writes[2].emailId, "old@example.test");
   view.unmount();
 });
 

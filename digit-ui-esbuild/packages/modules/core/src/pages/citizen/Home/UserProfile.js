@@ -676,6 +676,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
 
 
       if (responseInfo && responseInfo.status === "200") {
+        setEmail(savedEmail);
         const user = Digit.UserService.getUser();
 
         if (user) {
