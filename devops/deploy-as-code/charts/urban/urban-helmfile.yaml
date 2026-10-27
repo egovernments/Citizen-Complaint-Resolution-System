@@ -1,20 +1,10 @@
-environments:
-  env:
-    values:
-      - ../environments/env-secrets.yaml
-      - ../environments/env.yaml
-  # cms-saas.digit.org: env.yaml + environments/cms-saas.yaml, and the real
-  # secrets from the git-ignored cms-saas-secrets.yaml (scripts/cms-saas-secrets-from-cluster.sh).
-  cms-saas:
-    values:
-      - ../environments/env-secrets.yaml
-      - ../environments/cms-saas-secrets.yaml
-      - ../environments/env.yaml
-      - ../environments/cms-saas.yaml
+bases:
+  - ../environments/helmfile-environments.yaml
 ---
 {{- /* Releases this environment turns off by name (env values `disabledReleases`,
        empty by default): every release that is otherwise always installed reads it. */ -}}
 {{- $disabled := index .Values "disabledReleases" | default list }}
+{{- $turbopassUpstream := index (index .Values "turbopass-proxy" | default dict) "upstream" | default dict }}
 templates:
   default: &default
     chart: ./{{`{{ .Release.Name }}`}}
@@ -44,6 +34,12 @@ releases:
   # monitoring/gatus/values.yaml.
   - name: egov-bndry-mgmnt # Replace with your desired namespace
     installed: false
+    <<: *default
+
+  # Same-origin /turbopass forwarded to a shared Turbopass, cookies stripped
+  # (the chart's values.yaml). Only where the environment names the upstream.
+  - name: turbopass-proxy
+    installed: {{ ne (index $turbopassUpstream "host" | default "") "" }}
     <<: *default
 
   - name: configurator # DIGIT Studio tenant onboarding/management SPA

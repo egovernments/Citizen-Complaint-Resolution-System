@@ -63,12 +63,12 @@ digit-ui:
     stateTenantId: "pg"
     mapTenant: "pg"
 
-configurator:
-  # Same-origin /turbopass, proxied to the shared Turbopass on naipepea.digit.org
-  # (official boundary sets for 12 countries): the SPA's default TURBOPASS_URL,
-  # so the Geography step's Fetch and Preconfigured options work without running
-  # Turbopass on this cluster.
-  turbopassProxy:
+# Same-origin /turbopass, proxied to the shared Turbopass on naipepea.digit.org
+# (official boundary sets for 12 countries) with this site's cookies stripped:
+# the SPA's default TURBOPASS_URL, so the Geography step's Fetch and
+# Preconfigured options work without running Turbopass on this cluster.
+turbopass-proxy:
+  upstream:
     host: naipepea.digit.org
 
 # Not run here (2026-10-27). Before switching off, each was checked on the
@@ -146,11 +146,6 @@ identity:
       IDENTITY_OTP_SENDER: ""
       # ACCOUNT_ADMIN employee on pg, created by identity-bootstrap.
       DIGIT_ADMIN_USERNAME: "IDENTITY_ADMIN"
-      # egov-user directly, as Ansible's Kong routes /user (no RBAC). Through the
-      # gateway, access control refuses the pg ACCOUNT_ADMIN on every new
-      # workspace's own root tenant, and onboarding stops at BINDING with
-      # DIGIT_UNAVAILABLE.
-      DIGIT_USER_SERVICE_URL: "http://egov-user.egov:8080/user"
   # Creates identity-secrets, pgr-onboarding, Keycloak's database and the two
   # DIGIT employees (DIGIT_ADMIN_USERNAME above, pgr-services' provisioner below).
   bootstrap:

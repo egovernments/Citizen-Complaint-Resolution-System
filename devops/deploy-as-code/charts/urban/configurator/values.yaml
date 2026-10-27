@@ -54,12 +54,6 @@ runtimeConfig:
   POSTHOG_KEY: ""
   POSTHOG_HOST: ""
 
-# Same-origin /turbopass proxied to a shared Turbopass (https://<host><path>/*),
-# the address the SPA uses by default. Blank host = no proxy.
-turbopassProxy:
-  host: ""
-  path: "/turbopass"
-
 # Rolls the pods when config.js changes (common sets no deployment timestamp).
 additionalAnnotations: |
   checksum/config: {{ include "configurator.runtimeConfigJs" . | sha256sum | quote }}
