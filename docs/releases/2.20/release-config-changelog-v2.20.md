@@ -60,7 +60,7 @@ The deploy stops only if `enable_keycloak` is `false`, or if `auth_provider`, `c
 | --- | --- | --- |
 | `identity_signup_methods` | `[magic_link, google, github]` | Who can create a new workspace. An empty list falls back to the default. See section 2 |
 | `digit_ui_default_tenant_slug` | empty | Tenant that old `/digit-ui/` links redirect to; empty means they return 404 |
-| `notification_stack_tag` (or `image_tag`) | unset: falls back to the compose default `nightly-develop`, with a warning | One release tag for pgr-services, novu-bridge and user-preferences |
+| `notification_stack_tag` (or `image_tag`) | unset: the compose default, `master-b4adf0d` on master (`nightly-develop` on develop). The deploy's rolling-tag warning names `nightly-develop` either way | One release tag for pgr-services, novu-bridge and user-preferences |
 
 **Add** (only if you use them)
 
@@ -71,7 +71,7 @@ The deploy stops only if `enable_keycloak` is `false`, or if `auth_provider`, `c
 | `identity_configurator_roles` | Roles other than the admin defaults need the Configurator |
 | `kong_cors_origins` | Browsers call the APIs from a domain other than your own. The list replaces the default, so include `https://<domain>` too |
 
-**develop only (#2725):** the HRMS env var `EGOV_HRMS_DEFAULT_PASSWORD` is renamed `EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD` in the Ansible `.env` and compose files (Helm already used the new name). On `hrms_dev_mode: true` boxes the OpenBao value `egov_hrms_default_password` now reaches HRMS; replace the `CHANGE_ME` placeholder, or employee creates without a password fail.
+**HRMS default password (#2725):** the HRMS env var `EGOV_HRMS_DEFAULT_PASSWORD` is renamed `EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD` in the Ansible `.env` and compose files (Helm already used the new name). On `hrms_dev_mode: true` boxes the OpenBao value `egov_hrms_default_password` now reaches HRMS; replace the `CHANGE_ME` placeholder, or employee creates without a password fail.
 
 ## 2. Defaults that now behave differently
 
@@ -89,7 +89,7 @@ The deploy stops only if `enable_keycloak` is `false`, or if `auth_provider`, `c
 | `/status/` board | On (in `_example.yml`), no password | On, always behind HTTP basic auth; the password is generated into OpenBao (`bao kv get -field=status_basic_auth_password <secrets_path>`, for example `kv/digit/<tenant>`) | None; `nginx_features.status: false` turns the board off |
 | Fast-path database seed | Refused without `db_fast_path_ack_data_wipe: true`, and `_example.yml` shipped the ack as `true` | `_example.yml` ships the ack as `false`, and a Postgres storage guard checks the box first (#2101) | A host_vars copied from 2.12 still has `true` and gets no new protection: set it to `false` on any box with data |
 | Employee password reset | SMS | Email only | None; add staff email addresses |
-| HRMS dev-mode password (develop only, #2725) | `eGov@123` | OpenBao `egov_hrms_default_password` | Set that secret |
+| HRMS dev-mode password (#2725) | `eGov@123` | OpenBao `egov_hrms_default_password` | Set that secret |
 
 ## 3. Services added and removed
 
@@ -164,13 +164,13 @@ All off by default. Turn on only what you need.
 | Choose several boundaries at once in Geography | `configurator_geography_multiple_selections: true` |
 | Home-page banners | `citizen_banner_enabled`, `configurator_banner_enabled` |
 
-Self-serve workspaces are upgraded to the latest platform seed in the background (`pgr_onboarding_baseline_upgrade_enabled: true`, the default): v12 at the beta, v14 on master, v16 on develop. Deploy-seeded roots such as `ke` are not upgraded this way.
+Self-serve workspaces are upgraded to the latest platform seed in the background (`pgr_onboarding_baseline_upgrade_enabled: true`, the default): v12 at the beta, v16 on master and develop. Deploy-seeded roots such as `ke` are not upgraded this way.
 
 ## 7. Known deployment issues
 
 | Issue | Impact | Status |
 | --- | --- | --- |
-| master pins images to `master-b4adf0d`; develop still uses `nightly-develop` | Neither is a release tag | Pin a 2.20 tag before release |
+| master pins images to `master-b4adf0d`; develop still uses `nightly-develop` | Neither is a release tag | The release tag is `master-<promotion sha7>`, set when the final promotion merges |
 | On master before the pin PR, Keycloak metrics aren't scraped unless `enable_keycloak: true` is still set | No sign-in metrics in monitoring | Fix in the master image-pin PR (the scrape target becomes unconditional) |
 | The migration guide (§2.1, §2.2) still says to keep `enable_keycloak: true`; this changelog and the deploy's own message say to delete it | Conflicting advice | Guide to be updated |
 | The identity SMTP check runs only after Keycloak has migrated | A bad SMTP setting is found late | Open (#2618) |
