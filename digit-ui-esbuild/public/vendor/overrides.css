@@ -221,6 +221,15 @@
   color: var(--color-sidebar-text-default, #D1D5DB);
 }
 
+/* The resting primary label, captured at the root so the hover/pressed
+ * rules below can fall back to it (#2645). Writing
+ * `--color-button-primary-text: var(--...-hover, var(--color-button-primary-text))`
+ * would be a self-reference, i.e. a custom-property cycle, which makes the
+ * variable invalid even when the -hover colour is set. */
+:root {
+  --color-button-primary-text-resting: var(--color-button-primary-text, #FFFFFF);
+}
+
 /* Primary button hover — designer's "Primary Button / Background Hover"
  * (Nairobi: #E6B800). Upstream often uses theme(colors.primary.dark)
  * which compiles to a literal; this lets a tenant set a distinct hover
@@ -233,7 +242,7 @@ button[class*="submit-bar"]:hover {
   background-color: var(--color-button-primary-bg-hover, #B8420C) !important;
   /* The hover label, judged on the hover fill (#2645); the label rules
    * inside the button (h2, svg) read this variable too. */
-  --color-button-primary-text: var(--color-button-primary-text-hover, #FFFFFF);
+  --color-button-primary-text: var(--color-button-primary-text-hover, var(--color-button-primary-text-resting, #FFFFFF));
   color: var(--color-button-primary-text, #FFFFFF) !important;
 }
 
@@ -245,7 +254,7 @@ button[class*="submit-bar"]:hover {
 button.digit-submit-bar:active,
 button[class*="submit-bar"]:active {
   background-color: var(--color-button-primary-bg-pressed, #A03A0A) !important;
-  --color-button-primary-text: var(--color-button-primary-text-pressed, #FFFFFF);
+  --color-button-primary-text: var(--color-button-primary-text-pressed, var(--color-button-primary-text-resting, #FFFFFF));
 }
 
 /* Foreground (text + svg) on primary-2 surfaces. Vendor hardcodes
@@ -2996,6 +3005,23 @@ button[class*="toast-close"] svg,
   border: 0 !important;
   box-shadow: none !important;
 }
+/* Hover and pressed keep fill and label as a pair (#2645): the resting
+ * fill above outranks the global hover/pressed fills, while the label
+ * variable is swapped for the hover fill. */
+.v2-pgr-details button.actionButton:hover,
+.v2-pgr-details button.submit-bar:hover,
+.v2-pgr-details button[class*="submit-bar"]:hover,
+.v2-pgr-details .digit-button-primary:hover {
+  background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
+  --color-button-primary-text: var(--color-button-primary-text-hover, var(--color-button-primary-text-resting, #FFFFFF));
+}
+.v2-pgr-details button.actionButton:active,
+.v2-pgr-details button.submit-bar:active,
+.v2-pgr-details button[class*="submit-bar"]:active,
+.v2-pgr-details .digit-button-primary:active {
+  background-color: var(--color-button-primary-bg-pressed, var(--color-button-primary-bg-hover, var(--color-primary-2, #CC9F00))) !important;
+  --color-button-primary-text: var(--color-button-primary-text-pressed, var(--color-button-primary-text-resting, #FFFFFF));
+}
 
 @media (max-width: 47.99rem) {
   .v2-pgr-details {
@@ -3557,7 +3583,7 @@ button[class*="toast-close"] svg,
 .v2-pgr-inbox button.digit-button-primary:hover,
 .v2-pgr-inbox .digit-button-primary:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
-  --color-button-primary-text: var(--color-button-primary-text-hover, #FFFFFF);
+  --color-button-primary-text: var(--color-button-primary-text-hover, var(--color-button-primary-text-resting, #FFFFFF));
 }
 /* Scoped to filled buttons: `.v2-pgr-inbox .digit-button-label` alone also
  * caught the tertiary/link labels on this page, which must not take the
@@ -3778,7 +3804,7 @@ button[class*="toast-close"] svg,
 .v2-workbench-view button[class*="submit-bar"]:hover,
 .v2-workbench-view .digit-button-primary:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
-  --color-button-primary-text: var(--color-button-primary-text-hover, #FFFFFF);
+  --color-button-primary-text: var(--color-button-primary-text-hover, var(--color-button-primary-text-resting, #FFFFFF));
 }
 
 /* MDMS view "Actions" CTA + dropdown menu — vendor renders the button
