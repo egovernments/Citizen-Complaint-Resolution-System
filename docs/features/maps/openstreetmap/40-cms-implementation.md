@@ -76,8 +76,7 @@ tenant), and `MapConfigEditor.tsx` (live preview; framing it writes the position
 ## Citizen side
 
 The live tree is **`digit-ui-esbuild/products/pgr/`**. `frontend/micro-ui/…/modules/pgr/`
-and `digit-ui-v2/` also contain map code; check which tree a deployment serves before
-debugging.
+also contains map code; check which tree a deployment serves before debugging.
 
 `components/GeoLocations.js` calls Nominatim `reverse`, `search`, and a postcode lookup, and
 is the best-hardened caller. Three fixes in it are the accumulated scar tissue:
