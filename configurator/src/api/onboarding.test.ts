@@ -225,4 +225,11 @@ describe('operation readiness (CCRS#2303)', () => {
     expect(isRetryingAutomatically({ status: 'RETRYABLE_FAILED', attempt: 12 })).toBe(false);
     expect(isRetryingAutomatically({ status: 'TERMINAL_FAILED', attempt: 1 })).toBe(false);
   });
+
+  it('follows nextRetryAt past attempt 12, since PGR restarts its budget on progress', () => {
+    expect(isRetryingAutomatically({ status: 'RETRYABLE_FAILED', attempt: 13, nextRetryAt: 1 })).toBe(true);
+    expect(isOperationSettled({ status: 'RETRYABLE_FAILED', attempt: 13, nextRetryAt: 1 })).toBe(false);
+    expect(isRetryingAutomatically({ status: 'RETRYABLE_FAILED', attempt: 13, nextRetryAt: null })).toBe(false);
+    expect(isOperationSettled({ status: 'RETRYABLE_FAILED', attempt: 13, nextRetryAt: null })).toBe(true);
+  });
 });

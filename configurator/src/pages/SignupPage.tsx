@@ -1193,13 +1193,13 @@ function SignupFlow() {
               try {
                 setOperation(await retryOperation(operation.id));
               } catch (caught) {
-                // The run moved on since this page last looked, e.g. PGR's own retry succeeded (#2709):
-                // carry on from where it is now, as a reload would.
+                // The run moved on since this page last looked, e.g. PGR's own retry succeeded or is
+                // under way again (#2709): carry on from where it is now, as a reload would.
                 let latest: Operation | null = null;
                 if (caught instanceof OnboardingError && caught.code === 'ONBOARDING_OPERATION_NOT_RETRYABLE') {
                   latest = await searchOperation({ id: operation.id }).catch(() => null);
                 }
-                if (latest && latest.status !== 'RETRYABLE_FAILED') setOperation(latest);
+                if (latest) setOperation(latest);
                 else setError(describe(caught).message);
               } finally {
                 setSaving(false);

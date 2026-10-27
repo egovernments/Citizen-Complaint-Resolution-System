@@ -319,6 +319,20 @@ public class OnboardingStepsTest {
         verify(client,times(2)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap());
         assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
     }
+    /** The same for a lost hierarchy: the retried relationship step re-creates it too. */
+    @Test public void aRetriedRelationshipStepRecreatesAHierarchyThePersisterLost() throws Exception {
+        noBoundariesYet();
+        doThrow(new OnboardingFailure("HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR",false,400,List.of("HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR"))).doReturn(mapper.createObjectNode())
+                .when(client).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap());
+        assertTrue(assertThrows(OnboardingFailure.class,this::prerequisites).isRetryable());
+        // The root boundary got saved; the hierarchy never did.
+        when(client.read(eq("boundary"),eq("/boundary-service/boundary/_search?tenantId=newtown&codes=newtown"),anyMap()))
+                .thenReturn(mapper.readTree("{\"Boundary\":[{\"code\":\"newtown\"}]}"));
+        prerequisites();
+        verify(client,times(2)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(0)),anyMap());
+        verify(client,times(1)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(1)),anyMap());
+        assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
+    }
     @Test public void duplicateSchemaFromUncertainPriorWriteRetriesInsteadOfAbandoningSignup(){
         when(client.write(any(),eq("mdms"),eq("/egov-mdms-service/schema/v1/_create"),anyMap())).thenThrow(new OnboardingFailure("SCHEMA_ALREADY_EXISTS",false));
         OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress));

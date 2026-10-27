@@ -36,6 +36,9 @@ vi.mock('@/api/onboarding', async () => {
 
 import * as api from '@/api/onboarding';
 
+const track = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/analytics', async () => ({ ...(await vi.importActual<typeof import('@/lib/analytics')>('@/lib/analytics')), track }));
+
 const signedIn = { authenticated: true, user: { id: 'u', email: 'f@x.test', name: 'F', preferredUsername: 'f' } };
 
 /** `searchOperation`, by what it is asked for: the run's own id (the poll) or its signup's id (after a reload). */
@@ -436,6 +439,7 @@ describe('provisioning', () => {
     expect(screen.getByText('Reference: ONBOARDING_VALIDATION_ERROR')).toBeInTheDocument();
     expect(screen.queryByText(/could not create the organization/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+    expect(track).toHaveBeenCalledWith('signup:provision_fail', { error_code: 'ONBOARDING_VALIDATION_ERROR', retryable: true });
   });
 
   it('hands a rejected founder number back to be corrected, rather than closing the signup (#2353)', async () => {
@@ -1293,6 +1297,9 @@ describe('polling while the worker runs', () => {
     expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
     expect(screen.queryByText(/usually temporary/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    // The step being retried keeps spinning, and a run that has not ended reports no failure.
+    expect(screen.getByText(/setting up the basics/i).closest('li')?.querySelector('.animate-spin')).not.toBeNull();
+    expect(track).not.toHaveBeenCalledWith('signup:provision_fail', expect.anything());
     await tick(3000);
     expect(screen.getByText(/still setting up/i)).toBeInTheDocument();
 
@@ -1300,6 +1307,33 @@ describe('polling while the worker runs', () => {
     await tick(3000);
     await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
     expect(findOperation).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps polling a run past attempt 12 that PGR will still retry (nextRetryAt)', async () => {
+    // PGR restarts its budget on progress, so attempt alone can pass 12 while a retry is still due.
+    const pastTwelve = { ...failedOnce, attempt: 13, nextRetryAt: 5000 };
+    vi.mocked(api.submitSignup).mockResolvedValue(pastTwelve as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...pastTwelve }) as never);
+    await start();
+
+    expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
+    expect(screen.queryByText(/usually temporary/i)).not.toBeInTheDocument();
+    await tick(3000);
+    await tick(3000);
+    expect(findOperation).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows "Still setting up" when Try again finds PGR already retrying the run again', async () => {
+    vi.mocked(api.submitSignup).mockResolvedValue({ ...failedOnce, attempt: 12 } as never);
+    vi.mocked(api.retryOperation).mockRejectedValue(
+      new api.OnboardingError(400, 'ONBOARDING_OPERATION_NOT_RETRYABLE', 'The operation is not retryable'));
+    // Claimed and failed again between this page's last look and the click.
+    vi.mocked(findOperation).mockResolvedValue({ ...failedOnce, attempt: 13, nextRetryAt: 5000 } as never);
+    await start();
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }));
+    expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
+    expect(screen.queryByText(/can’t be retried from here/i)).not.toBeInTheDocument();
   });
 
   it('offers Try again next to "Still setting up" once the retrying run stops changing, and keeps polling', async () => {

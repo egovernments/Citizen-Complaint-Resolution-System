@@ -201,14 +201,19 @@ public class OnboardingPostgresTest {
             assertEquals(failure,lease.getOperation().getAttempt());failRetry(lease,now);assertEquals(failure,retryCount(original.getId()));
             if(failure<12) {
                 long due=now+Math.min(60000,1000L << Math.min(failure-1,6));assertEquals(Long.valueOf(due),retryAt(original.getId()));
+                // The status response carries it, so the configurator knows PGR will retry (#2709).
+                assertEquals(Long.valueOf(due),repository.findOperation(original.getId()).orElseThrow().getNextRetryAt());
                 assertTrue(repository.claimOperation("early",UUID.randomUUID(),due+120000,due-1).isEmpty());now=due;
             }
         }
         assertNull(retryAt(original.getId()));assertTrue(repository.claimOperation("late",UUID.randomUUID(),now+1000000,now+900000).isEmpty());
-        var exhausted=repository.findOperation(original.getId()).orElseThrow();assertEquals("RETRYABLE_FAILED",exhausted.getStatus());
+        var exhausted=repository.findOperation(original.getId()).orElseThrow();assertEquals("RETRYABLE_FAILED",exhausted.getStatus());assertNull(exhausted.getNextRetryAt());
         assertNull(exhausted.getLifecycleDecision());assertEquals("PROVISIONING",repository.findSignup(signup.getId()).orElseThrow().getStatus());
         repository.retry(exhausted,now);assertEquals(0,retryCount(original.getId()));
         var manual=repository.claimOperation("manual",UUID.randomUUID(),now+120000,now).orElseThrow();assertEquals(13,manual.getOperation().getAttempt());assertEquals(0,manual.getOperation().getRestartNo());
+        // Past attempt 12 a failure is still retried by PGR: the manual retry restarted its budget.
+        failRetry(manual,now);var again=repository.findOperation(original.getId()).orElseThrow();
+        assertEquals(13,again.getAttempt());assertEquals(Long.valueOf(now+1000),again.getNextRetryAt());
     }
     @Test public void onlyNewDurableRecordOrStepCompletionResetsRetryBudget() {
         var original=submit();long now=System.currentTimeMillis();var first=repository.claimOperation("first",UUID.randomUUID(),now+120000,now).orElseThrow();failRetry(first,now);

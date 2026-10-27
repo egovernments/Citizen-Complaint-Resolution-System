@@ -241,6 +241,11 @@ export interface Operation {
    * the identity side does not list the new tenant.
    */
   lifecyclePublishedAt?: number | null;
+  /**
+   * When PGR retries a RETRYABLE_FAILED run by itself; null once its automatic retries are used up.
+   * Absent from a pgr-services older than this field.
+   */
+  nextRetryAt?: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -600,18 +605,22 @@ export function isOperationReady(operation: Pick<Operation, 'status' | 'lifecycl
  */
 export const AUTOMATIC_ATTEMPTS = 12;
 
+type RetryState = Pick<Operation, 'status'> & Partial<Pick<Operation, 'attempt' | 'nextRetryAt'>>;
+
 /**
  * A retryable failure that PGR will retry by itself, so the founder waits rather than
- * acts (#2709). `attempt` counts runs from 1. A manual retry also counts but restarts
- * PGR's own budget, so after one this reads "no more retries" early, which only means
- * Try again is offered sooner.
+ * acts (#2709). `nextRetryAt` says so. `attempt` (counted from 1) is not enough alone:
+ * PGR restarts its budget on progress and on a manual retry, so a run can be past
+ * attempt 12 and still retried. Below attempt 12 a retry is always still due, which is
+ * all a pgr-services without `nextRetryAt` can tell.
  */
-export function isRetryingAutomatically(operation: Pick<Operation, 'status'> & { attempt?: number }): boolean {
-  return operation.status === 'RETRYABLE_FAILED' && (operation.attempt ?? AUTOMATIC_ATTEMPTS) < AUTOMATIC_ATTEMPTS;
+export function isRetryingAutomatically(operation: RetryState): boolean {
+  return operation.status === 'RETRYABLE_FAILED' &&
+    (operation.nextRetryAt != null || (operation.attempt ?? AUTOMATIC_ATTEMPTS) < AUTOMATIC_ATTEMPTS);
 }
 
 /** Settled means nothing more will change, so a success still being published, or a failure PGR still retries, is not. */
-export function isOperationSettled(operation: Pick<Operation, 'status' | 'lifecyclePublishedAt'> & { attempt?: number }): boolean {
+export function isOperationSettled(operation: Pick<Operation, 'status' | 'lifecyclePublishedAt'> & RetryState): boolean {
   return isOperationReady(operation) || operation.status === 'TERMINAL_FAILED' ||
     (operation.status === 'RETRYABLE_FAILED' && !isRetryingAutomatically(operation));
 }
