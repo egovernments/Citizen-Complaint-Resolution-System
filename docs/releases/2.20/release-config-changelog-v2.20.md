@@ -122,7 +122,7 @@ pgr-services, novu-bridge, user-preferences and chatbot migrations run automatic
 2. If the server is on v2.12, upgrade to v2.12.1 first (including the escalation migration).
 3. Update host_vars and OpenBao secrets as in section 1.
 4. Move any hand-edited `.env` values into host_vars; the notification services read host_vars only.
-5. Run a **full** deploy with one tag: `./deploy.sh <tenant> --image-tag=<tag>`. Never use `--tags` for this upgrade: `configure-identity-keycloak.sh` runs only in a full deploy and sets the clients, redirect URIs, social-provider visibility and SMTP. Use `identity-keycloak` and `identity-bff` images built from master `f106328719` or later (`master-f106328`): the `master-b4adf0d` defaults predate the sign-in fixes in the release notes (#2700, #2704, #2714, #2724).
+5. Run a **full** deploy with one tag: `./deploy.sh <tenant> --image-tag=<tag>`. Never use `--tags` for this upgrade: `configure-identity-keycloak.sh` runs only in a full deploy and sets the clients, redirect URIs, social-provider visibility and SMTP. Use the release tag `master-<promotion sha7>` (set when the final promotion merges) for every image, `identity-keycloak` and `identity-bff` included: the `master-b4adf0d` defaults predate the sign-in fixes in the release notes (#2700, #2704, #2714, #2724).
 6. Rebuild and run db-migrations (section 4).
 7. Link the first admin, then the other staff (section 4).
 8. Run the notification migration for each tenant.
@@ -171,7 +171,7 @@ Self-serve workspaces are upgraded to the latest platform seed in the background
 | Issue | Impact | Status |
 | --- | --- | --- |
 | master pins images to `master-b4adf0d`; develop still uses `nightly-develop` | Neither is a release tag | Pin a 2.20 tag before release |
-| Prometheus does not scrape Keycloak on develop, or on master when `enable_keycloak` is removed | No sign-in metrics in monitoring | Open |
+| On master before the pin PR, Keycloak metrics aren't scraped unless `enable_keycloak: true` is still set | No sign-in metrics in monitoring | Fix in the master image-pin PR (the scrape target becomes unconditional) |
 | The migration guide (§2.1, §2.2) still says to keep `enable_keycloak: true`; this changelog and the deploy's own message say to delete it | Conflicting advice | Guide to be updated |
 | The identity SMTP check runs only after Keycloak has migrated | A bad SMTP setting is found late | Open (#2618) |
 | Setup can show a boundary "usually temporary" error, then fail on Try again, although setup succeeded | Confusing onboarding | Open (#2709) |
