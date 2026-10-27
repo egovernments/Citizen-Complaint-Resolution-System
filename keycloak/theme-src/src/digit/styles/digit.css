@@ -326,6 +326,9 @@ body.dg-body {
 
 .dg-button--secondary:hover:not(:disabled) {
     background-color: var(--color-primary-1-bg, rgba(37, 99, 235, 0.08));
+    /* Keep the outline label: the base .dg-button:hover colour is the
+       primary-fill hover label and must not leak onto secondary. */
+    color: var(--color-button-secondary-text, var(--color-primary-2, #2563eb));
 }
 
 .dg-spinner {

@@ -650,6 +650,20 @@ test("button states: hover and pressed labels are judged on their own fill", () 
     // A label that already reads on the hover fill is kept.
     applyTheme({ version: "3", colors: { "primary-1": "#204F37", "button-primary-bg-default": "#FEC931" } });
     assert.equal(props["--color-button-primary-text-hover"], "#0B0C0C");
+    // The bar is AA 4.5: a stated #E0E0E0 label on #2563EB (3.92:1) is
+    // swapped, on #1D4FD8 (5.03:1) it is kept. A bar of 3 or 7 fails one.
+    applyTheme({
+      version: "3",
+      colors: {
+        "primary-1": "#0B1F3A",
+        "button-primary-bg-default": "#1D4FD8",
+        "button-primary-bg-hover": "#2563EB",
+        "button-primary-bg-pressed": "#1D4FD8",
+        "button-primary-text": "#E0E0E0",
+      },
+    });
+    assert.equal(props["--color-button-primary-text-hover"], "#FFFFFF");
+    assert.equal(props["--color-button-primary-text-pressed"], "#E0E0E0");
   } finally { restore(); }
 });
 

@@ -3809,8 +3809,15 @@ button[class*="toast-close"] svg,
 .action-bar-wrap > button.submit-bar:hover,
 .action-bar-wrap > button[class*="submit-bar"]:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
+  /* Hover label judged on the hover fill (#2645). */
+  color: var(--color-button-primary-text-hover, var(--color-text-primary, #0B0C0C)) !important;
   box-shadow: none !important;
   transform: none !important;
+}
+.action-bar-wrap > button.submit-bar:hover h2,
+.action-bar-wrap > button[class*="submit-bar"]:hover h2,
+.action-bar-wrap > button.submit-bar:hover .digit-button-label {
+  color: var(--color-button-primary-text-hover, var(--color-text-primary, #0B0C0C)) !important;
 }
 .action-bar-wrap > button.submit-bar h2,
 .action-bar-wrap > button[class*="submit-bar"] h2,
@@ -3920,8 +3927,18 @@ button[class*="toast-close"] svg,
 .v2-workbench-search button.submit-bar:hover,
 .v2-workbench-search button[class*="submit-bar"]:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
+  /* Hover label judged on the hover fill (#2645). */
+  color: var(--color-button-primary-text-hover, var(--color-text-primary, #0B0C0C)) !important;
   box-shadow: none !important;
   transform: none !important;
+}
+.v2-workbench-search .mdms-add-btn:hover .digit-button-label,
+.v2-workbench-search button.digit-submit-bar:hover .digit-button-label,
+.v2-workbench-search button.submit-bar:hover h2,
+.v2-workbench-search button.submit-bar:hover .digit-button-label,
+.v2-workbench-search button[class*="submit-bar"]:hover h2,
+.v2-workbench-search button[class*="submit-bar"]:hover .digit-button-label {
+  color: var(--color-button-primary-text-hover, var(--color-text-primary, #0B0C0C)) !important;
 }
 .v2-workbench-search button.submit-bar h2,
 .v2-workbench-search button[class*="submit-bar"] h2,
@@ -4464,6 +4481,8 @@ button:not([class]):not(:has(> svg)):not(:has(> img)) {
 }
 button:not([class]):not(:has(> svg)):not(:has(> img)):hover {
   background-color: var(--color-button-primary-bg-hover, #E6B800) !important;
+  /* Hover label judged on the hover fill (#2645). */
+  color: var(--color-button-primary-text-hover, var(--color-text-primary, #0B0C0C)) !important;
   box-shadow: 0 1px 3px 0 rgba(16, 24, 40, 0.10);
 }
 
@@ -9499,6 +9518,8 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
 }
 .cms-mic-button:hover {
   background: var(--color-button-primary-bg-hover, var(--cms-fill));
+  /* Hover icon colour judged on the hover fill (#2645). */
+  color: var(--color-button-primary-text-hover, var(--cms-on-fill));
 }
 .cms-counter {
   margin-top: 10px;
