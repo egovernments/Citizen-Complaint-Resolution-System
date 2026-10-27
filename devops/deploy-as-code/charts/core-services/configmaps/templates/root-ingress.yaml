@@ -30,13 +30,15 @@ spec:
     - {{ $.Values.global.domain }}
     secretName: {{ $.Values.global.domain }}-tls-certs    
 {{- end }}         
-{{- else if ne (toString (index . "configuratorRedirect")) "false" }}
+{{- else if and (ne (toString (index . "configuratorRedirect")) "false") (not (has "configurator" ($.Values.disabledReleases | default list))) }}
 {{- /* No default tenant slug: the bare domain lands on the Configurator (sign in,
        or sign up a new workspace), as the Ansible tier's root_to_configurator.
        `/$` as a regex is an exact match: ingress-nginx runs a host in regex mode
        once any of its Ingresses uses regex (digit-ui's tenant routes do), and a
        plain `/` would then catch every unmatched path. The redirect target is
-       absolute: ingress-nginx refuses a relative one. */}}
+       absolute: ingress-nginx refuses a relative one. Not where the environment
+       leaves configurator out (disabledReleases), as Ansible renders its redirect
+       only with nginx_features.configurator. */}}
 {{- $scheme := ternary "http" "https" (eq $.Values.global.setup "quickstart") }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress

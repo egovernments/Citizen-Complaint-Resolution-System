@@ -34,7 +34,11 @@ settings below exist.
 ## Before enabling
 
 **Or let `identity-bootstrap` do steps 1-3.** With `identity.bootstrap.enabled:
-true` (and `secrets.identity.existingSecret` set), the identity helmfile installs
+true`, `secrets.identity.existingSecret` set, and
+`identity.identity-bff.config.DIGIT_ADMIN_USERNAME` set in the environment to a
+dedicated employee (not `ADMIN`, which core-services/user-bootstrap creates with
+another password; the chart default does not count, and the identity helmfile
+refuses to render without it), the identity helmfile installs
 `charts/identity/identity-bootstrap` before Keycloak: an idempotent hook Job that
 creates `identity-secrets` (every missing key generated, none rewritten) and
 pgr-services' `pgr-onboarding`, Keycloak's role and database, and the BFF's
