@@ -28,8 +28,12 @@ require.cache[require.resolve("node-fetch")] = {
     }
 
     const body = JSON.parse(options.body);
+    // Accept either casing here so a wrong one fails on the assertion below rather
+    // than throwing inside the mock, but record which key was actually sent — the
+    // gateway only ever reads "RequestInfo".
+    const requestInfoKey = body.RequestInfo ? "RequestInfo" : "requestInfo";
     const token = (body.RequestInfo || body.requestInfo).authToken;
-    calls.push({ url: String(url), token });
+    calls.push({ url: String(url), token, requestInfoKey });
 
     // "boom-token" always 500s; "stale-token" is always refused (so the retry
     // path can be observed end to end); anything else succeeds.
@@ -120,4 +124,25 @@ test("a persistent 401 surfaces as an error after the single retry", async () =>
     mintRefusedToken = false;
   }
   assert.equal(loginCount, 1, "exactly one re-authentication was attempted");
+});
+
+test("the create request names RequestInfo with a capital R", async () => {
+  // Regression (#1992, live on bometfeedbackhub 2026-10-27): createUser sent a lowercase
+  // `requestInfo`. egov-user binds either casing, so this looked harmless and every unit
+  // test passed, but DIGIT's gateway reads body["RequestInfo"] only. /user/users/_createnovalidate
+  // is deliberately NOT auth-optional there, so the gateway saw a protected path with no
+  // token and returned 401 InvalidAccessTokenException before egov-user was ever reached.
+  // Existing citizens resolve through findCitizen and were unaffected — only brand-new
+  // numbers hit this branch, so the bot answered everyone except first-time users.
+  calls.length = 0;
+  loginCount = 0;
+  userService._serviceAccount = { authToken: "good-token", userInfo: { uuid: "svc" } };
+  userService._serviceAccountExpiry = Date.now() + 60_000;
+
+  await userService.createUser("840000000", "mz");
+
+  const create = calls.find((call) => call.url.includes("_createnovalidate"));
+  assert.ok(create, "the create endpoint was called");
+  assert.equal(create.requestInfoKey, "RequestInfo", "a lowercase key is invisible to the gateway");
+  assert.equal(create.token, "good-token", "the service-account token travels in that envelope");
 });
