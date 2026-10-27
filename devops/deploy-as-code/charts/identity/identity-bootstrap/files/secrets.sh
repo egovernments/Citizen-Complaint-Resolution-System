@@ -19,7 +19,9 @@ b64() { printf '%s' "$1" | base64 | tr -d '\n'; }
 get() {
   code=$(curl -s -o /tmp/secret.json -w '%{http_code}' --cacert "$sa/ca.crt" -H "$auth" "$api/api/v1/namespaces/$ns/secrets/$1")
   case $code in
-    200) tr -d '\n' < /tmp/secret.json | sed -n 's/.*"data": *\({[^}]*}\).*/\1/p' ;;
+    # Present without data (e.g. an external-secrets placeholder not synced
+    # yet) is "{}", not absent: ensure() then patches instead of creating.
+    200) d=$(tr -d '\n' < /tmp/secret.json | sed -n 's/.*"data": *\({[^}]*}\).*/\1/p'); if [ -n "$d" ]; then printf '%s' "$d"; else printf '{}'; fi ;;
     404) ;;
     *) echo "reading secret $1: HTTP $code" >&2; exit 1 ;;
   esac
