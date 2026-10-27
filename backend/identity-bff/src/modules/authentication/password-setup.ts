@@ -57,7 +57,7 @@ export async function sendPasswordSetup(input: {
   emailVerified: boolean;
   returnTo: string;
   clientId: string;
-  /** The tenant the emailed pages are branded for; undefined only when there is none. */
+  /** Ends the redirect; only the digit-employee theme brands the emailed pages from it. */
   tenantSlug: string | undefined;
 }): Promise<void> {
   const state = await createPasswordSetupAttempt({

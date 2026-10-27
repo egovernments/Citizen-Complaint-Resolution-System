@@ -157,22 +157,52 @@ describe("public MDMS branding (replacement for the BFF relay)", () => {
     const ru = "https://x.test/identity/v1/password/setup-complete/state123/bomet-county";
 
     it("reads an emailed password link's tenant from its redirect, in any browser (#2645)", () => {
-        expect(resolveTenantSlug({ search: `?client_data=${b64({ ru: "https://x.test/identity/v1/callback" })}` })).toBeUndefined();
-        expect(resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru.replace("/bomet-county", "") })}.s` })).toBeUndefined();
-        expect(resolveTenantSlug({ search: `?client_data=${b64({ ru, rt: "code" })}` })).toBe("bomet-county");
+        // Each read starts in a fresh tab, so nothing remembered can stand in for the parse.
+        const resolve = (search: string) => {
+            sessionStorage.clear();
+            return resolveTenantSlug({ search });
+        };
+        expect(resolve(`?client_data=${b64({ ru: "https://x.test/identity/v1/callback" })}`)).toBeUndefined();
+        expect(resolve(`?key=h.${b64({ reduri: ru.replace("/bomet-county", "") })}.s`)).toBeUndefined();
+        expect(resolve(`?client_data=${b64({ ru: `${ru}/extra` })}`)).toBeUndefined();
+        expect(resolve(`?client_data=${b64({ ru, rt: "code" })}`)).toBe("bomet-county");
+        expect(resolve(`?key=h.${b64({ reduri: ru })}.s`)).toBe("bomet-county");
         // An empty or invalid digit_tenant does not hide the link's slug.
-        expect(resolveTenantSlug({ search: `?digit_tenant=&client_data=${b64({ ru })}` })).toBe("bomet-county");
-        expect(resolveTenantSlug({ search: `?digit_tenant=Bomet&client_data=${b64({ ru })}` })).toBe("bomet-county");
-        sessionStorage.clear();
-        expect(resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru })}.s` })).toBe("bomet-county");
+        expect(resolve(`?digit_tenant=&client_data=${b64({ ru })}`)).toBe("bomet-county");
+        expect(resolve(`?digit_tenant=Bomet&client_data=${b64({ ru })}`)).toBe("bomet-county");
+        // An invalid slug in client_data falls through to the action token.
+        expect(resolve(`?client_data=${b64({ ru: ru.replace("bomet-county", "Bad_Slug") })}&key=h.${b64({ reduri: ru })}.s`)).toBe("bomet-county");
+        // Malformed values are ignored, never thrown.
+        for (const search of ["?client_data=%%%", `?client_data=${btoa("not json")}`, `?client_data=${btoa("null")}`, "?key=h.!!!.s", "?key=only"]) {
+            expect(resolve(search)).toBeUndefined();
+        }
     });
 
     it("keeps the link's landing-page tenant until a page with a tab_id takes it over (#2645)", () => {
         resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru })}.s` });
-        expect(resolveTenantSlug({ search: "" })).toBe("bomet-county");
         expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=a" })).toBe("bomet-county");
         expect(sessionStorage.getItem("digit_tenant:")).toBeNull();
         expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=a" })).toBe("bomet-county");
+    });
+
+    it("does not carry one link's landing-page tenant into a later link in the same tab (#2645)", () => {
+        const landing = (slug: string) => resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru.replace("/bomet-county", slug) })}.s` });
+        landing("/bomet-county");
+        expect(landing("")).toBeUndefined();
+        expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=b" })).toBeUndefined();
+        landing("/bomet-county");
+        expect(landing("/other-county")).toBe("other-county");
+        expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=c" })).toBe("other-county");
+    });
+
+    it("lets a page's own tenant win over an earlier landing page's (#2645)", () => {
+        resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru })}.s` });
+        // An email-change link for another tenant: its tab_id's shared copy names that tenant.
+        localStorage.setItem("digit_tenant:e", `${Date.now()} other-county`);
+        expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=e" })).toBe("other-county");
+        resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru })}.s` });
+        expect(resolveTenantSlug({ search: "?digit_tenant=other-county", loginAction: "/login?tab_id=f" })).toBe("other-county");
+        expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=f" })).toBe("other-county");
     });
 
     it("maps language tags and degrades unsupported tags to the deployment default", () => {
