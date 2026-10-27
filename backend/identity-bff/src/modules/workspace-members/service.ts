@@ -5,7 +5,7 @@ import { linkRequestId, normalizeLinkEmail } from "../bindings/link-request-id.j
 import { invitationExpiryHours } from "../bindings/invitations.js";
 import { accept, bindingsFromUser, createPending, effectiveBinding, ensureActive, readBindings, readBindingUser, recordBindingEmail, remove, type Binding } from "../bindings/store.js";
 import { BindingConflictError, BindingError, type BindingUser } from "../bindings/types.js";
-import { ensureOrganizationMembership, inspectPasswordSetupAccountById, isOrganizationMember, request } from "../organizations/organization-service.js";
+import { ensureOrganizationMembership, inspectPasswordSetupAccountById, isOrganizationMember, readTenantMappingForTenant, request } from "../organizations/organization-service.js";
 import { acquireRedisLease, getRedis } from "../../infrastructure/redis.js";
 import { createdId, paged, readUser } from "../../integrations/keycloak/admin-api.js";
 import { readOnboardingOrganizations } from "../onboarding/organization-reader.js";
@@ -61,6 +61,11 @@ async function activate(binding: Binding, lease: PersonLease): Promise<void> {
   }
 }
 
+/** The workspace's URL slug, which the emailed password pages are branded from (#2645). */
+async function workspaceSlug(tenantId: string): Promise<string | undefined> {
+  return (await readTenantMappingForTenant(tenantId))?.urlSlug;
+}
+
 async function linkAudit(subject: string, tenantId: string, uuid: string, actor: string, event: "ACCOUNT_LINK_CREATE" | "ACCOUNT_LINK_REVOKE") {
   console.info(JSON.stringify({ audit: "identity.account_link", event, subject, tenantId, digitUserUuid: uuid, actor }));
   await audit({ event, outcome: "SUCCESS", subject, tenantId, digitUserUuid: uuid, actor, method: "ADMIN", userType: "EMPLOYEE" });
@@ -108,13 +113,14 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
     if (previous?.state === "removed") throw new BindingError("BINDING_REMOVED", "This binding was removed");
     if (previous && previous.uuid !== input.digitUuid) throw new BindingConflictError();
     const org = await requireWorkspace(input.tenantId);
+    const tenantSlug = await workspaceSlug(input.tenantId);
     await lease.assertHeld();
     await ensureOrganizationMembership({ organizationId: org.id, userId: subject });
     const { binding } = await ensureActive({ subject, tenantId: input.tenantId, uuid: input.digitUuid, actor, email });
     await activate(binding, lease);
     await lease.assertHeld();
     await sendPasswordSetup({ userId: subject, hadPassword: false, emailVerified: fresh.emailVerified === true,
-      returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId });
+      returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId, tenantSlug });
     await mirrorPerson(subject);
     await updateKeycloakUser(subject, (current) => {
       if (pendingMarker(current)?.requestId !== requestId) return null;
@@ -156,9 +162,10 @@ async function resendActivation(input: { actor: string; tenantId: string; digitU
     const window = await acquireRedisLease(key, { ttlMs: RESEND_COOLDOWN_SECONDS * 1000 });
     if (!window) throw new ResendTooSoonError(Math.max(1, await getRedis().ttl(key)));
     try {
+      const tenantSlug = needsPassword ? await workspaceSlug(input.tenantId) : undefined;
       await lease.assertHeld();
       if (needsPassword) await sendPasswordSetup({ userId: subject, hadPassword: account.hasPassword, emailVerified: account.emailVerified,
-        returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId });
+        returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId, tenantSlug });
       else await sendVerifyEmail(subject);
     } catch (error) { await window.release(); throw error; }
     return { binding: publicBinding(subject, binding), identityUserCreated: false, activationEmailSent: true,

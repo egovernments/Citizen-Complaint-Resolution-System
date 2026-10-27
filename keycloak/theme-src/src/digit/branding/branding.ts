@@ -81,9 +81,9 @@ export function resolveTenantSlug(params: {
     search?: string;
 }): string | undefined {
     const search = new URLSearchParams(params.search ?? window.location.search);
-    const candidate = isValidSlug(params.digitTenant)
-        ? params.digitTenant
-        : search.get("digit_tenant") ?? emailedLinkSlug(search);
+    const fromQuery = search.get("digit_tenant");
+    const candidate = isValidSlug(params.digitTenant) ? params.digitTenant
+        : isValidSlug(fromQuery) ? fromQuery : emailedLinkSlug(search);
     return rememberedPerTab(STORAGE_PREFIX, params.loginAction, candidate, isValidSlug, true);
 }
 
@@ -95,19 +95,24 @@ export function resolveTenantSlug(params: {
  * link's action token (`key`), then in `client_data` on every page after.
  */
 function emailedLinkSlug(search: URLSearchParams): string | undefined {
-    const redirect = (value: string | null | undefined, field: string): unknown => {
-        try {
-            return value ? JSON.parse(atob(value.replace(/-/g, "+").replace(/_/g, "/")))[field] : undefined;
-        } catch {
-            return undefined;
-        }
-    };
-    for (const uri of [redirect(search.get("client_data"), "ru"), redirect(search.get("key")?.split(".")[1], "reduri")]) {
+    for (const uri of [
+        base64UrlJsonField(search.get("client_data"), "ru"),
+        base64UrlJsonField(search.get("key")?.split(".")[1], "reduri"),
+    ]) {
         if (typeof uri !== "string") continue;
         const slug = /\/password\/setup-complete\/[^/?#]+\/([^/?#]+)$/.exec(uri)?.[1];
         if (slug !== undefined) return slug;
     }
     return undefined;
+}
+
+/** One field of a base64url-encoded JSON value (`client_data`, a JWT payload), or undefined. */
+function base64UrlJsonField(value: string | null | undefined, field: string): unknown {
+    try {
+        return value ? JSON.parse(atob(value.replace(/-/g, "+").replace(/_/g, "/")))[field] : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 /**
@@ -130,9 +135,17 @@ function rememberedPerTab(
     const pageTabId = tabIdOf(window.location.href);
     const tabId = tabIdOf(loginAction) ?? pageTabId;
     const key = tabId === undefined || storage === undefined ? undefined : prefix + tabId;
+    // A page with no tab_id at all (an emailed link's landing page, #2645) keeps
+    // the value under the bare prefix; the first page with a tab_id takes it over.
+    const landing = shared && storage !== undefined ? prefix : undefined;
     try {
+        const carried = landing === undefined ? null : storage!.getItem(landing);
+        if (key !== undefined && carried !== null) {
+            storage!.removeItem(landing!);
+            if (isValid(carried) && !isValid(storage!.getItem(key))) storage!.setItem(key, carried);
+        }
         if (isValid(candidate)) {
-            if (key !== undefined) storage!.setItem(key, candidate);
+            if (key !== undefined || landing !== undefined) storage!.setItem(key ?? landing!, candidate);
             // The link emailed by an email change opens a new tab with this
             // tab_id but its own sessionStorage (#2645).
             if (local && tabId !== undefined) {
@@ -143,7 +156,7 @@ function rememberedPerTab(
             }
             return candidate;
         }
-        let stored = key === undefined ? null : storage?.getItem(key);
+        let stored = key === undefined ? carried : storage?.getItem(key);
         // The link's own tab_id first: Keycloak may render it in a new login session.
         for (const id of [pageTabId, tabId]) {
             if (!local || id === undefined || isValid(stored)) continue;

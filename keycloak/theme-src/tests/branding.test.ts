@@ -153,13 +153,26 @@ describe("public MDMS branding (replacement for the BFF relay)", () => {
         expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=c" })).toBeUndefined();
     });
 
+    const b64 = (value: object) => btoa(JSON.stringify(value)).replace(/=+$/, "");
+    const ru = "https://x.test/identity/v1/password/setup-complete/state123/bomet-county";
+
     it("reads an emailed password link's tenant from its redirect, in any browser (#2645)", () => {
-        const b64 = (value: object) => btoa(JSON.stringify(value)).replace(/=+$/, "");
-        const ru = "https://x.test/identity/v1/password/setup-complete/state123/bomet-county";
-        expect(resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru })}.s` })).toBe("bomet-county");
-        expect(resolveTenantSlug({ search: `?client_data=${b64({ ru, rt: "code" })}` })).toBe("bomet-county");
         expect(resolveTenantSlug({ search: `?client_data=${b64({ ru: "https://x.test/identity/v1/callback" })}` })).toBeUndefined();
         expect(resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru.replace("/bomet-county", "") })}.s` })).toBeUndefined();
+        expect(resolveTenantSlug({ search: `?client_data=${b64({ ru, rt: "code" })}` })).toBe("bomet-county");
+        // An empty or invalid digit_tenant does not hide the link's slug.
+        expect(resolveTenantSlug({ search: `?digit_tenant=&client_data=${b64({ ru })}` })).toBe("bomet-county");
+        expect(resolveTenantSlug({ search: `?digit_tenant=Bomet&client_data=${b64({ ru })}` })).toBe("bomet-county");
+        sessionStorage.clear();
+        expect(resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru })}.s` })).toBe("bomet-county");
+    });
+
+    it("keeps the link's landing-page tenant until a page with a tab_id takes it over (#2645)", () => {
+        resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru })}.s` });
+        expect(resolveTenantSlug({ search: "" })).toBe("bomet-county");
+        expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=a" })).toBe("bomet-county");
+        expect(sessionStorage.getItem("digit_tenant:")).toBeNull();
+        expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=a" })).toBe("bomet-county");
     });
 
     it("maps language tags and degrades unsupported tags to the deployment default", () => {

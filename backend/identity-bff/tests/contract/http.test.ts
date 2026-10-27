@@ -86,9 +86,9 @@ describe("sign-in results", () => {
     expect(body).toMatchObject({ status: "failed", code: "SIGN_IN_FAILED" });
   });
 
-  it("GET /identity/v1/password/setup-complete/:state hands an unknown state to auth-results as AUTH_ATTEMPT_EXPIRED", async () => {
+  it.each(["unknown-state", "unknown-state/some-slug"])("GET /identity/v1/password/setup-complete/%s hands an unknown state to auth-results as AUTH_ATTEMPT_EXPIRED", async (path) => {
     const route = contractRoute("GET", "/identity/v1/password/setup-complete/:state{/:tenantSlug}");
-    const body = await resultOf(await fetch(`${base}/identity/v1/password/setup-complete/unknown-state`, { redirect: "manual" }));
+    const body = await resultOf(await fetch(`${base}/identity/v1/password/setup-complete/${path}`, { redirect: "manual" }));
     expect(route.results).toContain(body.code);
     expect(body).toMatchObject({ status: "failed", code: "AUTH_ATTEMPT_EXPIRED" });
   });

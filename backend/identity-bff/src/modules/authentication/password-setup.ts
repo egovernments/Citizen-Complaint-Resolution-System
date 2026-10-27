@@ -57,7 +57,8 @@ export async function sendPasswordSetup(input: {
   emailVerified: boolean;
   returnTo: string;
   clientId: string;
-  tenantSlug?: string;
+  /** The tenant the emailed pages are branded for; undefined only when there is none. */
+  tenantSlug: string | undefined;
 }): Promise<void> {
   const state = await createPasswordSetupAttempt({
     returnTo: input.returnTo, userId: input.userId, hadPassword: input.hadPassword,
