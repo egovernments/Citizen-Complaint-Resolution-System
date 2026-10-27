@@ -296,11 +296,14 @@ body.dg-body {
     background-color: var(--color-button-primary-bg-default, var(--color-primary-2, #fec931));
     color: var(--color-button-primary-text, var(--color-text-primary, #0b0c0c));
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    transition: background-color 0.15s;
+    transition: background-color 0.15s, filter 0.15s;
 }
 
+/* Hover keeps the label's own background, a shade darker (components-v2's
+   bg-primary/90): a theme's hover colour can be one the label is unreadable
+   on, e.g. Green and Gold's #204F37 under dark text meant for #FEC931. */
 .dg-button:hover:not(:disabled) {
-    background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #e6b800));
+    filter: brightness(0.92);
 }
 
 .dg-button:focus-visible {
