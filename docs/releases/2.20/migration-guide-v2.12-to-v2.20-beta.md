@@ -170,8 +170,8 @@ has migrated, so check those by hand.
 | `auth_provider`, `citizen_auth_provider`, `employee_auth_provider` set to `keycloak` | Deploy fails ("selects Keycloak login on: …"). Delete them. |
 | `enable_keycloak: false` | Deploy fails. Set it to `true` (2.2); don't delete it. |
 | `keycloak_google_client_id` left from 2.12 citizen Google | The deploy creates a Google provider in realm `digit`, and the default signup list includes `google` (2.2). Delete it, and the secret, unless you set up Configurator Google (2.3). |
-| `enable_digit_ui_v2`, `nginx_features.digit_ui_v2` | Deploy fails if true. Delete them. |
-| `digit_ui_v2_branch`, `digit_ui_esbuild_branch` set to an old feature branch | The old branch is still checked out. Delete them. |
+| `enable_digit_ui_v2`, `nginx_features.digit_ui_v2`, `digit_ui_v2_repo`, `digit_ui_v2_branch` | Ignored, with a warning: the `/citizen` app is removed, so `<host>/citizen` returns 404 and citizens use `/<slug>/digit-ui/citizen`. The deploy deletes `/opt/digit-ui-v2` and, unless `nginx_preserve_vhost: true`, `/var/www/citizen`; on Helm, run `helm uninstall digit-ui-v2 -n egov`. Delete them. |
+| `digit_ui_esbuild_branch` set to an old feature branch | The old branch is still checked out. Delete it. |
 | `keycloak_client_id`, `login_tenant_allowlist`, `build_otp_publisher`, `build_default_data_handler` | Ignored. Delete them. |
 | `pgr_services_image`, `configurator_image` and other image pins | The old image runs on the 2.20 schema. Delete them. |
 
@@ -506,10 +506,10 @@ COMPOSE_PROFILES=<profiles> docker compose <-f files> build db-migrations
 COMPOSE_PROFILES=<profiles> docker compose <-f files> up --no-deps db-migrations
 ```
 
-Use the profiles and `-f` files the deploy uses (`docker-compose.egov-digit.yaml`,
-`docker-compose.migrations.yml`, your overlay, and any others in host_vars). Link
-users (§5) only after this: without the workspace routes, an admin who picks the
-workspace in the Configurator gets `AccessDeniedException`.
+Copy the profiles and `-f` files from the deploy log's `Active compose profiles for
+<tenant>:` and `compose files for <tenant>:` lines. Link users (§5) only after
+this: without the workspace routes, an admin who picks the workspace in the
+Configurator gets `AccessDeniedException`.
 
 Also:
 
