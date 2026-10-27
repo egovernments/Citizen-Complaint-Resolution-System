@@ -1563,6 +1563,37 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     })).status).toBe(401);
   });
 
+  it("ends an employee's email change redirect with the workspace slug once the client allows it (#2645)", async () => {
+    const cookie = await signIn("employee");
+    const client = "/clients/digit-ui-employee-uuid";
+    const returnTo = "/bomet-county/digit-ui/employee/user/account";
+    const changeEmail = async () => {
+      const response = await fetch(`${app()}/identity/v1/authorize?surface=employee&tenantSlug=bomet-county&action=UPDATE_EMAIL&returnTo=${encodeURIComponent(returnTo)}`,
+        { redirect: "manual", headers: { Cookie: cookie } });
+      expect(response.status).toBe(302);
+      return { url: new URL(response.headers.get("location")!), loginCookie: response.headers.get("set-cookie")!.split(";", 1)[0] };
+    };
+    await kcUpdate(client, { attributes: { "digit.auth.account.actions": "UPDATE_EMAIL" } });
+    try {
+      // A client configured before #2645 keeps the plain callback.
+      expect((await changeEmail()).url.searchParams.get("redirect_uri")).toBe(config.identityRedirectUri);
+      await kcUpdate(client, { redirectUris: [config.identityRedirectUri, `${config.identityRedirectUri}/*`] });
+      const { url, loginCookie } = await changeEmail();
+      expect(url.searchParams.get("kc_action")).toBe("UPDATE_EMAIL");
+      expect(url.searchParams.get("redirect_uri")).toBe(`${config.identityRedirectUri}/bomet-county`);
+      const callback = await fetch(`${app()}/identity/v1/callback/bomet-county?code=valid-code:${encodeURIComponent(url.searchParams.get("nonce")!)}` +
+        `&state=${encodeURIComponent(url.searchParams.get("state")!)}&kc_action_status=success`,
+        { redirect: "manual", headers: { Cookie: `${cookie}; ${loginCookie}` } });
+      expect(callback.status).toBe(303);
+      const location = new URL(callback.headers.get("location")!, "http://localhost");
+      expect(location.pathname).toBe(returnTo);
+      const result = await fetch(`${app()}/identity/v1/auth-results/${encodeURIComponent(location.searchParams.get("authResult")!)}`);
+      expect(await result.json()).toMatchObject({ code: "ACTION_COMPLETE" });
+    } finally {
+      await kcUpdate(client, { redirectUris: [], attributes: { "digit.auth.account.actions": "" } });
+    }
+  });
+
   it.each([false, true])("#2592: public logout-others revokes the shared managed rotate token; the current session re-selects (alias: %s)", async (alias) => {
     const subject = `managed-logout-${alias}`;
     const tenantId = "ke.bomet";

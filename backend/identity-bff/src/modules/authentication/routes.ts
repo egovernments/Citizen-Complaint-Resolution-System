@@ -8,6 +8,7 @@ import { config } from "../../infrastructure/config.js";
 import {
   applyVerifiedSignupIdentityProfile,
   IdentityAdminError,
+  identityClient,
 } from "../organizations/organization-service.js";
 import { boundTenantOf, routeForSlug } from "../access-context/tenant-route.js";
 import {
@@ -32,6 +33,7 @@ import {
   authorizationUrl,
   exchangeAuthorizationCode,
   oidcClientForSurface,
+  tenantCallbackUri,
   verifyIdentityAccessToken,
   verifyIdentityIdToken,
 } from "./oidc.js";
@@ -278,6 +280,13 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     if (prompt) extraParams.prompt = prompt;
     if (kcAction) extraParams.kc_action = kcAction;
     if (typeof uiLocales === "string") extraParams.ui_locales = uiLocales;
+    // An email change finishes on a link Keycloak emails, which opens in a new
+    // Keycloak session: only the redirect kept in that link can tell the theme
+    // the workspace (#2645). Until the client allows the slugged callback, the
+    // change keeps the plain one and that link's pages use the default tenant.
+    const redirectUri = accountAction?.action === "UPDATE_EMAIL" && boundTenant &&
+      (await identityClient(oidcClient.clientId).catch(() => null))?.redirectUris.includes(`${config.identityRedirectUri}/*`)
+      ? tenantCallbackUri(boundTenant.urlSlug) : undefined;
     response.setHeader("Set-Cookie", loginCookie(state, surface));
     return response.redirect(
       302,
@@ -285,11 +294,12 @@ export function registerAuthenticationRoutes(app: express.Application): void {
         scope: oidcClient.scope,
         idpHint: method.idpHint,
         extraParams,
+        redirectUri,
       }),
     );
   }));
 
-  app.get("/identity/v1/callback", asyncRoute(async (request, response) => {
+  app.get("/identity/v1/callback{/:tenantSlug}", asyncRoute(async (request, response) => {
     const code = typeof request.query.code === "string" ? request.query.code : null;
     const state = typeof request.query.state === "string" ? request.query.state : null;
     if (!state) return redirectWithResult(response, DEFAULT_SURFACE, config.identityPostLoginRedirect, "SIGN_IN_FAILED");
@@ -326,10 +336,13 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     }
 
     try {
+      // Keycloak checks this is the redirect the attempt was authorized with.
+      const tenantSlug = request.params.tenantSlug;
       const tokens = await exchangeAuthorizationCode(
         code,
         attempt.codeVerifier,
         attempt.oidcClientId,
+        typeof tenantSlug === "string" ? tenantCallbackUri(tenantSlug) : undefined,
       );
       const claims = await verifyIdentityAccessToken(tokens.accessToken, attempt.oidcClientId);
       const idClaims = await verifyIdentityIdToken(

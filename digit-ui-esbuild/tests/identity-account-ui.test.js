@@ -390,6 +390,31 @@ for (const surface of ["employee", "citizen"]) {
   });
 }
 
+// #2645: an email changed on Account and security reaches egov-user, not the
+// session's user info, which keeps the email of the sign-in.
+test("employee profile shows and saves the live record's email, not the session's", async () => {
+  const state = browser("employee", () => assert.fail("profile page must not depend on the BFF"));
+  let live = "new@example.test";
+  Digit.UserService.userSearch = async () => ({ user: [{ uuid: "same-uuid", emailId: live }] });
+  const writes = [];
+  Digit.UserService.updateUser = async (details) => { writes.push(details); return { responseInfo: { status: "200" } }; };
+  let view = await render(ui.Profile, { userType: "employee", stateCode: "ke", cityDetails: { name: "Bomet" } });
+  const email = () => view.root.findAllByType("input").find((node) => node.props.id === "profile-email");
+  assert.equal(email().props.value, "new@example.test");
+  assert.equal(state.getUser().info.emailId, "new@example.test");
+  await click(button(view, "Save"));
+  assert.equal(writes[0].emailId, "new@example.test");
+  view.unmount();
+
+  // A masked value is never shown or written back.
+  state.replaceUser({ ...state.getUser(), info: { ...state.getUser().info, emailId: "old@example.test" } });
+  live = "ne*****@example.test";
+  view = await render(ui.Profile, { userType: "employee", stateCode: "ke", cityDetails: { name: "Bomet" } });
+  assert.equal(email().props.value, "old@example.test");
+  await click(button(view, "Save"));
+  assert.equal(writes[1].emailId, "old@example.test");
+  view.unmount();
+});
 
 test("logout dialog keeps a failed sign-out visible for retry", async () => {
   browser("employee", () => assert.fail("dialog delegates to UserService"));

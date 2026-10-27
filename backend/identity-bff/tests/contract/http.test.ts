@@ -80,7 +80,7 @@ describe("sign-in results", () => {
   }
 
   it("GET /identity/v1/callback hands a failure to auth-results as a result code, never an HTTP error", async () => {
-    const route = contractRoute("GET", "/identity/v1/callback");
+    const route = contractRoute("GET", "/identity/v1/callback{/:tenantSlug}");
     const body = await resultOf(await fetch(`${base}/identity/v1/callback?code=x&state=unknown-state`, { redirect: "manual" }));
     expect(route.results).toContain(body.code);
     expect(body).toMatchObject({ status: "failed", code: "SIGN_IN_FAILED" });

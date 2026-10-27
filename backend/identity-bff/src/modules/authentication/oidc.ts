@@ -83,12 +83,14 @@ export function authorizationUrl(
     idpHint?: string;
     /** e.g. `digit_tenant` (display only), `prompt=login`, `ui_locales`. */
     extraParams?: Record<string, string>;
+    /** A `tenantCallbackUri`; the callback then exchanges the code with it. */
+    redirectUri?: string;
   } = {},
 ): string {
   const url = new URL(oidcUrl("auth"));
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: config.identityRedirectUri,
+    redirect_uri: options.redirectUri || config.identityRedirectUri,
     response_type: "code",
     scope: options.scope || config.identityScope,
     state,
@@ -163,15 +165,25 @@ export async function verifyIdentityIdToken(
   return claims;
 }
 
+/**
+ * The callback with a workspace's slug after it. Keycloak keeps the redirect
+ * in the link it emails for an email change, and the employee theme reads the
+ * slug back from it to link that link's pages to the workspace (#2645).
+ */
+export function tenantCallbackUri(urlSlug: string): string {
+  return `${config.identityRedirectUri}/${encodeURIComponent(urlSlug)}`;
+}
+
 export function exchangeAuthorizationCode(
   code: string,
   codeVerifier: string,
   clientId: string,
+  redirectUri: string = config.identityRedirectUri,
 ): Promise<IdentityTokenSet> {
   return tokenRequest(new URLSearchParams({
     grant_type: "authorization_code",
     code,
-    redirect_uri: config.identityRedirectUri,
+    redirect_uri: redirectUri,
     code_verifier: codeVerifier,
   }), clientId);
 }

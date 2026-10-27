@@ -475,6 +475,20 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     setLoading(false);
   }, [userDetails !== null]);
 
+  // A Keycloak-managed email changes on Account and security. The identity
+  // BFF copies it to egov-user, but the session's user info keeps the email
+  // of the sign-in (#2645). Show the live record's, and keep it in the session
+  // so a save sends it back unchanged rather than the old one.
+  useEffect(() => {
+    const liveEmail = userDetails?.emailId;
+    if (!identityManaged || typeof liveEmail !== "string" || !liveEmail || /\*{2,}/.test(liveEmail)) return;
+    setEmail(liveEmail);
+    const user = Digit.UserService.getUser();
+    if (user?.info && user.info.emailId !== liveEmail) {
+      Digit.UserService.setUser({ ...user, info: { ...user.info, emailId: liveEmail } });
+    }
+  }, [userDetails?.emailId]);
+
   let validation = {};
   const editScreen = false; // To-do: Deubug and make me dynamic or remove if not needed
   const onClickAddPic = () => setOpenUploadSide(!openUploadSlide);

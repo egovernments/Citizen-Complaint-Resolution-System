@@ -378,6 +378,8 @@ def _():
         [stored] = admin("GET", "/clients?clientId=" + client)
         assert stored["attributes"]["digit.auth.account.actions"] == ",".join(DECLARED["clientPolicy"]["accountActions"])
         assert REDIRECT.removesuffix("/callback") + DECLARED["clientPolicy"]["passwordSetupRedirectPath"] in stored["redirectUris"]
+        # The digit-ui clients also take the callback with a workspace slug after it (#2645).
+        assert (REDIRECT + "/*" in stored["redirectUris"]) == (client != BFF[0]), stored["redirectUris"]
 
 
 @check("digit-ui clients: Back to Application is the surface's sign-in, also on an existing client (#2644)")
