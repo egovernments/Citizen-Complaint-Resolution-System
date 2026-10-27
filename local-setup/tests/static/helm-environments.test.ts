@@ -27,13 +27,13 @@ const helmfiles = [
     .filter((f) => /^(environments:|bases:)/m.test(read(f))),
 ];
 
-const BASE = `${DEPLOY}/charts/environments/helmfile-environments.yaml`;
+const BASE = `${DEPLOY}/charts/environments/environments.yaml`;
 
 /** The value file list of one environment, in order: the helmfile's own
  *  `environments:`, or the shared base it lists under `bases:`. */
 const environmentValues = (helmfile: string, env: string): string[] => {
   const own = read(helmfile);
-  const text = /^bases:\n {2}- \.\.\/environments\/helmfile-environments\.yaml$/m.test(own) && !/^environments:/m.test(own)
+  const text = /^bases:\n {2}- \.\.\/environments\/environments\.yaml$/m.test(own) && !/^environments:/m.test(own)
     ? read(BASE) : own;
   const start = text.indexOf(`\n  ${env}:\n    values:\n`);
   if (start < 0) return [];

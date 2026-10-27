@@ -1,5 +1,5 @@
 bases:
-  - ../environments/helmfile-environments.yaml
+  - ../environments/environments.yaml
 ---
 {{- /* Releases this environment turns off by name (env values `disabledReleases`,
        empty by default): every release that is otherwise always installed reads it. */ -}}

@@ -1,5 +1,5 @@
 bases:
-  - ../environments/helmfile-environments.yaml
+  - ../environments/environments.yaml
 ---
 templates:
   default: &default
