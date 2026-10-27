@@ -93,6 +93,9 @@ const PRIMARY_INLINE_STYLE: React.CSSProperties = {
 };
 const PRIMARY_HOVER_BG =
   "var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800))";
+/** The hover fill's own label (#2645): the resting one can be unreadable on it. */
+const PRIMARY_HOVER_TEXT =
+  `var(--color-button-primary-text-hover, ${PRIMARY_INLINE_STYLE.color})`;
 
 /**
  * DIGIT Secondary and Tertiary, from the same token family as PRIMARY above.
@@ -162,7 +165,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         onMouseEnter={(e) => {
           if (!disabled && !loading) {
             const el = e.currentTarget as HTMLButtonElement;
-            if (isPrimary) el.style.backgroundColor = PRIMARY_HOVER_BG;
+            if (isPrimary) {
+              el.style.backgroundColor = PRIMARY_HOVER_BG;
+              el.style.color = PRIMARY_HOVER_TEXT;
+            }
             // Secondary and tertiary take a tint of the brand rather than a
             // fill, so the outline still reads as an outline while hovered.
             else if (isSecondary || isTertiary) el.style.backgroundColor = SECONDARY_HOVER_BG;
@@ -173,6 +179,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           const el = e.currentTarget as HTMLButtonElement;
           if (isPrimary) {
             el.style.backgroundColor = PRIMARY_INLINE_STYLE.backgroundColor as string;
+            el.style.color = (mergedStyle.color ?? PRIMARY_INLINE_STYLE.color) as string;
           } else if (isSecondary || isTertiary) {
             el.style.backgroundColor = "transparent";
           }

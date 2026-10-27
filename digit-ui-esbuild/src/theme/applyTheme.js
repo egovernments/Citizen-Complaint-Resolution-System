@@ -759,6 +759,17 @@ function applyTheme(config) {
       ]);
       if (fg) vars["--color-button-primary-text"] = fg;
     }
+    // Hover and pressed each get a label judged on their own fill (#2645):
+    // Green and Gold rests on #FEC931 and hovers on #204F37, and no one
+    // colour reads on both.
+    for (const state of ["hover", "pressed"]) {
+      const name = `--color-button-primary-text-${state}`;
+      const text = vars["--color-button-primary-text"];
+      const fill = vars[`--color-button-primary-bg-${state}`];
+      if (name in vars || !text || !fill) continue;
+      const contrast = worstContrast(text, [fill]);
+      vars[name] = contrast === null || contrast >= AA_NORMAL_TEXT ? text : readableForegroundAcross([fill]) || text;
+    }
   }
 
   applyLegibilityFloors(vars);

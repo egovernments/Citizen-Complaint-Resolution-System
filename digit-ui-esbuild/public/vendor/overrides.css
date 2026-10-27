@@ -231,6 +231,9 @@
 button.digit-submit-bar:hover,
 button[class*="submit-bar"]:hover {
   background-color: var(--color-button-primary-bg-hover, #B8420C) !important;
+  /* The hover label, judged on the hover fill (#2645); the label rules
+   * inside the button (h2, svg) read this variable too. */
+  --color-button-primary-text: var(--color-button-primary-text-hover, #FFFFFF);
   color: var(--color-button-primary-text, #FFFFFF) !important;
 }
 
@@ -242,6 +245,7 @@ button[class*="submit-bar"]:hover {
 button.digit-submit-bar:active,
 button[class*="submit-bar"]:active {
   background-color: var(--color-button-primary-bg-pressed, #A03A0A) !important;
+  --color-button-primary-text: var(--color-button-primary-text-pressed, #FFFFFF);
 }
 
 /* Foreground (text + svg) on primary-2 surfaces. Vendor hardcodes
@@ -3553,6 +3557,7 @@ button[class*="toast-close"] svg,
 .v2-pgr-inbox button.digit-button-primary:hover,
 .v2-pgr-inbox .digit-button-primary:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
+  --color-button-primary-text: var(--color-button-primary-text-hover, #FFFFFF);
 }
 /* Scoped to filled buttons: `.v2-pgr-inbox .digit-button-label` alone also
  * caught the tertiary/link labels on this page, which must not take the
@@ -3773,6 +3778,7 @@ button[class*="toast-close"] svg,
 .v2-workbench-view button[class*="submit-bar"]:hover,
 .v2-workbench-view .digit-button-primary:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
+  --color-button-primary-text: var(--color-button-primary-text-hover, #FFFFFF);
 }
 
 /* MDMS view "Actions" CTA + dropdown menu — vendor renders the button

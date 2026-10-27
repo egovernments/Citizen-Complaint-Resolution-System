@@ -635,6 +635,24 @@ test("button states: a stated text colour is never made invisible by a generated
   } finally { restore(); }
 });
 
+// #2645: onboarding's Green and Gold (v1) rests on #FEC931 and hovers on its
+// primary.dark #204F37. One label for both read 2.1:1 under the cursor.
+test("button states: hover and pressed labels are judged on their own fill", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({ version: "1", colors: { primary: { main: "#FEC931", dark: "#204F37" } } });
+    assert.equal(props["--color-button-primary-bg-default"], "#FEC931");
+    assert.equal(props["--color-button-primary-text"], "#0B0C0C");
+    assert.equal(props["--color-button-primary-bg-hover"], "#204F37");
+    assert.equal(props["--color-button-primary-text-hover"], "#FFFFFF");
+    assert.equal(props["--color-button-primary-text-pressed"], "#FFFFFF");
+    // A label that already reads on the hover fill is kept.
+    applyTheme({ version: "3", colors: { "primary-1": "#204F37", "button-primary-bg-default": "#FEC931" } });
+    assert.equal(props["--color-button-primary-text-hover"], "#0B0C0C");
+  } finally { restore(); }
+});
+
 test("button foreground: AA is judged on #0B0C0C, not on pure black", () => {
   const { props, restore } = stubDocument();
   try {
