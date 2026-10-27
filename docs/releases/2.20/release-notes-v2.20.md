@@ -234,7 +234,3 @@ No performance measurements were available for this release.
 | Developers and integrators | Sign-in goes through the new sign-in service; old user endpoints are closed. New onboarding and notification services. | Follow the [deployment changelog](release-config-changelog-v2.20.md). Update custom login code. |
 | QA teams | Wide changes to screens and workflows. | Regression-test sign-in for every role, onboarding end to end, the complaint lifecycle including escalation and reopen, notifications per channel, French and Portuguese, phone layouts, and WhatsApp if used. |
 | Operations teams | New and retired services, new settings and secrets, data migrations, linking existing staff to the new sign-in. | Follow the upgrade steps in the [deployment changelog](release-config-changelog-v2.20.md). Back up all databases first. |
-
-## J. Acknowledgements
-
-Thanks to everyone who built this release: Kanav Dwevedi, Dhruv Baliyan, Prateek Jakhar, Karun Singhal, Lokendra Tyagi, Subhashini Srinivasan, Shivam Upadhyay, Feliciano Mazoio, vishalrathore8oct, vinothrallapalli-egov, Hari-egov, soniikajal, yashgoel1331, rahuljose-egov and pradeep-egov. Thanks also to the partner security auditors and to Rahul for rounds of design feedback.
