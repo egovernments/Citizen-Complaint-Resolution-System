@@ -74,7 +74,7 @@ vi.mock("../../src/modules/revocation/index.js", () => ({ revokeAccount: vi.fn(a
 vi.mock("../../src/modules/citizen-otp/audit.js", () => ({ audit: vi.fn(async () => {}) }));
 import { acceptWorkspaceInvitation, declineWorkspaceInvitation, linkWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberEmail } from "../../src/modules/workspace-members/service.js";
 import { readOnboardingOrganizations } from "../../src/modules/onboarding/organization-reader.js";
-import { isOrganizationMember, request } from "../../src/modules/organizations/organization-service.js";
+import { isOrganizationMember, request, sendPasswordSetupEmail } from "../../src/modules/organizations/organization-service.js";
 import { readDigitAccount, requireWorkspace } from "../../src/modules/workspace-members/authority.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { audit } from "../../src/modules/citizen-otp/audit.js";
@@ -328,6 +328,13 @@ describe("admin resend of the activation email", () => {
     await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "RESEND_TOO_SOON", status: 429, retryAfter: expect.any(Number) });
     expect(f.emails).toBe(emails + 1);
     expect(f.users.get("new-1")).toEqual(before);
+  });
+  it("sends the invite's and the resend's password link without a slug: the Configurator theme has no tenant branding", async () => {
+    vi.mocked(sendPasswordSetupEmail).mockClear();
+    await linkWorkspaceMember(input);
+    await linkWorkspaceMember(resend);
+    const redirects = vi.mocked(sendPasswordSetupEmail).mock.calls.map(([email]) => email.redirectUri);
+    expect(redirects).toEqual([expect.stringMatching(/\/password\/setup-complete\/[^/]+$/), expect.stringMatching(/\/password\/setup-complete\/[^/]+$/)]);
   });
   it("sends the verify email to an unverified invitee who already has a password", async () => {
     f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: false, attributes: {} });
