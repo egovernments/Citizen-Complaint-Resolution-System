@@ -244,6 +244,7 @@ export interface IdentityClientSummary {
   enabled: boolean;
   standardFlowEnabled: boolean;
   attributes: Record<string, string>;
+  redirectUris: string[];
 }
 
 /** Live client capability and DIGIT journey policy from Keycloak. */
@@ -265,6 +266,7 @@ export async function identityClient(clientId: string): Promise<IdentityClientSu
     enabled?: boolean;
     standardFlowEnabled?: boolean;
     attributes?: Record<string, string>;
+    redirectUris?: string[];
   };
   if (!client?.id || !client.clientId) return null;
   return {
@@ -273,6 +275,7 @@ export async function identityClient(clientId: string): Promise<IdentityClientSu
     enabled: client.enabled !== false,
     standardFlowEnabled: client.standardFlowEnabled !== false,
     attributes: client.attributes || {},
+    redirectUris: Array.isArray(client.redirectUris) ? client.redirectUris : [],
   };
 }
 

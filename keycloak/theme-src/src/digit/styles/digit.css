@@ -301,6 +301,7 @@ body.dg-body {
 
 .dg-button:hover:not(:disabled) {
     background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #e6b800));
+    color: var(--color-button-primary-text-hover, var(--color-button-primary-text, var(--color-text-primary, #0b0c0c)));
 }
 
 .dg-button:focus-visible {
@@ -325,6 +326,9 @@ body.dg-body {
 
 .dg-button--secondary:hover:not(:disabled) {
     background-color: var(--color-primary-1-bg, rgba(37, 99, 235, 0.08));
+    /* Keep the outline label: the base .dg-button:hover colour is the
+       primary-fill hover label and must not leak onto secondary. */
+    color: var(--color-button-secondary-text, var(--color-primary-2, #2563eb));
 }
 
 .dg-spinner {

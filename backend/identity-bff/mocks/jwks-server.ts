@@ -117,6 +117,21 @@ function citizenClaims(profile: string): Record<string, unknown> & { sub: string
 export function createJwksApp() {
   const app = express();
   app.use(express.json());
+  // Like Keycloak, a code must be exchanged with the redirect_uri it was
+  // authorized with. Only codes issued through this endpoint are bound; tests
+  // that build `valid-code:<nonce>` themselves skip authorization.
+  const authorizedRedirects = new Map<string, string>();
+  app.get("/realms/digit-sandbox/protocol/openid-connect/auth", (req, res) => {
+    const nonce = String(req.query.nonce || "");
+    const redirectUri = String(req.query.redirect_uri || "");
+    if (!nonce || !redirectUri) return res.status(400).json({ error: "invalid_request" });
+    authorizedRedirects.set(nonce, redirectUri);
+    const target = new URL(redirectUri);
+    target.searchParams.set("code", `valid-code:${nonce}`);
+    target.searchParams.set("state", String(req.query.state || ""));
+    if (req.query.kc_action) target.searchParams.set("kc_action_status", "success");
+    return res.redirect(302, target.toString());
+  });
   app.get(
     "/realms/digit-sandbox/protocol/openid-connect/certs",
     (_req, res) => {
@@ -144,6 +159,10 @@ export function createJwksApp() {
           : false;
       if (!surface || !validGrant) {
         return res.status(400).json({ error: "invalid_grant" });
+      }
+      const authorizedRedirect = grantType === "authorization_code" ? authorizedRedirects.get(nonce) : undefined;
+      if (authorizedRedirect !== undefined && authorizedRedirect !== req.body.redirect_uri) {
+        return res.status(400).json({ error: "invalid_grant", error_description: "Incorrect redirect_uri" });
       }
 
       const claims = surface === "citizen"

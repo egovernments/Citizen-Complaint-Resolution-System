@@ -59,7 +59,7 @@ export const ROUTES: RouteContract[] = [
     codes: ["INVALID_REQUEST", "UNSUPPORTED_SURFACE", "UNSUPPORTED_INTENT", "UNSUPPORTED_METHOD", "UNSUPPORTED_RETURN_TO",
       "TENANT_ROUTE_NOT_FOUND", "TENANT_ROUTE_UNAVAILABLE", "SIGNIN_METHODS_UNAVAILABLE", "ACTION_NOT_ALLOWED",
       "SESSION_REQUIRED", "CREDENTIAL_NOT_SECOND_FACTOR", "PROVIDER_ALREADY_LINKED", "IDENTITY_UNAVAILABLE"] },
-  { method: "GET", path: "/identity/v1/callback", auth: "login-attempt", state: "changing", items: [4, 15], codes: [],
+  { method: "GET", path: "/identity/v1/callback{/:tenantSlug}", auth: "login-attempt", state: "changing", items: [4, 15], codes: [],
     results: ["AUTH_CANCELLED", "AUTH_ATTEMPT_EXPIRED", "IDENTITY_PROVIDER_UNAVAILABLE", "ACCOUNT_LINK_REQUIRED",
       "ACCOUNT_LINK_FAILED", "IDENTITY_ALREADY_LINKED", "EMAIL_VERIFICATION_REQUIRED", "SIGN_IN_FAILED",
       "ACTION_COMPLETE", "ACTION_CANCELLED", "ACTION_FAILED"] },

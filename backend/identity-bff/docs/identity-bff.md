@@ -187,7 +187,7 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | GET | `/readyz` | none | changing | 15 |
 | GET | `/identity/v1/auth-methods` | none | changing | 1, 2 |
 | GET | `/identity/v1/authorize` | none (session for `action`) | changing | 1, 4 |
-| GET | `/identity/v1/callback` | login-attempt | changing | 4, 15 |
+| GET | `/identity/v1/callback{/:tenantSlug}` | login-attempt | changing | 4, 15 |
 | GET | `/identity/v1/auth-results/:id` | none | live | — |
 | POST | `/identity/v1/authentication/magic-link-requests` | none | live | — |
 | POST | `/identity/v1/password/setup-requests` | none (optional session) | live | — |
@@ -297,13 +297,14 @@ Starts Authorization Code + PKCE, answering `302` to Keycloak and setting the lo
 - An `action` needs a session on that surface. The attempt stores `{sid, sub, action}`, and the callback refuses a different `sub`.
 - Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE`, `UNSUPPORTED_INTENT`, `UNSUPPORTED_METHOD`, `UNSUPPORTED_RETURN_TO`, `ACTION_NOT_ALLOWED` (all 400); `SESSION_REQUIRED` 401; `TENANT_ROUTE_NOT_FOUND` 404; `CREDENTIAL_NOT_SECOND_FACTOR`, `PROVIDER_ALREADY_LINKED` (409); `TENANT_ROUTE_UNAVAILABLE`, `SIGNIN_METHODS_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
 
-#### 3.2.3 `GET /identity/v1/callback` (items 4, 15)
+#### 3.2.3 `GET /identity/v1/callback{/:tenantSlug}` (items 4, 15)
 
 The Keycloak redirect target. It always answers `303`: to `returnTo` on success, or to `returnTo?authResult=<id>` with one of `AUTH_CANCELLED`, `AUTH_ATTEMPT_EXPIRED`, `IDENTITY_PROVIDER_UNAVAILABLE`, `ACCOUNT_LINK_REQUIRED`, `ACCOUNT_LINK_FAILED`, `IDENTITY_ALREADY_LINKED`, `EMAIL_VERIFICATION_REQUIRED`, `SIGN_IN_FAILED`.
 
 - **The callback never emits DIGIT-side codes** (D25/B5). Locked, inactive and pending-invitation outcomes appear at `_select`.
 - **Action attempts:** `kc_action_status` = `success` | `cancelled` | `error` gives the results `ACTION_COMPLETE` | `ACTION_CANCELLED` | `ACTION_FAILED`. The **same** session's tokens are replaced (an update-only write); no new session is created.
 - A new session records the person's current revocation generation and the Keycloak `sid` (§6).
+- **`/tenantSlug`:** an `UPDATE_EMAIL` action on an `employee` or `citizen` session is authorized with the workspace's slug after the callback, once the client's redirect URIs include `<callback>/*` (`configure-keycloak.sh`). Keycloak keeps that redirect in the emailed verification link, whose pages open in a new Keycloak session; the `digit-employee` theme reads the slug from it to link "Back to Application" to the workspace (#2645). The code is exchanged with the same redirect, and the route ignores the slug otherwise.
 - The discarded discovery call is removed (item 15).
 
 #### 3.2.4 `GET /identity/v1/auth-results/:id`

@@ -32,6 +32,7 @@ import {
   authorizationUrl,
   exchangeAuthorizationCode,
   oidcClientForSurface,
+  tenantCallbackUri,
   verifyIdentityAccessToken,
   verifyIdentityIdToken,
 } from "./oidc.js";
@@ -223,16 +224,17 @@ export function registerAuthenticationRoutes(app: express.Application): void {
 
     let accountAction: { sid: string; sub: string; action: string } | undefined;
     let kcAction: string | undefined;
+    let clientRedirectUris: string[] = [];
     let method: { id: string; type: import("./types.js").IdentityAuthMethod["type"]; idpHint?: string };
     if (action !== undefined) {
       const current = await currentSession(request.headers.cookie, surface);
       if (!current) return response.status(401).json(errorBody("SESSION_REQUIRED", "A signed-in session is required"));
       if (boundTenant && current.session.boundTenant?.tenantId !== boundTenant.tenantId) return response.status(400).json(errorBody("INVALID_REQUEST", "The session belongs to another tenant"));
       try {
-        kcAction = await withPersonLease(current.session.claims.sub, async lease => {
+        ({ kcAction, redirectUris: clientRedirectUris } = await withPersonLease(current.session.claims.sub, async lease => {
           const session = await requireCurrentSession(lease, current.sessionId);
           return authorizeAccountAction(session, surface, action, request.query.credentialId, request.query.provider);
-        });
+        }));
       } catch (error) {
         if (error instanceof AccountActionError) return response.status(error.status).json({ code: error.code, error: error.message });
         throw error;
@@ -258,6 +260,13 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     if (!oidcClient) {
       return response.status(503).json({ error: "Sign-in methods are temporarily unavailable", code: "SIGNIN_METHODS_UNAVAILABLE" });
     }
+    // An email change finishes on a link Keycloak emails, which opens in a new
+    // Keycloak session: only the redirect kept in that link can tell the theme
+    // the workspace (#2645). Until the client allows the slugged callback, the
+    // change keeps the plain one and that link's pages use the default tenant.
+    const redirectUri = accountAction?.action === "UPDATE_EMAIL" && boundTenant &&
+      clientRedirectUris.includes(`${config.identityRedirectUri}/*`)
+      ? tenantCallbackUri(boundTenant.urlSlug) : undefined;
     const { state, codeChallenge, nonce } = await createLoginAttempt({
       oidcClientId: oidcClient.clientId,
       intent,
@@ -266,6 +275,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
       returnTo,
       surface,
       ...(boundTenant && { boundTenant }),
+      ...(redirectUri && { redirectUri }),
     });
     const extraParams: Record<string, string> = boundTenant
       ? {
@@ -285,11 +295,12 @@ export function registerAuthenticationRoutes(app: express.Application): void {
         scope: oidcClient.scope,
         idpHint: method.idpHint,
         extraParams,
+        redirectUri,
       }),
     );
   }));
 
-  app.get("/identity/v1/callback", asyncRoute(async (request, response) => {
+  app.get("/identity/v1/callback{/:tenantSlug}", asyncRoute(async (request, response) => {
     const code = typeof request.query.code === "string" ? request.query.code : null;
     const state = typeof request.query.state === "string" ? request.query.state : null;
     if (!state) return redirectWithResult(response, DEFAULT_SURFACE, config.identityPostLoginRedirect, "SIGN_IN_FAILED");
@@ -324,12 +335,20 @@ export function registerAuthenticationRoutes(app: express.Application): void {
         attempt.intent,
       );
     }
+    // The code is exchanged with the redirect the attempt was authorized with
+    // (#2645); a path slug is display only and must simply agree with it.
+    const redirectUri = attempt.redirectUri ?? config.identityRedirectUri;
+    const tenantSlug = request.params.tenantSlug;
+    if (redirectUri !== (typeof tenantSlug === "string" ? tenantCallbackUri(tenantSlug) : config.identityRedirectUri)) {
+      return redirectWithResult(response, surface, attempt.returnTo, attempt.accountAction ? "ACTION_FAILED" : "SIGN_IN_FAILED", attempt.intent);
+    }
 
     try {
       const tokens = await exchangeAuthorizationCode(
         code,
         attempt.codeVerifier,
         attempt.oidcClientId,
+        redirectUri,
       );
       const claims = await verifyIdentityAccessToken(tokens.accessToken, attempt.oidcClientId);
       const idClaims = await verifyIdentityIdToken(
