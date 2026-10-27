@@ -3791,7 +3791,8 @@ button[class*="toast-close"] svg,
 .v2-workbench-view button[class*="submit-bar"],
 .v2-workbench-view .digit-button-primary {
   background-color: var(--color-button-primary-bg-default, var(--color-primary-2, #FEC931)) !important;
-  color: var(--color-text-primary, #0B0C0C) !important;
+  /* Reads the label variable, so the :hover swap below reaches it (#2645). */
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   border-radius: 6px !important;
   padding: 10px 24px !important;
   font-weight: 600 !important;
@@ -3816,7 +3817,9 @@ button[class*="toast-close"] svg,
 .action-bar-wrap > button.submit-bar,
 .action-bar-wrap > button[class*="submit-bar"] {
   background-color: var(--color-button-primary-bg-default, var(--color-primary-2, #FEC931)) !important;
-  color: var(--color-text-primary, #0B0C0C) !important;
+  /* The resting label; the global submit-bar :hover rule swaps the variable
+   * for the hover fill's label, so both states come from one pair (#2645). */
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   border: 0 !important;
   border-radius: 6px !important;
   height: 40px !important;
@@ -3835,20 +3838,13 @@ button[class*="toast-close"] svg,
 .action-bar-wrap > button.submit-bar:hover,
 .action-bar-wrap > button[class*="submit-bar"]:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
-  /* Hover label judged on the hover fill (#2645). */
-  color: var(--color-button-primary-text-hover, var(--color-text-primary, #0B0C0C)) !important;
   box-shadow: none !important;
   transform: none !important;
-}
-.action-bar-wrap > button.submit-bar:hover h2,
-.action-bar-wrap > button[class*="submit-bar"]:hover h2,
-.action-bar-wrap > button.submit-bar:hover .digit-button-label {
-  color: var(--color-button-primary-text-hover, var(--color-text-primary, #0B0C0C)) !important;
 }
 .action-bar-wrap > button.submit-bar h2,
 .action-bar-wrap > button[class*="submit-bar"] h2,
 .action-bar-wrap > button.submit-bar .digit-button-label {
-  color: var(--color-text-primary, #0B0C0C) !important;
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   font-size: 0.875rem !important;
   font-weight: 600 !important;
   margin: 0 !important;
@@ -3934,7 +3930,8 @@ button[class*="toast-close"] svg,
 .v2-workbench-search button.submit-bar,
 .v2-workbench-search button[class*="submit-bar"] {
   background-color: var(--color-button-primary-bg-default, var(--color-primary-2, #FEC931)) !important;
-  color: var(--color-text-primary, #0B0C0C) !important;
+  /* Resting and hover labels come from one pair: :hover swaps the variable (#2645). */
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   border-radius: 6px !important;
   padding: 10px 24px !important;
   font-weight: 600 !important;
@@ -3953,18 +3950,9 @@ button[class*="toast-close"] svg,
 .v2-workbench-search button.submit-bar:hover,
 .v2-workbench-search button[class*="submit-bar"]:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
-  /* Hover label judged on the hover fill (#2645). */
-  color: var(--color-button-primary-text-hover, var(--color-text-primary, #0B0C0C)) !important;
+  --color-button-primary-text: var(--color-button-primary-text-hover, var(--color-button-primary-text-resting, #FFFFFF));
   box-shadow: none !important;
   transform: none !important;
-}
-.v2-workbench-search .mdms-add-btn:hover .digit-button-label,
-.v2-workbench-search button.digit-submit-bar:hover .digit-button-label,
-.v2-workbench-search button.submit-bar:hover h2,
-.v2-workbench-search button.submit-bar:hover .digit-button-label,
-.v2-workbench-search button[class*="submit-bar"]:hover h2,
-.v2-workbench-search button[class*="submit-bar"]:hover .digit-button-label {
-  color: var(--color-button-primary-text-hover, var(--color-text-primary, #0B0C0C)) !important;
 }
 .v2-workbench-search button.submit-bar h2,
 .v2-workbench-search button[class*="submit-bar"] h2,
@@ -3975,6 +3963,16 @@ button[class*="toast-close"] svg,
   text-transform: none !important;
   letter-spacing: 0 !important;
   margin: 0 !important;
+}
+/* Labels inside the filled buttons take the button's label pair; other
+ * labels on the page keep the body colour above. */
+.v2-workbench-search .mdms-add-btn .digit-button-label,
+.v2-workbench-search button.digit-submit-bar .digit-button-label,
+.v2-workbench-search button.submit-bar h2,
+.v2-workbench-search button.submit-bar .digit-button-label,
+.v2-workbench-search button[class*="submit-bar"] h2,
+.v2-workbench-search button[class*="submit-bar"] .digit-button-label {
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
 }
 
 /* Mobile: stack header actions, full-width filter inputs */
@@ -4490,7 +4488,8 @@ button.digit-submit-bar, button[class*="submit-bar"],
  * to the card edge when right-aligned. */
 button:not([class]):not(:has(> svg)):not(:has(> img)) {
   background-color: var(--color-button-primary-bg-default, var(--color-primary-2, #FEC931)) !important;
-  color: var(--color-text-primary, #0B0C0C) !important;
+  /* The fill's own label; :hover swaps the variable (#2645). */
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   padding: 10px 28px !important;
   font-weight: 500 !important;
   border-radius: 4px !important;
@@ -4507,8 +4506,8 @@ button:not([class]):not(:has(> svg)):not(:has(> img)) {
 }
 button:not([class]):not(:has(> svg)):not(:has(> img)):hover {
   background-color: var(--color-button-primary-bg-hover, #E6B800) !important;
-  /* Hover label judged on the hover fill (#2645). */
-  color: var(--color-button-primary-text-hover, var(--color-text-primary, #0B0C0C)) !important;
+  /* Hover label judged on the hover fill; the resting colour reads it (#2645). */
+  --color-button-primary-text: var(--color-button-primary-text-hover, var(--color-button-primary-text-resting, #FFFFFF));
   box-shadow: 0 1px 3px 0 rgba(16, 24, 40, 0.10);
 }
 
