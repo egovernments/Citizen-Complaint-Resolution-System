@@ -45,7 +45,7 @@ cms-saas (EKS `ccrs-prod`) is its own environment: `charts/environments/cms-saas
 holds what is specific to it and every helmfile layers it over `env.yaml`.
 
 ```bash
-scripts/cms-saas-secrets-from-cluster.sh        # once per checkout: writes the git-ignored secrets file
+scripts/cms-saas-secrets-from-cluster.sh        # before EVERY apply: refreshes it, or stops on a stale copy
 helmfile -f digit-helmfile.yaml -e cms-saas diff
 helmfile -f digit-helmfile.yaml -e cms-saas apply
 ```
