@@ -393,7 +393,9 @@ body.dg-body {
     align-items: center;
     justify-content: center;
     min-height: 100vh;
-    padding: 24px;
+    /* 58px = 24px + the footer's 34px (#2714): room for it below a tall
+       card; the same on top, so a short card stays centred. */
+    padding: 58px 24px;
     width: 100%;
     background-color: transparent;
     flex-shrink: 0;
@@ -736,6 +738,15 @@ body.dg-body {
     position: absolute;
     bottom: 10px;
     line-height: 24px;
+}
+
+/* Under the banner the footer follows the card rather than the bottom of the
+ * first screen, so a tall card (authenticator setup, #2714) pushes it down
+ * instead of running under it. On a short page the negative margin keeps it
+ * where it was: 10px above the bottom of the viewport. */
+.dg-banner > .dg-employee-footer {
+    position: static;
+    margin: -34px auto 10px;
 }
 
 .dg-employee-footer img {
