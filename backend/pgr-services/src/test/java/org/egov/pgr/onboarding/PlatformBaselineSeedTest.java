@@ -101,10 +101,14 @@ public class PlatformBaselineSeedTest {
      * The dashboard catalog is copied from its repository source of truth (the files digit-mcp's catalog floor also
      * embeds): schemas from local-setup/db/dss-mdms-seed/schemas, records from ansible/nairobi-mdms/mdms/dss, with the
      * source tenant dropped because onboarding writes each record at the workspace. A source edit must be copied here
-     * (with a version bump) or this fails.
+     * (with a version bump) or this fails. The image build (build/maven/Dockerfile) copies only this module's pom.xml
+     * and src, so there the sources are absent and the check is skipped.
      */
     @Test public void dashboardCatalogMatchesItsRepositorySource() throws Exception {
         ObjectMapper mapper = new ObjectMapper(); java.nio.file.Path repo = java.nio.file.Path.of("../..");
+        org.junit.Assume.assumeTrue("dashboard catalog sources (local-setup/db/dss-mdms-seed/schemas, ansible/nairobi-mdms/mdms/dss) not present",
+                java.nio.file.Files.isDirectory(repo.resolve("local-setup/db/dss-mdms-seed/schemas"))
+                        && java.nio.file.Files.isDirectory(repo.resolve("ansible/nairobi-mdms/mdms/dss")));
         for (String master : List.of("KpiDefinition", "DashboardPack")) {
             String code = "dss." + master;
             JsonNode schema = null;
