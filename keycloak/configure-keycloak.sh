@@ -44,10 +44,14 @@ in_keycloak() {
   if [ -z "${KEYCLOAK_KCADM_SERVER:-}" ]; then
     docker exec ${opts[@]+"${opts[@]}"} "$KEYCLOAK_CONTAINER" "$@"
   else
-    (
-      for assignment in ${assignments[@]+"${assignments[@]}"}; do export "${assignment?}"; done
-      exec "$@"
-    )
+    # The -e names include readonly script variables (KCADM_SERVER), which a
+    # subshell inherits and cannot assign, so `export` there aborts. `env
+    # NAME=VALUE cmd` would put the values (KCADM_PASSWORD) on env's argv, i.e.
+    # /proc/<pid>/cmdline. Instead a fresh bash, which inherits no readonly
+    # declarations, reads them as `export` lines from a pipe on fd 3: printf is
+    # a builtin, so no value reaches any argv, and stdin stays free for -i.
+    bash -c 'set -a; . /dev/fd/3; set +a; exec 3<&-; exec "$@"' in_keycloak "$@" \
+      3< <(for assignment in ${assignments[@]+"${assignments[@]}"}; do printf 'export %q\n' "$assignment"; done)
   fi
 }
 readonly KC_CONFIG=/tmp/identity-bff-kcadm.config
@@ -357,6 +361,8 @@ configure_employee_flow() {
 # client's theme and, when `flow` is set, its browser flow (an empty `flow`
 # clears any override, so the realm's browser flow applies; an empty `theme`
 # likewise leaves login_theme absent, clearing an earlier value).
+# `<callback>/*` lets the BFF end an email change's redirect with the
+# workspace slug, which the employee theme reads from the emailed link (#2645).
 # `signin_path` is the surface's sign-in route under /digit-ui/, Keycloak's
 # "Back to Application" (baseUrl). The site root is no page: it falls through
 # to the API gateway (#2644). nginx sends this tenantless route to the default
@@ -374,7 +380,7 @@ configure_digit_ui_client() {
   kc update "clients/$client_uuid_value" -r "$REALM" \
     -s standardFlowEnabled=true -s implicitFlowEnabled=false \
     -s "baseUrl=${DIGIT_UI_BASE_URL%/}/digit-ui/$signin_path" \
-    -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\",\"$PASSWORD_SETUP_REDIRECT\"]" \
+    -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\",\"$IDENTITY_REDIRECT_URI/*\",\"$PASSWORD_SETUP_REDIRECT\"]" \
     -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
     -s "authenticationFlowBindingOverrides.browser=$flow_id" >/dev/null
   kc get "clients/$client_uuid_value" -r "$REALM" |

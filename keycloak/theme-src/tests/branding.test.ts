@@ -178,6 +178,20 @@ describe("public MDMS branding (replacement for the BFF relay)", () => {
         }
     });
 
+    it("reads an email change link's tenant from its redirect, with nothing remembered (#2645)", () => {
+        // The verification link opens in a fresh Keycloak session: a private tab or another browser.
+        const callback = "https://x.test/identity/v1/callback/bomet-county";
+        localStorage.clear();
+        expect(resolveTenantSlug({ search: `?key=h.${b64({ reduri: callback })}.s&client_id=digit-ui-employee&tab_id=t1` })).toBe("bomet-county");
+        sessionStorage.clear();
+        expect(resolveTenantSlug({ search: `?client_data=${b64({ ru: callback, rt: "code", st: "s" })}&tab_id=t1` })).toBe("bomet-county");
+        sessionStorage.clear();
+        expect(resolveTenantSlug({ search: `?key=h.${b64({ reduri: `${callback}/extra` })}.s` })).toBeUndefined();
+        sessionStorage.clear();
+        // Another client's callback is not the BFF's.
+        expect(resolveTenantSlug({ search: `?client_data=${b64({ ru: "https://app.test/auth/callback/keycloak" })}` })).toBeUndefined();
+    });
+
     it("keeps the link's landing-page tenant until a page with a tab_id takes it over (#2645)", () => {
         resolveTenantSlug({ search: `?key=h.${b64({ reduri: ru })}.s` });
         expect(resolveTenantSlug({ search: "", loginAction: "/login?tab_id=a" })).toBe("bomet-county");

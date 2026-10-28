@@ -33,6 +33,22 @@ settings below exist.
 
 ## Before enabling
 
+**Or let `identity-bootstrap` do steps 1-3.** With `identity.bootstrap.enabled:
+true`, `secrets.identity.existingSecret` set, and
+`identity.identity-bff.config.DIGIT_ADMIN_USERNAME` set in the environment to a
+dedicated employee (not `ADMIN`, which core-services/user-bootstrap creates with
+another password; the chart default does not count, and the identity helmfile
+refuses to render without it), the identity helmfile installs
+`charts/identity/identity-bootstrap` before Keycloak: an idempotent hook Job that
+creates `identity-secrets` (every missing key generated, none rewritten) and
+pgr-services' `pgr-onboarding`, Keycloak's role and database, and the BFF's
+`ACCOUNT_ADMIN` employee plus the onboarding provisioner, then checks both can
+sign in. Two keys come from outside accounts, so it cannot generate them:
+`keycloak-smtp-password` (with SMTP auth on) and `keycloak-google-client-secret`
+(with `configure.googleClientId` set). Add them to the Secret yourself; the Job
+stops and prints the command for whichever is missing.
+cms-saas runs this way (`charts/environments/cms-saas.yaml`).
+
 1. **Database.** Keycloak uses the platform Postgres (`egov-config`'s `db-host`)
    with a database and role of its own. Create them once:
 
@@ -157,8 +173,12 @@ defaults the Ansible path uses. Notable ones:
 - `IDENTITY_TRUST_PROXY_HOPS` defaults to `1` (ingress-nginx straight to the
   BFF; Compose uses 2 for host nginx then Kong). Add one for each L7 load
   balancer in front of ingress-nginx that appends to `X-Forwarded-For`.
-- DIGIT calls go through the gateway (`http://gateway.egov:8080/...`). OTP
-  creation and token revocation go straight to `egov-otp` and `egov-user`.
+- DIGIT calls go through the gateway (`http://gateway.egov:8080/...`), except
+  egov-user (`DIGIT_USER_SERVICE_URL`), OTP creation and token revocation,
+  which go straight to `egov-user` and `egov-otp`. The user calls bypass the
+  gateway's access control as the Ansible tier's Kong does: the BFF's
+  `ACCOUNT_ADMIN` holds roles on the state tenant only, and every
+  self-service workspace is a root tenant of its own.
 - Redis is the platform Redis, `redis.backbone:6379`. The BFF takes a host and
   port only, no credential.
 

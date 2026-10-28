@@ -104,3 +104,6 @@ gatus:
   checks:
     boundaryManagement: false  # urban/urban-helmfile.yaml: egov-bndry-mgmnt
     inbox: false               # analytics/analytics-helmfile.yaml: inbox
+    # Every other release-backed check follows the environment's
+    # disabledReleases directly (templates/configmap.yaml): a release left out
+    # gets no check. These two are for releases a helmfile hard-codes off.

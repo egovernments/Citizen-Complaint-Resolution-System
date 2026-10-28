@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: turbopass-proxy
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  labels:
+    app: turbopass-proxy
+data:
+  default.conf: |
+    {{- include "turbopass-proxy.conf" . | nindent 4 }}

@@ -162,7 +162,9 @@ jobs:
             # `values:` path is truncated mid-word. It is dead, not deployed --
             # skipped here rather than silently failing the guard. If it is ever
             # revived it gains an environments block and starts being checked.
-            if ! grep -q '^environments:' "$f"; then
+            # `bases:` counts: the tier helmfiles take `env` from the shared
+            # charts/environments/environments.yaml (which this glob skips).
+            if ! grep -qE '^(environments|bases):' "$f"; then
               echo 'SKIPPED (no environments block; not included by digit-helmfile.yaml)'
               continue
             fi

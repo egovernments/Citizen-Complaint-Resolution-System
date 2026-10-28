@@ -1,9 +1,9 @@
-environments:
-  env:
-    values:
-      - ../environments/env-secrets.yaml
-      - ../environments/env.yaml
+bases:
+  - ../environments/environments.yaml
 ---
+{{- /* Releases this environment turns off by name (env values `disabledReleases`,
+       empty by default): every release that is otherwise always installed reads it. */ -}}
+{{- $disabled := index .Values "disabledReleases" | default list }}
 templates:
   default: &default
     chart: ./{{`{{ .Release.Name }}`}}
@@ -20,23 +20,23 @@ templates:
 
 releases:
   - name: egov-user-event
-    installed: true
+    installed: {{ not (has "egov-user-event" $disabled) }}
     <<: *default
 
   - name: egov-hrms
-    installed: true
+    installed: {{ not (has "egov-hrms" $disabled) }}
     <<: *default
 
   - name: digit-config-service
-    installed: true
+    installed: {{ not (has "digit-config-service" $disabled) }}
     <<: *default
 
   - name: digit-user-preferences-service
-    installed: true
+    installed: {{ not (has "digit-user-preferences-service" $disabled) }}
     <<: *default
 
   - name: novu-bridge
-    installed: true
+    installed: {{ not (has "novu-bridge" $disabled) }}
     <<: *default
     # Wait for the rollout before moving on: digit-helmfile.yaml deploys urban
     # (pgr-services) after this file, and a new pgr-services must not publish thin

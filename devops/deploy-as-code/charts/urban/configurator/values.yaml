@@ -35,3 +35,36 @@ resources: |
     memory: 24Mi
   limits:
     memory: 64Mi
+
+# Runtime config (<base>/config.js), the keys of the Ansible tier's
+# configurator-config.js.j2. Blank = the SPA's own default:
+#   STATE_TENANT_ID        login form's tenant (default pg)
+#   OVERPASS_URL           boundary-polygon Overpass endpoint (default overpass-api.de)
+#   TURBOPASS_URL          Turbopass base for boundary search and the Geography
+#                          step's preconfigured official sets (default same-origin
+#                          /turbopass). A shared instance serves any configurator.
+#   BOUNDARY_SEARCH_LIMIT  boundary-service page cap (default 300)
+#   SENTRY_DSN, POSTHOG_KEY, POSTHOG_HOST  this console's own telemetry (default off)
+runtimeConfig:
+  STATE_TENANT_ID: ""
+  OVERPASS_URL: ""
+  TURBOPASS_URL: ""
+  BOUNDARY_SEARCH_LIMIT: ""
+  SENTRY_DSN: ""
+  POSTHOG_KEY: ""
+  POSTHOG_HOST: ""
+
+# Rolls the pods when config.js changes (common sets no deployment timestamp).
+additionalAnnotations: |
+  checksum/config: {{ include "configurator.runtimeConfigJs" . | sha256sum | quote }}
+
+extraVolumes: |
+  - name: runtime-config
+    configMap:
+      name: configurator-runtime-config
+extraVolumeMounts: |
+  - name: runtime-config
+    mountPath: /usr/share/nginx/html/configurator/config.js
+    subPath: config.js
+    readOnly: true
+

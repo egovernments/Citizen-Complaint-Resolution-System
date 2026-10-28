@@ -1,9 +1,9 @@
-environments:
-  env:
-    values:
-      - ../environments/env-secrets.yaml
-      - ../environments/env.yaml
+bases:
+  - ../environments/environments.yaml
 ---
+{{- /* Releases this environment turns off by name (env values `disabledReleases`,
+       empty by default): every release that is otherwise always installed reads it. */ -}}
+{{- $disabled := index .Values "disabledReleases" | default list }}
 templates:
   default: &default
     chart: ./{{`{{ .Release.Name }}`}}
@@ -20,45 +20,51 @@ templates:
 
 releases:
   - name: mdms-v2
-    installed: true
+    installed: {{ not (has "mdms-v2" $disabled) }}
+    <<: *default
+
+  # /egov-mdms-service/* -> mdms-v2 path shim, as Compose/Ansible run it. Needed by
+  # pgr-services' self-service onboarding (see the chart's values.yaml).
+  - name: egov-mdms-service
+    installed: {{ not (has "egov-mdms-service" $disabled) }}
     <<: *default
   
   - name: egov-localization
-    installed: true
+    installed: {{ not (has "egov-localization" $disabled) }}
     <<: *default
 
   - name: boundary-service
-    installed: true
+    installed: {{ not (has "boundary-service" $disabled) }}
     <<: *default
   
   - name: egov-accesscontrol
-    installed: true
+    installed: {{ not (has "egov-accesscontrol" $disabled) }}
     <<: *default
 
   - name: audit-service
-    installed: true
+    installed: {{ not (has "audit-service" $disabled) }}
     <<: *default
 
   - name: egov-enc-service
-    installed: true
+    installed: {{ not (has "egov-enc-service" $disabled) }}
     needs:
     - mdms-v2
     <<: *default
 
   - name: egov-filestore
-    installed: true
+    installed: {{ not (has "egov-filestore" $disabled) }}
     <<: *default
 
   - name: egov-idgen
-    installed: true
+    installed: {{ not (has "egov-idgen" $disabled) }}
     <<: *default
 
   - name: egov-indexer
-    installed: true
+    installed: {{ not (has "egov-indexer" $disabled) }}
     <<: *default
 
   - name: egov-notification-mail
-    installed: true
+    installed: {{ not (has "egov-notification-mail" $disabled) }}
     <<: *default
 
   # Replaced by novu-bridge, which consumes egov.core.notification.sms itself
@@ -68,35 +74,35 @@ releases:
     <<: *default
 
   - name: egov-user
-    installed: true
+    installed: {{ not (has "egov-user" $disabled) }}
     needs:
     - egov-enc-service
     <<: *default
 
   - name: egov-otp
-    installed: true
+    installed: {{ not (has "egov-otp" $disabled) }}
     <<: *default
   
   - name: egov-persister
-    installed: true
+    installed: {{ not (has "egov-persister" $disabled) }}
     <<: *default
 
   - name: egov-url-shortening
-    installed: true
+    installed: {{ not (has "egov-url-shortening" $disabled) }}
     <<: *default
 
   - name: egov-workflow-v2
-    installed: true
+    installed: {{ not (has "egov-workflow-v2" $disabled) }}
     needs:
     - mdms-v2
     <<: *default
 
   - name: user-otp
-    installed: true
+    installed: {{ not (has "user-otp" $disabled) }}
     <<: *default
 
   - name: configmaps
-    installed: true
+    installed: {{ not (has "configmaps" $disabled) }}
     <<: *default
 
   # service-request / pdf-service: not used by CCRS — zero callers in pgr-services, the
@@ -111,11 +117,11 @@ releases:
     <<: *default
   
   - name: gateway
-    installed: true
+    installed: {{ not (has "gateway" $disabled) }}
     <<: *default
   
   - name: boundary-bulk-bff
-    installed: true
+    installed: {{ not (has "boundary-bulk-bff" $disabled) }}
     <<: *default
 
 
@@ -127,5 +133,5 @@ releases:
   # they are encrypted with THIS deployment's key (the dump's users use the
   # compose key and are unusable here) and ADMIN gets ACCOUNT_ADMIN for onboarding.
   - name: user-bootstrap
-    installed: true
+    installed: {{ not (has "user-bootstrap" $disabled) }}
     <<: *default

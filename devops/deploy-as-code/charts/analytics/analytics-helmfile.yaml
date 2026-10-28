@@ -1,8 +1,5 @@
-environments:
-  env:
-    values:
-      - ../environments/env-secrets.yaml
-      - ../environments/env.yaml
+bases:
+  - ../environments/environments.yaml
 ---
 templates:
   default: &default

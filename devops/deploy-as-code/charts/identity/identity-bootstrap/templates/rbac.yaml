@@ -1,0 +1,51 @@
+{{- /* Hook resources too, at a lower weight, so they exist before the Job runs,
+       and deleted once the hooks finish, succeeded or failed (Helm waits for
+       every hook of the event first): no standing identity keeps get/patch on
+       these Secrets. The Job keeps only hook-succeeded, so a failed run's logs
+       stay for debugging. */ -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: identity-bootstrap
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded,hook-failed
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: identity-bootstrap
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded,hook-failed
+rules:
+  # create cannot be scoped to a name; read and patch are, to the two it owns.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [{{ .Values.identitySecret | quote }}, {{ .Values.onboardingSecret | quote }}]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: identity-bootstrap
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded,hook-failed
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: identity-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: identity-bootstrap
+    namespace: {{ .Release.Namespace }}

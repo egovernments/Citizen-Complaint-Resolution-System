@@ -89,10 +89,11 @@ export function resolveTenantSlug(params: {
 
 /**
  * The identity BFF ends a tenant's password setup redirect with its slug
- * (`/password/setup-complete/<state>/<slug>`). An emailed link starts a new
- * Keycloak session in whatever browser opens it, so this is all its pages
- * can learn the tenant from (#2645). Keycloak carries the redirect in the
- * link's action token (`key`), then in `client_data` on every page after.
+ * (`/password/setup-complete/<state>/<slug>`), and an email change's
+ * (`/callback/<slug>`). An emailed link starts a new Keycloak session in
+ * whatever browser opens it, so this is all its pages can learn the tenant
+ * from (#2645). Keycloak carries the redirect in the link's action token
+ * (`key`), then in `client_data` on every page after.
  */
 function emailedLinkSlug(search: URLSearchParams): string | undefined {
     for (const uri of [
@@ -100,7 +101,8 @@ function emailedLinkSlug(search: URLSearchParams): string | undefined {
         base64UrlJsonField(search.get("key")?.split(".")[1], "reduri"),
     ]) {
         if (typeof uri !== "string") continue;
-        const slug = /\/password\/setup-complete\/[^/?#]+\/([^/?#]+)$/.exec(uri)?.[1];
+        // Only the BFF's own routes: another client's `/callback/<x>` is no slug.
+        const slug = /\/identity\/v1\/(?:password\/setup-complete\/[^/?#]+|callback)\/([^/?#]+)$/.exec(uri)?.[1];
         if (isValidSlug(slug)) return slug;
     }
     return undefined;

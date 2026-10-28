@@ -250,6 +250,79 @@ describe('identity helmfile wiring', () => {
     expect(read('devops/deploy-as-code/charts/environments/env.yaml')).toMatch(/^identity:\n {2}enabled: false$/m);
   });
 
+  // identity-bootstrap replaces helm-identity.md's manual "Before enabling" steps.
+  test('identity-bootstrap runs before keycloak, only when asked for, on the existingSecret path', () => {
+    expect(helmfile).toMatch(/^ {4}installed: \{\{ \$bootstrap \}\}$/m);
+    expect(helmfile).toContain('{{- $bootstrap := and $enabled (index $boot "enabled" | default false) }}');
+    expect(helmfile).toMatch(/- name: keycloak\n[\s\S]*?\{\{- if \$bootstrap \}\}\n {4}needs:\n {6}- identity-bootstrap/);
+    expect(helmfile).toContain('identity.bootstrap.enabled needs secrets.identity.existingSecret');
+    expect(read('devops/deploy-as-code/charts/environments/env.yaml')).toMatch(/^ {2}bootstrap:\n {4}enabled: false$/m);
+    // The release outlasts the Job, as keycloak's does its realm Job.
+    const timeout = Number(/- name: identity-bootstrap\n[\s\S]*?\n {4}timeout: (\d+)\n/.exec(helmfile)?.[1]);
+    const deadline = Number(/^activeDeadlineSeconds: (\d+)$/m.exec(read(`${CHARTS}/identity-bootstrap/values.yaml`))?.[1]);
+    expect(deadline).toBeGreaterThan(0);
+    expect(timeout).toBeGreaterThan(deadline);
+  });
+
+  test('identity-bootstrap never rewrites a present key, and generates every key the charts require', () => {
+    const script = read(`${CHARTS}/identity-bootstrap/files/secrets.sh`);
+    expect(script).toContain('if [ -n "$data" ] && has "$data" "$key"; then continue; fi');
+    for (const key of ['keycloak-db-password', 'keycloak-admin-password', 'keycloak-bff-client-secret',
+      'keycloak-admin-client-secret', 'keycloak-employee-client-secret', 'keycloak-citizen-client-secret',
+      'digit-admin-password']) {
+      expect(script).toContain(`"${key}=`);
+    }
+    // Keys from outside accounts are required when their feature is on, never generated.
+    expect(script).toContain('[ "$SMTP_AUTH" = "true" ] && require keycloak-smtp-password');
+    expect(script).toContain('[ "$GOOGLE_SIGNIN" = "true" ] && require keycloak-google-client-secret');
+    expect(helmfile).toContain('googleSignin: {{ ne (index $kcConfigure "googleClientId" | default "") "" }}');
+    // pgr-services presents the BFF's values, so they are copied, not generated.
+    expect(script).toContain('"onboarding-token=value \\"\\$identity\\" identity-onboarding-token"');
+    expect(script).toContain('"provisioner-password=value \\"\\$identity\\" digit-provisioner-password"');
+  });
+
+  test('identity-bootstrap refuses the platform ADMIN and creates each employee where its service signs in', () => {
+    expect(helmfile).toMatch(/if and \$bootstrap \(or \(eq \$bootstrapAdmin ""\) \(eq \$bootstrapAdmin "ADMIN"\)\)/);
+    expect(helmfile).toContain('adminTenant: {{ index $bffConfig "DIGIT_ADMIN_TENANT_ID" | default "" | quote }}');
+    expect(helmfile).toContain('provisionerTenant: {{ index $pgrOnboarding "provisionerTenantId" | default "" | quote }}');
+    const accounts = read(`${CHARTS}/identity-bootstrap/files/accounts.sh`);
+    expect(accounts).toContain('account "${ADMIN_TENANT:-$STATE_TENANT}"');
+    expect(accounts).toContain('account "${PROVISIONER_TENANT:-$STATE_TENANT}"');
+  });
+
+  test("identity-bootstrap creates Keycloak's database where the keycloak chart connects, without the password on argv or in every run's SQL", () => {
+    expect(helmfile).toContain('host: {{ index $kcDb "host" | default "" | quote }}');
+    const job = read(`${CHARTS}/identity-bootstrap/templates/job.yaml`);
+    expect(job).toContain('- {name: PGPORT, value: {{ .Values.keycloakDb.port | quote }}}');
+    expect(job).toContain('- {name: PGSSLMODE, value: {{ .Values.dbSslMode | quote }}}');
+    expect(read(`${CHARTS}/identity-bootstrap/values.yaml`)).toMatch(/^dbSslMode: prefer$/m);
+    const sh = read(`${CHARTS}/identity-bootstrap/files/keycloak-db.sh`);
+    const sql = read(`${CHARTS}/identity-bootstrap/files/keycloak-db.sql`);
+    expect(sh).not.toMatch(/-v kcpw/);
+    expect(sql).toContain('\\getenv kcpw KC_PASSWORD');
+    // The plaintext CREATE/ALTER runs only when Keycloak cannot already sign in.
+    expect(sh.indexOf('exit 0')).toBeLessThan(sh.indexOf('-f /scripts/keycloak-db.sql'));
+  });
+
+  test("identity-bootstrap stops when pgr-onboarding disagrees with identity-secrets", () => {
+    const script = read(`${CHARTS}/identity-bootstrap/files/secrets.sh`);
+    expect(script).toContain('for pair in "digit-provisioner-password provisioner-password" "identity-onboarding-token onboarding-token"; do');
+  });
+
+  test('identity-bootstrap leaves no standing RBAC, keeps passwords off argv, and patches a Secret without data', () => {
+    expect(read(`${CHARTS}/identity-bootstrap/templates/rbac.yaml`).match(/hook-delete-policy: before-hook-creation,hook-succeeded/g)).toHaveLength(3);
+    const accounts = read(`${CHARTS}/identity-bootstrap/files/accounts.sh`);
+    expect(accounts).toContain('-d @-');
+    expect(accounts).toContain('--data-urlencode password@-');
+    expect(accounts).not.toMatch(/-d "\$body"/);
+    expect(accounts).not.toContain('"password=$password"');
+    expect(read(`${CHARTS}/identity-bootstrap/files/secrets.sh`)).toContain("else printf '{}'; fi ;;");
+  });
+
+  test('the BFF reaches egov-user directly by default, as the Ansible tier does', () => {
+    expect(read(`${BFF}/values.yaml`)).toMatch(/^ {2}DIGIT_USER_SERVICE_URL: "http:\/\/egov-user\.egov:8080\/user"$/m);
+  });
+
   test('Keycloak is ready, and its realm configured, before the BFF starts', () => {
     expect(helmfile).toMatch(/- name: keycloak\n[\s\S]*?wait: true/);
     expect(helmfile).toMatch(/- name: identity-bff\n[\s\S]*?needs:\n\s+- keycloak/);
@@ -267,7 +340,8 @@ describe('identity helmfile wiring', () => {
   test('the BFF reaches Keycloak through the same shared values and helper as the keycloak chart', () => {
     expect(helmfile).toMatch(/"httpPort" \(index \$kcOverrides "httpPort" \| default 8180\)/);
     expect(helmfile).toContain('"keycloak" $keycloak }}');
-    expect(helmfile.match(/^ {4}namespace: \{\{ \$namespace \}\}$/gm)).toHaveLength(2);
+    // keycloak, identity-bff and identity-bootstrap.
+    expect(helmfile.match(/^ {4}namespace: \{\{ \$namespace \}\}$/gm)).toHaveLength(3);
     expect(read(`${BFF}/templates/_helpers.tpl`)).toContain('{{- $kc := include "common.identity.keycloakUrl" . -}}');
     expect(read(`${KC}/templates/_helpers.tpl`)).toContain('{{- include "common.identity.keycloakUrl" . -}}');
     expect(read('devops/deploy-as-code/charts/common/templates/_identity.tpl')).toContain('define "common.identity.keycloakUrl"');

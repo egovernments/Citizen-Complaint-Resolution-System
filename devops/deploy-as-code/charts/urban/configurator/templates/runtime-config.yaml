@@ -1,0 +1,21 @@
+{{- /*
+  The configurator SPA's runtime config, <base>/config.js, rendered from
+  `runtimeConfig` like the Ansible tier's templates/configurator-config.js.j2,
+  and mounted over the copy the image ships (extraVolumes below). One image
+  then serves every deployment; a blank key falls through to the SPA's
+  build-time or in-code default, exactly as the image's own config.js does.
+
+  env.yaml overrides arrive as `configurator.runtimeConfig` in the wholesale
+  values; read them here explicitly rather than rely on common.name having
+  merged them by the time this file renders.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configurator-runtime-config
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  labels:
+    app: configurator
+data:
+  config.js: |
+    {{- include "configurator.runtimeConfigJs" . | nindent 4 }}

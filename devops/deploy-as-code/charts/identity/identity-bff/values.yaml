@@ -207,7 +207,11 @@ config:
   # service and must never be routed through a public gateway: the OTP
   # response carries the code.
   DIGIT_GATEWAY_HOST: "http://gateway.egov:8080"
-  DIGIT_USER_SERVICE_URL: "http://gateway.egov:8080/user"
+  # egov-user directly, as the Ansible tier's Kong routes /user (no RBAC). The
+  # BFF's ACCOUNT_ADMIN lives on the state tenant; through the gateway, access
+  # control refuses it on each self-service workspace's own root tenant, and
+  # onboarding stalls at BINDING with DIGIT_UNAVAILABLE.
+  DIGIT_USER_SERVICE_URL: "http://egov-user.egov:8080/user"
   DIGIT_USER_LOGOUT_URL: "http://egov-user.egov:8080/user/_logout"
   DIGIT_OTP_CREATE_URL: "http://egov-otp.egov:8080/otp/v1/_create"
   DIGIT_MDMS_SEARCH_URL: "http://gateway.egov:8080/mdms-v2/v1/_search"

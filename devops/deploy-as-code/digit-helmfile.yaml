@@ -5,6 +5,14 @@ environments:
     values:
       - ./charts/environments/env-secrets.yaml
       - ./charts/environments/env.yaml
+  # cms-saas.digit.org: env.yaml + environments/cms-saas.yaml, and the real
+  # secrets from the git-ignored cms-saas-secrets.yaml (scripts/cms-saas-secrets-from-cluster.sh).
+  cms-saas:
+    values:
+      - ./charts/environments/env-secrets.yaml
+      - ./charts/environments/cms-saas-secrets.yaml
+      - ./charts/environments/env.yaml
+      - ./charts/environments/cms-saas.yaml
 
 ---
 
