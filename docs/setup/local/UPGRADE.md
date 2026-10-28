@@ -72,6 +72,22 @@ refuses, but some requirements are only checked by the playbook itself (in
 `_example.yml` and release notes. A missed one fails the deploy, which then
 rolls back cleanly, but costs a maintenance window.
 
+### Release migration guides come first
+
+A release that changes data or configuration in ways a deploy cannot do on its
+own ships a migration guide in its release directory, for example the
+v2.12 → v2.20 guide (Keycloak and identity) in [`docs/releases/2.20/`](../../releases/2.20/). `digit-upgrade` does not replace it. Use them together:
+
+| Guide section | With `digit-upgrade` |
+|---|---|
+| Inventory, stop scheduled deploys (§1.1, §1.2) | Do them. |
+| Back up (§1.3) | `digit-upgrade deploy` takes and verifies the backup; keep the guide's OpenBao and Keycloak copies too if you want them off the box. |
+| Configuration (§2.1, §2.2) | Do them in host_vars **before** analysing. The analysis refuses what the target's preflight refuses; what only the playbook checks (SMTP) is on you. |
+| Data at the root tenant (§2.3) | Do them **before** the deploy. Without the roles and role-actions, the identity BFF and the MCP tenant bootstrap get 403s after the upgrade. |
+| Deploy, rebuild the MDMS migrations image (§4) | `digit-upgrade deploy` (it rebuilds the migrations image and reruns the migrators). |
+| Users, verify (§5, §6) | Do them after the deploy. |
+| Rollback (§7) | Automatic; `digit-upgrade rollback` for an interrupted run. It restores the database too, so it does not depend on whether the old services can start on a migrated one. |
+
 ### 1. Back up /opt/digit and analyse
 
 ```bash
@@ -202,6 +218,26 @@ sudo local-setup/scripts/digit-upgrade rollback <run>
 It restarts the old stack if nothing had changed yet and rolls back fully
 otherwise; it also removes a database clone a killed run left behind and lifts
 the maintenance rule.
+
+### Cleaning up after an upgrade
+
+Nothing is deleted automatically. Once the new version is verified and you no
+longer need to roll back by hand:
+
+```bash
+# Full backups (database dumps, cold archives of /opt/digit, host state and volumes)
+ls -dt /var/backups/digit-upgrade/digit-upgrade-*
+B=digit-upgrade-YYYYMMDD-HHMMSS        # one you no longer need
+sudo rm -rf /var/backups/digit-upgrade/$B
+# The images that ran before that upgrade, pinned so a rollback could restart them
+docker images --format '{{.Repository}}:{{.Tag}}' | grep "^digit-upgrade-keep/.*:$B$" | xargs -r docker image rm
+# Trees a rollback set aside, and old analysis runs (they hold no secrets in clear)
+ls -d /opt/digit.failed-* /etc/nginx.failed-* /var/www.failed-* 2>/dev/null
+ls -dt /var/lib/digit-upgrade/runs/digit-upgrade-*
+```
+
+Each backup is about twice the size of `/opt/digit` plus the stack's volumes; the
+deploy refuses to start without that much free space.
 
 ## For playbook authors: the render contract
 
