@@ -45,7 +45,7 @@ Automatic escalation is **off after the upgrade** and is one switch for the whol
 | Issue | Symptom | Workaround / status |
 |-------|---------|-----------|
 | [#2729](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2729) | When adding an employee in the management console, the mobile number skips the country format set at onboarding. | Enter numbers in the onboarding format. |
-| [#1150](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1150) | Advanced › Role Actions has no Create or Edit buttons. | Fix merged on develop (#1856), awaiting QA; not on master yet. |
+| [#1150](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1150) | Advanced › Role Actions has no Create or Edit buttons. | Fix merged (#1856), awaiting QA. |
 
 ---
 
@@ -81,7 +81,7 @@ Automatic escalation is **off after the upgrade** and is one switch for the whol
 |----------|---------|
 | [release-notes-v2.20.md](release-notes-v2.20.md) | Feature-level release notes |
 | [release-config-changelog-v2.20.md](release-config-changelog-v2.20.md) | Deployment changelog: settings, services and upgrade steps |
-| [migration-guide-v2.12-to-v2.20-beta.md](migration-guide-v2.12-to-v2.20-beta.md) | Operator upgrade procedure (v2.12 → v2.20) |
+| [migration-guide-v2.12-to-v2.20.md](migration-guide-v2.12-to-v2.20.md) | Operator upgrade procedure (v2.12 → v2.20) |
 | [migration-guide-v2.12-to-v2.12.1.md](../2.12/migration-guide-v2.12-to-v2.12.1.md) | Escalation migration (step 6a) for servers still on v2.12 |
 
 ---
