@@ -253,6 +253,8 @@ class Deployment:
         ):
             source = scratch / f"{name}-source"
             render.export_commit(self.tool_root, commit, source)
+            if name == "target":
+                render.preflight(source, vars_path)
             raw[name] = scratch / f"{name}-render"
             render.render(source, self.tenant, vars_path, raw[name], allow_legacy=legacy)
         known = analyse.values_in_structure(values) | analyse.values_in_structure(analyse.base_tenant_vars(values, overrides))

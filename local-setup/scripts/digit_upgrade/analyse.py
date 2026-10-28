@@ -138,6 +138,8 @@ def analyse(
         ):
             source = scratch / f"{name}-source"
             render.export_commit(repo, commit, source)
+            if name == "target":
+                render.preflight(source, vars_path)
             raw[name] = scratch / f"{name}-render"
             renderers[name] = render.render(source, tenant, vars_path, raw[name], allow_legacy=legacy)
 

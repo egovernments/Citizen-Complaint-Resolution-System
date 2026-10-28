@@ -4,9 +4,10 @@ A version that carries the render contract (``local-setup/ansible/
 playbook-render.yml`` starting with ``# digit-render-contract: 1``) renders
 itself: its own playbook-deploy.yml, limited to the tasks tagged ``render``.
 
-Versions before the contract (v2.12-beta, v2.12, v2.12.1) have the same tasks
-without the tag.  For those the tag is grafted onto a frozen list of task
-names in the exported copy, and the version then renders itself the same way:
+Versions before the contract (v2.12-beta, v2.12, v2.12.1, and any commit in
+between) have the same tasks without the tag.  For those the tag is grafted,
+by exact task name, onto the frozen v2.12 list plus every task this version
+tags, in the exported copy; the version then renders itself the same way, so
 every file still comes from that version's own tasks and templates.
 """
 
@@ -119,6 +120,20 @@ def extract_tar(archive: Path, destination: Path, *, skip_unsafe_links: bool = F
             bundle.extractall(destination, members=members)  # validated above
 
 
+def preflight(source: Path, tenant_vars: Path) -> None:
+    """The version's own host_vars preflight (what deploy.sh runs first), if it has one."""
+    script = source / "local-setup/scripts/preflight.py"
+    if not script.is_file():
+        return
+    result = run([sys.executable, str(script), str(tenant_vars.resolve())], cwd=source / "local-setup/ansible", check=False)
+    if result.returncode:
+        failures = [line for line in (result.stdout + result.stderr).splitlines() if line.startswith("[FAIL]")]
+        raise UpgradeError(
+            "the tenant vars do not pass the target version's preflight, so its deploy.sh would refuse them:\n  "
+            + "\n  ".join(failures or [(result.stdout + result.stderr).strip()[-2000:]])
+        )
+
+
 def has_contract(source: Path) -> bool:
     playbook = source / "local-setup/ansible/playbook-render.yml"
     if not playbook.is_file():
@@ -169,10 +184,23 @@ def tag_tasks(playbook: str, names: Iterable[str]) -> str:
     return "".join(out)
 
 
+def render_task_names(playbook: Path) -> set[str]:
+    """Names of the play-level tasks a contract playbook tags `render`."""
+    import yaml
+
+    play = yaml.safe_load(playbook.read_text(encoding="utf-8"))[0]
+    names = set()
+    for task in (play.get("pre_tasks") or []) + play.get("tasks", []):
+        if isinstance(task, dict) and "render" in (task.get("tags") or []) and task.get("name"):
+            names.add(task["name"])
+    return names
+
+
 def graft_render_contract(source: Path) -> None:
     ansible_dir = source / "local-setup/ansible"
     playbook = ansible_dir / "playbook-deploy.yml"
-    playbook.write_text(tag_tasks(playbook.read_text(encoding="utf-8"), LEGACY_RENDER_TASKS), encoding="utf-8")
+    names = set(LEGACY_RENDER_TASKS) | render_task_names(TOOL_ROOT / "local-setup/ansible/playbook-deploy.yml")
+    playbook.write_text(tag_tasks(playbook.read_text(encoding="utf-8"), names), encoding="utf-8")
     shutil.copyfile(TOOL_ROOT / "local-setup/ansible/playbook-render.yml", ansible_dir / "playbook-render.yml")
 
 

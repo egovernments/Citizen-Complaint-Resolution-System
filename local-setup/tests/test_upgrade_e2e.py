@@ -22,7 +22,7 @@ from digit_upgrade.common import NeedsOperator, UpgradeError  # noqa: E402
 from digit_upgrade.trees import prepare  # noqa: E402
 
 PERSISTER = "configs/egov-persister/audit-service-persister.yml"
-VARS = ROOT / "local-setup/ansible/inventory/host_vars/_example.yml"
+EXAMPLE = ROOT / "local-setup/ansible/inventory/host_vars/_example.yml"
 
 
 def git(repo, *args):
@@ -42,6 +42,11 @@ class UpgradeEndToEndTests(unittest.TestCase):
     def setUpClass(cls):
         cls._temp = tempfile.TemporaryDirectory()
         tmp = Path(cls._temp.name)
+        # The tracked example deliberately fails preflight once (the fast-path
+        # data-wipe acknowledgement); an operator sets it, and so does this test.
+        cls.vars = tmp / "rt.yml"
+        cls.vars.write_text(EXAMPLE.read_text(encoding="utf-8").replace(
+            "db_fast_path_ack_data_wipe: false", "db_fast_path_ack_data_wipe: true"), encoding="utf-8")
         cls.repo = tmp / "repo"
         subprocess.run(["git", "clone", "-q", "--shared", str(ROOT), str(cls.repo)], check=True)
         # The working tree under test, not just its last commit.
@@ -60,7 +65,7 @@ class UpgradeEndToEndTests(unittest.TestCase):
         cls.live = tmp / "live"
         source = tmp / "base-source"
         render.export_commit(cls.repo, cls.base, source)
-        render.render(source, "rt", VARS, cls.live, allow_legacy=False)
+        render.render(source, "rt", cls.vars, cls.live, allow_legacy=False)
         replace_line(cls.live / PERSISTER, 5, "      description: operator wording")
         kong = cls.live / "kong/kong.yml"
         kong.write_text("# operator note\n" + kong.read_text(encoding="utf-8"), encoding="utf-8")
@@ -70,7 +75,7 @@ class UpgradeEndToEndTests(unittest.TestCase):
 
         cls.output = tmp / "runs"
         try:
-            analyse.analyse(repo=cls.repo, target_ref=cls.target, base_ref=cls.base, tenant="rt", tenant_vars=VARS,
+            analyse.analyse(repo=cls.repo, target_ref=cls.target, base_ref=cls.base, tenant="rt", tenant_vars=cls.vars,
                             base_overrides={}, backup=cls.live, output=cls.output, excludes=())
         except NeedsOperator:
             pass
@@ -117,8 +122,8 @@ class UpgradeEndToEndTests(unittest.TestCase):
         for name, commit in (("base", manifest["base_commit"]), ("target", manifest["target_commit"])):
             render.export_commit(self.repo, commit, scratch / f"{name}-source")
             raw[name] = scratch / f"{name}-render"
-            render.render(scratch / f"{name}-source", "rt", VARS, raw[name], allow_legacy=False)
-        known = analyse.values_in_structure(analyse.load_yaml(VARS))
+            render.render(scratch / f"{name}-source", "rt", self.vars, raw[name], allow_legacy=False)
+        known = analyse.values_in_structure(analyse.load_yaml(self.vars))
         deployment = deploy.Deployment(self.run_dir, backup_parent=scratch / "b", resolution=None, tool_root=self.repo)
         return deployment, prepare(raw, scratch / "normalized", known_secrets=known, excludes=()), scratch
 
