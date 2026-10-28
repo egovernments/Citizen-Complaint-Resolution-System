@@ -150,6 +150,15 @@ jobs:
       # in CI and their assertions were dead code — a template could be flipped
       # back to a pre-set data-wipe ack on a fully green build. A new file under
       # static/ now runs without anyone remembering to add it here.
+      # Guarded-upgrade analyser, deployer and normal-deploy drift guard. Named
+      # explicitly: other test_*.py here need pytest or a live stack.
+      - name: upgrade and drift-guard unit tests
+        run: >-
+          python3 -m unittest -v
+          local-setup.tests.test_upgrade_dry_run
+          local-setup.tests.test_upgrade_deploy
+          local-setup.tests.test_deploy_drift
+
       - name: static contract tests
         working-directory: local-setup/tests
         run: |

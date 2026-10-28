@@ -2888,6 +2888,17 @@
     # delta, fills secret fields from the existing deployment/OpenBao path, and
     # passes that private overlay here.  Apply it after the normal target render
     # and tenant rewrites, but before OpenBao or any application container starts.
+    - name: "upgrade-safe — reject unresolved redaction markers before applying the overlay"
+      ansible.builtin.command:
+        argv: [grep, -rIlF, --exclude-dir=.git, --, "<REDACTED>", "{{ upgrade_overlay_dir }}"]
+      register: upgrade_redaction_markers
+      # grep: 0 = a marker was found, 1 = none, >1 = error.
+      failed_when: upgrade_redaction_markers.rc != 1
+      changed_when: false
+      delegate_to: localhost
+      become: false
+      when: upgrade_safe_mode | default(false) | bool
+
     - name: "upgrade-safe — apply resolved local configuration overlay"
       ansible.posix.synchronize:
         src: "{{ upgrade_overlay_dir }}/"
@@ -2904,20 +2915,6 @@
         path: "{{ digit_dir }}/{{ item }}"
         state: absent
       loop: "{{ upgrade_deleted_paths }}"
-      when: upgrade_safe_mode | default(false) | bool
-
-    - name: "upgrade-safe — reject unresolved redaction markers before startup"
-      ansible.builtin.shell: |
-        set -euo pipefail
-        if grep -RIl --exclude-dir=.git -- '<REDACTED>' "{{ upgrade_overlay_dir }}" | head -n 1 | grep -q .; then
-          echo "unresolved <REDACTED> marker remains under {{ upgrade_overlay_dir }}" >&2
-          exit 1
-        fi
-      args:
-        executable: /bin/bash
-      changed_when: false
-      delegate_to: localhost
-      become: false
       when: upgrade_safe_mode | default(false) | bool
 
     # ==================== Secrets prep (OpenBao) — BEFORE the first compose-up ====================
@@ -3017,18 +3014,11 @@
         port: 18200
         timeout: 120
 
+    # The port can accept connections before OpenBao answers (most visibly
+    # when it restarts around restored data during a guarded upgrade), so
+    # retry through that window. One task on purpose: a second, skipped task
+    # registering bao_init_status would overwrite this result with a skip.
     - name: "OpenBao — check init status"
-      ansible.builtin.uri:
-        url: http://127.0.0.1:18200/v1/sys/init
-        status_code: [200]
-      register: bao_init_status
-      when: not (upgrade_safe_mode | default(false) | bool)
-
-    # During an existing-install upgrade Docker may briefly accept the TCP
-    # connection while OpenBao is still restarting around its restored data.
-    # Keep the normal deployment path unchanged; only the guarded upgrade
-    # waits through that short readiness race.
-    - name: "OpenBao — check init status (upgrade-safe retry)"
       ansible.builtin.uri:
         url: http://127.0.0.1:18200/v1/sys/init
         status_code: [200]
@@ -3036,7 +3026,6 @@
       retries: 12
       delay: 5
       until: bao_init_status.status | default(0) == 200
-      when: upgrade_safe_mode | default(false) | bool
 
     - name: "OpenBao — initialize if first deploy (writes init.json with 0600)"
       when: not bao_init_status.json.initialized
