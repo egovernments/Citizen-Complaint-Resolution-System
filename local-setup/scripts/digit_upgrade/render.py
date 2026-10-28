@@ -120,6 +120,63 @@ def extract_tar(archive: Path, destination: Path, *, skip_unsafe_links: bool = F
             bundle.extractall(destination, members=members)  # validated above
 
 
+# Directories and Compose files a deploy copies verbatim from local-setup/:
+# identical bytes on the box identify the version that deployed them.
+VERBATIM_DIRS = ("configs", "dataloader", "db", "docker", "gatus", "otel", "postman", "scripts", "seeds")
+VERBATIM_FILES = ("docker-compose.fast-path.yml", "docker-compose.matomo.yml", "docker-compose.migrations.yml",
+                  "docker-compose.monitoring.yml", "docker-compose.opensre.yml")
+
+
+def base_candidates(repo: Path, live_root: Path, *, until: str) -> list[tuple[int, str]]:
+    """The commits whose verbatim-copied files best match the box, best first.
+
+    For a box deployed before the drift guard recorded its version.  Scores
+    every commit up to `until` that touched local-setup: files identical to the
+    box count for it, files it has that the box lacks count against it.
+    """
+    paths = [p for d in VERBATIM_DIRS for p in sorted((live_root / d).rglob("*")) if p.is_file() and not p.is_symlink()]
+    paths += [live_root / f for f in VERBATIM_FILES if (live_root / f).is_file()]
+    if not paths:
+        raise UpgradeError(f"{live_root} has none of the files a deploy copies verbatim; give --base-ref")
+    blobs = _hash_objects(repo, paths)
+    live = {p.relative_to(live_root).as_posix(): b for p, b in zip(paths, blobs)}
+    scored = []
+    for commit in run(["git", "rev-list", until, "--", "local-setup"], cwd=repo).stdout.split():
+        listing = run(["git", "ls-tree", "-r", commit, "--",
+                       *(f"local-setup/{d}" for d in VERBATIM_DIRS + VERBATIM_FILES),
+                       *(f"local-setup/ansible/{d}" for d in VERBATIM_DIRS)], cwd=repo).stdout
+        found: dict[str, dict[str, str]] = {"ansible": {}, "": {}}
+        for line in listing.splitlines():
+            meta, path = line.split("\t", 1)
+            rel = path.removeprefix("local-setup/")
+            where = "ansible" if rel.startswith("ansible/") else ""
+            found[where][rel.removeprefix("ansible/")] = meta.split()[2]
+        # Like the deploy's `src: ../<dir>`: Ansible looks in playbook_dir/files/../<dir>
+        # (local-setup/ansible/<dir>) before playbook_dir/../<dir> (local-setup/<dir>).
+        tree = {}
+        for rel, blob in found[""].items():
+            top = rel.split("/", 1)[0]
+            if top not in VERBATIM_DIRS or not any(r.split("/", 1)[0] == top for r in found["ansible"]):
+                tree[rel] = blob
+        tree.update(found["ansible"])
+        same = sum(tree.get(rel) == blob for rel, blob in live.items())
+        missing = sum(rel not in live for rel in tree if rel.split("/", 1)[0] in VERBATIM_DIRS)
+        scored.append((same - missing, commit))
+    scored.sort(key=lambda item: -item[0])  # stable: newest first among equals
+    best = scored[0][0] if scored else None
+    return [item for item in scored if item[0] == best]
+
+
+def _hash_objects(repo: Path, paths: list[Path]) -> list[str]:
+    import subprocess
+
+    result = subprocess.run(["git", "hash-object", "--stdin-paths"], cwd=repo, input="\n".join(map(str, paths)),
+                            capture_output=True, text=True, check=False)
+    if result.returncode:
+        raise UpgradeError(f"git hash-object failed: {result.stderr.strip()}")
+    return result.stdout.split()
+
+
 def preflight(source: Path, tenant_vars: Path) -> None:
     """The version's own host_vars preflight (what deploy.sh runs first), if it has one."""
     script = source / "local-setup/scripts/preflight.py"
@@ -144,6 +201,7 @@ def has_contract(source: Path) -> bool:
 
 def render(source: Path, tenant: str, tenant_vars: Path, destination: Path, *, allow_legacy: bool) -> str:
     """Render source (an exported tree) for tenant into destination; return how."""
+    source, tenant_vars, destination = source.resolve(), tenant_vars.resolve(), destination.resolve()
     how = OWN
     if not has_contract(source):
         if not allow_legacy:
@@ -157,8 +215,12 @@ def render(source: Path, tenant: str, tenant_vars: Path, destination: Path, *, a
     return how
 
 
-def tag_tasks(playbook: str, names: Iterable[str]) -> str:
-    """Add the `render` tag to every play-level task with one of these exact names."""
+def tag_tasks(playbook: str, names: Iterable[str], *, strip_ownership: bool = False) -> str:
+    """Add the `render` tag to every play-level task with one of these exact names.
+
+    strip_ownership drops `owner:`/`group:` from those tasks: a render runs
+    unprivileged, and ownership is not part of what is compared.
+    """
     wanted = set(names)
     out: list[str] = []
     in_task = False
@@ -180,6 +242,8 @@ def tag_tasks(playbook: str, names: Iterable[str]) -> str:
             continue
         if line.startswith("    - "):
             in_task = False
+        if in_task and strip_ownership and re.match(r"\s{8}(owner|group):", line):
+            continue
         out.append(line)
     return "".join(out)
 
@@ -200,7 +264,7 @@ def graft_render_contract(source: Path) -> None:
     ansible_dir = source / "local-setup/ansible"
     playbook = ansible_dir / "playbook-deploy.yml"
     names = set(LEGACY_RENDER_TASKS) | render_task_names(TOOL_ROOT / "local-setup/ansible/playbook-deploy.yml")
-    playbook.write_text(tag_tasks(playbook.read_text(encoding="utf-8"), names), encoding="utf-8")
+    playbook.write_text(tag_tasks(playbook.read_text(encoding="utf-8"), names, strip_ownership=True), encoding="utf-8")
     shutil.copyfile(TOOL_ROOT / "local-setup/ansible/playbook-render.yml", ansible_dir / "playbook-render.yml")
 
 

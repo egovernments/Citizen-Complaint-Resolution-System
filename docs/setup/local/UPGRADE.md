@@ -80,8 +80,11 @@ local-setup/scripts/digit-upgrade analyse \
 Analysis is read-only: no container, database, OpenBao or `/opt/digit` write.
 
 - `--base-ref` is the version the box runs. It defaults to the commit the box's
-  last deploy recorded; boxes deployed before the guard need it given
-  explicitly (for example `v2.12.1`).
+  last deploy recorded. A box deployed before the guard has no such record:
+  give the commit, or `--base-ref auto` to find it from the box itself (the
+  commits whose verbatim-copied files match the box best are rendered, and the
+  closest render wins; the report lists the candidates). Do not guess: a wrong
+  base turns every difference between the two versions into a "local change".
 - `--base-override KEY=VALUE` (repeatable): a host_vars value as it was when the
   base version was deployed, if it has changed since (not for secrets).
 - `--exclude GLOB` (repeatable): ignore a path, e.g. a generated file specific

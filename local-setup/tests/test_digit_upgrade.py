@@ -223,6 +223,13 @@ class RenderHelperTests(TempDirCase):
         tasks = yaml.safe_load(render.tag_tasks(playbook, {"Copy one", "Copy two"}))[0]["tasks"]
         self.assertEqual([["render"], ["x", "render"], None], [t.get("tags") for t in tasks])
 
+    def test_grafting_drops_ownership_a_render_cannot_set(self):
+        playbook = ("- hosts: digit\n  tasks:\n    - name: Logs\n      file:\n        path: x\n"
+                    "        owner: '10001'\n        group: '10001'\n        mode: '0750'\n")
+        out = render.tag_tasks(playbook, {"Logs"}, strip_ownership=True)
+        self.assertNotIn("owner", out)
+        self.assertIn("mode: '0750'", out)
+
     def test_archive_escapes_are_refused(self):
         archive = self.tmp / "bad.tar"
         with tarfile.open(archive, "w") as bundle:
@@ -475,6 +482,31 @@ class ReviewRegressionTests(TempDirCase):
             starts,
         )
 
+
+    def test_backup_pins_running_images_and_commits_one_whose_record_is_gone(self):
+        calls = []
+
+        def runner(args, check=True, **_):
+            calls.append(args)
+            code = 1 if args[:2] == ["docker", "tag"] and args[2] == "sha256:gone" else 0
+            out = ""
+            if args[:3] == ["docker", "ps", "-a"]:
+                out = "c-mcp\nc-user"
+            elif args[:2] == ["docker", "inspect"]:
+                service = {"c-mcp": "digit-mcp", "c-user": "egov-user"}[args[2]]
+                out = json.dumps([{"Config": {"Labels": {"com.docker.compose.service": service}}}])
+            return subprocess.CompletedProcess(args, code, out, "")
+
+        deployment = deploy.Deployment.__new__(deploy.Deployment)
+        deployment.docker, deployment.log = deploy.Docker(runner), lambda message: None
+        stack = deploy.StackRecord(digit_dir="/opt/digit", project="digit", compose_files=[], services=[],
+                                   images={"egov-user": {"id": "sha256:u", "ref": "egovio/user:1"},
+                                           "digit-mcp": {"id": "sha256:gone", "ref": "digit-mcp:local"}},
+                                   volumes=[], data_directory="/d")
+        deployment._keep_images(stack, "b1")
+        self.assertIn(["docker", "tag", "sha256:u", "digit-upgrade-keep/egov-user:b1"], calls)
+        self.assertIn(["docker", "commit", "c-mcp", "digit-upgrade-keep/digit-mcp:b1"], calls)
+        self.assertEqual("digit-upgrade-keep/digit-mcp:b1", stack.images["digit-mcp"]["keep"])
 
 def leaks_in(root, rel, text, value):
     write(root, rel, text)

@@ -45,7 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
     a = commands.add_parser("analyse", help="analyse a backup against a target version (read-only)")
     a.add_argument("--repo", type=Path, required=True, help="Git checkout holding both versions (fetched)")
     a.add_argument("--target-ref", required=True, help="version to upgrade to")
-    a.add_argument("--base-ref", help="version the box runs (default: recorded by its last deploy)")
+    a.add_argument("--base-ref", help="version the box runs (default: recorded by its last deploy; "
+                                      "'auto': find it from the files on the box)")
     a.add_argument("--tenant", required=True)
     a.add_argument("--tenant-vars", type=Path, required=True, help="the tenant's host_vars YAML")
     a.add_argument("--backup", type=Path, required=True, help="copy of /opt/digit: directory or tar archive")

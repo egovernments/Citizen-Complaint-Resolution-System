@@ -24,6 +24,7 @@ from .redaction import is_secret_key, redact_structure, values_in_structure
 from .trees import leaks, prepare
 
 READY = "READY"
+RENDERED_BASE_CANDIDATES = 8
 CONFLICTS = "CONFLICTS"
 SECRET_REVIEW = "SECRET_REVIEW"
 
@@ -120,28 +121,33 @@ def analyse(
         recorded = deployed_commit(live_root)
         if base_ref is None and recorded is None:
             raise UpgradeError(
-                "--base-ref is required: the backup has no record of the deployed commit "
-                "(boxes deployed before the drift guard)"
+                "the backup has no record of the deployed commit (boxes deployed before the drift "
+                "guard): give --base-ref, or --base-ref auto to find it from the files on the box"
             )
-        base_ref_source = "argument" if base_ref else "deploy-state"
-        base_ref = base_ref or recorded
-        base_commit = render.resolve_commit(repo, base_ref)
+        base_ref_source = "deploy-state" if base_ref is None else "auto" if base_ref == "auto" else "argument"
 
         base_values = base_tenant_vars(tenant_values, base_overrides)
         base_vars = scratch / "base-tenant-vars.yml"
         write_yaml(base_vars, base_values)
         raw = {"live": live_root}
         renderers = {}
-        for name, commit, vars_path, legacy in (
-            ("base", base_commit, base_vars, True),
-            ("target", target_commit, tenant_vars, False),
-        ):
-            source = scratch / f"{name}-source"
-            render.export_commit(repo, commit, source)
-            if name == "target":
-                render.preflight(source, vars_path)
-            raw[name] = scratch / f"{name}-render"
-            renderers[name] = render.render(source, tenant, vars_path, raw[name], allow_legacy=legacy)
+        base_selection = None
+        if base_ref_source == "auto":
+            base_commit, raw["base"], renderers["base"], base_selection = _find_base(
+                repo, live_root, target_commit, tenant, base_vars, scratch, excludes)
+            base_ref = base_commit
+        else:
+            base_ref = base_ref or recorded
+            base_commit = render.resolve_commit(repo, base_ref)
+            source = scratch / "base-source"
+            render.export_commit(repo, base_commit, source)
+            raw["base"] = scratch / "base-render"
+            renderers["base"] = render.render(source, tenant, base_vars, raw["base"], allow_legacy=True)
+        source = scratch / "target-source"
+        render.export_commit(repo, target_commit, source)
+        render.preflight(source, tenant_vars)
+        raw["target"] = scratch / "target-render"
+        renderers["target"] = render.render(source, tenant, tenant_vars, raw["target"], allow_legacy=False)
 
         known = values_in_structure(tenant_values) | values_in_structure(base_values)
         prepared = prepare(raw, scratch / "normalized", known_secrets=known, excludes=excludes)
@@ -164,6 +170,7 @@ def analyse(
             "base_ref": base_ref,
             "base_commit": base_commit,
             "base_ref_source": base_ref_source,
+            "base_selection": base_selection,
             "base_overrides": redact_structure(base_overrides),
             "target_ref": target_ref,
             "target_commit": target_commit,
@@ -191,6 +198,50 @@ def analyse(
             )
     _require_ready(run_dir, manifest)
     return run_dir
+
+
+def _changed_lines(a: Path, b: Path) -> int:
+    """Lines added or removed between two versions of a file (an absent file is empty)."""
+    import difflib
+
+    def lines(path: Path) -> list[str]:
+        if not path.is_file() or path.is_symlink():
+            return []
+        data = path.read_bytes()
+        return data.decode("utf-8", "replace").splitlines() if b"\0" not in data[:8192] else [data.hex()]
+
+    return sum(1 for line in difflib.unified_diff(lines(a), lines(b), lineterm="", n=0)
+               if line[:1] in "+-" and not line.startswith(("+++", "---")))
+
+
+def _find_base(repo: Path, live_root: Path, target_commit: str, tenant: str, base_vars: Path, scratch: Path,
+               excludes: tuple[str, ...]) -> tuple[str, Path, str, dict[str, Any]]:
+    """The deployed commit, found from the box: blob-matching shortlist, then the closest render."""
+    import deploy_state
+
+    tied = render.base_candidates(repo, live_root, until=target_commit)
+    live = deploy_state.analysed_files(str(live_root), excludes)
+    scored = []
+    for index, (score, commit) in enumerate(tied[:RENDERED_BASE_CANDIDATES]):
+        source, out = scratch / f"base-candidate-{index}-source", scratch / f"base-candidate-{index}"
+        render.export_commit(repo, commit, source)
+        how = render.render(source, tenant, base_vars, out, allow_legacy=True)
+        rendered = deploy_state.analysed_files(str(out), excludes)
+        differing = sorted(rel for rel in set(live) | set(rendered) if live.get(rel) != rendered.get(rel))
+        lines = sum(_changed_lines(live_root / rel, out / rel) for rel in differing)
+        scored.append({"commit": commit, "verbatim_score": score, "differing_files": len(differing),
+                       "differing_lines": lines, "how": how, "out": out})
+        if not differing:
+            break
+    # The render closest to the box, by how much differs; the newest commit on a tie.
+    best = min(scored, key=lambda item: item["differing_lines"])
+    selection = {
+        "method": "auto",
+        "candidates": [{k: v for k, v in item.items() if k not in ("out", "how")} for item in scored],
+        # More commits matched equally than were rendered, and none rendered exactly as the box.
+        "uncertain": len(tied) > len(scored) and best["differing_lines"] > 0,
+    }
+    return best["commit"], best["out"], best["how"], selection
 
 
 def resume(run_dir: Path, *, acknowledge_secret_review: bool) -> Path:
@@ -255,6 +306,17 @@ def write_report(run_dir: Path, manifest: dict[str, Any]) -> None:
         f"- Secret fields changed locally only: **{secrets['warning_count']}**",
         "",
     ]
+    if manifest.get("base_selection"):
+        out += ["The base was found from the files on the box (--base-ref auto); candidates, closest first:", ""]
+        out += [
+            f"- `{c['commit'][:12]}`: {c['verbatim_score']} verbatim files matched; its render differs "
+            f"from the box in {c['differing_files']} files, {c['differing_lines']} lines"
+            for c in sorted(manifest["base_selection"]["candidates"], key=lambda c: c["differing_lines"])
+        ]
+        if manifest["base_selection"]["uncertain"]:
+            out += ["", "> **Uncertain:** more commits matched the box equally well than were rendered, and none",
+                    "> rendered exactly as the box. Confirm the deployed commit and pass it with --base-ref."]
+        out.append("")
     if manifest["renderers"]["base"] == render.GRAFTED:
         out += [
             "> The base version predates the render contract, so it was rendered by the legacy",

@@ -42,11 +42,15 @@ class UpgradeEndToEndTests(unittest.TestCase):
     def setUpClass(cls):
         cls._temp = tempfile.TemporaryDirectory()
         tmp = Path(cls._temp.name)
-        # The tracked example deliberately fails preflight once (the fast-path
-        # data-wipe acknowledgement); an operator sets it, and so does this test.
+        # The tracked example fails the target's preflight on purpose until an
+        # operator fills it in; settle it the way one would on a plain box.
         cls.vars = tmp / "rt.yml"
-        cls.vars.write_text(EXAMPLE.read_text(encoding="utf-8").replace(
-            "db_fast_path_ack_data_wipe: false", "db_fast_path_ack_data_wipe: true"), encoding="utf-8")
+        cls.vars.write_text(
+            EXAMPLE.read_text(encoding="utf-8")
+            .replace("db_fast_path_ack_data_wipe: false", "db_fast_path_ack_data_wipe: true")
+            .replace("\nenable_mcp: true", "\nenable_mcp: false"),
+            encoding="utf-8",
+        )
         cls.repo = tmp / "repo"
         subprocess.run(["git", "clone", "-q", "--shared", str(ROOT), str(cls.repo)], check=True)
         # The working tree under test, not just its last commit.
@@ -145,6 +149,19 @@ class UpgradeEndToEndTests(unittest.TestCase):
         with self.assertRaisesRegex(UpgradeError, r"\(1 path\(s\): nginx/digit-ui.conf\)"):
             deployment._check_same_as_analysed(prepared.hashes, prepared.normalized["live"])
 
+
+    def test_5_auto_base_finds_the_deployed_commit(self):
+        """A box deployed before the drift guard: no recorded commit, found from its files."""
+        try:
+            analyse.analyse(repo=self.repo, target_ref=self.target, base_ref="auto", tenant="rt",
+                            tenant_vars=self.vars, base_overrides={}, backup=self.live,
+                            output=Path(self._temp.name) / "auto-runs", excludes=())
+        except NeedsOperator:
+            pass  # the same conflict as test_1
+        run_dir = next((Path(self._temp.name) / "auto-runs").glob("digit-upgrade-*"))
+        manifest = analyse.read_json(run_dir / "run.json")
+        self.assertEqual((self.base, "auto"), (manifest["base_commit"], manifest["base_ref_source"]))
+        self.assertIn("found from the files on the box", (run_dir / "report.md").read_text(encoding="utf-8"))
 
 if __name__ == "__main__":
     unittest.main()

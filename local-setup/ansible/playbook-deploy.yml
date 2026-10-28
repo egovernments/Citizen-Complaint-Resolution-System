@@ -2981,6 +2981,16 @@
         - upgrade_safe_mode | default(false) | bool
         - not (digit_render_only | default(false) | bool)
 
+    - name: "local overrides — state directory (first upgrade of a box)"
+      tags: ['always']
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/.digit-deploy-state"
+        state: directory
+        mode: "0700"
+      when:
+        - upgrade_safe_mode | default(false) | bool
+        - not (digit_render_only | default(false) | bool)
+
     - name: "local overrides — stage the upgrade overlay on the target"
       tags: ['always']
       ansible.posix.synchronize:

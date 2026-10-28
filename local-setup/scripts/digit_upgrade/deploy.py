@@ -470,6 +470,7 @@ class Deployment:
         write_json(backup / "mdms-before.json", {t: list(rows.values()) for t, rows in before.items()})
         stack.analysed_files = deploy_state.analysed_files(stack.digit_dir)
         self.docker.run(["docker", "stop", "--time", "120", POSTGRES])
+        self._keep_images(stack, backup.name)
         self.log("database stopped; archiving configuration, host state and volumes")
         archives = {"digit": (Path(stack.digit_dir), backup / "digit.tar.zst")}
         for path in map(Path, stack.host_paths):
@@ -482,6 +483,23 @@ class Deployment:
             run(["tar", "--zstd", "-tf", str(archive)])  # readable end to end
         write_json(backup / "stack.json", asdict(stack))
         return backup
+
+    def _keep_images(self, stack: StackRecord, label: str) -> None:
+        """Pin every running image under a tag of its own, so the deploy cannot drop it.
+
+        A deploy that rebuilds a local image (digit-mcp:local) moves the tag,
+        and the old image can disappear.  An image whose record is already gone
+        (the containerd store drops it when the tag moves) is preserved by
+        committing the stopped container, the closest thing left to what ran.
+        """
+        for service, image in stack.images.items():
+            keep = f"digit-upgrade-keep/{service}:{label}"
+            if self.docker.run(["docker", "tag", image["id"], keep], check=False).returncode:
+                container = next(c for c in self.docker.project_containers(stack.project, running_only=False)
+                                 if self.docker.inspect(c)[0]["Config"]["Labels"].get("com.docker.compose.service") == service)
+                self.docker.run(["docker", "commit", container, keep])
+                self.log(f"{service}: its image ({image['ref']}) has no record left; kept by committing its container")
+            image["keep"] = keep
 
     def _mountpoint(self, volume: str) -> Path:
         path = Path(self.docker.run(["docker", "volume", "inspect", "-f", "{{.Mountpoint}}", volume]).stdout.strip())
@@ -613,7 +631,8 @@ class Deployment:
         for image in stack.images.values():
             if "@" in image["ref"]:  # a digest-pinned reference cannot move
                 continue
-            if self.docker.run(["docker", "tag", image["id"], image["ref"]], check=False).returncode:
+            source = image.get("keep") or image["id"]
+            if self.docker.run(["docker", "tag", source, image["ref"]], check=False).returncode:
                 self.log(f"WARNING: the image {image['ref']} ran as ({image['id'][:19]}) no longer exists; "
                          "its current image is used")
 
