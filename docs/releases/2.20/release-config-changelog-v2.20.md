@@ -2,7 +2,7 @@
 
 **Covers:** v2.12 → v2.20, as of `master` at `63472b4a1` (#2716) and `develop` at `42e914005` (27 Oct 2026). **Who this is for:** operators upgrading or deploying CMS.
 
-What an operator must change to move a CMS deployment from v2.12 to v2.20. It lists only what affects a deployment; feature details are in the [Release notes](release-notes-v2.20.md), and escalation known issues in [Known issues](known_issues_2.20.md). The [Migration guide](migration-guide-v2.12-to-v2.20-beta.md) has the full identity and Keycloak cut-over; section numbers below (guide §n) point into it.
+What an operator must change to move a CMS deployment from v2.12 to v2.20. It lists only what affects a deployment; feature details are in the [Release notes](release-notes-v2.20.md), and escalation known issues in [Known issues](known_issues_2.20.md). The [Migration guide](migration-guide-v2.12-to-v2.20.md) has the full identity and Keycloak cut-over; section numbers below (guide §n) point into it.
 
 **The six things that matter most**
 
@@ -176,7 +176,6 @@ Self-serve workspaces are upgraded to the latest platform seed in the background
 | The identity SMTP check runs only after Keycloak has migrated | A bad SMTP setting is found late | Open (#2618) |
 | Setup can show a boundary "usually temporary" error, then fail on Try again, although setup succeeded | Confusing onboarding | Open (#2709) |
 | No tested rollback; the Keycloak and database migrations cannot be undone | Restore from backup only | Open |
-| The [migration guide](migration-guide-v2.12-to-v2.20-beta.md) file name still says "beta" | Readers may think it is not final | Rename for 2.20 |
 | `_example.yml` comments still say images default to `nightly-develop` | Misleading on master | Docs fix pending |
 
 Source: changes between tag `v2.12`, `master` at `63472b4a1` and `develop` at `42e914005`, checked on 27 October 2026.
