@@ -92,8 +92,8 @@ scrape_configs:
       - targets: ['gatus:8080']
 
 
-  # Optional components, as file_sd targets the playbook writes into otel/targets/ when their flag is on, so a tenant
-  # without them has no failing scrape: keycloak.json (enable_keycloak). Each file names its own job label.
+  # File_sd targets the playbook writes into otel/targets/: keycloak.json (Keycloak is mandatory). Each file names its
+  # own job label.
   - job_name: optional
     file_sd_configs:
       - files: ['/etc/prometheus/targets/*.json']

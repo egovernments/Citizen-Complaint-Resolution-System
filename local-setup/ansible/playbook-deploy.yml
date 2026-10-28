@@ -4714,23 +4714,15 @@
       changed_when: true
 
     # ==================== Optional scrape targets (file_sd) and pg_stat_statements ====================
-    # Prometheus scrapes otel/targets/*.json; a tenant with Keycloak gets keycloak.json, one without gets nothing (no
-    # failing scrape, no TargetDown). The exporter's stat_statements collector needs the extension in the database:
+    # Prometheus scrapes otel/targets/*.json; Keycloak is mandatory, so every tenant gets keycloak.json. The exporter's stat_statements collector needs the extension in the database:
     # created here, as soon as Postgres is up, not at the end of the play, where a failed CI test would stop the
     # play before it (and the exporter errors on every scrape until it exists). Keycloak serves /metrics on its
     # management port, 9000 (Keycloak 25+; the image is 26), not on its HTTP port 8180.
-    - name: "Prometheus — Keycloak scrape target (enable_keycloak)"
+    - name: "Prometheus — Keycloak scrape target"
       ansible.builtin.copy:
         dest: "{{ digit_dir }}/otel/targets/keycloak.json"
         content: '[{"targets": ["keycloak:9000"], "labels": {"job": "keycloak"}}]'
         mode: "0644"
-      when: enable_keycloak | default(false) | bool
-
-    - name: "Prometheus — no Keycloak scrape target when Keycloak is off"
-      ansible.builtin.file:
-        path: "{{ digit_dir }}/otel/targets/keycloak.json"
-        state: absent
-      when: not (enable_keycloak | default(false) | bool)
 
     # psql prints the CREATE EXTENSION tag even when IF NOT EXISTS skips it, so "changed" comes from pg_extension.
     - name: "Postgres — pg_stat_statements extension (postgres_stat_statements)"
