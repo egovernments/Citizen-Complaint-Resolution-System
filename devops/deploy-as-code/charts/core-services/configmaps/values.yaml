@@ -153,8 +153,10 @@ root-ingress:
   namespace: egov
   cert-issuer: "letsencrypt-staging"
   # Set to a tenant route slug to redirect `/` to `/<slug>/digit-ui`.
-  # Empty leaves `/` without a tenantless digit-ui login.
+  # Empty: `/` redirects to /configurator/ (sign in, or sign up a new workspace),
+  # unless configuratorRedirect is false, which leaves `/` unrouted.
   defaultTenantSlug: ""
+  configuratorRedirect: true
   serviceName: digit-ui
   servicePort: 80
 secrets:

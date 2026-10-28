@@ -1,5 +1,11 @@
+# No restart policies on the application services here: under a plain `docker compose up` the
+# `depends_on: service_healthy` gates below order the boot, and a service with a real fault
+# should exit once with its first stack trace. Tilt skips those gates (`up --no-deps`), so the
+# Tiltfiles also load docker-compose.tilt-restart.yml, which adds the retries Tilt needs.
+# (Tilt's docker_compose(wait=True) is not an alternative: `up --wait` fails on every one-shot
+# job below that exits 0.)
 services:
-  # PostgreSQL with pre-loaded data (no migrations needed)
+  # PostgreSQL with pre-loaded data. Only PGR's schema is migrated on top (pgr-services-migration).
   postgres-db:
     image: postgres:16
     container_name: docker-postgres
@@ -157,13 +163,20 @@ services:
     depends_on:
       minio:
         condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set myminio http://minio:9000 minioadmin minioadmin;
-      mc mb --ignore-existing myminio/egov-rainmaker;
-      mc anonymous set download myminio/egov-rainmaker;
-      exit 0;
-      "
+    # Waits for MinIO itself (under Tilt, depends_on is not applied), then exits with the real
+    # result: a non-zero exit here means the egov-rainmaker bucket is missing and filestore
+    # uploads will fail, so it must not look like success.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        for i in $$(seq 60); do
+          mc alias set myminio http://minio:9000 minioadmin minioadmin >/dev/null 2>&1 && break
+          [ "$$i" = 60 ] && { echo "minio-init: minio:9000 not reachable after 120s" >&2; exit 1; }
+          sleep 2
+        done
+        mc mb --ignore-existing myminio/egov-rainmaker &&
+        mc anonymous set download myminio/egov-rainmaker
     networks:
       - egov-network
 
@@ -673,12 +686,11 @@ services:
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     ports:
       - 18090:8090
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/access/health >/dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 240s
+    # No healthcheck: this image is distroless — no /bin/sh, wget or curl — so any
+    # CMD-SHELL check sits at "health: starting" forever while the app serves traffic
+    # (same finding as egov-accesscontrol in docker-compose.egov-digit.yaml). Dependents
+    # must use `condition: service_started`. Real health is probed from outside the
+    # container by Gatus and scripts/health-check.sh.
     deploy:
       resources:
         limits:
@@ -916,10 +928,64 @@ services:
     networks:
       - egov-network
 
+  # One-shot Flyway run for PGR's schema. full-dump.sql's PGR history stops at 2020, but
+  # the app image writes columns added since (e.g. eg_pgr_service_v2.extended_attributes);
+  # without this the persister's INSERT fails and every complaint is lost after PGR has
+  # already answered 200.
+  #
+  # Same image and env as pgr-services-migration in docker-compose.migrations.yml, with two
+  # deliberate differences:
+  # - It waits only for postgres-db. Here every service runs with SPRING_FLYWAY_ENABLED=false
+  #   and gets its schema from full-dump.sql, so the tables PGR's materialized views read
+  #   exist as soon as the dump has loaded. The migrations file gates on four JVMs because
+  #   there each service's own migrator creates those tables.
+  # - No db-history-normalize step: it only renames legacy Flyway history tables, and the
+  #   dump already ships PGR's under the canonical name (db/flyway-history-map.yml), so it
+  #   would be a no-op for the one migrator this file runs.
+  #
+  # PGR_SERVICES_DB_IMAGE moves with PGR_SERVICES_IMAGE: override both together, or a newer
+  # app runs on the old schema. Under `tilt up` (dev mode), docker-compose.tilt.yml swaps
+  # both for images built from the local source tree.
+  # Connects to postgres-db directly: pgbouncer's transaction mode breaks Flyway.
+  pgr-services-migration:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    image: ${PGR_SERVICES_DB_IMAGE:-egovio/pgr-services-db:master-b4adf0d}
+    container_name: pgr-services-migration
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    # Waits for postgres-db itself instead of relying on restarts: under Tilt, depends_on is
+    # not applied, and a container that exits non-zero before Docker restarts it fails
+    # `tilt ci`. Postgres only listens on TCP once initdb (the full-dump.sql load) is done,
+    # so a successful connect means the dump is in.
+    entrypoint:
+      - bash
+      - -c
+      - |
+        for i in $$(seq 150); do
+          (exec 3<>/dev/tcp/postgres-db/5432) 2>/dev/null && exec /usr/bin/migrate.sh
+          sleep 2
+        done
+        echo "pgr-services-migration: postgres-db:5432 not reachable after 300s" >&2
+        exit 1
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_TABLE: pgr_services_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks:
+      - egov-network
+
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12.1-7a38661}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-b4adf0d}
     container_name: pgr-services
     depends_on:
+      pgr-services-migration:
+        condition: service_completed_successfully
       pgbouncer:
         condition: service_healthy
       redpanda:
@@ -934,6 +1000,9 @@ services:
         condition: service_healthy
       egov-localization:
         condition: service_healthy
+      egov-accesscontrol:
+        # service_started, not service_healthy: accesscontrol has no healthcheck (see its block).
+        condition: service_started
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
@@ -954,7 +1023,15 @@ services:
       EGOV_BOUNDARY_HOST: http://boundary-service:8081/
       EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
+      EGOV_ENC_HOST: http://egov-enc-service:1234
+      # PGR's ABAC lookup (MDMSUtils#fetchAccessControlActions). The application.properties
+      # default is localhost:8080 — PGR itself — so without this every employee search fails
+      # with "access-control call failed". Kept in step with docker-compose.egov-digit.yaml.
+      EGOV_ACCESSCONTROL_HOST: http://egov-accesscontrol:8090
       EGOV_UI_APP_HOST: http://localhost:18080
+      # EscalationScheduler reads the state tenant from the keys of this map; unset, it
+      # falls back to the default SLA and auto-escalation never fires.
+      EGOV_UI_APP_HOST_MAP: "{pg:'http://localhost:18080'}"
       NOTIFICATION_SMS_ENABLED: 'false'
       NOTIFICATION_EMAIL_ENABLED: 'false'
       NEW_COMPLAINT_ENABLED: 'true'
@@ -987,7 +1064,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12.1-7a38661}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-b4adf0d}
     container_name: digit-ui
     restart: on-failure
     ports:

@@ -29,6 +29,8 @@ const SLUG_PATTERN = /^[a-z0-9-]{2,63}$/;
 const STORAGE_PREFIX = "digit_tenant:";
 const CACHE_PREFIX = "digit_branding:";
 const CACHE_TTL_MS = 10 * 60 * 1000;
+/** How long a new tab may pick up a login tab's slug: covers the emailed link's lifespan (#2645). */
+const SHARED_TTL_MS = 12 * 60 * 60 * 1000;
 
 export function isValidSlug(value: unknown): value is string {
     return typeof value === "string" && SLUG_PATTERN.test(value);
@@ -37,6 +39,14 @@ export function isValidSlug(value: unknown): value is string {
 function safeSession(): Storage | undefined {
     try {
         return window.sessionStorage;
+    } catch {
+        return undefined;
+    }
+}
+
+function safeLocal(): Storage | undefined {
+    try {
+        return window.localStorage;
     } catch {
         return undefined;
     }
@@ -60,42 +70,129 @@ export function tabIdOf(loginAction: string | undefined, base = window.location.
  * 2. `digit_tenant` on the current URL — present on the first page, which
  *    Keycloak renders straight off the authorization request — remembered in
  *    sessionStorage under this tab's `tab_id` so the pages that follow a
- *    form post (errors, further steps) still know it.
+ *    form post (errors, further steps) still know it. A page Keycloak gives
+ *    no form action (error.ftl when the sign-in session is gone, #2644) is
+ *    the answer to that tab's form post, so its own address carries `tab_id`.
+ * 3. The slug at the end of an emailed password link's redirect (below).
  */
 export function resolveTenantSlug(params: {
     digitTenant?: string;
     loginAction?: string;
     search?: string;
 }): string | undefined {
-    const storage = safeSession();
-    const tabId = tabIdOf(params.loginAction);
-    const remember = (slug: string) => {
-        if (tabId === undefined || storage === undefined) return;
-        try {
-            storage.setItem(STORAGE_PREFIX + tabId, slug);
-        } catch {
-            // Private mode or quota: later pages fall back to the default look.
-        }
-    };
+    const search = new URLSearchParams(params.search ?? window.location.search);
+    const fromQuery = search.get("digit_tenant");
+    const candidate = isValidSlug(params.digitTenant) ? params.digitTenant
+        : isValidSlug(fromQuery) ? fromQuery : emailedLinkSlug(search);
+    return rememberedPerTab(STORAGE_PREFIX, params.loginAction, candidate, isValidSlug, true);
+}
 
-    if (isValidSlug(params.digitTenant)) {
-        remember(params.digitTenant);
-        return params.digitTenant;
-    }
-    const fromQuery = new URLSearchParams(params.search ?? window.location.search).get("digit_tenant");
-    if (isValidSlug(fromQuery)) {
-        remember(fromQuery);
-        return fromQuery;
-    }
-    if (tabId !== undefined && storage !== undefined) {
-        try {
-            const stored = storage.getItem(STORAGE_PREFIX + tabId);
-            if (isValidSlug(stored)) return stored;
-        } catch {
-            return undefined;
-        }
+/**
+ * The identity BFF ends a tenant's password setup redirect with its slug
+ * (`/password/setup-complete/<state>/<slug>`), and an email change's
+ * (`/callback/<slug>`). An emailed link starts a new Keycloak session in
+ * whatever browser opens it, so this is all its pages can learn the tenant
+ * from (#2645). Keycloak carries the redirect in the link's action token
+ * (`key`), then in `client_data` on every page after.
+ */
+function emailedLinkSlug(search: URLSearchParams): string | undefined {
+    for (const uri of [
+        base64UrlJsonField(search.get("client_data"), "ru"),
+        base64UrlJsonField(search.get("key")?.split(".")[1], "reduri"),
+    ]) {
+        if (typeof uri !== "string") continue;
+        // Only the BFF's own routes: another client's `/callback/<x>` is no slug.
+        const slug = /\/identity\/v1\/(?:password\/setup-complete\/[^/?#]+|callback)\/([^/?#]+)$/.exec(uri)?.[1];
+        if (isValidSlug(slug)) return slug;
     }
     return undefined;
+}
+
+/** One field of a base64url-encoded JSON value (`client_data`, a JWT payload), or undefined. */
+function base64UrlJsonField(value: string | null | undefined, field: string): unknown {
+    try {
+        return value ? JSON.parse(atob(value.replace(/-/g, "+").replace(/_/g, "/")))[field] : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * A value that is valid now is remembered in sessionStorage under this tab's
+ * `tab_id`; without one, the remembered value is returned, so the pages that
+ * follow a form post (errors, further steps) still know it. With `shared`,
+ * it is also kept in localStorage under the `tab_id`, for a new tab of the
+ * same login; that copy is used once and ignored after SHARED_TTL_MS.
+ */
+function rememberedPerTab(
+    prefix: string,
+    loginAction: string | undefined,
+    candidate: string | null | undefined,
+    isValid: (value: string | null | undefined) => value is string,
+    shared = false
+): string | undefined {
+    const storage = safeSession();
+    const local = shared ? safeLocal() : undefined;
+    // Error pages carry no form action; their tab_id is only in the page URL (#2644).
+    const pageTabId = tabIdOf(window.location.href);
+    const tabId = tabIdOf(loginAction) ?? pageTabId;
+    const key = tabId === undefined || storage === undefined ? undefined : prefix + tabId;
+    // A page with no tab_id at all (an emailed link's landing page, #2645) keeps
+    // only its own value under the bare prefix; the first page with a tab_id
+    // takes it over, after anything that tab_id already has.
+    const landing = shared && storage !== undefined ? prefix : undefined;
+    try {
+        const carried = landing === undefined ? null : storage!.getItem(landing);
+        if (landing !== undefined && (key !== undefined || !isValid(candidate))) storage!.removeItem(landing);
+        if (isValid(candidate)) {
+            if (key !== undefined || landing !== undefined) storage!.setItem(key ?? landing!, candidate);
+            // The link emailed by an email change opens a new tab with this
+            // tab_id but its own sessionStorage (#2645).
+            if (local && tabId !== undefined) {
+                for (const name of Object.keys(local)) {
+                    if (name.startsWith(prefix) && freshShared(local, name) === undefined) local.removeItem(name);
+                }
+                local.setItem(prefix + tabId, `${Date.now()} ${candidate}`);
+            }
+            return candidate;
+        }
+        let stored = key === undefined ? null : storage?.getItem(key);
+        // The link's own tab_id first: Keycloak may render it in a new login session.
+        for (const id of [pageTabId, tabId]) {
+            if (!local || id === undefined || isValid(stored)) continue;
+            stored = freshShared(local, prefix + id);
+            local.removeItem(prefix + id);
+            if (isValid(stored) && key !== undefined) storage!.setItem(key, stored);
+        }
+        if (!isValid(stored) && key !== undefined && isValid(carried)) storage!.setItem(key, (stored = carried));
+        return isValid(stored) ? stored : undefined;
+    } catch {
+        // Private mode or quota: later pages fall back to the default look.
+        return isValid(candidate) ? candidate : undefined;
+    }
+}
+
+/** A localStorage copy written as `<time> <value>`, until SHARED_TTL_MS has passed. */
+function freshShared(local: Storage, name: string): string | undefined {
+    const [at, value] = (local.getItem(name) ?? "").split(" ");
+    return Date.now() - Number(at) < SHARED_TTL_MS ? value : undefined;
+}
+
+const ACTION_STORAGE_PREFIX = "digit_kc_action:";
+const ACTION_PATTERN = /^[A-Za-z_]{1,64}$/;
+const isValidAction = (value: string | null | undefined): value is string => !!value && ACTION_PATTERN.test(value);
+
+/**
+ * The account action this sign-in confirms the person for (#2645): the
+ * identity BFF sends `kc_action` when someone signed in asks to change their
+ * password, authenticator or email, and Keycloak first asks for the password
+ * again. Read and remembered per tab like `digit_tenant`, so the page after a
+ * wrong password still reads as the confirmation. Only the action name is
+ * kept (`delete_credential:<id>` gives `delete_credential`).
+ */
+export function resolveAccountAction(params: { loginAction?: string; search?: string }): string | undefined {
+    const fromQuery = new URLSearchParams(params.search ?? window.location.search).get("kc_action")?.split(":")[0];
+    return rememberedPerTab(ACTION_STORAGE_PREFIX, params.loginAction, fromQuery, isValidAction);
 }
 
 /** Bare English uses the configured deployment default locale. */

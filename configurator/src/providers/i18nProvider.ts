@@ -94,7 +94,7 @@ const customEnglishMessages: TranslationMessages = {
     },
     header: {
       management_mode: 'Management Mode',
-      title: 'DIGIT Management Studio',
+      studio_title: 'DIGIT Complaint Management Studio',
       product_name: 'Complaint Management System',
       help: 'Help',
       account: 'Account',
@@ -230,6 +230,17 @@ const customEnglishMessages: TranslationMessages = {
       legacy_tooltip: "This tenant's channel policy is still in the legacy master. Move it with the migration script on the server: %{command}",
       // Shown instead of the controls to a user without a provider-admin role.
       admin_only: 'Read-only: switching a channel on or off, or choosing its provider, needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role.',
+    },
+    workspace_links: {
+      title: 'Workspace links',
+      employee_label: 'Employee app',
+      employee_hint: 'Where your staff sign in and handle complaints',
+      citizen_label: 'Citizen app',
+      citizen_hint: 'Share this with citizens to file and track complaints',
+      copy: 'Copy',
+      copied: 'Link copied.',
+      copy_failed: 'Could not copy the link. Select it and copy it manually.',
+      open: 'Open',
     },
     providers: {
       // Notification Providers screen — self-service actions.

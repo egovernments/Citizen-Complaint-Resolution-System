@@ -1,9 +1,9 @@
-environments:
-  env:
-    values:
-      - ../environments/env-secrets.yaml
-      - ../environments/env.yaml
+bases:
+  - ../environments/environments.yaml
 ---
+{{- /* Releases this environment turns off by name (env values `disabledReleases`,
+       empty by default): every release that is otherwise always installed reads it. */ -}}
+{{- $disabled := index .Values "disabledReleases" | default list }}
 repositories:
 - name: bitnami
   url: https://charts.bitnami.com/bitnami
@@ -53,15 +53,15 @@ releases:
   #      so uncommenting them as-is would not protect it either. Reach it
   #      through a tunnel or bastion, or deploy oauth2-proxy first.
   - name: pgadmin
-    installed: true
+    installed: {{ not (has "pgadmin" $disabled) }}
     <<: *default
 
   - name: kafka-connect
-    installed: true
+    installed: {{ not (has "kafka-connect" $disabled) }}
     <<: *default
 
   - name: playground
-    installed: true
+    installed: {{ not (has "playground" $disabled) }}
     <<: *default
 
   # digit-mcp — DIGIT REST/JSON-RPC admin shim (tenant onboarding tooling).
@@ -71,7 +71,7 @@ releases:
   # ClusterIP + ingress.enabled defaults to false, so it is never publicly
   # reachable. A separate, opt-in READ-ONLY instance is defined below.
   - name: digit-mcp
-    installed: true
+    installed: {{ not (has "digit-mcp" $disabled) }}
     namespace: egov
     chart: ../../../../digit-mcp/helm/digit-mcp
     missingFileHandler: Warn
@@ -85,7 +85,7 @@ releases:
       # most recent sha tags, so a sha pin vanishes within about a week.
       - image:
           repository: egovio/digit-mcp
-          tag: "2.12.1-7a38661"
+          tag: "master-b4adf0d"
         service:
           type: ClusterIP
         env:
@@ -121,7 +121,7 @@ releases:
           # Hub's library/digit-mcp). #2023 makes the same fix on the sibling
           # release above; kept separate per that PR's scope.
           repository: egovio/digit-mcp
-          tag: "2.12.1-7a38661"
+          tag: "master-b4adf0d"
         service:
           type: ClusterIP
         env:

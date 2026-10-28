@@ -156,12 +156,11 @@
           no OTP can be sent. Set enable_novu: true (and enable SMS for the tenant under
           Configurator -> Notifications -> Channels), or leave enable_otp_services false.
 
-    # The fixed OTP (123456) and log delivery are opt-in only, so a Keycloak box
+    # The fixed OTP (123456) and log delivery are opt-in only, so a box
     # with no SMS stack and neither opt-in has no way to deliver a citizen code.
     # Warn, never fail: staff sign-in and citizen password sign-in still work.
     - name: "preflight — warn when citizen phone sign-in has no OTP channel"
       when:
-        - enable_keycloak | default(false) | bool
         - not (enable_otp_services | default(false) | bool)
         - not (identity_dev_fixed_otp | default(false) | bool)
         - not (identity_citizen_otp_sender | default('', true) | length > 0)
@@ -274,6 +273,47 @@
       when: host_vars_file.stat.exists
       delegate_to: localhost
       become: false
+
+    # digit-ui-v2 (the Vite citizen SPA at /citizen) was removed. Tenant
+    # host_vars are gitignored, so upgraded boxes still carry its keys. They
+    # are read by nothing now; say so instead of failing, so the operator can
+    # drop them. The leftover bundle is deleted further down ("digit-ui-v2
+    # (removed)"). The digit-ui-esbuild citizen app at /digit-ui/citizen is
+    # unaffected.
+    - name: "preflight — WARNING: digit-ui-v2 settings are ignored (app removed)"
+      vars:
+        _v2_keys: >-
+          {{ (['enable_digit_ui_v2'] if (enable_digit_ui_v2 | default(false) | bool) else [])
+             + (['nginx_features.digit_ui_v2'] if ((nginx_features | default({})).digit_ui_v2 | default(false) | bool) else [])
+             + ([] if (digit_ui_v2_repo | default('')) in [false, '', none] else ['digit_ui_v2_repo'])
+             + ([] if (digit_ui_v2_branch | default('')) in [false, '', none] else ['digit_ui_v2_branch']) }}
+      ansible.builtin.debug:
+        msg: >-
+          WARNING (deprecated): {{ _v2_keys | join(', ') }} {{ 'is' if (_v2_keys | length) == 1 else 'are' }}
+          set in host_vars but IGNORED. The digit-ui-v2 citizen SPA was removed, so
+          /citizen is no longer served (it falls through to the default route). Citizens
+          use /{{ digit_ui_default_tenant_slug | default('<tenant-slug>', true) }}/digit-ui/citizen, which is unaffected. Delete
+          {{ 'this key' if (_v2_keys | length) == 1 else 'these keys' }} from
+          host_vars/{{ inventory_hostname }}.yml; this deploy removes the leftover
+          /opt/digit-ui-v2 and, unless nginx_preserve_vhost is set, /var/www/citizen.
+      when: _v2_keys | length > 0
+
+
+    # A string would be joined one character at a time: `-e turbopass_countries=KE`
+    # or `turbopass_countries: KE,IN` becomes COUNTRIES=K,E, which the bootstrap
+    # rejects on every deploy (review on #2608). Fail once, before anything
+    # changes.
+    - name: "preflight — turbopass_countries is a list"
+      ansible.builtin.assert:
+        that: turbopass_countries is sequence and turbopass_countries is not string
+        fail_msg: >-
+          turbopass_countries must be a list of ISO 3166-1 alpha-2 codes, e.g.
+          turbopass_countries: [KE, IN] in host_vars, or
+          -e '{"turbopass_countries": ["KE"]}' on the command line. Got
+          {{ turbopass_countries | to_json }}.
+        quiet: true
+      when: enable_turbopass | default(false) | bool
+      tags: [turbopass]
 
     # ==================== One-tag deploys (#1729) ====================
     # Turn `image_tag` (usually `./deploy.sh <tenant> --image-tag=<tag>`) into
@@ -683,42 +723,25 @@
           these keys.
 
           Delete these keys (or set them to 'digit'). Every employee and
-          citizen sign-in already goes through Keycloak and the Identity BFF;
-          `enable_keycloak: true` is what stands them up.
+          citizen sign-in already goes through Keycloak and the Identity BFF.
       when: _keycloak_login_surfaces | length > 0
 
-    # D26 removed every sign-in path that did not go through the Identity BFF:
-    # the tenantless /digit-ui/user/* pages, the legacy citizen OTP and
-    # employee password pages, and (with Keycloak on) the native create/reset/
-    # OTP endpoints at Kong. Tenant routes resolve through
-    # /identity/v1/tenant-contexts/<slug>, which only exists in the `keycloak`
-    # compose profile. identity_legacy_user_endpoints reopens Kong endpoints,
-    # not the UI pages, so it is no way around this. (Dhruv, #2271 review 2.)
-    - name: "preflight — identity requires enable_keycloak: true"
+    # Keycloak and the Identity BFF are always deployed: since D26 every DIGIT
+    # UI sign-in goes through them, so the enable_keycloak switch is gone. A
+    # host_vars that still sets it false expects a box without Keycloak; stop
+    # rather than silently stand one up. `| bool`: `-e enable_keycloak=false`
+    # arrives as the string "false".
+    - name: "preflight — Keycloak is mandatory (refuse enable_keycloak: false)"
       ansible.builtin.fail:
         msg: >-
-          enable_keycloak is false on {{ inventory_hostname }}, but since D26
-          every DIGIT UI sign-in (employee and citizen) goes through the
-          Identity BFF, which only runs with Keycloak. Without it the
-          /<tenant-slug>/digit-ui/ routes cannot resolve their tenant and
-          nobody can sign in; the old DIGIT OTP/password login pages are gone.
-          Set `enable_keycloak: true` (and `nginx_features.keycloak: true`)
-          in host_vars/{{ inventory_hostname }}.yml, with keycloak_admin_password,
-          keycloak_db_password and identity_digit_admin_password in
-          bootstrap_secrets (or OpenBao). See the Keycloak section of
-          host_vars/_example.yml. With enable_novu, either Novu dashboard
-          works alongside it: nginx routes Keycloak's /auth/realms/ and
-          /auth/resources/ ahead of the stock dashboard's /auth/ paths, though
-          `build_novu_dashboard: true` remains the cleaner setup.
-      when: not (enable_keycloak | default(false) | bool)
-
-    - name: "preflight — refuse retired digit-ui-v2 citizen identity"
-      ansible.builtin.fail:
-        msg: >-
-          enable_digit_ui_v2 is no longer supported. D26 retired its fixed-OTP
-          citizen login, direct egov-user account creation and profile writes.
-          Publish the canonical /<tenant-slug>/digit-ui/citizen route instead.
-      when: enable_digit_ui_v2 | default(false)
+          enable_keycloak is false for {{ inventory_hostname }}, but Keycloak
+          is now mandatory: every DIGIT UI sign-in goes through it and the
+          Identity BFF, so the switch was removed. Delete enable_keycloak from
+          host_vars/{{ inventory_hostname }}.yml (or -e), and put
+          keycloak_admin_password, keycloak_db_password and
+          identity_digit_admin_password in bootstrap_secrets (or OpenBao). See
+          the Keycloak section of host_vars/_example.yml.
+      when: enable_keycloak is defined and not (enable_keycloak | bool)
 
     - name: "preflight — validate digit_ui_default_tenant_slug"
       ansible.builtin.assert:
@@ -1940,35 +1963,29 @@
       register: kong_otp_unmock
       when: enable_otp_services | default(false)
 
-    # D26: with Keycloak enabled, legacy native identity endpoints default
-    # closed. An explicit identity_legacy_user_endpoints:true is the rollback
-    # switch for a non-complete deployment.
+    # D26: legacy native identity endpoints default closed. An explicit
+    # identity_legacy_user_endpoints:true is the rollback switch for a
+    # non-complete deployment. `| bool`: `-e ...=false` is the string "false".
     - name: "Kong — remove legacy identity endpoints from AUTH_OPTIONAL"
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: '(?m)^.*-- identity-legacy-user-endpoint\n'
         replace: ''
-      when: >-
-        not (identity_legacy_user_endpoints
-             | default(not (enable_keycloak | default(false))))
+      when: not (identity_legacy_user_endpoints | default(false) | bool)
 
     - name: "Kong — remove the legacy OTP validation mock route"
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: '(?ms)^# identity-legacy-otp-mock-start\n.*?^# identity-legacy-otp-mock-end\n'
         replace: ''
-      when: >-
-        not (identity_legacy_user_endpoints
-             | default(not (enable_keycloak | default(false))))
+      when: not (identity_legacy_user_endpoints | default(false) | bool)
 
     - name: "Kong — reopen legacy identity endpoints only when explicitly enabled"
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: '(?ms)^- name: identity-legacy-user-endpoints-denied # identity-legacy-user-deny-start\n.*?^# identity-legacy-user-deny-end\n'
         replace: ''
-      when: >-
-        identity_legacy_user_endpoints
-        | default(not (enable_keycloak | default(false)))
+      when: identity_legacy_user_endpoints | default(false) | bool
 
     - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
       ansible.builtin.shell: |
@@ -2077,7 +2094,7 @@
               + (['mcp-readonly']  if enable_mcp_readonly  | default(false) else [])
               + (['notifications'] if enable_novu          | default(false) else [])
               + (['chatbot']       if enable_chatbot       | default(false) else [])
-              + (['keycloak']      if enable_keycloak      | default(false) else [])
+              + ['keycloak']
               + (['otp']           if enable_otp_services  | default(false) else [])
               + (['matomo']        if enable_matomo        | default(false) else [])
               + (['opensre']       if enable_opensre       | default(false) else [])
@@ -2087,7 +2104,7 @@
 
     - name: "Show active compose profiles"
       ansible.builtin.debug:
-        msg: "Active compose profiles for {{ inventory_hostname }}: {{ compose_profiles or '(none — lean stack)' }}"
+        msg: "Active compose profiles for {{ inventory_hostname }}: {{ compose_profiles }}"
 
     # ==================== One-tag deploys (#1729): resolve + verify ====================
     # A per-tenant overlay (docker-compose.<tenant>.yml, layered last with -f)
@@ -2397,7 +2414,7 @@
       ansible.builtin.set_fact:
         novu_tenant_accounts_on: >-
           {{ (enable_novu | default(false) | bool)
-             and (novu_tenant_accounts | default(enable_keycloak | default(false)) | bool) }}
+             and (novu_tenant_accounts | default(true) | bool) }}
 
     # Promtail's journal job reads the host's persistent journal. Mounted only where it exists: a missing bind source
     # would be created by Docker, and an empty /var/log/journal makes journald switch to persistent storage on its
@@ -2477,8 +2494,8 @@
       register: configurator_config_render
     # The template above regenerates .env from scratch, which used to WIPE the
     # marked secret blocks the OpenBao section appends much later in the play
-    # (TENANT SECRETS: POSTGRES_PASSWORD, MINIO creds, …; KEYCLOAK SECRETS
-    # behind enable_keycloak). Fresh box: fine — the blocks don't exist yet and
+    # (TENANT SECRETS: POSTGRES_PASSWORD, MINIO creds, …; KEYCLOAK SECRETS).
+    # Fresh box: fine — the blocks don't exist yet and
     # the first `up -d` runs postgres on the compose default before the OpenBao
     # section ALTERs the role to the vault password. RERUN: fatal — the role's
     # password in the persisted volume is already the vault value, but the
@@ -2935,11 +2952,10 @@
     # rotating a secret in vault out-of-band without also touching the running
     # DB), but are no longer load-bearing for the common path.
     #
-    # Bringing OpenBao (+ keycloak-postgres, when enable_keycloak) up here, ahead
-    # of the main stack, is what "Keycloak prep" used to do — gated on
-    # enable_keycloak, because only Keycloak's own converge-abort problem was
-    # recognized. It's unconditional now: every tenant needs its Postgres/MCP
-    # secrets synced this early, not just Keycloak ones.
+    # Bringing OpenBao and keycloak-postgres up here, ahead of the main stack,
+    # is what "Keycloak prep" used to do, for Keycloak alone, because only
+    # Keycloak's own converge-abort problem was recognized. Every tenant needs
+    # its Postgres/MCP secrets synced this early, not just Keycloak ones.
     #
     # docker-compose.egov-digit.yaml resolves GF_SECURITY_ADMIN_PASSWORD from
     # ${GF_ADMIN_PASSWORD:?} — no default. Compose interpolates the WHOLE file
@@ -2981,10 +2997,10 @@
         label: "{{ item.k }}"
       no_log: true
 
-    - name: "Secrets prep — bring up OpenBao (+ keycloak-postgres when enable_keycloak) first"
+    - name: "Secrets prep — bring up OpenBao and keycloak-postgres first"
       ansible.builtin.shell: >-
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }}
-        up -d openbao{{ ' keycloak-postgres' if (enable_keycloak | default(false)) else '' }}
+        up -d openbao keycloak-postgres
       args:
         chdir: "{{ digit_dir }}"
       changed_when: true
@@ -3170,8 +3186,8 @@
           - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_store_encryption_key",  bad: "change-this-key-32-characters!!!" }
           - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_secret_key",            bad: "dev-novu-secret-key-change-in-production" }
           - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: "secret" }
-          - { feature: "Keycloak (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "keycloak_admin_password",  bad: "admin" }
-          - { feature: "Identity BFF (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "identity_digit_admin_password", bad: "CHANGE_ME" }
+          - { feature: "Keycloak",                 enabled: true,                                      var: "keycloak_admin_password",    bad: "admin" }
+          - { feature: "Identity BFF",             enabled: true,                                      var: "identity_digit_admin_password", bad: "CHANGE_ME" }
           - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123" }
           - { feature: "Search (enable_search_stack)", enabled: "{{ enable_search_stack | default(false) }}", var: "elasticsearch_password", bad: "changeme-elastic" }
 
@@ -3185,7 +3201,7 @@
           the published default in OpenBao — so .env gets an empty value and
           compose falls back to the public default from
           docker-compose.egov-digit.yaml. Set it with
-          `bao kv put {{ secrets_path }} {{ item.var }}=<value>` (or put it in
+          `bao kv patch {{ secrets_path }} {{ item.var }}=<value>` (or put it in
           bootstrap_secrets in host_vars/{{ inventory_hostname }}.yml on a tenant
           whose OpenBao has not been seeded yet). These values are in a public
           repo, so the default is equivalent to no secret at all.
@@ -3203,7 +3219,7 @@
           the published default in OpenBao on this already-deployed box. The
           deploy is CONTINUING so an existing tenant is not bricked, but this
           credential is public and equivalent to no secret at all — rotate it:
-          `bao kv put {{ secrets_path }} {{ item.var }}=<value>` and rotate the
+          `bao kv patch {{ secrets_path }} {{ item.var }}=<value>` and rotate the
           live service to match. Fresh deploys fail closed on this.
       when:
         - item.enabled | bool
@@ -3445,7 +3461,7 @@
           # 500s with InvalidAccessKeyId. The "strip stale AWS_KEY" task below
           # guarantees no such line survives. (Root-caused by @dhruv-1001.)
           ELASTICSEARCH_MASTER_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_master_password }}
-          EGOV_HRMS_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
+          EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
           ELASTICSEARCH_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_password | default('', true) }}
           {# Opt-in Novu stack. default('') so a tenant without these keys writes
              an empty value, which compose's ${NOVU_*:-dev-default} treats as
@@ -3708,7 +3724,6 @@
           X-Vault-Token: "{{ bao_root_token }}"
         status_code: [200]
       register: bao_secrets_identity
-      when: enable_keycloak | default(false)
       no_log: true
 
     # The one identity credential that CANNOT be generated here: Keycloak bakes
@@ -3723,13 +3738,12 @@
         that:
           - (bao_secrets_identity.json.data.data.keycloak_admin_password | default('', true)) | length > 0
         fail_msg: >-
-          enable_keycloak is on but `keycloak_admin_password` is empty in
-          OpenBao, so .env would hand compose an empty KC_ADMIN_PASSWORD and
-          Keycloak would fall back to the published default `admin`. Set it
-          with `bao kv put {{ secrets_path }} keycloak_admin_password=<value>`
+          `keycloak_admin_password` is empty in OpenBao, so .env would hand
+          compose an empty KC_ADMIN_PASSWORD and Keycloak would fall back to
+          the published default `admin`. Set it with
+          `bao kv patch {{ secrets_path }} keycloak_admin_password=<value>`
           (and, on a box where Keycloak already bootstrapped, change the
           admin user's password in Keycloak to match).
-      when: enable_keycloak | default(false)
 
     - name: "Identity BFF — validate staff credential mode"
       ansible.builtin.assert:
@@ -3743,7 +3757,6 @@
           identity_staff_credential_mode must be rotate or derived. Derived mode
           also requires identity_credential_keys and identity_credential_key_current
           in OpenBao; rotate mode requires neither.
-      when: enable_keycloak | default(false)
 
     # `or`, not `ternary`: Jinja evaluates every filter argument up front, so a
     # ternary would run the generator on every deploy and discard it whenever
@@ -3790,7 +3803,6 @@
             {{ _identity_stored.pgr_digit_provisioner_password | default('', true)
                or _identity_stored.identity_digit_provisioner_password | default('', true)
                or (lookup('password', '/dev/null length=11 chars=ascii_letters,digits') ~ 'Pq7@') }}
-      when: enable_keycloak | default(false)
       no_log: true
 
     # One merged, cas-guarded write — same shape and same reasoning as the
@@ -3809,7 +3821,6 @@
               'data': bao_secrets_identity.json.data.data | combine(identity_secrets)} }}
         status_code: [200]
       when:
-        - enable_keycloak | default(false)
         # Exactly "the merge would change something", i.e. at least one of the
         # resolved identity secrets was absent or empty and has just been generated.
         - (bao_secrets_identity.json.data.data | combine(identity_secrets))
@@ -3817,10 +3828,10 @@
       no_log: true
 
     # Identity-tier secrets — appended as a separate marked block so the
-    # main TENANT SECRETS block stays untouched on Keycloak-free tenants.
+    # main TENANT SECRETS block stays untouched.
     # KC_ADMIN_PASSWORD is asserted non-empty above; the rest come from the
     # resolved dict, so an operator can rotate any of them independently with
-    # `bao kv put` without touching the others.
+    # `bao kv patch` without touching the others.
     - name: "OpenBao — write Keycloak and Identity BFF secrets into compose .env"
       ansible.builtin.blockinfile:
         path: "{{ digit_dir }}/.env"
@@ -3847,10 +3858,9 @@
         create: false
         mode: '0600'
       no_log: true
-      when: enable_keycloak | default(false)
 
-    # keycloak-postgres is already up (brought up alongside openbao above, when
-    # enable_keycloak), so — unlike the main egov/mcp Postgres ALTERs further
+    # keycloak-postgres is already up (brought up alongside openbao above),
+    # so — unlike the main egov/mcp Postgres ALTERs further
     # down, which need the main stack running — this can sync right here,
     # before the main compose-up ever touches keycloak.
     - name: "Secrets prep — align keycloak DB-user password to OpenBao value"
@@ -3861,7 +3871,6 @@
       changed_when: true
       failed_when: false
       when:
-        - enable_keycloak | default(false)
         - bao_secrets.json.data.data.keycloak_db_password | default('') | length > 0
 
     # Same ordering trap as the KEYCLOAK SECRETS block above, for Novu (CCRS#1551).
@@ -4091,6 +4100,20 @@
       shell: |
         set -o pipefail
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} build opensre 2>&1 | tee -a {{ compose_progress_file }}
+      args:
+        chdir: "{{ digit_dir }}"
+        executable: /bin/bash
+      changed_when: false
+
+    # db-history-normalize is built on the box too (db/normalize/Dockerfile), and
+    # `up -d` does not rebuild an image it already has, so a changed normalize.py
+    # would never reach a box that built it once: a box that aborted on a 2.12
+    # Go user_preference table would abort again. Built here, before any `up -d`
+    # that runs it; a cache hit when nothing changed.
+    - name: "Flyway history normalize — build the image"
+      shell: |
+        set -o pipefail
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} build db-history-normalize 2>&1 | tee -a {{ compose_progress_file }}
       args:
         chdir: "{{ digit_dir }}"
         executable: /bin/bash
@@ -4776,169 +4799,27 @@
       when: digit_ui_mode == "hmr"
 
     # ============================================================
-    # digit-ui-v2 — Vite + React 19 citizen SPA (new in feat/keycloak-stack).
-    #
-    # Source lives at /opt/digit-ui-v2 on the TARGET (cloned via
-    # ansible.builtin.git so the build environment matches the host's
-    # Node — no controller-side cross-arch surprises). Mirrors the
-    # digit-ui-esbuild pattern (clone-on-target + build-on-target),
-    # NOT the configurator pattern (controller-side build). Rationale:
-    # digit-ui-v2's Vite build pulls native deps (esbuild + lightningcss
-    # platform binaries) that must match the runtime arch; building on
-    # the target avoids the "ran on Mac controller, won't link on
-    # x86_64 server" failure mode.
-    #
-    # Env-var contract (read by Vite at build time via import.meta.env)
-    # is documented in CLAUDE.md / handoff between this PR and the
-    # sister UI PR. Update both ends together.
+    # digit-ui-v2 (the Vite citizen SPA once served at /citizen) was
+    # REMOVED. Earlier deploys built it under /opt/digit-ui-v2 and synced
+    # the bundle to /var/www/citizen for host nginx to serve; there was
+    # never a container or service for it. Remove both leftovers so an
+    # upgraded box does not keep a stale, unreachable bundle around.
+    # Idempotent (absent paths are a no-op) and runs whether or not the
+    # host_vars still set enable_digit_ui_v2. No data lives here: both
+    # are build output re-creatable from source. Darwin never ran the
+    # build (it needed become for /var/www), so it is skipped there.
     # ============================================================
-    # Source selection. The citizen SPA is VENDORED in-tree at CCRS
-    # `digit-ui-v2/` (alongside `ui-shared/`, which its build imports), so the
-    # DEFAULT is to ship the source this checkout actually contains — same
-    # rule the configurator and turbopass builds already follow. The previous
-    # default cloned an external fork branch, which meant a deploy that did not
-    # override `digit_ui_v2_repo` silently built a different codebase than the
-    # one under review: build-time contracts added here (e.g.
-    # VITE_ENABLE_LEGACY_PGR_DASHBOARD) were passed to a build that had no code
-    # reading them, so the legacy dashboard stayed visible by default.
-    #
-    # Setting `digit_ui_v2_repo` still selects the clone path, for transitional
-    # or standalone use. Either way the build dir stays
-    # /opt/digit-ui-v2/digit-ui-v2 with ui-shared as its sibling, matching the
-    # repo-root-relative import in src/config/featureFlags.ts.
-    - name: "digit-ui-v2 — clone external source (only when digit_ui_v2_repo is set)"
-      ansible.builtin.git:
-        repo: "{{ digit_ui_v2_repo }}"
-        dest: /opt/digit-ui-v2
-        version: "{{ digit_ui_v2_branch | default('HEAD') }}"
-        update: true
-        force: true
-      when:
-        - enable_digit_ui_v2 | default(false)
-        - digit_ui_v2_repo is defined
-        - (digit_ui_v2_repo | default('')) | length > 0
-
-    - name: "digit-ui-v2 — ensure vendored source dirs on target"
+    - name: "digit-ui-v2 (removed) — delete leftover build source and served bundle"
       ansible.builtin.file:
         path: "{{ item }}"
-        state: directory
-        mode: "0755"
+        state: absent
       loop:
         - /opt/digit-ui-v2
-        - /opt/digit-ui-v2/digit-ui-v2
+        - /var/www/citizen
       when:
-        - enable_digit_ui_v2 | default(false)
-        - (digit_ui_v2_repo | default('')) | length == 0
-
-    # node_modules/dist stay on the target between runs (the npm-install task
-    # below is mtime-gated), so never delete them from the controller copy.
-    - name: "digit-ui-v2 — sync vendored source (digit-ui-v2/ + ui-shared/) to target"
-      ansible.builtin.synchronize:
-        src: "{{ playbook_dir }}/../../{{ item }}/"
-        dest: "/opt/digit-ui-v2/{{ item }}/"
-        delete: false
-        rsync_opts:
-          - "--omit-dir-times"
-          - "--exclude=node_modules"
-          - "--exclude=dist"
-          - "--exclude=.git"
-      loop:
-        - digit-ui-v2
-        - ui-shared
-      when:
-        - enable_digit_ui_v2 | default(false)
-        - (digit_ui_v2_repo | default('')) | length == 0
-
-    # Fail loudly rather than silently building a source tree that predates the
-    # build-time flag contract — the failure mode the external-fork default hid.
-    - name: "digit-ui-v2 — stat build-flag contract in the selected source"
-      ansible.builtin.stat:
-        path: "{{ item }}"
-      register: dui2_flag_contract
-      loop:
-        - /opt/digit-ui-v2/digit-ui-v2/src/config/featureFlags.ts
-        - /opt/digit-ui-v2/ui-shared/featureFlags.ts
-      when: enable_digit_ui_v2 | default(false)
-
-    - name: "digit-ui-v2 — assert the selected source reads VITE_ENABLE_LEGACY_PGR_DASHBOARD"
-      ansible.builtin.assert:
-        that:
-          - dui2_flag_contract.results | map(attribute='stat.exists') | select | list | length == 2
-        fail_msg: >-
-          /opt/digit-ui-v2 does not contain src/config/featureFlags.ts and
-          ui-shared/featureFlags.ts. The source selected by digit_ui_v2_repo /
-          digit_ui_v2_branch predates the VITE_ENABLE_LEGACY_PGR_DASHBOARD
-          contract, so the legacy PGR dashboard would ship visible regardless of
-          enable_legacy_pgr_dashboard. Unset digit_ui_v2_repo to build the
-          vendored in-tree source, or point it at a revision that has the flag.
-        success_msg: "digit-ui-v2 source reads the build-time feature-flag contract"
-      when: enable_digit_ui_v2 | default(false)
-
-    # Node 20 + npm for the Vite build (see tasks/ensure-node20.yml).
-    - name: "digit-ui-v2 — ensure Node 20 + npm (NodeSource) for Vite build"
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
-      vars:
-        node_ensure_label: "digit-ui-v2"
-      when:
-        - enable_digit_ui_v2 | default(false)
         - ansible_system != "Darwin"
-
-    - name: "digit-ui-v2 — npm install if package.json newer than node_modules"
-      ansible.builtin.shell: |
-        cd /opt/digit-ui-v2/digit-ui-v2
-        if [ ! -d node_modules ] \
-           || [ package.json -nt node_modules ] \
-           || [ package-lock.json -nt node_modules ]; then
-          npm install --no-audit --no-fund --prefer-offline
-          echo installed
-        else
-          echo skipped
-        fi
-      register: dui2_install
-      changed_when: dui2_install.stdout == 'installed'
-      when: enable_digit_ui_v2 | default(false)
-
-    - name: "digit-ui-v2 — build (vite) with env contract"
-      ansible.builtin.shell: |
-        cd /opt/digit-ui-v2/digit-ui-v2
-        VITE_AUTH_PROVIDER="{{ auth_provider | default('') }}" \
-        VITE_KEYCLOAK_URL=/auth \
-        VITE_KEYCLOAK_REALM="{{ state_tenant_id }}" \
-        VITE_KEYCLOAK_CLIENT_ID="{{ keycloak_client_id | default('digit-ui') }}" \
-        VITE_TOKEN_EXCHANGE_URL=/token-exchange \
-        VITE_CITIZEN_STATE_TENANT="{{ state_tenant_id }}" \
-        VITE_CITIZEN_TENANT="{{ tenant_id }}" \
-        VITE_ENABLE_LEGACY_PGR_DASHBOARD="{{ enable_legacy_pgr_dashboard | default(false) | bool | ternary('true', 'false') }}" \
-        npm run build
-        test -f dist/index.html
-      args:
-        executable: /bin/bash
-      register: dui2_build
-      changed_when: true
-      when: enable_digit_ui_v2 | default(false)
-
-    - name: "digit-ui-v2 — ensure /var/www/citizen exists"
-      ansible.builtin.file:
-        path: /var/www/citizen
-        state: directory
-        mode: '0755'
-      when: enable_digit_ui_v2 | default(false)
-
-    # rsync on the TARGET (not synchronize from the controller). The
-    # source dist lives on the same box as the destination, so a local
-    # rsync is faster and avoids the ansible.posix.synchronize
-    # cross-host SSH dance. delete=true so a removed asset doesn't
-    # linger; --no-perms/--no-owner because /var/www/citizen is owned
-    # by root:root and we don't want to chown to the npm-build user.
-    - name: "digit-ui-v2 — sync dist/ to /var/www/citizen/"
-      ansible.builtin.command: >-
-        rsync -a --delete
-        --no-perms --no-times --no-owner --no-group
-        /opt/digit-ui-v2/digit-ui-v2/dist/
-        /var/www/citizen/
-      register: dui2_sync
-      changed_when: dui2_sync.rc == 0
-      when: enable_digit_ui_v2 | default(false)
+        # A preserved hand-written vhost may still serve /citizen from here.
+        - item != '/var/www/citizen' or not (nginx_preserve_vhost | default(false) | bool)
 
     # ==================== Wait for MCP Server ====================
     # Only when MCP is actually deployed. enable_mcp is false on Mac (the
@@ -5286,9 +5167,9 @@
     # ui-shared/ comes too: configurator/src/config/featureFlags.ts imports
     # `../../../ui-shared/featureFlags`, which resolves OUTSIDE configurator/.
     # Syncing the app alone gets as far as 637 modules and then dies on
-    # "Could not resolve ../../../ui-shared/featureFlags". Same pairing the
-    # digit-ui-v2 sync already does. The relative path works out because
-    # configurator lands at .build/configurator and ui-shared at .build/ui-shared.
+    # "Could not resolve ../../../ui-shared/featureFlags". The relative path
+    # works out because configurator lands at .build/configurator and
+    # ui-shared at .build/ui-shared.
     - name: "Configurator SPA — sync vendored source (configurator/ + ui-shared/) to target"
       ansible.posix.synchronize:
         src: "{{ item.src }}"
@@ -5329,6 +5210,9 @@
         # The citizen-banner upload in the Branding step (#2358). Default false
         # hides it; the citizen side has its own switch, citizen_banner_enabled.
         VITE_ENABLE_CITIZEN_BANNER: "{{ configurator_banner_enabled | default(false) | bool | ternary('true', 'false') }}"
+        # Geography's list takes more than one boundary selection. Default
+        # false: one selection at a time.
+        VITE_ENABLE_GEOGRAPHY_MULTIPLE_SELECTIONS: "{{ configurator_geography_multiple_selections | default(false) | bool | ternary('true', 'false') }}"
       register: configurator_build_run
       changed_when: true
       when:
@@ -5439,21 +5323,23 @@
     # templates/nginx-site.conf.j2; the trailing slash strips the prefix).
     #
     # What it serves:
-    #   - the offline Overture boundary DB (the configurator's default source)
-    #     when turbopass_overture_data_dir names a directory holding
-    #     boundaries.sqlite. The DB is built separately by
-    #     turbopass/overture-scraper — it is NOT part of this deploy;
+    #   - the offline boundary DB in turbopass_overture_data_dir: Overture plus
+    #     the official sets, which back Phase 2's "Fetch boundaries" and
+    #     "Preconfigured boundaries". tasks/turbopass-boundary-db.yml builds it
+    #     for turbopass_countries when it doesn't hold them yet (#2600);
     #   - Geoapify passthrough when turbopass_geoapify_api_key is set;
     #   - the vendored name hierarchies (turbopass/data) for the legacy /search.
     # Turbopass is meant to run as its own central service; this on-box path
     # suits a single box or local testing. Default off → zero behaviour
-    # change: no image, no container, no nginx block.
+    # change: no image, no container, no nginx block. `--tags=turbopass`
+    # reruns only this part.
     - name: "Turbopass — ensure build workspace on target"
       ansible.builtin.file:
         path: "{{ digit_dir }}/.build"
         state: directory
         mode: "0755"
       when: enable_turbopass | default(false)
+      tags: [turbopass]
 
     - name: "Turbopass — sync vendored source + scraped data to target"
       ansible.builtin.synchronize:
@@ -5468,6 +5354,7 @@
           - "--exclude=node_modules"
           - "--exclude=venv"
       when: enable_turbopass | default(false)
+      tags: [turbopass]
 
     - name: "Turbopass — build search-api image (turbopass-search:local)"
       ansible.builtin.command: >-
@@ -5478,6 +5365,17 @@
       register: turbopass_build_run
       changed_when: true
       when: enable_turbopass | default(false)
+      tags: [turbopass]
+
+    - name: "Turbopass — boundary DB for turbopass_countries"
+      ansible.builtin.include_tasks:
+        file: tasks/turbopass-boundary-db.yml
+        apply:
+          tags: [turbopass]
+      when:
+        - enable_turbopass | default(false)
+        - turbopass_overture_data_dir | default('') | length > 0
+      tags: [turbopass]
 
     - name: "Turbopass — (re)create the turbopass-search container"
       ansible.builtin.shell: |
@@ -5499,6 +5397,7 @@
       register: turbopass_run
       changed_when: true
       when: enable_turbopass | default(false)
+      tags: [turbopass]
 
     # If a tenant just flipped enable_turbopass: true → false, the
     # previously-running container isn't managed by compose, so nothing
@@ -5513,6 +5412,7 @@
       register: turbopass_sweep
       changed_when: turbopass_sweep.stdout | length > 0
       when: not (enable_turbopass | default(false))
+      tags: [turbopass]
 
     # ---- Self-hosted Overpass: retired ----
     # Phase 2 no longer queries Overpass — boundaries come from turbopass
@@ -6257,8 +6157,8 @@
           changed_when: true
 
     # ==================== SELinux content labeling (RHEL family only) ====================
-    # Files copied/synced into /var/www/* (configurator, citizen SPA,
-    # integration-tests dashboards, brand assets, …) by the copy/synchronize
+    # Files copied/synced into /var/www/* (configurator, integration-tests
+    # dashboards, brand assets, …) by the copy/synchronize
     # tasks above don't automatically get the httpd_sys_content_t SELinux
     # label — copy/synchronize aren't SELinux-aware the way package-managed
     # files are, so new files can land with the wrong context (or none) even
@@ -6291,19 +6191,46 @@
         # Bad signals: "Restarting", "Exited" (with non-zero), or
         # "(unhealthy)". One-shot init containers that finished
         # successfully report "Exited (0)" — those are fine too.
+        #
+        # The observability tier (validate_health_warn_only) is reported but
+        # does not fail the gate: a crash-looping Tempo or Loki breaks no
+        # sign-in or complaint, but failing here skips every task after it,
+        # identity bootstrap included.
         set -eo pipefail
         bad=$(docker compose -f {{ digit_dir }}/docker-compose.egov-digit.yaml ps \
                 --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Status{{ "}}" }}' \
               | grep -E 'Restarting|\(unhealthy\)|Exited \([1-9]' || true)
-        if [ -n "$bad" ]; then
+        warn_only='{{ validate_health_warn_only | default([]) | join(' ') }}'
+        # Exact match on the name field, so no name is read as a pattern.
+        pick() { echo "$bad" | awk -v names="$warn_only" -v want="$1" \
+          'BEGIN { n = split(names, list, " "); for (i = 1; i <= n; i++) warn[list[i]] = 1 }
+           NF && (($1 in warn) == want)'; }
+        soft=$(pick 1)
+        hard=$(pick 0)
+        if [ -n "$soft" ]; then
+          echo "WARN observability containers not healthy:"
+          echo "$soft"
+        fi
+        if [ -n "$hard" ]; then
           echo "Broken containers:"
-          echo "$bad"
+          echo "$hard"
           exit 1
         fi
       args:
         chdir: "{{ digit_dir }}"
         executable: /bin/bash
+      register: container_health
       changed_when: false
+
+    - name: "validate — ACTION: observability containers are not healthy (not gating)"
+      when: "'WARN observability' in (container_health.stdout | default(''))"
+      ansible.builtin.debug:
+        msg: >-
+          {{ container_health.stdout }}.
+          Traces, logs or dashboards may be missing; the stack itself is unaffected.
+          Check each container's restart count and `docker logs <name>`.
+          {{ 'To run without tracing (Tempo), set observability_level: logs.' if 'digit-tempo ' in container_health.stdout else '' }}
+          {{ 'To run without log storage (Loki, promtail), set observability_level: metrics.' if ('digit-loki ' in container_health.stdout or 'digit-promtail ' in container_health.stdout) else '' }}
 
     # ── Service health through Kong ───────────────────────────────────────
     # Hit each core service's health endpoint via Kong (port 18000), not
@@ -7355,11 +7282,14 @@
         stdin: |
           import json, os, sys, urllib.request, urllib.error
           api = "http://127.0.0.1:14002"
-          def call(path, body, token=None):
-              req = urllib.request.Request(api + path, data=json.dumps(body).encode(), method="POST",
+          def call(path, body, token=None, env_id=None):
+              req = urllib.request.Request(api + path, method="POST" if body is not None else "GET",
+                                           data=json.dumps(body).encode() if body is not None else None,
                                            headers={"Content-Type": "application/json"})
               if token:
                   req.add_header("Authorization", "Bearer " + token)
+              if env_id:
+                  req.add_header("Novu-Environment-Id", env_id)
               try:
                   with urllib.request.urlopen(req, timeout=20) as r:
                       raw = r.read()
@@ -7374,8 +7304,15 @@
           if status not in (200, 201):
               print("NOUSER"); sys.exit(0)
           token = (body.get("data") or {}).get("token")
+          # Novu 2.x takes the session's environment only from this header, and
+          # update-password refuses a session without one (422 "environmentId
+          # should not be empty"). Any environment of the admin's organization does.
+          status, envs = call("/v1/environments", None, token)
+          env_id = next((e.get("_id") for e in (envs.get("data") or []) if e.get("_id")), None)
+          if not env_id:
+              print("FAILED no environment (%s)" % status); sys.exit(1)
           status, _ = call("/v1/auth/update-password",
-                           {"currentPassword": old, "newPassword": new, "confirmPassword": new}, token)
+                           {"currentPassword": old, "newPassword": new, "confirmPassword": new}, token, env_id)
           if status not in (200, 204):
               print("FAILED %s" % status); sys.exit(1)
           print("ROTATED")
@@ -7799,7 +7736,6 @@
         timeout 300 bash -c 'until [ "$(docker inspect -f "{{ '{{' }}.State.Health.Status{{ '}}' }}" keycloak 2>/dev/null)" = "healthy" ]; do sleep 5; done && echo ready'
       register: kc_wait
       changed_when: false
-      when: enable_keycloak | default(false)
 
     - name: "identity-bootstrap — validate identity email configuration"
       ansible.builtin.assert:
@@ -7812,8 +7748,6 @@
           optional magic links require identity_smtp_host, identity_smtp_from,
           and an OpenBao identity_smtp_password when SMTP authentication is
           enabled.
-      when:
-        - enable_keycloak | default(false)
 
     - name: "identity-bootstrap — reconcile Organizations realm and BFF clients"
       ansible.builtin.command: "{{ digit_dir }}/configure-identity-keycloak.sh"
@@ -7853,7 +7787,6 @@
         KEYCLOAK_BFF_SIGNUP_METHODS: "{{ identity_signup_methods | default(['magic_link', 'google', 'github']) | join(',') }}"
         # digit-ui citizen client (#2189): empty = no citizen sign-in method, the script's default.
         KEYCLOAK_CITIZEN_SIGNIN_METHODS: "{{ identity_citizen_signin_methods | default([]) | join(',') }}"
-      when: enable_keycloak | default(false)
       no_log: true
       changed_when: true
 
@@ -7884,7 +7817,6 @@
       delay: 5
       failed_when: false
       when:
-        - enable_keycloak | default(false)
         - nginx_features.keycloak | default(false)
 
     - name: "validate — /auth/ answers with the realm's OIDC discovery document"
@@ -7904,7 +7836,6 @@
           {{ (keycloak_oidc_discovery.content | default(keycloak_oidc_discovery.msg | default('')))[:160] }}
         quiet: true
       when:
-        - enable_keycloak | default(false)
         - nginx_features.keycloak | default(false)
 
     - name: "validate — Identity BFF browser API is ready"
@@ -7915,7 +7846,6 @@
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
       when:
-        - enable_keycloak | default(false)
         - nginx_features.keycloak | default(false)
 
     # Deploy-seeded roots (#2398). A root the deploy seeds (state_root) never went
@@ -7953,7 +7883,6 @@
       failed_when: false
       no_log: true
       when:
-        - enable_keycloak | default(false)
         - identity_route_backfill_roots | length > 0
 
     - name: "identity-bootstrap — fail: identity-bff rejected the control-plane token"
@@ -9077,6 +9006,10 @@
         #   python3 migrate-notifications.py plan --all
         # The deploy itself never runs it.
         - "{{ playbook_dir }}/../scripts/migrate-notifications.py"
+        # The platform baseline's action ids, so the access phase never treats one of them as
+        # a notification action's home and can hand one back (seed-notifications.py,
+        # give_back_baseline_id).
+        - "{{ playbook_dir }}/../../backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json"
 
     # The allowlist novu-bridge falls back to for a tenant with no channel rows. Read
     # from the RUNNING container, not host_vars: a per-tenant overlay can override the
@@ -9333,6 +9266,21 @@
         label: "{{ item.item }}"
       ansible.builtin.debug:
         msg: "{{ item.stdout_lines | default([]) | select('search', 'ACL-ROLES-ABSENT') | list }}"
+
+    # Lines to read even when the access phase succeeded: a grant an older build wrote on an
+    # id that holds another URL (ACL-STALE-GRANT, left in place: the tenant may have made it
+    # itself), a notification action that is switched off (ACL-ACTION-INACTIVE), and a
+    # platform-baseline id handed back or not (ACL-BASELINE-ID-RETURNED / -KEPT).
+    - name: "notif-seed — WARNING: access-control rows to review"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - (item.stdout | default('')) is search('ACL-(STALE-GRANT|ACTION-INACTIVE|BASELINE-ID)')
+      tags: ['notifications', 'notification-seed']
+      loop: "{{ notif_seed_acl.results | default([]) | selectattr('rc', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+      ansible.builtin.debug:
+        msg: "{{ item.stdout_lines | default([]) | select('search', 'ACL-(STALE-GRANT|ACTION-INACTIVE|BASELINE-ID)') | list }}"
 
     # egov-accesscontrol loads ACCESSCONTROL-ROLEACTIONS into an in-memory cache at
     # startup. Rows created just now are invisible to the running process, so Kong's
@@ -9671,7 +9619,7 @@
           {%- set fin = notif_seed_final_by_root[item] | default({}) -%}
           {%- set phase = 'access' if item not in (notif_acl_ok_roots | default([])) else 'data' -%}
           {%- set rc = (acl.rc | default('n/a')) if phase == 'access' else (fin.rc | default('n/a')) -%}
-          {%- set why = ((acl.stdout_lines | default([])) + (fin.stdout_lines | default([]))) | select('search', 'FORBIDDEN|FAILED|UNREADABLE|ABSENT|ERROR|INCOMPLETE|NOTIF-|CHANNEL-|access-control') | list -%}
+          {%- set why = ((acl.stdout_lines | default([])) + (fin.stdout_lines | default([]))) | select('search', 'FORBIDDEN|FAILED|UNREADABLE|ABSENT|ERROR|INCOMPLETE|NOTIF-|CHANNEL-|ACL-|access-control') | list -%}
           {{ item }} has {{ (notif_complaint_counts[item] | default('?')) }} complaint(s) but its
           notification seed did not finish ({{ phase }} phase exit {{ rc }}: {{ why | join(' | ') }}).
           The deploy goes on: {{ item }} is not state_root (`{{ notif_seed_tenant | trim }}`), and nothing
@@ -9713,7 +9661,7 @@
           [{{ r }}: {{ ('access phase exit ' ~ (acl.rc | default('n/a'))) if r not in (notif_acl_ok_roots | default([]))
                        else ('data phase exit ' ~ (fin.rc | default('n/a'))) }}
           {{ ((acl.stdout_lines | default([])) + (fin.stdout_lines | default([])))
-             | select('search', 'FORBIDDEN|FAILED|UNREADABLE|ABSENT|ERROR|INCOMPLETE|NOTIF-|CHANNEL-|access-control') | list }}]
+             | select('search', 'FORBIDDEN|FAILED|UNREADABLE|ABSENT|ERROR|INCOMPLETE|NOTIF-|CHANNEL-|ACL-|access-control') | list }}]
           {% endfor %}
           Exit 4 = {{ notif_seed_user | default('ADMIN') }} cannot log in there (set
           notif_seed_user / notif_seed_pass). Exit 3 = still refused with 403 after restarting
@@ -9725,9 +9673,13 @@
           token was issued with and hands the same token back on every login, so a role change
           during this deploy is invisible to Kong until the token goes (flush that user's
           auth_to_access/auth/access/uname_to_access/refresh keys in digit-redis, then re-run).
-          Exit 2 = an action row or a role-action for a role the tenant HAS failed, a core master
-          failed (NOTIFICATIONS-SEED-INCOMPLETE: a re-run finishes it), the login could not reach
-          egov-user (NOTIF-LOGIN-ERROR), or MDMS could not be read (nothing was written then).
+          An ACL-ACTION-INACTIVE line above means none of that: the action itself is deactivated
+          at that tenant, and only reactivating it ends the 403.
+          Exit 2 = an action row or a role-action for a role the tenant HAS failed, an action id
+          MDMS reported taken (ACL-ID-TAKEN: docs/releases/2.20/notifications/migration.md#access-control-actions),
+          a core master failed (NOTIFICATIONS-SEED-INCOMPLETE: a re-run finishes it), the login
+          could not reach egov-user (NOTIF-LOGIN-ERROR), or MDMS could not be read (nothing was
+          written then).
           Credentials were passed in the task environment, so none appear above. Re-run with
           `./deploy.sh {{ inventory_hostname }} --tags notifications`.
 

@@ -95,7 +95,7 @@ public class DispatchPipelineService {
     /** @param sourcePath {@link DispatchLogEntry#SOURCE_PATH_RESOLVED}, or null for pre-rendered */
     public DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo,
                                   String sourcePath) {
-        return process(event, send, requestInfo, sourcePath, false);
+        return process(event, send, requestInfo, sourcePath, false, false);
     }
 
     /**
@@ -105,13 +105,25 @@ public class DispatchPipelineService {
      * topics, or a {@code /dispatch/_dry-run} caller, can write.
      */
     public DispatchResult processCoreSms(NotificationEvent event) {
-        return process(event, true, null, null, true);
+        return process(event, true, null, null, true, false);
+    }
+
+    /**
+     * A workspace-trial email from {@code POST /messages/_dispatch}, sent now. Its caller holds the
+     * internal send token (the Identity BFF), the trust {@code messages/_send} already has, and it is a
+     * platform notice to a workspace's own admins. So the consent gate is skipped, and so is the
+     * tenant's channel policy: enabling EMAIL at the platform root would also start that root's
+     * complaint emails. It still needs a usable Novu integration for the channel. Like the core-SMS
+     * exemption this is an in-process fact (the authenticated route), never an envelope field.
+     */
+    public DispatchResult processInternal(NotificationEvent event) {
+        return process(event, true, null, null, false, true);
     }
 
     private DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo,
-                                   String sourcePath, boolean coreSms) {
+                                   String sourcePath, boolean coreSms, boolean internal) {
         log.info("Processing {} envelope: eventId={}, eventName={}, tenant={}, channel={}, send={}",
-                sourcePath != null ? "resolved" : coreSms ? "core-SMS" : "pre-rendered",
+                sourcePath != null ? "resolved" : coreSms ? "core-SMS" : internal ? "internal" : "pre-rendered",
                 event.getEventId(), event.getEventName(), event.getTenantId(), event.getChannel(), send);
 
         // Rejections are written down BEFORE they are thrown; the consumer still DLQs the event.
@@ -144,7 +156,7 @@ public class DispatchPipelineService {
                     .build();
         }
 
-        if (!(coreSms && CoreSmsTranslator.isConsentExempt(event))
+        if (!internal && !(coreSms && CoreSmsTranslator.isConsentExempt(event))
                 && !preferenceServiceClient.isChannelAllowed(event.getTenantId(), context.getRecipientUserId(),
                         context.getRecipientMobile(), context.getChannel())) {
             persist(event, context, "SKIPPED", "NB_PREFERENCE_DENIED", context.getChannel() + " preference denied");
@@ -162,7 +174,7 @@ public class DispatchPipelineService {
             return skip(event, context, "NB_UNSUPPORTED_CHANNEL", "Unknown channel: " + channel,
                     "Unsupported channel " + channel + " skipped");
         }
-        if (!channelPolicy.isEnabled(event.getTenantId(), channel)) {
+        if (!internal && !channelPolicy.isEnabled(event.getTenantId(), channel)) {
             return skip(event, context, "NB_NO_PROVIDER",
                     "Channel " + channel + " is not enabled for tenant " + event.getTenantId(),
                     "Channel " + channel + " has no enabled provider; skipped");

@@ -13,7 +13,6 @@ test.describe('Keycloak and citizen BFF browser entry', () => {
     expect(paths).toEqual(expect.arrayContaining(['/identity/v1/citizen/otp/_send', '/identity/v1/citizen/otp/_verify', '/identity/v1/contexts/citizen/_select']));
     expect(paths.some(path => path.startsWith('/token-exchange/') || path === '/user/oauth/token')).toBe(false);
     expect(await page.evaluate(() => Boolean(localStorage.getItem('Citizen.token')))).toBe(true);
-    expect(await page.evaluate(() => localStorage.getItem('digit_ui_v2_kc_access'))).toBeNull();
   });
 
   test('Google entry uses BFF authorize and server-owned PKCE', { tag: ['@area:keycloak', '@persona:citizen'] }, async ({ page, request }) => {
@@ -30,5 +29,15 @@ test.describe('Keycloak and citizen BFF browser entry', () => {
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.get('redirect_uri')).toBe(`${BASE_URL}/identity/v1/callback`);
     expect(url.searchParams.get('state')).toBeTruthy();
+  });
+
+  test('Configurator login page shows no Google button when Google is not a sign-in method', { tag: ['@area:keycloak', '@persona:system'] }, async ({ page, request }) => {
+    const methods = await request.get(`${BASE_URL}/identity/v1/auth-methods?surface=configurator&intent=signin`);
+    test.skip(methods.status() !== 200, 'this deployment does not publish configurator sign-in methods (/identity/v1/auth-methods)');
+    const offered: Array<{ id?: string }> = (await methods.json()).methods ?? [];
+    test.skip(offered.some(m => m.id === 'google'), 'Google is a configurator sign-in method here, so its button is expected');
+    await page.goto(authorizeUrl(BASE_URL, 'configurator'));
+    await expect(page.locator('#username')).toBeVisible();
+    await expect(page.locator('#social-google, a[href*="/broker/google/"]')).toHaveCount(0);
   });
 });

@@ -17,7 +17,12 @@ export interface AccountMetadata {
 }
 
 export async function accountMetadata(session: IdentitySession, surface: IdentitySurface): Promise<AccountMetadata> {
-  if (session.authMethod === "phone_otp") return { actions: [], credentials: [], providers: [] };
+  return (await readAccount(session, surface)).account;
+}
+
+/** The account view, and the redirect URIs of the surface's client it was read from. */
+async function readAccount(session: IdentitySession, surface: IdentitySurface): Promise<{ account: AccountMetadata; redirectUris: string[] }> {
+  if (session.authMethod === "phone_otp") return { account: { actions: [], credentials: [], providers: [] }, redirectUris: [] };
   const subject = encodeURIComponent(session.claims.sub);
   const [client, credentialsResponse, providersResponse] = await Promise.all([
     identityClient(surfaceConfig(surface).clientId),
@@ -26,15 +31,17 @@ export async function accountMetadata(session: IdentitySession, surface: Identit
   const declared = (client?.attributes["digit.auth.account.actions"] || "").split(",").map(value => value.trim());
   const credentials = await credentialsResponse.json() as Array<{ id?: string; type?: string; userLabel?: string }>;
   const providers = await providersResponse.json() as Array<{ identityProvider?: string }>;
-  return {
+  return { account: {
     actions: client?.enabled ? ACCOUNT_ACTIONS.filter(action => declared.includes(action)) : [],
     credentials: credentials.flatMap(item => item.id && item.type ? [{ id: item.id, type: item.type, label: item.userLabel || "" }] : []),
     providers: providers.flatMap(item => item.identityProvider ? [{ alias: item.identityProvider }] : []),
-  };
+  }, redirectUris: client?.redirectUris ?? [] };
 }
 
-export async function authorizeAccountAction(session: IdentitySession, surface: IdentitySurface, action: unknown, credentialId: unknown, provider: unknown): Promise<string> {
-  const account = await accountMetadata(session, surface);
+/** The `kc_action` to request, and the client's redirect URIs from the same read. */
+export async function authorizeAccountAction(session: IdentitySession, surface: IdentitySurface, action: unknown, credentialId: unknown, provider: unknown): Promise<{ kcAction: string; redirectUris: string[] }> {
+  const { account, redirectUris } = await readAccount(session, surface);
+  const allowed = (kcAction: string) => ({ kcAction, redirectUris });
   if (typeof action !== "string" || !account.actions.includes(action as AccountAction)) {
     throw new AccountActionError("ACTION_NOT_ALLOWED", 400, "This account action is not available");
   }
@@ -43,16 +50,16 @@ export async function authorizeAccountAction(session: IdentitySession, surface: 
     if (!account.credentials.some(item => item.id === credentialId && ["otp", "webauthn"].includes(item.type))) {
       throw new AccountActionError("CREDENTIAL_NOT_SECOND_FACTOR", 409, "Only a second-factor credential may be removed");
     }
-    return `${action}:${credentialId}`;
+    return allowed(`${action}:${credentialId}`);
   }
   if (action === "idp_link") {
     if (typeof provider !== "string" || !/^[A-Za-z0-9._-]+$/.test(provider) || !(await enabledIdentityProviders()).has(provider)) {
       throw new AccountActionError("INVALID_REQUEST", 400, "An enabled provider is required");
     }
     if (account.providers.some(item => item.alias === provider)) throw new AccountActionError("PROVIDER_ALREADY_LINKED", 409, "This provider is already linked");
-    return `${action}:${provider}`;
+    return allowed(`${action}:${provider}`);
   }
-  return action;
+  return allowed(action);
 }
 
 export async function unlinkProvider(subject: string, sessionId: string, surface: IdentitySurface, alias: string): Promise<Array<{ alias: string }>> {

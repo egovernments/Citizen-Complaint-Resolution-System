@@ -391,7 +391,7 @@ export const CitizenSideBar = ({
       onLogout={
         onLogout
           ? () => {
-              trackEvent("shell.drawer.logout", { category: "shell" });
+              trackEvent("app:sign_out");
               onLogout();
             }
           : undefined

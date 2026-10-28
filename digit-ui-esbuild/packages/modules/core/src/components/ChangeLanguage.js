@@ -67,7 +67,7 @@ const LanguagePill = ({ languages, selected, onPick, t }) => {
         aria-expanded={open}
         aria-label={label}
         onClick={() => setOpen((value) => !value)}
-        data-analytics-event="shell.language.open"
+        data-analytics-event="app:language_menu_open"
       >
         <TranslateGlyph />
         {shortCode(selected)}
@@ -86,7 +86,7 @@ const LanguagePill = ({ languages, selected, onPick, t }) => {
                     setOpen(false);
                     if (!active) onPick(language);
                   }}
-                  data-analytics-event="shell.language.select"
+                  data-analytics-event="app:locale_change"
                   data-analytics-label={language.value}
                 >
                   <span>{language.label}</span>

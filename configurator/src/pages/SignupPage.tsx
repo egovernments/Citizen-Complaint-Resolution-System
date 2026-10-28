@@ -8,6 +8,8 @@ import {
   type Signup,
   type SignupDraftInput,
   type TenantOption,
+  type TenantsResponse,
+  type WorkspaceTrialNotice,
   OnboardingError,
   PROVISIONING_STEPS,
   PROVISIONING_STEP_LABELS,
@@ -18,6 +20,7 @@ import {
   findSignup,
   isOperationReady,
   isOperationSettled,
+  isRetryingAutomatically,
   isValidAccountCode,
   isValidUrlSlug,
   newIdempotencyKey,
@@ -40,8 +43,10 @@ import { Input } from '@/components/ui/input';
 import { RequiredMark } from '@/components/ui/required-mark';
 import { Stepper } from '@/components/ui/stepper';
 import { AuthShell } from '@/components/signup/AuthPanel';
+import { WorkspaceTrialDialog } from '@/components/WorkspaceTrialDialog';
 import { useAuthResult } from '@/hooks/useAuthResult';
-import { clearSignOutIncomplete, signOutIncomplete } from '@/lib/session';
+import { clearSignOutIncomplete, signOutIncomplete, signOutThisDevice } from '@/lib/session';
+import { track } from '@/lib/analytics';
 import { useOnboardingT } from '@/onboarding/i18n';
 import { MOBILE_RULES, mobileHint, nationalMobile } from '@/onboarding/signup/mobileRules';
 import {
@@ -81,9 +86,8 @@ const TIME_ZONES = [...new Set(COUNTRIES.map((c) => c.timeZone))].sort();
 const LANGUAGES: { code: string; label: string }[] = [
   { code: 'en', label: 'English' },
   { code: 'fr', label: 'French' },
-  { code: 'pt', label: 'Portuguese' },
-  { code: 'sw', label: 'Swahili' },
   { code: 'hi', label: 'Hindi' },
+  { code: 'pt', label: 'Portuguese' },
 ];
 
 /**
@@ -103,6 +107,12 @@ const FINANCIAL_YEARS = [
   { code: 'OCT_SEP', label: 'October to September' },
 ];
 
+/**
+ * The terms version every signup records. Continuing past sign-in is the
+ * agreement ("By continuing, you agree to the Terms of Service and Privacy
+ * Notice"), so Review has no checkbox; pgr-services still needs the version to
+ * submit.
+ */
 const TERMS_VERSION = '2026-09';
 
 /**
@@ -131,8 +141,26 @@ const POLL_FAILURES_BEFORE_ERROR = 3;
 const PUBLISH_WAIT_MS = 120_000;
 const SLOW_POLL_MS = 15_000;
 
+/**
+ * A run PGR retries by itself changes (updatedAt, at least) every minute or so: its longest backoff is
+ * 60 s and the worker polls every 5 s. Unchanged for three times that, nobody is working it (the
+ * runner is stopped, say), so Try again is offered next to "Still setting up" (#2710 review).
+ */
+const STALLED_RETRY_MS = 180_000;
+
 function SignupMethodIcon({ method }: { method: AuthMethod }) {
-  if (method.id.toLowerCase() !== 'github') return null;
+  const id = method.id.toLowerCase();
+  if (id === 'google') {
+    return (
+      <svg viewBox="0 0 24 24" data-icon="inline-start" data-provider="google" aria-hidden="true">
+        <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.07H12v3.92h5.38a4.6 4.6 0 0 1-2 3.02v2.54h3.24c1.9-1.75 2.98-4.33 2.98-7.41Z" />
+        <path fill="#34A853" d="M12 22c2.7 0 4.98-.9 6.63-2.43l-3.24-2.54c-.9.6-2.05.96-3.39.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.62A10 10 0 0 0 12 22Z" />
+        <path fill="#FBBC05" d="M6.39 13.86A6 6 0 0 1 6.08 12c0-.65.11-1.28.31-1.86V7.52H3.04A10 10 0 0 0 2 12c0 1.61.38 3.14 1.04 4.48l3.35-2.62Z" />
+        <path fill="#EA4335" d="M12 6.01c1.47 0 2.79.51 3.83 1.5l2.87-2.87A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.96 5.52l3.35 2.62C7.18 7.77 9.39 6.01 12 6.01Z" />
+      </svg>
+    );
+  }
+  if (id !== 'github') return null;
   return (
     <svg
       viewBox="0 0 24 24"
@@ -246,6 +274,34 @@ function AvailabilityNote({
  * the provisioning screen and the workspace picker all read as one product
  * instead of a form floating on an empty page.
  */
+/**
+ * The way out of a signed-in signup: to start again under another email, or to leave a setup that
+ * did not finish. The signup stays with this email, so signing in with it again picks it up where
+ * it stopped.
+ */
+function SignOutLine({ email }: { email?: string }) {
+  const t = useOnboardingT();
+  const [busy, setBusy] = useState(false);
+  return (
+    <p className="mt-6 text-center text-sm text-muted-foreground">
+      {email && <>{t('signup.signed_in_as', 'Signed in as %{email}.', { email })} </>}
+      <button
+        type="button"
+        disabled={busy}
+        className="font-medium text-primary underline-offset-4 hover:underline disabled:opacity-60"
+        onClick={async () => {
+          setBusy(true);
+          await signOutThisDevice('current');
+          // A full load, so the page starts from the sign-in gate instead of this session.
+          window.location.assign('/configurator/signup');
+        }}
+      >
+        {t('signup.sign_out_other_email', 'Sign out and use a different email')}
+      </button>
+    </p>
+  );
+}
+
 function SignupFlow() {
   const t = useOnboardingT();
   const authResult = useAuthResult();
@@ -257,12 +313,16 @@ function SignupFlow() {
   const [signupEmail, setSignupEmail] = useState('');
   const [sessionUser, setSessionUser] = useState<{ email: string; name: string } | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
+  const [trialNotice, setTrialNotice] = useState<WorkspaceTrialNotice | null>(null);
+  const [trialOpen, setTrialOpen] = useState(false);
   // The tenant the operator picked and how far it has actually been built. Set
   // only when the pick is refused, so the gate can name what it is holding.
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [signup, setSignup] = useState<Signup | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
   const [publishSlow, setPublishSlow] = useState(false);
+  /** The automatically retrying run as it was when it stopped changing (STALLED_RETRY_MS). */
+  const [stalledRun, setStalledRun] = useState<string | null>(null);
   const [step, setStep] = useState<string>('account');
   const [saving, setSaving] = useState(false);
 
@@ -283,7 +343,6 @@ function SignupFlow() {
   // Whether a TERMINAL_FAILED run's signup was handed back is read from the signup. Until that
   // read answers, neither "Change my details" nor "contact support" is shown.
   const [reopenCheck, setReopenCheck] = useState<'pending' | 'failed' | 'done'>('pending');
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [codeState, setCodeState] = useState<AvailabilityResult | null>(null);
   const [codeChecking, setCodeChecking] = useState(false);
@@ -315,11 +374,12 @@ function SignupFlow() {
     setAccountCode(record.accountCode || '');
     setUrlSlug(record.urlSlug || '');
     setCountryCode(record.countryCode || '');
-    setLanguages(record.languages?.length ? record.languages : ['en']);
+    // A draft saved before a language was withdrawn keeps only the ones still offered.
+    const offered = (record.languages || []).filter((code) => LANGUAGES.some((language) => language.code === code));
+    setLanguages(offered.length ? offered : ['en']);
     setTimeZone(record.timeZone || '');
     setFinancialYearPolicy(record.financialYearPolicy || '');
     setTenantAdminMobile(String(record.tenantMetadata?.tenantAdmin?.mobileNumber || ''));
-    setAcceptedTerms(Boolean(record.acceptedTermsVersion));
     // Only a value the operator typed stops following the name. A saved value
     // that is still what the saved name derives was never edited by hand, so
     // it keeps updating when the name changes after a resume.
@@ -345,6 +405,20 @@ function SignupFlow() {
     setPhase('signedOut');
   }, [t]);
 
+  /**
+   * A locked workspace stays listed so it is not mistaken for no workspace (and
+   * a locked founder sent into a second signup). With nothing else to choose,
+   * say so now; otherwise wait for the click.
+   */
+  const offerTenants = useCallback((view: TenantsResponse) => {
+    setTenantOptions(view.tenants);
+    const locked = view.tenants.filter((option) => option.code === 'WORKSPACE_TRIAL_EXPIRED');
+    if (view.notice && locked.length) {
+      setTrialNotice(view.notice);
+      setTrialOpen(locked.length === view.tenants.length);
+    }
+  }, []);
+
   /** Session → tenants → onboarding or chooser. The contract's own order. */
   // No synchronous setState in here: it runs from an effect on mount, where
   // `loading` is already the initial phase. The two re-entry points below want
@@ -363,7 +437,7 @@ function SignupFlow() {
       }
       const view = await tenants();
       if (view.tenants.length) {
-        setTenantOptions(view.tenants);
+        offerTenants(view);
         setPhase('chooseTenant');
         return;
       }
@@ -442,7 +516,7 @@ function SignupFlow() {
       setError(describeSignupError(caught, t).message);
       setPhase('failed');
     }
-  }, [seedFrom, t, restartSignIn]);
+  }, [seedFrom, t, restartSignIn, offerTenants]);
 
   useEffect(() => {
     // Load on mount. Every setState inside `bootstrap` happens after an await,
@@ -524,13 +598,21 @@ function SignupFlow() {
     if (languages.length) next.languages = languages;
     if (timeZone) next.timeZone = timeZone;
     if (financialYearPolicy) next.financialYearPolicy = financialYearPolicy;
-    if (acceptedTerms) next.acceptedTermsVersion = TERMS_VERSION;
+    next.acceptedTermsVersion = TERMS_VERSION;
     if (tenantAdminMobile.trim()) {
       // The bare national number when it passes the rule: the backend's parser and egov-user then see the same digits.
       next.tenantMetadata = { schemaVersion: 1, tenantAdmin: { mobileNumber: mobileNational ?? tenantAdminMobile.trim() } };
     }
     return next;
-  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, tenantAdminMobile, mobileNational]);
+  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, tenantAdminMobile, mobileNational]);
+
+  /** Preferences' choices as analytics gets them: never the mobile number. */
+  const preferenceChoices = {
+    country: countryCode,
+    languages: languages.join(','),
+    time_zone: timeZone,
+    financial_year: financialYearPolicy,
+  };
 
   /** Create on first save, update thereafter — one signup per founder. */
   const persist = useCallback(async (): Promise<Signup> => {
@@ -579,6 +661,7 @@ function SignupFlow() {
     setError(null);
     try {
       await persist();
+      track('signup:step_complete', step === 'preferences' ? { step, ...preferenceChoices } : { step });
       setStep(next);
     } catch (caught) {
       await handleFailure(caught);
@@ -593,6 +676,7 @@ function SignupFlow() {
     try {
       const record = await persist();
       const started = await submitSignup(record.id, submitKey.current);
+      track('signup:account_submit', { country: countryCode });
       setOperation(started);
       setPhase('provisioning');
     } catch (caught) {
@@ -607,6 +691,7 @@ function SignupFlow() {
     authResult.clear();
     setSaving(true);
     setError(null);
+    track('signup:method_select', { method: 'magic_link' });
     try {
       clearSignOutIncomplete();
       await requestMagicLinkSignup({
@@ -614,6 +699,7 @@ function SignupFlow() {
         lastName: signupLastName.trim(),
         email: signupEmail.trim(),
       });
+      track('signup:link_send');
       setPhase('checkEmail');
     } catch (caught) {
       setError(describe(caught, true).message);
@@ -632,6 +718,18 @@ function SignupFlow() {
     const timer = setTimeout(() => setPublishSlow(true), PUBLISH_WAIT_MS);
     return () => clearTimeout(timer);
   }, [awaitingPublication]);
+
+  // While PGR retries the run by itself, any change to it restarts the stall timer; a poll that
+  // brings back the same run does not.
+  const retryingRun = phase === 'provisioning' && !!operation && isRetryingAutomatically(operation)
+    ? `${operation.id}|${operation.status}|${operation.attempt}|${operation.currentStep}|${operation.updatedAt}`
+    : null;
+  useEffect(() => {
+    if (!retryingRun) return;
+    const timer = setTimeout(() => setStalledRun(retryingRun), STALLED_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [retryingRun]);
+  const retryStalled = !!retryingRun && stalledRun === retryingRun;
 
   // Poll while the worker runs, on a fixed cadence keyed to the operation, not
   // its contents: an answer that changes nothing, an empty answer or a check
@@ -716,13 +814,27 @@ function SignupFlow() {
   }, [phase, seedFrom, restart]);
 
   const enter = useCallback(async (option: TenantOption): Promise<boolean> => {
-    setSaving(true);
     setError(null);
+    if (option.code === 'WORKSPACE_TRIAL_EXPIRED') {
+      // The dialog renders only with a notice. `enter` doesn't read it, so a new
+      // notice per tenant read never re-creates `enter` or re-runs the effect below.
+      setTrialOpen(true);
+      return false;
+    }
+    setSaving(true);
     try {
       await enterWorkspace(option.tenantId, sessionUser);
       return true;
     } catch (caught) {
-      setError(describe(caught).message);
+      const notice = caught instanceof OnboardingError && caught.code === 'WORKSPACE_TRIAL_EXPIRED'
+        ? (caught.details?.notice as WorkspaceTrialNotice | undefined)
+        : undefined;
+      if (notice) {
+        setTrialNotice(notice);
+        setTrialOpen(true);
+      } else {
+        setError(describe(caught).message);
+      }
       setSaving(false);
       return false;
     }
@@ -737,7 +849,7 @@ function SignupFlow() {
       try {
         const view = await tenants();
         if (!live) return;
-        setTenantOptions(view.tenants);
+        offerTenants(view);
         if (view.tenants.length === 1) {
           const ok = await enter(view.tenants[0]);
           if (!live) return;
@@ -754,7 +866,7 @@ function SignupFlow() {
     return () => {
       live = false;
     };
-  }, [ready, enter, describe]);
+  }, [ready, enter, describe, offerTenants]);
 
   // A run that failed on the founder's own input hands the draft back (PGR's
   // user-correctable codes) rather than closing it. The signup, not a list of
@@ -799,6 +911,7 @@ function SignupFlow() {
       }
       // The one case where the country may change: it is what the run refused.
       if (refused === 'COUNTRY_NOT_SUPPORTED') setCountryCode('');
+      track('signup:details_change', { error_code: operation?.errorCode ?? undefined });
       setOperation(null);
       setReopened(false);
       setReopenCheck('pending');
@@ -810,6 +923,26 @@ function SignupFlow() {
       setSaving(false);
     }
   };
+
+  // The funnel's steps: the sign-in gate, the emailed link, then the wizard's three.
+  const viewed = phase === 'signedOut' ? 'sign_in' : phase === 'checkEmail' ? 'check_email' : phase === 'wizard' ? step : null;
+  useEffect(() => {
+    if (viewed) track('signup:step_view', { step: viewed });
+  }, [viewed]);
+
+  // How the run ended, once per operation and outcome.
+  const runStatus = operation?.status;
+  const runError = operation?.errorCode;
+  // A failure PGR still retries by itself has not ended the run.
+  const runRetrying = !!operation && isRetryingAutomatically(operation);
+  useEffect(() => {
+    if (runStatus === 'TERMINAL_FAILED' || (runStatus === 'RETRYABLE_FAILED' && !runRetrying)) {
+      track('signup:provision_fail', { error_code: runError ?? 'UNKNOWN', retryable: runStatus === 'RETRYABLE_FAILED' });
+    }
+  }, [operationId, runStatus, runError, runRetrying]);
+  useEffect(() => {
+    if (ready) track('signup:provision_complete');
+  }, [ready]);
 
   const accountReady =
     accountName.trim().length > 0 && codeValid && codeState?.available !== false;
@@ -920,10 +1053,16 @@ function SignupFlow() {
                     key={method.id}
                     variant="outline"
                     className="w-full"
-                    onClick={() => { clearSignOutIncomplete(); startSignIn(method.id, 'signup'); }}
+                    onClick={() => {
+                      clearSignOutIncomplete();
+                      track('signup:method_select', { method: method.id });
+                      startSignIn(method.id, 'signup');
+                    }}
                   >
                     <SignupMethodIcon method={method} />
-                    {method.label}
+                    {method.type === 'idp'
+                      ? t('signup.with_provider', 'Sign up with %{provider}', { provider: method.label })
+                      : method.label}
                   </Button>
                 ))}
               </div>
@@ -982,10 +1121,13 @@ function SignupFlow() {
               onClick={() => enter(option)}
             >
               <span>{option.name}</span>
-              <span className="text-xs text-muted-foreground">{option.tenantId}</span>
+              <span className="text-xs text-muted-foreground">
+                {option.tenantId}{option.code === 'WORKSPACE_TRIAL_EXPIRED' ? ' — trial ended' : ''}
+              </span>
             </Button>
           ))}
         </div>
+        {trialNotice && <WorkspaceTrialDialog notice={trialNotice} open={trialOpen} onClose={() => setTrialOpen(false)} />}
       </div>
     );
   }
@@ -1026,11 +1168,13 @@ function SignupFlow() {
 
   if (phase === 'provisioning' && operation) {
     const done = new Set(operation.completedSteps);
-    const failed = operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
+    // A retryable failure PGR will retry by itself is still setting up, not an error (#2709).
+    const retrying = isRetryingAutomatically(operation);
+    const failed = (operation.status === 'RETRYABLE_FAILED' && !retrying) || operation.status === 'TERMINAL_FAILED';
     // PGR runs the steps in order, so while the run is live the step in progress is the first one not
     // done. That holds for a step code this list does not know, and after a resubmit, which clears
     // completedSteps but leaves currentStep where the last attempt stopped. A settled run spins nothing.
-    const live = operation.status === 'PENDING' || operation.status === 'RUNNING';
+    const live = operation.status === 'PENDING' || operation.status === 'RUNNING' || retrying;
     const current = live ? PROVISIONING_STEPS.find((name) => !done.has(name)) : undefined;
     return (
       <div>
@@ -1071,7 +1215,18 @@ function SignupFlow() {
             </AlertDescription>
           </Alert>
         )}
-        {operation.status === 'RETRYABLE_FAILED' && (
+        {retrying && (
+          <Alert className="mt-6">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertTitle>{t('signup.still_setting_up', 'Still setting up')}</AlertTitle>
+            <AlertDescription>
+              {retryStalled
+                ? t('signup.still_setting_up_stalled', 'This is taking longer than it should. You can try again now.')
+                : t('signup.still_setting_up_detail', 'This is taking a little longer than usual. We\'re retrying automatically, and this page will continue by itself.')}
+            </AlertDescription>
+          </Alert>
+        )}
+        {operation.status === 'RETRYABLE_FAILED' && (!retrying || retryStalled) && (
           <Button
             className="mt-4"
             disabled={saving}
@@ -1080,7 +1235,14 @@ function SignupFlow() {
               try {
                 setOperation(await retryOperation(operation.id));
               } catch (caught) {
-                setError(describe(caught).message);
+                // The run moved on since this page last looked, e.g. PGR's own retry succeeded or is
+                // under way again (#2709): carry on from where it is now, as a reload would.
+                let latest: Operation | null = null;
+                if (caught instanceof OnboardingError && caught.code === 'ONBOARDING_OPERATION_NOT_RETRYABLE') {
+                  latest = await searchOperation({ id: operation.id }).catch(() => null);
+                }
+                if (latest) setOperation(latest);
+                else setError(describe(caught).message);
               } finally {
                 setSaving(false);
               }
@@ -1125,6 +1287,7 @@ function SignupFlow() {
             </AlertDescription>
           </Alert>
         )}
+        <SignOutLine email={sessionUser?.email} />
       </div>
     );
   }
@@ -1142,6 +1305,7 @@ function SignupFlow() {
             <span className="font-mono">{signup?.id}</span>.
           </AlertDescription>
         </Alert>
+        <SignOutLine email={sessionUser?.email} />
       </div>
     );
   }
@@ -1155,6 +1319,7 @@ function SignupFlow() {
         >
           <RefreshCw className="mr-2 h-4 w-4" /> Try again
         </Button>
+        <SignOutLine email={sessionUser?.email} />
       </div>
     );
   }
@@ -1227,7 +1392,14 @@ function SignupFlow() {
             />
           </Field>
 
-          <Button className="w-full" disabled={!accountReady} onClick={() => setStep('preferences')}>
+          <Button
+            className="w-full"
+            disabled={!accountReady}
+            onClick={() => {
+              track('signup:step_complete', { step: 'account' });
+              setStep('preferences');
+            }}
+          >
             Continue
           </Button>
         </section>
@@ -1467,26 +1639,17 @@ function SignupFlow() {
             ))}
           </dl>
 
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
-            />
-            <span className="text-muted-foreground">I agree to the terms of service.</span>
-          </label>
-
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setStep('preferences')}>
               Back
             </Button>
-            <Button className="flex-1" disabled={!acceptedTerms || saving} onClick={submit}>
+            <Button className="flex-1" disabled={saving} onClick={submit}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Create account
             </Button>
           </div>
         </section>
       )}
+      <SignOutLine email={email} />
     </>
   );
 }

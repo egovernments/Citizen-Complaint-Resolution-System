@@ -226,7 +226,9 @@ describe('availableSources', () => {
   });
 
   it('labels every source', () => {
-    expect(sourceOptionLabel('official')).toMatch(/COD-AB/);
+    // Plain names: which official dataset backs a country isn't the operator's concern.
+    expect(sourceOptionLabel('official')).toBe('Official boundaries');
+    expect(sourceOptionLabel('overture')).toBe('OpenStreetMap');
     expect(sourceOptionLabel('geoapify')).toBe('Geoapify (hosted)');
   });
 });

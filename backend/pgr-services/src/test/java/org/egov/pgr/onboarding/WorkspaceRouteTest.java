@@ -44,6 +44,17 @@ public class WorkspaceRouteTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.Workspace.legacy").value(true)).andExpect(jsonPath("$.Workspace.status").value("DONE"));
         assertEquals(2,lookups.get());verifyNoInteractions(client,mdms);
     }
+    /** A root that predates 2.20 has no workspace row: the configurator's _update reads it as legacy DONE, never a 500, and writes nothing. */
+    @Test public void updateWithoutAWorkspaceRowReadsAsLegacyAndWritesNothing() throws Exception {
+        when(repository.find("example",true)).thenReturn(Optional.empty());
+        mvc.perform(post("/v2/onboarding/workspaces/_update").contentType("application/json").content(request()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.Workspace.legacy").value(true))
+                .andExpect(jsonPath("$.Workspace.status").value("DONE")).andExpect(jsonPath("$.Workspace.version").value(0));
+        mvc.perform(post("/v2/onboarding/workspaces/_update").contentType("application/json").content(request().replace("\"version\":0","\"version\":1")))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.Errors[0].code").value("WORKSPACE_VERSION_CONFLICT"));
+        verify(repository,never()).materializeLegacy(any());verify(repository,never()).update(any(),anyLong(),any());
+        verify(repository,never()).event(any(),any(),anyLong(),any(),any());verifyNoInteractions(client,mdms);
+    }
     @Test public void allRoutesRejectForgedCallerRoleAndCrossTenantAdmin() throws Exception {
         for(Map<String,Object> user:List.of(Map.<String,Object>of("uuid","admin","roles",List.of(Map.of("code","EMPLOYEE","tenantId","example"))),
                 Map.<String,Object>of("uuid","admin","roles",List.of(Map.of("code","ACCOUNT_ADMIN","tenantId","other"))))) {
@@ -65,6 +76,15 @@ public class WorkspaceRouteTest {
                 .thenReturn(mapper.readTree("{\"TenantBoundary\":[{\"boundary\":[{\"code\":\"COUNTY\",\"children\":"+children+"}]}]}"));
     }
     private static final String WATER="{\"tenantId\":\"example\",\"data\":{\"code\":\"WATER\",\"active\":true}}";
+    @Test public void brandingProbeAcceptsSavedThemeWithoutLogo() throws Exception {
+        when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
+        mdms("tenant.tenants","[{\"data\":{\"imageId\":null}}]");
+        assertFalse(gateway.probe("example","BRANDING",null));
+        mdms("common-masters.ThemeConfig","[{\"tenantId\":\"example\",\"data\":{\"code\":\"themeconfig\"}}]");
+        assertTrue(gateway.probe("example","BRANDING",null));
+        mdms("common-masters.ThemeConfig","[{\"tenantId\":\"parent\",\"data\":{\"code\":\"themeconfig\"}},{\"isActive\":false,\"tenantId\":\"example\",\"data\":{}}]");
+        assertFalse(gateway.probe("example","BRANDING",null));
+    }
     @Test public void probesExcludePlatformPrerequisitesAndInactiveRows() throws Exception {
         when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
         mdms("tenant.tenants","[{\"data\":{\"imageId\":null}}]");

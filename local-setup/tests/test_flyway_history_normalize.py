@@ -13,7 +13,7 @@ import yaml
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "db", "normalize")))
 
-from normalize import ABORT, DROP, NOOP, RENAME, decide, load_map
+from normalize import ABORT, ADOPT, DROP, NOOP, RENAME, decide, load_map
 
 MAP_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "db", "flyway-history-map.yml")
@@ -70,6 +70,34 @@ def test_no_history_but_populated_data_tables_abort():
     d = decide("egov-user", SPEC, {"eg_user", "eg_role"}, {"eg_user": 534, "eg_role": 0})
     assert d.action == ABORT
     assert "eg_user" in d.reason
+
+
+def test_adopting_service_keeps_populated_tables_without_history():
+    # The 2.12 Go user-preferences service created user_preference with no Flyway
+    # history; its 2.20 migration is written to run over that table.
+    m = load_map(MAP_PATH)
+    spec = m["digit-user-preferences-service"]
+    d = decide("digit-user-preferences-service", spec, {"user_preference"}, {"user_preference": 40})
+    assert d.action == ADOPT
+    assert "user_preference has 40 rows" in d.reason
+
+    # Without the flag the same database still aborts.
+    d = decide("digit-user-preferences-service", dict(spec, adopts_unversioned_tables=False),
+               {"user_preference"}, {"user_preference": 40})
+    assert d.action == ABORT
+
+
+def test_adopting_service_still_rebuilds_empty_tables():
+    spec = load_map(MAP_PATH)["digit-user-preferences-service"]
+    d = decide("digit-user-preferences-service", spec, {"user_preference"}, {"user_preference": 0})
+    assert d.action == DROP
+    assert d.tables == ("user_preference",)
+
+
+def test_adopting_service_still_aborts_on_ambiguous_history():
+    spec = dict(SPEC, adopts_unversioned_tables=True)
+    d = decide("egov-user", spec, {"egov_user_schema", "egov_user_schema_version", "eg_user"}, {"eg_user": 1})
+    assert d.action == ABORT
 
 
 def test_no_service_opts_out_of_normalization():

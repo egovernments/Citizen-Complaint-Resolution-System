@@ -22,7 +22,7 @@ initContainers:
     # Same build as the app image below — see the tag note there.
     image:
       repository: "digit-user-preferences-service-db"
-      tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> — the same tag as image.tag
+      tag: "master-b4adf0d"   # RELEASE STEP: develop-<sha8> — the same tag as image.tag
       pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
     # The common chart's migration env, plus FLYWAY_VALIDATE_ON_MIGRATE=false.
     # V20260205120000__create_user_preference.sql was edited after it shipped (#2081
@@ -81,7 +81,7 @@ initContainers:
 # develop-<sha8> here and in the other two stack charts at once.
 image:
   repository: "digit-user-preferences-service"
-  tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> of the merge build
+  tag: "master-b4adf0d"   # RELEASE STEP: develop-<sha8> of the merge build
   pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 replicas: "1"
 httpPort: 8080
@@ -119,13 +119,6 @@ env: |
     value: {{ index .Values "heap" | quote }}
   - name: JAVA_ARGS
     value: {{ index .Values "java-args" | quote }}
-  {{- if index .Values "tracing-enabled" }}
-  - name: TRACER_OPENTRACING_ENABLED
-    value: "true"
-  {{- end }}
-  # The init container above applies the migrations, so the app must not.
-  - name: SPRING_FLYWAY_ENABLED
-    value: "false"
   # Both endpoints key on the userId in the request body, and this route is
   # exposed through the gateway, so the service holds a citizen principal to
   # its own record. Roles listed here may act on someone else's record within

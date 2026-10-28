@@ -40,7 +40,7 @@ initContainers:
     # Same build as the app image below and as novu-bridge — see "One build" below.
     image:
       repository: "pgr-services-db"
-      tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> — see "One build" below
+      tag: "master-b4adf0d"   # RELEASE STEP: develop-<sha8> — see "One build" below
       pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
     env: |
         {{- if index .Values "pgr-ismultischema-enabled" }}        
@@ -91,7 +91,7 @@ initContainers:
 # tag) in its env.yaml.
 image:
   repository: "pgr-services"
-  tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> of the merge build
+  tag: "master-b4adf0d"   # RELEASE STEP: develop-<sha8> of the merge build
   pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 replicas: "1"
 healthChecks:
@@ -109,6 +109,12 @@ comment-by-employee-notif-enabled: "false"
 notification-allowed-status: "open,assigned,rejected,resolved"
 heap: "-Xmx192m -Xms192m"
 
+# EGOV_MDMS_HOST. Empty = egov-service-host's mdms-service-v2 (mdms-v2 directly).
+# With the onboarding runner on, set it to the core-services/egov-mdms-service
+# shim (http://egov-mdms-service.egov:8080/), as Compose/Ansible point
+# pgr-services at theirs.
+mdmsHost: ""
+
 # Self-service tenant onboarding (#2269). DISABLED by default here: the runner
 # provisions every signup as a platform provisioner account, and this chart does
 # not create one. Before enabling, create an EMPLOYEE on a ROOT tenant (no dot)
@@ -117,9 +123,9 @@ heap: "-Xmx192m -Xms192m"
 # in the Secret named below, and point identityBffUrl at the identity BFF. If the
 # provisioner cannot sign in with those roles the runner pauses (log line
 # "PGR onboarding runner PAUSED") and signups wait in the queue.
-# Known gap: the runner calls MDMS v2 at /egov-mdms-service/... (the docker-compose
-# layout); core-services/mdms-v2 here serves /mdms-v2, so provisioning would 404 on
-# this chart as it stands. Only the docker-compose/Ansible deploy is supported today.
+# The runner writes MDMS v2 at hardcoded /egov-mdms-service/... paths (the
+# docker-compose layout), which core-services/mdms-v2 answers with a 404, so set
+# mdmsHost above too.
 onboarding:
   runnerEnabled: false
   # Step NOTIFICATION_DEFAULTS: a new workspace gets the notification schemas, access rows,
@@ -167,10 +173,14 @@ env: |
         name: egov-service-host
         key: egov-workflow-v2
   - name: EGOV_MDMS_HOST
+  {{- if .Values.mdmsHost }}
+    value: {{ .Values.mdmsHost | quote }}
+  {{- else }}
     valueFrom:
       configMapKeyRef:
         name: egov-service-host
         key: mdms-service-v2
+  {{- end }}
   - name: EGOV_LOCALIZATION_HOST
     valueFrom:
       configMapKeyRef:
@@ -258,15 +268,6 @@ env: |
     value: "RATE"
   - name: EGOV_USR_EVENTS_REOPEN_CODE
     value: "REOPEN" 
-  - name: SPRING_DATASOURCE_URL
-    valueFrom:
-      configMapKeyRef:
-        name: egov-config
-        key: db-url
-  {{- if index .Values "tracing-enabled" }}
-  - name: TRACER_OPENTRACING_ENABLED
-    value: "true" 
-  {{- end }}
   {{- if index .Values "tracing-enabled" }}
   - name: TRACER_REQUESTLOGGINGENABLED
     value: "true" 

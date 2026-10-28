@@ -1,5 +1,5 @@
 # Build from the repository root (`docker build -f configurator/Dockerfile .`)
-# so both SPAs consume the same ui-shared feature-flag parser.
+# so the build can read the ui-shared feature-flag parser.
 # digit-configurator — static SPA built with Vite, served by nginx under
 # /configurator/. Mirrors local-setup/ansible/files/configurator-build.sh so the
 # nightly image matches the proven on-box build:
@@ -8,9 +8,9 @@
 #   - `vite build` DIRECTLY (not the package.json `tsc -b && vite build`): the
 #     root tsc -b has blocking app-level type errors upstream, but vite/esbuild
 #     emits a working SPA without type-checking.
-# Tenant-neutral — but by construction, not by accident. The app DOES read four
+# Tenant-neutral — but by construction, not by accident. The app DOES read
 # deployment values (state tenant, Overpass/Turbopass endpoints, boundary search
-# limit); they are resolved at RUNTIME from `<base>/config.js`
+# limit, its own Sentry/PostHog); they are resolved at RUNTIME from `<base>/config.js`
 # (window.__CONFIGURATOR_CONFIG__), which the deploy renders per-tenant and drops
 # next to the bundle — the same pattern as digit-ui's globalConfigs.js. A neutral
 # public/config.js ships in the image so an unconfigured run falls through to the
@@ -53,6 +53,9 @@ ENV VITE_ENABLE_LEGACY_PGR_DASHBOARD=${VITE_ENABLE_LEGACY_PGR_DASHBOARD}
 # The citizen-banner upload in the Branding step (#2358). Off until it goes live.
 ARG VITE_ENABLE_CITIZEN_BANNER=false
 ENV VITE_ENABLE_CITIZEN_BANNER=${VITE_ENABLE_CITIZEN_BANNER}
+# More than one boundary selection in Geography's list. Off: one at a time.
+ARG VITE_ENABLE_GEOGRAPHY_MULTIPLE_SELECTIONS=false
+ENV VITE_ENABLE_GEOGRAPHY_MULTIPLE_SELECTIONS=${VITE_ENABLE_GEOGRAPHY_MULTIPLE_SELECTIONS}
 RUN npx vite build --base="${BASE_PATH}" \
  && test -f dist/index.html
 

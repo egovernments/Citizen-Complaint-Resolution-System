@@ -10,6 +10,8 @@ import static org.mockito.ArgumentMatchers.*;
 
 /** Production step orchestration against deterministic DIGIT API responses. */
 public class OnboardingStepsTest {
+    /** egov-user's default policy: a digit, a lowercase and an uppercase letter, one of @#$%, 8-15 long. */
+    private static final String PASSWORD_POLICY="^(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])[A-Za-z\\d@#$%]{8,15}$";
     private ObjectMapper mapper=new ObjectMapper(); private OnboardingProvisionerClient client;
     private OnboardingSteps steps; private OnboardingSignup signup; private OnboardingOperation op; private OnboardingProgress progress;
     private Map<String,JsonNode> rows=new LinkedHashMap<>();private Set<String> schemas=new HashSet<>();
@@ -41,7 +43,10 @@ public class OnboardingStepsTest {
                     if(ids!=null&&ids.size()==1&&lagging.merge(prefix+ids.get(0),-1,Integer::sum)>=0) return mapper.valueToTree(Map.of("mdms",List.of()));
                     return mapper.valueToTree(Map.of("mdms",rows.entrySet().stream().filter(e->e.getKey().startsWith(prefix)&&(ids==null||ids.contains(e.getKey().substring(prefix.length())))).map(Map.Entry::getValue).toList()));
                 }
-                Map<String,Object> row=(Map<String,Object>)body.get("Mdms");String key=row.get("tenantId")+"|"+row.get("schemaCode")+"|"+row.get("uniqueIdentifier");rows.put(key,mapper.valueToTree(row));if(path.contains("/v2/_create/"))lagging.put(key,lagReads);writes.add("record:"+row.get("schemaCode"));return mapper.createObjectNode();
+                Map<String,Object> row=(Map<String,Object>)body.get("Mdms");
+                // As mdms-v2 does: a record can only be created once its schema exists.
+                if(path.contains("/v2/_create/")&&!schemas.contains(String.valueOf(row.get("schemaCode"))))throw new OnboardingFailure("SCHEMA_DEFINITION_NOT_FOUND",false);
+                String key=row.get("tenantId")+"|"+row.get("schemaCode")+"|"+row.get("uniqueIdentifier");rows.put(key,mapper.valueToTree(row));if(path.contains("/v2/_create/"))lagging.put(key,lagReads);writes.add("record:"+row.get("schemaCode"));return mapper.createObjectNode();
             }
             if(service.equals("hrms")) {
                 if(path.contains("_search")) {
@@ -83,18 +88,30 @@ public class OnboardingStepsTest {
         verify(client,never()).identity(anyString(),anyMap());
     }
     private void prerequisites(){steps.perform("TENANT_FOUNDATION",signup,op,progress);steps.perform("PLATFORM_BASELINE",signup,op,progress);}
+    /** A new workspace carries its own dashboard catalog, so turning its public dashboard on serves its own data. */
+    @Test public void freshWorkspaceGetsTheDashboardCatalogItsPublicDashboardNeeds(){
+        prerequisites(); // the fixture refuses a record whose schema has not been created yet
+        for(String schema:List.of("dss.KpiDefinition","dss.DashboardPack"))assertTrue(schema,writes.contains("schema:"+schema));
+        DashboardCatalogProbe.assertPublicDashboardServed(rows,"newtown",mapper);
+    }
+    /** One sample misses a dropped character class most of the time; a thousand do not (#2713). */
+    @Test public void everyFounderThrowawayPasswordMeetsEgovUserPolicy(){
+        for(int i=0;i<1000;i++)assertTrue(OnboardingSteps.throwawayPassword().matches(PASSWORD_POLICY));
+    }
     @Test public void completePrerequisitesUseCountryRuleEveryLanguageAndVerifiedFounderPolicy(){
         prerequisites();steps.perform("FOUNDER_HRMS",signup,op,progress);
         assertEquals("founder-uuid",op.getFounderDigitUuid());assertEquals("9876543210",createdUser.get("mobileNumber"));assertEquals("+91",createdUser.get("countryCode"));
-        assertFalse(createdUser.containsKey("emailId"));assertFalse(createdUser.containsKey("password"));
+        assertFalse(createdUser.containsKey("emailId"));
+        // HRMS's own fallback can lack an uppercase letter, which egov-user refuses (#2713).
+        assertTrue(((String)createdUser.get("password")).matches(PASSWORD_POLICY));
         assertTrue(mapper.valueToTree(createdUser.get("roles")).toString().contains("SUPERUSER"));
         boolean csr=false;for(var r:mapper.valueToTree(createdUser.get("roles")))csr|="CSR".equals(r.path("code").asText())&&"newtown".equals(r.path("tenantId").asText());
         assertTrue("every employee files complaints (#2239)",csr);
         assertEquals("New Town",rows.get("newtown|tenant.tenants|newtown").path("data").path("name").asText());
         assertEquals(2,rows.get("newtown|common-masters.StateInfo|newtown").path("data").path("languages").size());
         assertEquals(336,rows.get("newtown|identity.invitationPolicy|default").path("data").path("invitationExpiryHours").asInt());
-        // hi_IN carries no rainmaker-common pack, so of en and hi only en_IN gets the tenant-name key.
-        verify(client,times(1)).write(any(),eq("localization"),eq("/localization/messages/v1/_upsert"),argThat(b->b.toString().contains("New Town")));
+        // en_IN and hi_IN both carry the rainmaker-common pack, so each gets the tenant-name key.
+        verify(client,times(2)).write(any(),eq("localization"),eq("/localization/messages/v1/_upsert"),argThat(b->b.toString().contains("New Town")));
         verify(client,never()).read(eq("mdms"),anyString(),argThat(b->!b.toString().contains("tenantId=newtown")));
         var order=inOrder(client);order.verify(client).read(eq("hrms"),contains("_search"),anyMap());order.verify(client).write(any(),eq("hrms"),contains("_create"),anyMap());
         steps.perform("FOUNDER_HRMS",signup,op,progress);verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
@@ -263,13 +280,75 @@ public class OnboardingStepsTest {
         op.setFounderDigitUuid("prior-uuid");assertEquals("FOUNDER_NOT_FOUND",assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress)).getCode());
         verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
     }
-    @Test public void asynchronousBoundaryWriteIsNotCheckpointedUntilVisible() throws Exception {
-        String path="/boundary-service/boundary-hierarchy-definition/_search";
-        when(client.read(eq("boundary"),eq(path),anyMap())).thenReturn(mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"WORKSPACE\"}]}"));
-        assertEquals("BOUNDARY_NOT_VISIBLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
-        assertEquals("STARTED",op.getRecordProgress().get("boundary-hierarchy"));
-        prerequisites();assertEquals("DONE",op.getRecordProgress().get("boundary-hierarchy"));
-        verify(client,times(1)).write(any(),eq("boundary"),eq("/boundary-service/boundary-hierarchy-definition/_create"),anyMap());
+    private static final List<String> BOUNDARY_CREATES=List.of("/boundary-service/boundary-hierarchy-definition/_create",
+            "/boundary-service/boundary/_create","/boundary-service/boundary-relationships/_create");
+    /** No boundary exists yet: every search answers boundary-service's empty result. */
+    private void noBoundariesYet() throws Exception {
+        JsonNode none=mapper.readTree("{\"BoundaryHierarchy\":null,\"Boundary\":null,\"TenantBoundary\":[]}");
+        when(client.read(eq("boundary"),anyString(),anyMap())).thenReturn(none);
+    }
+    /** #2709: boundary-service answers a create 202 and saves it later through Kafka; the answer is the outcome, never a read-back. */
+    @Test public void anAcceptedBoundaryCreateIsDoneWithoutReadingItBack() throws Exception {
+        noBoundariesYet();
+        prerequisites();
+        for(String key:List.of("boundary-hierarchy","boundary-root","boundary-relationship")) assertEquals("DONE",op.getRecordProgress().get(key));
+        for(String create:BOUNDARY_CREATES) verify(client,times(1)).write(any(),eq("boundary"),eq(create),anyMap());
+        // One search per step, the one before its create.
+        verify(client,times(3)).read(eq("boundary"),anyString(),anyMap());
+    }
+    /** A create the pre-check missed (still in Kafka, or a lost answer) is refused as a duplicate: it exists, so the step is done. */
+    @Test public void boundaryServicesDuplicateAnswerMeansTheBoundaryExists() throws Exception {
+        noBoundariesYet();
+        when(client.write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(0)),anyMap())).thenThrow(new OnboardingFailure("DUPLICATE_RECORD",false,400,List.of("DUPLICATE_RECORD")));
+        when(client.write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(1)),anyMap())).thenThrow(new OnboardingFailure("DUPLICATE_CODE",false,400,List.of("DUPLICATE_CODE")));
+        when(client.write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap())).thenThrow(new OnboardingFailure("DUPLICATE_RECORD",false,400,List.of("DUPLICATE_RECORD")));
+        prerequisites();
+        for(String key:List.of("boundary-hierarchy","boundary-root","boundary-relationship")) assertEquals("DONE",op.getRecordProgress().get(key));
+    }
+    /** The relationship create checks the root boundary and hierarchy in boundary-service's DB, which may not have them saved yet: retried, not final. */
+    @Test public void aRelationshipCreateBeforeItsPrerequisitesAreSavedFailsRetryably() throws Exception {
+        for(String code:List.of("BOUNDARY_ENTITY_DOES_NOT_EXIST","HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR")) {
+            op.getRecordProgress().clear();noBoundariesYet();
+            when(client.write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap())).thenThrow(new OnboardingFailure(code,false,400,List.of(code)));
+            OnboardingFailure failure=assertThrows(OnboardingFailure.class,this::prerequisites);
+            assertEquals(code,failure.getCode());assertTrue(code,failure.isRetryable());
+            assertEquals("DONE",op.getRecordProgress().get("boundary-root"));assertEquals("STARTED",op.getRecordProgress().get("boundary-relationship"));
+        }
+        // Any other refusal keeps its own classification.
+        op.getRecordProgress().clear();
+        when(client.write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap())).thenThrow(new OnboardingFailure("HIERARCHY_ERROR",false,400,List.of("HIERARCHY_ERROR")));
+        assertFalse(assertThrows(OnboardingFailure.class,this::prerequisites).isRetryable());
+    }
+    /** A root boundary boundary-service accepted (202) but its persister lost is made again by the relationship's next attempt, not skipped as DONE. */
+    @Test public void aRetriedRelationshipStepRecreatesARootBoundaryThePersisterLost() throws Exception {
+        noBoundariesYet();
+        doThrow(new OnboardingFailure("BOUNDARY_ENTITY_DOES_NOT_EXIST",false,400,List.of("BOUNDARY_ENTITY_DOES_NOT_EXIST"))).doReturn(mapper.createObjectNode())
+                .when(client).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap());
+        assertTrue(assertThrows(OnboardingFailure.class,this::prerequisites).isRetryable());
+        // A first attempt creates each once: nothing is re-ensured before the relationship has failed.
+        for(String create:BOUNDARY_CREATES) verify(client,times(1)).write(any(),eq("boundary"),eq(create),anyMap());
+        // The hierarchy got saved; the root boundary never did.
+        when(client.read(eq("boundary"),eq("/boundary-service/boundary-hierarchy-definition/_search"),anyMap()))
+                .thenReturn(mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"WORKSPACE\"}]}"));
+        prerequisites();
+        verify(client,times(1)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(0)),anyMap());
+        verify(client,times(2)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(1)),anyMap());
+        verify(client,times(2)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap());
+        assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
+    }
+    /** The same for a lost hierarchy: the retried relationship step re-creates it too. */
+    @Test public void aRetriedRelationshipStepRecreatesAHierarchyThePersisterLost() throws Exception {
+        noBoundariesYet();
+        doThrow(new OnboardingFailure("HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR",false,400,List.of("HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR"))).doReturn(mapper.createObjectNode())
+                .when(client).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(2)),anyMap());
+        assertTrue(assertThrows(OnboardingFailure.class,this::prerequisites).isRetryable());
+        // The root boundary got saved; the hierarchy never did.
+        when(client.read(eq("boundary"),eq("/boundary-service/boundary/_search?tenantId=newtown&codes=newtown"),anyMap()))
+                .thenReturn(mapper.readTree("{\"Boundary\":[{\"code\":\"newtown\"}]}"));
+        prerequisites();
+        verify(client,times(2)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(0)),anyMap());
+        verify(client,times(1)).write(any(),eq("boundary"),eq(BOUNDARY_CREATES.get(1)),anyMap());
+        assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
     }
     @Test public void duplicateSchemaFromUncertainPriorWriteRetriesInsteadOfAbandoningSignup(){
         when(client.write(any(),eq("mdms"),eq("/egov-mdms-service/schema/v1/_create"),anyMap())).thenThrow(new OnboardingFailure("SCHEMA_ALREADY_EXISTS",false));
@@ -346,15 +425,19 @@ public class OnboardingStepsTest {
     }
 
     @Test public void foreignOrInactiveBoundaryEntriesDoNotProvePrerequisites() {
+        Map<String,String> creates=Map.of("BoundaryHierarchy",BOUNDARY_CREATES.get(0),"Boundary",BOUNDARY_CREATES.get(1),"TenantBoundary",BOUNDARY_CREATES.get(2));
         for(String field:List.of("BoundaryHierarchy","Boundary","TenantBoundary")) {
             for(String invalid:List.of("foreign","inactive")) {
-                op.getRecordProgress().clear();
+                op.getRecordProgress().clear();clearInvocations(client);
                 Map<String,Object> entry=new LinkedHashMap<>(Map.of("tenantId",invalid.equals("foreign")?"other":"newtown","hierarchyType","WORKSPACE","code","newtown","active",!invalid.equals("inactive"),"boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))));
                 when(client.read(eq("boundary"),contains("_search"),anyMap())).thenAnswer(call->mapper.valueToTree(Map.of(
                         "BoundaryHierarchy",field.equals("BoundaryHierarchy")?List.of(entry):List.of(Map.of("hierarchyType","WORKSPACE")),
                         "Boundary",field.equals("Boundary")?List.of(entry):List.of(Map.of("code","newtown")),
                         "TenantBoundary",field.equals("TenantBoundary")?List.of(entry):List.of(Map.of("boundary",List.of(Map.of("code","newtown","boundaryType","ROOT")))))));
-                assertEquals("BOUNDARY_NOT_VISIBLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
+                prerequisites();
+                // Not taken as present: the step creates its own.
+                verify(client,times(1)).write(any(),eq("boundary"),eq(creates.get(field)),anyMap());
+                verify(client,times(1)).write(any(),eq("boundary"),startsWith("/boundary-service/"),anyMap());
             }
         }
     }
@@ -376,7 +459,7 @@ public class OnboardingStepsTest {
         var baseline=new PlatformBaseline(mapper);Map<String,Integer> expected=new TreeMap<>();
         for(String locale:List.of("en_IN","hi_IN"))baseline.localizationPacks(locale).forEach((module,pack)->expected.put(locale+"/"+module,pack.size()));
         assertEquals(expected,seeded); // signup languages en,hi (+ en_IN always); no fr_FR/pt_BR
-        assertTrue(seeded.keySet().containsAll(List.of("en_IN/rainmaker-common","en_IN/rainmaker-pgr","en_IN/rainmaker-hr","en_IN/configurator-ui","hi_IN/configurator-ui")));
+        assertTrue(seeded.keySet().containsAll(List.of("en_IN/rainmaker-common","en_IN/rainmaker-pgr","en_IN/rainmaker-hr","en_IN/configurator-ui","hi_IN/rainmaker-common","hi_IN/configurator-ui")));
     }
     @SuppressWarnings({"unchecked","rawtypes"}) private Map<String,Object> localeOutcome(String country,List<String> languages) {
         signup.setCountryCode(country);signup.setLanguages(languages);op.getRecordProgress().clear();clearInvocations(client);
@@ -392,7 +475,7 @@ public class OnboardingStepsTest {
     }
     /** #2269 item 6: a signup language maps to the locale its pack uses, never language_COUNTRY when a pack exists. */
     @Test public void signupLanguagesMapToPackLocalesAndTheNameKeyOnlyGoesWhereTenantOwnsRainmakerCommon() {
-        assertEquals(Map.of("stateInfo",List.of("en_IN=en","hi_IN=hi"),"packs",Set.of("en_IN","hi_IN"),"names",Set.of("en_IN")),localeOutcome("IN",List.of("en","hi")));
+        assertEquals(Map.of("stateInfo",List.of("en_IN=en","hi_IN=hi"),"packs",Set.of("en_IN","hi_IN"),"names",Set.of("en_IN","hi_IN")),localeOutcome("IN",List.of("en","hi")));
         // Kenya: en is en_IN, not en_KE; Swahili has no pack, keeps the country code and is served from default.
         assertEquals(Map.of("stateInfo",List.of("en_IN=en","sw_KE=sw"),"packs",Set.of("en_IN"),"names",Set.of("en_IN")),localeOutcome("KE",List.of("en","sw")));
         // Mozambique: pt is pt_BR (the committed pack), not pt_MZ; en_IN still leads although pt was chosen first.
@@ -404,8 +487,8 @@ public class OnboardingStepsTest {
     @Test public void explicitRegionIsKeptAndNormalized() {
         assertEquals("pt_BR",steps.locale("pt-br","MZ"));assertEquals("en_KE",steps.locale("en-ke","KE"));
         assertEquals("en_IN",steps.locale("en","KE"));assertEquals("sw_KE",steps.locale("sw","ke"));
-        for(String locale:List.of("en_IN","fr_FR","pt_BR"))assertTrue(locale,steps.seedsTenantNameModule(locale));
-        for(String locale:List.of("hi_IN","en_KE","sw_KE"))assertFalse(locale,steps.seedsTenantNameModule(locale));
+        for(String locale:List.of("en_IN","fr_FR","hi_IN","pt_BR"))assertTrue(locale,steps.seedsTenantNameModule(locale));
+        for(String locale:List.of("en_KE","sw_KE"))assertFalse(locale,steps.seedsTenantNameModule(locale));
     }
     @Test public void localizationPacksAreTenantNeutral() throws Exception {
         var forbidden=java.util.regex.Pattern.compile("(^|_)(PG|PB|STATEA|CITYA)(_|$)|^TENANT_TENANTS_|^CS_SELECT_CITY_(?!CHOOSE_CITY$)|^SUN\\d+_|^DDR_",java.util.regex.Pattern.CASE_INSENSITIVE);

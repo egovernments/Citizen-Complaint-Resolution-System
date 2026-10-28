@@ -1,4 +1,5 @@
 [
+{"code": "ACCESSCONTROL_ROLES_ROLES_CITIZEN", "message": "Citoyen", "module": "rainmaker-common", "locale": "fr_FR"},
 {"code": "ACTION_TEST_COMPLAINT_TYPES", "message": "Catégories de réclamation", "module": "rainmaker-common", "locale": "fr_FR"},
 {"code": "ACTION_TEST_HOME", "message": "Accueil", "module": "rainmaker-common", "locale": "fr_FR"},
 {"code": "ACTION_TEST_SEARCH", "message": "Recherche", "module": "rainmaker-common", "locale": "fr_FR"},
@@ -211,6 +212,7 @@
 {"code": "CS_WORKING_CONTEXT_SUBTITLE", "message": "Voici vos affectations", "module": "rainmaker-common", "locale": "fr_FR"},
 {"code": "CS_WORKING_CONTEXT_UNAVAILABLE", "message": "Contexte de travail indisponible", "module": "rainmaker-common", "locale": "fr_FR"},
 {"code": "Clear", "message": "Effacer", "module": "rainmaker-common", "locale": "fr_FR"},
+{"code": "DASHBOARD_CARD_HEADER", "message": "Tableau de bord", "module": "rainmaker-common", "locale": "fr_FR"},
 {"code": "DIGIT_I_ACCEPT", "message": "J'accepte", "module": "rainmaker-common", "locale": "fr_FR"},
 {"code": "DIGIT_I_DO_NOT_ACCEPT", "message": "Je n'accepte pas", "module": "rainmaker-common", "locale": "fr_FR"},
 {"code": "DIGIT_TABLE_OF_CONTENTS", "message": "Politique de confidentialité", "module": "rainmaker-common", "locale": "fr_FR"},

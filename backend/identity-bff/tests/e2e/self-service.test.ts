@@ -23,7 +23,7 @@ beforeAll(async () => {
   Object.assign(config, { cachePrefix: prefix, keycloakOrganizationRealm: "self-service", keycloakBffClientSecret: "test-bff-secret", keycloakOidcBackchannelUrl: process.env.KEYCLOAK_ISSUER, identityCookieSecure: false });
   base = `http://localhost:${await startIdentityTestApp()}`;
   await admin("/clients/digit-identity-bff-uuid", { attributes: { "digit.auth.account.actions": ACCOUNT_ACTIONS.join(",") } });
-  await admin("/users", { id: "identity-user-1", username: "self-service-user", enabled: true, credentials: [{ id: "password-1", type: "password" }, { id: "otp-1", type: "otp" }], federatedIdentities: [{ identityProvider: "google", userId: "google-id" }] }, "POST");
+  await admin("/users", { id: "identity-user-1", username: "self-service-user", email: "changed@example.test", enabled: true, credentials: [{ id: "password-1", type: "password" }, { id: "otp-1", type: "otp" }], federatedIdentities: [{ identityProvider: "google", userId: "google-id" }] }, "POST");
 });
 afterAll(async () => {
   const keys = await getRedis().keys(`${prefix}:*`); if (keys.length) await getRedis().del(...keys);
@@ -37,6 +37,9 @@ describe("account self-service", () => {
     const body = await (await fetch(`${base}/identity/v1/session?include=account`, { headers })).json();
     expect(body.account).toMatchObject({ actions: ACCOUNT_ACTIONS, providers: [{ alias: "google" }], credentials: [{ id: "password-1", type: "password", label: "" }, { id: "otp-1", type: "otp", label: "" }] });
     expect(body.sessions).toContainEqual(expect.objectContaining({ current: true, surface: "configurator" }));
+    // A verified email change shows before the token's claims catch up (#2645).
+    expect(body.user.email).toBe("changed@example.test");
+    expect(body.account).not.toHaveProperty("email");
     expect(JSON.stringify(body)).not.toContain(sessionId);
     expect(body.account.credentials[0]).not.toHaveProperty("secretData");
   });
@@ -52,6 +55,14 @@ describe("account self-service", () => {
       const response = await authorize(query); expect(response.status).toBe(302);
       expect(new URL(response.headers.get("location")!).searchParams.get("kc_action")).toBe(action);
     }
+  });
+  it("never puts the person's username or email in the authorize URL (#2645)", async () => {
+    const { sessionId } = await createIdentitySession(tokens, { sub: "identity-user-1", email: "test@example.test", preferred_username: "self-service-user" }, config.keycloakBffClientId);
+    const response = await fetch(`${base}/identity/v1/authorize?action=UPDATE_PASSWORD`, { redirect: "manual", headers: { Cookie: cookie(sessionId) } });
+    const location = response.headers.get("location")!;
+    expect(new URL(location).searchParams.has("login_hint")).toBe(false);
+    expect(location).not.toContain("self-service-user");
+    expect(location).not.toContain("example.test");
   });
   it.each(["success", "cancelled", "error"])("updates the same session for action result %s", async status => {
     const { sessionId } = await session();

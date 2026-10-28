@@ -214,20 +214,20 @@ describe('Save and continue', () => {
     await waitFor(() => expect(app.completePhase).toHaveBeenCalledWith(expect.any(Number), false));
   });
 
-  it('records the step skipped with no logo', async () => {
+  it('records the step done with a theme but no logo', async () => {
     page();
     await screen.findByText('Account logo');
     saveAndContinue();
-    await waitFor(() => expect(app.completePhase).toHaveBeenCalledWith(expect.any(Number), true));
+    await waitFor(() => expect(app.completePhase).toHaveBeenCalledWith(expect.any(Number), false));
   });
 
-  it('records the step skipped when this save removes the logo', async () => {
+  it('records the step done when this save removes the logo but a theme is saved', async () => {
     load.mockResolvedValue(tenantWithLogo());
     page();
     await screen.findByRole('img', { name: 'Account logo' });
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     saveAndContinue();
-    await waitFor(() => expect(app.completePhase).toHaveBeenCalledWith(expect.any(Number), true));
+    await waitFor(() => expect(app.completePhase).toHaveBeenCalledWith(expect.any(Number), false));
   });
 
   it('saves a workspace whose name is over 100 characters', async () => {

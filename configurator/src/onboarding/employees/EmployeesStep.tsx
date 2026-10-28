@@ -14,7 +14,8 @@ import { EmptyState, OptionCard, StepActions } from '../StepParts';
 import { adjacentSteps, stepById } from '../steps';
 import { probeGate, useStepProbe } from '../stepProbe';
 import { describeSaveError } from '../errors';
-import { reportStepError, trackStepAction } from '../telemetry';
+import { reportStepError, trackMethod, trackRecordSave } from '../telemetry';
+import { track } from '@/lib/analytics';
 import { useOnboardingT, type OnboardingT } from '../i18n';
 import { blockingError, stepKeys, STEP_QUERY_OPTIONS } from '../stepQueries';
 import { RefreshNotice } from '../RefreshNotice';
@@ -70,6 +71,10 @@ export default function EmployeesStep() {
 
   const queryClient = useQueryClient();
   const [bulk, setBulk] = useState(false);
+  const openBulk = () => {
+    setBulk(true);
+    trackMethod('employees', 'bulk');
+  };
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [sending, setSending] = useState<string | null>(null);
@@ -163,13 +168,11 @@ export default function EmployeesStep() {
       created = err.employee as unknown as Employee;
       inviteError = err.reason;
     }
-    trackStepAction('employees', 'entity_create', 'employee', {
-      tenant,
-      source: 'form',
-      departments: input.departments.length,
+    trackRecordSave('employees', 'employee', 'create', {
       roles: input.roles.length,
       jurisdictions: input.jurisdictions.length,
-      email: !!input.emailId,
+      has_email: !!input.emailId,
+      invited: !inviteError,
     });
     toast(
       inviteError
@@ -182,7 +185,7 @@ export default function EmployeesStep() {
           }
         : {
             title: t('common.added_named', '%{name} added', { name: created.user.name }),
-            description: t('employees.signs_in_as', 'They sign in as %{username}.', { username: created.user.userName }),
+            description: t('employees.signs_in_with_email', 'They sign in with %{email}.', { email: created.user.emailId || input.emailId || '' }),
           },
     );
     reload();
@@ -194,12 +197,10 @@ export default function EmployeesStep() {
       reportStepError('employees', 'update_employee', err, tenant);
       throw err;
     });
-    trackStepAction('employees', 'entity_update', 'employee', {
-      tenant,
-      source: 'form',
+    trackRecordSave('employees', 'employee', 'update', {
       roles: changes.roles.length,
       jurisdictions: changes.jurisdictions.length,
-      email,
+      outcome: email,
     });
     toast({ title: t('common.updated_named', '%{name} updated', { name: changes.name }), description: emailOutcome(email, t) });
     reload();
@@ -214,7 +215,7 @@ export default function EmployeesStep() {
     try {
       if (resending) {
         const { email, activationEmail } = await resendInvite(employee, member);
-        trackStepAction('employees', 'entity_update', 'employee', { tenant, invite: 'resend', activationEmail });
+        track('onboarding:invite_send', { outcome: 'resent', link: activationEmail });
         toast({
           title: t('employees.email_sent', 'Email sent to %{email}', { email }),
           description:
@@ -224,7 +225,7 @@ export default function EmployeesStep() {
         });
       } else {
         const { email, invited } = await sendInvite(employee, status.kind !== 'none');
-        trackStepAction('employees', 'entity_update', 'employee', { tenant, invite: status.kind === 'none' ? 'send' : 'again' });
+        track('onboarding:invite_send', { outcome: status.kind === 'none' ? 'sent' : 'sent_again' });
         toast({
           title: t('employees.invitation_sent', 'Invitation sent to %{email}', { email }),
           description: invited
@@ -248,6 +249,7 @@ export default function EmployeesStep() {
         );
       } else {
         reportStepError('employees', resending ? 'resend_invite' : 'send_invite', err, tenant);
+        track('onboarding:invite_send', { outcome: 'failed' });
         toast({ variant: 'destructive', title: t('employees.email_not_sent', 'The email wasn’t sent'), description: describeInviteError(err, t) });
       }
     } finally {
@@ -263,7 +265,7 @@ export default function EmployeesStep() {
       reportStepError('employees', 'delete_employee', err, tenant);
       throw new Error(describeSaveError(err, t('common.remove_failed', 'Removing failed. Try again.'), t));
     }
-    trackStepAction('employees', 'entity_delete', 'employee', { tenant });
+    trackRecordSave('employees', 'employee', 'delete');
     toast({ title: t('common.removed_named', '%{name} removed', { name: employee.user.name }) });
     reload();
   };
@@ -329,7 +331,10 @@ export default function EmployeesStep() {
           {t('employees.bulk_intro', 'Get a template with your departments, designations, roles and areas built in, fill it, and upload it.')}
         </StepHeader>
         <BulkEmployeeImport
-          onCancel={() => setBulk(false)}
+          onCancel={() => {
+            setBulk(false);
+            trackMethod('employees', 'bulk', true);
+          }}
           onDone={() => {
             setBulk(false);
             reload();
@@ -356,11 +361,14 @@ export default function EmployeesStep() {
                 icon={FileText}
                 title={t('common.create_manually', 'Create manually')}
                 action={t('common.start_adding', 'Start adding')}
-                onClick={() => setAdding(true)}
+                onClick={() => {
+                  setAdding(true);
+                  trackMethod('employees', 'form');
+                }}
               >
                 {t('employees.manual_body', 'Type in people one at a time.')}
               </OptionCard>
-              <OptionCard icon={LayoutGrid} title={t('common.bulk_upload', 'Bulk upload')} action={t('common.upload_file', 'Upload a file')} onClick={() => setBulk(true)}>
+              <OptionCard icon={LayoutGrid} title={t('common.bulk_upload', 'Bulk upload')} action={t('common.upload_file', 'Upload a file')} onClick={openBulk}>
                 {t('employees.bulk_body', 'Upload a staff list and we will bring everyone in.')}
               </OptionCard>
             </div>
@@ -372,7 +380,7 @@ export default function EmployeesStep() {
             <h3 className="text-lg font-semibold text-foreground">{t('steps.employees', 'Employees')}</h3>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{employees.length}</span>
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setBulk(true)} className="h-9 text-primary hover:text-primary">
+              <Button variant="ghost" size="sm" onClick={openBulk} className="h-9 text-primary hover:text-primary">
                 {t('common.upload_file', 'Upload a file')}
               </Button>
               <Button size="sm" onClick={() => setAdding(true)} className="h-9 gap-1.5">

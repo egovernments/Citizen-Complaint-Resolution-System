@@ -20,13 +20,22 @@ export async function resolveTenantOptions(claims: KeycloakClaims, _live = false
 
 export async function resolveTenantOption(subject: string, tenantId: string): Promise<TenantOption | null> {
   const access = await staffAccess(subject, tenantId);
-  if (!access.allowed) return null;
+  // A locked workspace stays listed, so its staff see the notice instead of signup.
+  if (!access.allowed && access.denial !== "WORKSPACE_TRIAL_EXPIRED") return null;
   if (access.via === "managed") {
     const fallback = await managedFallbackAccess(subject, tenantId);
-    return fallback.allowed ? tenantOption({ ...fallback.mapping, roles: [] }, fallback.account) : null;
+    if (!fallback.allowed) return null;
+    if (!access.allowed) {
+      const { organizationId, alias, name } = fallback.mapping;
+      return { organizationId, organizationAlias: alias, tenantId: fallback.mapping.tenantId, name, roles: [], code: "WORKSPACE_TRIAL_EXPIRED" };
+    }
+    return tenantOption({ ...fallback.mapping, roles: [] }, fallback.account);
   }
   const org = await readOrganizationByTenant(tenantId);
   if (!org?.enabled || (org.lifecycle !== null && org.lifecycle !== "ACTIVE")) return null;
+  if (!access.allowed) {
+    return { organizationId: org.id, organizationAlias: org.alias, tenantId, name: org.name, roles: [], code: "WORKSPACE_TRIAL_EXPIRED" };
+  }
   const account = await readDigitAccount(tenantId, access.binding!.uuid);
   if (!account) return null;
   return { organizationId: org.id, organizationAlias: org.alias, tenantId, name: org.name,

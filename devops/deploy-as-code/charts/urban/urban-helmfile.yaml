@@ -1,9 +1,10 @@
-environments:
-  env:
-    values:
-      - ../environments/env-secrets.yaml
-      - ../environments/env.yaml
+bases:
+  - ../environments/environments.yaml
 ---
+{{- /* Releases this environment turns off by name (env values `disabledReleases`,
+       empty by default): every release that is otherwise always installed reads it. */ -}}
+{{- $disabled := index .Values "disabledReleases" | default list }}
+{{- $turbopassUpstream := index (index .Values "turbopass-proxy" | default dict) "upstream" | default dict }}
 templates:
   default: &default
     chart: ./{{`{{ .Release.Name }}`}}
@@ -20,32 +21,28 @@ templates:
 
 releases:
   - name: pgr-services # Replace with your desired namespace
-    installed: true
+    installed: {{ not (has "pgr-services" $disabled) }}
     <<: *default
 
   - name: digit-ui # Replace with your desired namespace
-    installed: true
+    installed: {{ not (has "digit-ui" $disabled) }}
     <<: *default
 
+  # Boundary management (bulk boundary upload/generation from Excel): not used
+  # by this deployment, so it is disabled. Re-enable by setting installed: true
+  # here and gatus.checks.boundaryManagement: true in
+  # monitoring/gatus/values.yaml.
   - name: egov-bndry-mgmnt # Replace with your desired namespace
-    installed: true
+    installed: false
+    <<: *default
+
+  # Same-origin /turbopass forwarded to a shared Turbopass, cookies stripped
+  # (the chart's values.yaml). Only where the environment names the upstream.
+  - name: turbopass-proxy
+    installed: {{ ne (index $turbopassUpstream "host" | default "") "" }}
     <<: *default
 
   - name: configurator # DIGIT Studio tenant onboarding/management SPA
-    installed: true
+    installed: {{ not (has "configurator" $disabled) }}
     <<: *default
-
-  # Citizen UI v2 (Vite SPA under /citizen/). No common-chart image: it serves a
-  # tenant-baked dist pulled from object storage (see the chart's values.yaml for
-  # why + how to build the tarball). Declares its own values instead of *default.
-  - name: digit-ui-v2
-    installed: true
-    chart: ./digit-ui-v2
-    namespace: egov
-    missingFileHandler: Warn
-    values:
-      - global:
-          domain: {{ .Values.global.domain | quote }}
-        namespace: egov
-        distUrl: {{ index .Values "digit-ui-v2" "distUrl" | default "" | quote }}
   # Frontend services end

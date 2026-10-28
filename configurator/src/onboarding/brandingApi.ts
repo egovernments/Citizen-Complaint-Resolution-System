@@ -82,8 +82,11 @@ export async function loadBranding(tenantId: string): Promise<Branding> {
   const stateRoot = stateRootOf(tenantId);
   const [tenants, themes, stateInfos] = await Promise.all([
     // A city's record lives at its state root; mdms-v2 resolves up the tree, so
-    // searching at the tenant itself finds it either way.
-    mdmsService.searchRecords(tenantId, MDMS_SCHEMAS.TENANT),
+    // searching at the tenant itself finds it either way. Asked for by id: this
+    // search is unfiltered and a page is 100 rows, and a root can hold more
+    // (Bomet's `ke` has 110, mostly retired test workspaces, its own last), so
+    // the first page could miss the workspace's record.
+    mdmsService.searchRecords(tenantId, MDMS_SCHEMAS.TENANT, { uniqueIdentifiers: [tenantId] }),
     mdmsService.searchRecords(stateRoot, THEME_SCHEMA).catch(() => [] as MdmsRecord[]),
     // Only the banner needs it, so a failed read leaves the banner unavailable
     // rather than failing the whole step.

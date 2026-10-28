@@ -259,22 +259,32 @@ public class OnboardingSteps {
 
     private void rootBoundary(OnboardingProgress.WriteScope scope, String tenant, OnboardingProgress progress) {
         Map<String,Object> root = new LinkedHashMap<>(); root.put("boundaryType", "ROOT"); root.put("parentBoundaryType", null); root.put("active", true);
-        progress.record("boundary-hierarchy", () -> ensureBoundary(scope, "/boundary-service/boundary-hierarchy-definition/_search",
+        Runnable hierarchy = () -> ensureBoundary(scope, "/boundary-service/boundary-hierarchy-definition/_search",
                 Map.of("BoundaryTypeHierarchySearchCriteria",Map.of("tenantId",tenant,"hierarchyType",WORKSPACE_HIERARCHY)), "BoundaryHierarchy", tenant,
                 "/boundary-service/boundary-hierarchy-definition/_create", Map.of("BoundaryHierarchy",
-                        Map.of("tenantId", tenant, "hierarchyType", WORKSPACE_HIERARCHY, "boundaryHierarchy", List.of(root)))));
+                        Map.of("tenantId", tenant, "hierarchyType", WORKSPACE_HIERARCHY, "boundaryHierarchy", List.of(root))));
         // Technical root placeholder only; operational geography is workspace-owned (Geography step).
         var geometry = Map.of("type", "Point", "coordinates", List.of(0,0));
-        progress.record("boundary-root", () -> ensureBoundary(scope, "/boundary-service/boundary/_search?tenantId=" + tenant + "&codes=" + tenant,
+        Runnable rootEntity = () -> ensureBoundary(scope, "/boundary-service/boundary/_search?tenantId=" + tenant + "&codes=" + tenant,
                 Map.of(), "Boundary", tenant, "/boundary-service/boundary/_create",
-                Map.of("Boundary", List.of(Map.of("tenantId", tenant, "code", tenant, "geometry", geometry)))));
+                Map.of("Boundary", List.of(Map.of("tenantId", tenant, "code", tenant, "geometry", geometry))));
+        // Those two are DONE on boundary-service's 202, before its persister saves them. A relationship step that an
+        // earlier attempt left STARTED re-ensures both first (each is a search, then a create only if missing), so a
+        // write the persister lost is made again, by the automatic retries and a manual one alike. The checkpoints
+        // stay DONE, so this does not count as progress and the run's retry budget still bounds it.
+        boolean relationshipRetried = progress.started("boundary-relationship");
+        progress.record("boundary-hierarchy", hierarchy);
+        progress.record("boundary-root", rootEntity);
         // Stock boundary-service reads relationship search criteria from the query
         // string only; criteria in the body were ignored (8c gate 2).
-        progress.record("boundary-relationship", () -> ensureBoundary(scope,
+        progress.record("boundary-relationship", () -> {
+            if (relationshipRetried) { hierarchy.run(); rootEntity.run(); }
+            ensureBoundary(scope,
                 "/boundary-service/boundary-relationships/_search?tenantId=" + tenant + "&hierarchyType=" + WORKSPACE_HIERARCHY,
                 Map.of(), "TenantBoundary", tenant,
                 "/boundary-service/boundary-relationships/_create", Map.of("BoundaryRelationship",
-                        Map.of("tenantId", tenant, "code", tenant, "hierarchyType", WORKSPACE_HIERARCHY, "boundaryType", "ROOT"))));
+                        Map.of("tenantId", tenant, "code", tenant, "hierarchyType", WORKSPACE_HIERARCHY, "boundaryType", "ROOT")));
+        });
     }
 
     private void validateMobileRule(JsonNode rule) {
@@ -286,11 +296,25 @@ public class OnboardingSteps {
         catch (java.util.regex.PatternSyntaxException invalid) { throw new OnboardingFailure("COUNTRY_MOBILE_RULE_INVALID", true); }
     }
 
+    /** boundary-service's "already exists": DUPLICATE_RECORD (hierarchy, relationship), DUPLICATE_CODE (boundary). */
+    private static final Set<String> BOUNDARY_EXISTS = Set.of("DUPLICATE_RECORD", "DUPLICATE_CODE");
+    /**
+     * boundary-relationships/_create looks the boundary and the hierarchy up in boundary-service's database, which its
+     * persister fills from Kafka after the earlier creates have answered. Not saved yet is not final: the run's retry outlives it.
+     */
+    private static final Set<String> BOUNDARY_NOT_YET_SAVED = Set.of("BOUNDARY_ENTITY_DOES_NOT_EXIST", "HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR");
+
     private void ensureBoundary(OnboardingProgress.WriteScope scope, String search, Map<String,Object> criteria, String field, String tenant, String create, Map<String,Object> body) {
         if (boundaryPresent(client.read("boundary", search, criteria), field, tenant)) return;
-        createProjectedRecord(scope, "boundary", create, body);
-        if (!boundaryPresent(client.read("boundary", search, criteria), field, tenant))
-            throw new OnboardingFailure("BOUNDARY_NOT_VISIBLE", true);
+        // boundary-service validates, queues the insert on Kafka and answers 202, so reading it back would race its
+        // persister (#2709). The create's own answer is the outcome: accepted, or it already exists.
+        try { client.write(scope, "boundary", create, body); }
+        catch (OnboardingFailure failure) {
+            if (failure.getCodes().stream().anyMatch(BOUNDARY_EXISTS::contains)) return;
+            if (failure.getCodes().stream().anyMatch(BOUNDARY_NOT_YET_SAVED::contains))
+                throw new OnboardingFailure(failure.getCode(), true, failure.getHttpStatus(), failure.getCodes());
+            throw failure;
+        }
     }
 
     private boolean boundaryPresent(JsonNode response, String field, String tenant) {
@@ -333,6 +357,21 @@ public class OnboardingSteps {
                 && (!node.has("active") || node.path("active").isBoolean() && node.path("active").booleanValue());
     }
 
+    private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
+    private static final String LOWER = "abcdefghijkmnopqrstuvwxyz", UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ", DIGITS = "23456789", SPECIAL = "@#$%";
+
+    /** Random password satisfying egov-user's default policy (digit, lower, upper, @#$%, 8-15), as identity-bff's oneTimePassword. */
+    static String throwawayPassword() {
+        String all = LOWER + UPPER + DIGITS + SPECIAL;
+        List<Character> chars = new ArrayList<>();
+        for (String set : List.of(LOWER, UPPER, DIGITS, SPECIAL)) chars.add(set.charAt(RANDOM.nextInt(set.length())));
+        while (chars.size() < 12) chars.add(all.charAt(RANDOM.nextInt(all.length())));
+        Collections.shuffle(chars, RANDOM);
+        StringBuilder password = new StringBuilder();
+        chars.forEach(password::append);
+        return password.toString();
+    }
+
     private void founder(OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress, OnboardingProgress.WriteScope scope) {
         String tenant = signup.getRequestedTenantId();
         // The old code too, so a run that created its founder under it before an upgrade finds them. If that
@@ -361,6 +400,9 @@ public class OnboardingSteps {
             user.put("mobileNumber", phone);
             if (!countryCode.isBlank()) user.put("countryCode", countryCode);
             user.put("type", "EMPLOYEE"); user.put("active", true); user.put("tenantId", tenant); user.put("roles", roles);
+            // HRMS's own fallback password can lack an uppercase letter, which egov-user refuses (#2713).
+            // A throwaway: the founder signs in through Keycloak and identity-bff replaces it at first sign-in.
+            user.put("password", throwawayPassword());
             if (signup.isFounderEmailVerified()) user.put("emailId", signup.getFounderEmail());
             var employee = new LinkedHashMap<String,Object>();
             employee.put("tenantId", tenant); employee.put("code", FOUNDER_CODE); employee.put("employeeStatus", "EMPLOYED");

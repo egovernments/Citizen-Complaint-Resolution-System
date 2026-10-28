@@ -11,7 +11,7 @@ import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/compon
 import { HOME_PATH, ONBOARDING_STEPS } from './steps';
 import { completedCount, resumePath, resumeStep, stepForPath, stepStatus, type StepStatus } from './progress';
 import { initialsOf, useOrganisation } from './organisation';
-import { trackEvent } from '@/lib/telemetry';
+import { track } from '@/lib/analytics';
 import { useOnboardingT } from './i18n';
 import { DocsButton, DocsRail } from './docs/DocsRail';
 import type { DocsSection } from './docs/docsLinks';
@@ -71,7 +71,7 @@ export default function OnboardingLayout() {
   const openedStep = currentStepLocked ? undefined : currentStep;
   const docsSection: DocsSection | undefined = location.pathname === HOME_PATH ? 'home' : openedStep?.id;
   useEffect(() => {
-    if (openedStep) trackEvent('phase_start', { phase: openedStep.number, step: openedStep.id, tenant: state.tenant });
+    if (openedStep) track('onboarding:step_view', { step: openedStep.id });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per step opened, not per tenant re-render
   }, [openedStep?.id]);
 
@@ -105,7 +105,7 @@ export default function OnboardingLayout() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-5 text-foreground truncate" title={orgName}>{orgName}</p>
-                  <p className="text-xs leading-4 text-muted-foreground truncate">{t('app.header.product_name', 'Complaint Management System')}</p>
+                  <p className="text-xs leading-4 text-muted-foreground break-words">{t('app.header.product_name', 'Complaint Management System')}</p>
                 </div>
               </>
             )}

@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
-import { expect, type APIRequestContext, type APIResponse } from '@playwright/test';
+import { chromium, expect, type APIRequestContext, type APIResponse } from '@playwright/test';
+import ExcelJS from 'exceljs';
 import { identityJson, type DigitContext, type ReadOtp } from './identity-bff';
 
 /**
@@ -406,6 +407,46 @@ export async function departmentsStep(digit: Digit, locales: string[]) {
     { code: `COMMON_MASTERS_DESIGNATION_${DESIGNATION.code}`, message: DESIGNATION.name, module: 'rainmaker-common' },
   ]);
   return markDone(digit, 'DEPARTMENTS');
+}
+
+export interface EmployeeTemplate { fileName: string; sample: Record<string, string>; codes: string[] }
+
+/**
+ * #2648: opens the Employees step as the founder (the configurator session is seeded from the
+ * founder's DIGIT context with no completed phases, so the workspace stays in onboarding), takes
+ * Upload a file -> Get the template -> Download Template, and reads the workbook it downloads.
+ * Needs a Chromium for Playwright; the rest of this suite is API-only.
+ */
+export async function downloadEmployeeTemplate(digit: Digit, base: string): Promise<EmployeeTemplate> {
+  const browser = await chromium.launch();
+  try {
+    const context = await browser.newContext({ ignoreHTTPSErrors: process.env.ONBOARDING_E2E_IGNORE_HTTPS_ERRORS === '1', acceptDownloads: true });
+    const page = await context.newPage();
+    await page.goto(`${base}/configurator/login`, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(({ user, token, origin }) => localStorage.setItem('crs-auth-state', JSON.stringify({
+      isAuthenticated: true,
+      user: { name: user.name || user.userName, email: user.emailId || '', roles: (user.roles ?? []).map((r: { code: string }) => r.code),
+        uuid: user.uuid, id: user.id, mobileNumber: user.mobileNumber },
+      environment: origin, tenant: user.tenantId, targetTenant: user.tenantId, currentPhase: 1, completedPhases: [], authToken: token,
+    })), { user: digit.user as any, token: digit.context.access_token, origin: new URL(base).origin });
+    await page.goto(`${base}/configurator/onboarding/employees`, { waitUntil: 'domcontentloaded' });
+    await page.getByText('Upload a file', { exact: true }).click();
+    const get = page.getByRole('button', { name: 'Get the template' });
+    await expect(get, 'reference data loaded').toBeEnabled({ timeout: 60_000 });
+    await get.click();
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download Template' }).click()]);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(await download.path());
+    expect(workbook.worksheets.map(sheet => sheet.name)).toEqual(['Employee', 'Codes', 'Instructions']);
+    const text = (cell: ExcelJS.CellValue) => String(cell ?? '');
+    const [header, row] = [1, 2].map(n => workbook.getWorksheet('Employee')!.getRow(n).values as ExcelJS.CellValue[]);
+    const sample = Object.fromEntries(header.map((name, i) => [text(name), text(row[i])]).filter(([name]) => name));
+    const codes: string[] = [];
+    workbook.getWorksheet('Codes')!.eachRow((r, n) => { if (n > 1) (r.values as ExcelJS.CellValue[]).forEach(v => v && codes.push(text(v).split(' : ')[0].trim())); });
+    return { fileName: download.suggestedFilename(), sample, codes };
+  } finally {
+    await browser.close();
+  }
 }
 
 export interface Staff { key: string; name: string; email: string; mobile: string; role: 'GRO' | 'PGR_LME'; department: string; jurisdiction: string }

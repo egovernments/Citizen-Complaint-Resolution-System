@@ -1458,18 +1458,17 @@ services:
     # breaking MDMS mobile validation) has not been re-verified — check for
     # regressions in those specific behaviors before relying on this tag in
     # a multi-tenant deploy.
-    # EGOV_HRMS_DEV_MODE makes enrichUser() respect the password supplied in
-    # an employee-create request instead of overwriting it with the
-    # auto-generated one. That is what the onboarding paths (configurator
-    # wizard, XLSX onboarding, MCP employee_create) rely on to set a known
-    # first password — but it also means any caller authorised to create
-    # employees picks their passwords directly, bypassing generation and the
-    # credential-delivery notification.
+    # At this tag enrichUser() keeps a password supplied in an employee-create
+    # request in both modes (CCRS#482); it generates one only when none is
+    # sent. EGOV_HRMS_DEV_MODE only changes that fallback to HRMS's default
+    # password (`egov.hrms.employee.default.password`, env
+    # EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD) and skips the credential-delivery
+    # SMS that create otherwise sends.
     #
     # It used to be hardcoded 'true' on every deployment. It is now off unless
     # a tenant opts in with `hrms_dev_mode: true` in host_vars (rendered into
-    # .env by digit.env.j2). Turn it on for a box you are actively onboarding
-    # employees onto through those wizards; leave it off otherwise.
+    # .env by digit.env.j2). The configurator and onboarding paths send their
+    # own password, so they do not need it.
     image: egovio/egov-hrms:2.12-beta-dd641a6
     container_name: egov-hrms
     depends_on:
@@ -1518,10 +1517,10 @@ services:
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATELEVEL_TENANT: pg
       HRMS_SYSTEM_USERNAME: INTERNAL_USER
-      EGOV_HRMS_DEFAULT_PASSWORD: ${EGOV_HRMS_DEFAULT_PASSWORD:-eGov@123}
-      # Enables enrichUser() to honor passwords supplied in the create
-      # request rather than overwriting with the default/auto-generated
-      # one. Required by the CCRS#482 fix in :digit-common-boundary.
+      EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD: ${EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD:-eGov@123}
+      # Not needed for a supplied password: enrichUser() keeps it in both
+      # modes (CCRS#482). Dev mode makes the no-password fallback HRMS's
+      # default password and skips the credential SMS.
       EGOV_HRMS_DEV_MODE: ${EGOV_HRMS_DEV_MODE:-false}
     ports:
       - "${BIND_IP:-127.0.0.1}:18092:8092"
@@ -1743,7 +1742,7 @@ services:
     # (build/NIGHTLY-BUILDS.md "Release step").
     # PGR_SERVICES_IMAGE still overrides this one image (e.g. a local build) — then
     # pin the rest of the stack to the same build yourself.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:${NOTIFICATION_STACK_TAG:-nightly-develop}}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:${NOTIFICATION_STACK_TAG:-master-b4adf0d}}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1895,7 +1894,7 @@ services:
   # necessarily public and unauthenticated at the network layer, so it relies on
   # Twilio signature validation (TWILIO_VALIDATE_SIGNATURE, on by default).
   xstate-chatbot-db:
-    image: ${XSTATE_CHATBOT_DB_IMAGE:-egovio/xstate-chatbot-db:nightly-develop}
+    image: ${XSTATE_CHATBOT_DB_IMAGE:-egovio/xstate-chatbot-db:master-b4adf0d}
     container_name: xstate-chatbot-db
     profiles: ["chatbot"]
     depends_on:
@@ -1920,7 +1919,7 @@ services:
       - egov-network
 
   xstate-chatbot:
-    image: ${XSTATE_CHATBOT_IMAGE:-egovio/xstate-chatbot:nightly-develop}
+    image: ${XSTATE_CHATBOT_IMAGE:-egovio/xstate-chatbot:master-b4adf0d}
     container_name: xstate-chatbot
     restart: unless-stopped
     profiles: ["chatbot"]
@@ -2056,7 +2055,7 @@ services:
     # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
     # the Container Build Pipeline, multi-arch); the bundle lives at
     # /var/web/digit-ui, matching the mounted digit-ui.conf root.
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12.1-7a38661}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-b4adf0d}
     container_name: digit-ui
     ports:
       - "${PROXY_BIND_IP:-127.0.0.1}:18080:80"
@@ -2090,7 +2089,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
     cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
-    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12.1-6e8adb3}
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:master-b4adf0d}
     container_name: configurator
     # Per-tenant runtime config, rendered by the ansible deploy from host_vars
     # (templates/configurator-config.js.j2) and mounted over the neutral
@@ -2448,7 +2447,7 @@ services:
     # pulls the public build published by this repo's own image pipeline
     # (build/build-config.yml -> egovio/digit-mcp). Override MCP_IMAGE to use a
     # different registry/tag.
-    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12.1-7a38661}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:master-b4adf0d}
     container_name: digit-mcp
     restart: unless-stopped
     depends_on:
@@ -2526,7 +2525,7 @@ services:
     # MCP_IMAGE override to a flag-carrying tag is required; the ansible deploy
     # verifies /v1/version reports readOnly=true after start and fails otherwise
     # (see playbook-deploy.yml, "assert the image honours MCP_READ_ONLY").
-    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12.1-7a38661}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:master-b4adf0d}
     container_name: digit-mcp-readonly
     restart: unless-stopped
     depends_on:
@@ -2863,7 +2862,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: ${DIGIT_CONFIG_SERVICE_IMAGE:-egovio/digit-config-service:2.12-5137119}
+    image: ${DIGIT_CONFIG_SERVICE_IMAGE:-egovio/digit-config-service:master-b4adf0d}
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2931,7 +2930,7 @@ services:
     # docker-compose.migrations.yml, so notification_stack_tag pins the pair.
     # DIGIT_USER_PREFERENCES_SERVICE_IMAGE overrides this one image; pin
     # DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE to the same build with it.
-    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:${NOTIFICATION_STACK_TAG:-nightly-develop}}
+    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:${NOTIFICATION_STACK_TAG:-master-b4adf0d}}
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2978,7 +2977,7 @@ services:
     # Same build as pgr-services — see the ONE BUILD, ONE TAG note there.
     # NOVU_BRIDGE_IMAGE overrides this one image; novu-bridge-migration then still
     # follows NOTIFICATION_STACK_TAG unless NOVU_BRIDGE_DB_IMAGE is pinned too.
-    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:${NOTIFICATION_STACK_TAG:-nightly-develop}}
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:${NOTIFICATION_STACK_TAG:-master-b4adf0d}}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]
@@ -3168,8 +3167,7 @@ services:
   #
   # Both services are profile-gated — they don't start on a default
   # `docker compose up`. Opt in with `COMPOSE_PROFILES=keycloak`. The
-  # Ansible playbook flips this on when `enable_keycloak: true` in
-  # host_vars.
+  # Ansible playbook always turns the profile on: every sign-in needs it.
   #
   # Keycloak has its OWN Postgres instance (keycloak-postgres) rather
   # than sharing the DIGIT postgres-db. Two reasons:
@@ -3211,7 +3209,7 @@ services:
     # Built from keycloak/Dockerfile. It pins
     # Keycloak 26.7.3 and adds the email magic-link provider. Override with the
     # upstream image only when magic-link authentication is disabled.
-    image: ${IDENTITY_KEYCLOAK_IMAGE:-egovio/identity-keycloak:nightly-develop}
+    image: ${IDENTITY_KEYCLOAK_IMAGE:-egovio/identity-keycloak:master-b4adf0d}
     container_name: keycloak
     restart: unless-stopped
     profiles: ["keycloak"]
@@ -3254,7 +3252,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: ${IDENTITY_BFF_IMAGE:-egovio/identity-bff:nightly-develop}
+    image: ${IDENTITY_BFF_IMAGE:-egovio/identity-bff:master-b4adf0d}
     container_name: identity-bff
     restart: unless-stopped
     profiles: ["keycloak"]
@@ -3288,6 +3286,8 @@ services:
       # Off unless .env turns it on (identity_dev_fixed_otp: true).
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
+      # Off unless .env turns it on (identity_staff_phone_join: true; #2595, off until #2631).
+      IDENTITY_STAFF_PHONE_JOIN: ${IDENTITY_STAFF_PHONE_JOIN:-false}
       IDENTITY_POLLER_MAX_LAG_SECONDS: ${IDENTITY_POLLER_MAX_LAG_SECONDS:-60}
       KEYCLOAK_ADMIN_URL: http://keycloak:8180
       KEYCLOAK_ADMIN_REALM: ${KEYCLOAK_ORGANIZATION_REALM:-digit}
@@ -3310,6 +3310,16 @@ services:
       IDENTITY_ONBOARDING_TOKEN: ${IDENTITY_ONBOARDING_TOKEN:-}
       IDENTITY_RECONCILE_ON_STARTUP: ${IDENTITY_RECONCILE_ON_STARTUP:-true}
       IDENTITY_RECONCILIATION_INTERVAL_SECONDS: ${IDENTITY_RECONCILIATION_INTERVAL_SECONDS:-900}
+      IDENTITY_WORKSPACE_TRIAL_DAYS: ${IDENTITY_WORKSPACE_TRIAL_DAYS:-0}
+      IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS: ${IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS:-}
+      # Trial reminder emails go through novu-bridge's internal send API (no Novu key here).
+      # Single dash: an explicitly empty value (identity_workspace_trial_reminders_enabled: false) turns them off.
+      IDENTITY_NOVU_BRIDGE_URL: ${IDENTITY_NOVU_BRIDGE_URL-http://novu-bridge:8080/novu-bridge}
+      IDENTITY_NOVU_BRIDGE_TOKEN: ${NOVU_BRIDGE_INTERNAL_SEND_TOKEN:-}
+      IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE: ${IDENTITY_WORKSPACE_TRIAL_NOTICE_TITLE:-}
+      IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE: ${IDENTITY_WORKSPACE_TRIAL_NOTICE_MESSAGE:-}
+      IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL: ${IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_LABEL:-}
+      IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL: ${IDENTITY_WORKSPACE_TRIAL_NOTICE_LINK_URL:-}
       DIGIT_USER_SERVICE_URL: http://kong:8000/user
       # Citizen DIGIT-token mint. Internal only, never via Kong: the response carries the OTP.
       DIGIT_OTP_CREATE_URL: ${DIGIT_OTP_CREATE_URL:-http://egov-otp:8089/otp/v1/_create}
@@ -3324,6 +3334,8 @@ services:
       DIGIT_ADMIN_USER_TYPE: EMPLOYEE
       DIGIT_MANAGED_BASE_ROLES: EMPLOYEE
       DIGIT_MANAGED_ROLE_ALLOWLIST: EMPLOYEE,GRO,PGR_LME,DGRO,CSR,SUPERVISOR,AUTO_ESCALATE,PGR_VIEWER,TICKET_REPORT_VIEWER,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER
+      # Roles that open the Configurator (#2599); empty = identity-bff's default, the founder's admin roles.
+      DIGIT_CONFIGURATOR_ROLES: ${IDENTITY_CONFIGURATOR_ROLES:-}
       DIGIT_ROLE_CLIENT_ID: digit-ui
       REDIS_HOST: redis
       REDIS_PORT: '6379'

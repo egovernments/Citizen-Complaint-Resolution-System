@@ -57,6 +57,27 @@
 {{ indent }}if ($request_uri ~ "{{ html_route }}") { return 404; }
 {% endif %}
 {%- endmacro %}
+{#
+   ==================== The bare domain ====================
+   `location = /` for every digit_ui_mode: each mode's own `location /` is a
+   catch-all to Kong, which answers / with a 404. root_to_digit_ui (explicit)
+   wins; otherwise root_to_configurator (default on) sends / to the
+   Configurator, where people sign in or sign up a workspace, when this box
+   serves it. Exact match, so no other path is redirected.
+#}
+{% macro root_location() %}
+{% if nginx_features.root_to_digit_ui | default(false) %}
+  # Bare domain enters the canonical tenant route. Without a configured
+  # default, fail closed instead of resurrecting tenantless legacy login.
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+  location = / { return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/citizen/login; }
+{% else %}
+  location = / { return 404; }
+{% endif %}
+{% elif (nginx_features.root_to_configurator | default(true)) and nginx_features.configurator %}
+  location = / { return 302 /configurator/; }
+{% endif %}
+{%- endmacro %}
 server {
   server_name {{ domain }};
 
@@ -153,26 +174,6 @@ server {
 {% endif %}
 
 {% endif %}
-{% if nginx_features.digit_ui_v2 | default(false) %}
-  # digit-ui-v2 — Vite + React 19 citizen SPA. Built on the target from
-  # {{ (digit_ui_v2_repo | default('')) | ternary(digit_ui_v2_repo | default('') ~ '@' ~ (digit_ui_v2_branch | default('HEAD')), 'the vendored in-tree digit-ui-v2/ source') }} and
-  # synced to /var/www/citizen/ by the ansible deploy. Hashed assets get
-  # the long immutable cache; index.html stays no-cache so a redeploy
-  # propagates without operators forcing a hard refresh.
-  location /citizen/assets/ {
-    alias /var/www/citizen/assets/;
-    add_header Cache-Control "public, max-age=31536000, immutable" always;
-    {{ security_headers('    ') }}
-    try_files $uri =404;
-  }
-  location /citizen {
-    alias /var/www/citizen/;
-    try_files $uri $uri/ /citizen/index.html;
-    add_header Cache-Control "no-cache, must-revalidate" always;
-    {{ security_headers('    ') }}
-  }
-
-{% endif %}
 {% if nginx_features.integration_tests | default(false) %}
   # digit-integration-tests dashboards — vanilla catalog SPA at
   # /tests/ and the react-admin rebuild at /tests-v2/ (matches naipepea's
@@ -235,7 +236,7 @@ server {
 {# `| default(true)` is load-bearing: host_vars override nginx_features as a
    whole dict (hash_behaviour=replace), so every tenant file written before
    this key existed has no `grafana` member. Without the default those deploys
-   would fail rendering this template. Same reason as digit_ui_v2 below. #}
+   would fail rendering this template. #}
 {% if nginx_features.grafana | default(true) %}
   # Grafana dashboard. This is the ONLY public path to Grafana — the Kong
   # /grafana route was removed in #1604, so turning this flag off makes the
@@ -495,8 +496,8 @@ server {
   # ⚠ WORKAROUND. Proper fix: set `build_novu_dashboard: true` to build the
   # subpath-rebased image (build/novu-dashboard/Dockerfile); then this branch is
   # replaced by the tidy one above. The stock branch ALSO claims the `/auth/`
-  # prefix. With enable_keycloak, Keycloak's public paths (/auth/realms/ and
-  # /auth/resources/) are carved back out by `^~` locations further down, so
+  # prefix. Keycloak's public paths (/auth/realms/ and /auth/resources/) are
+  # carved back out by `^~` locations further down, so
   # the two coexist on one domain; everything else under /auth/ is the
   # dashboard's (Kong denies the rest of Keycloak's surface anyway).
   location = /novu { return 302 /novu/; }
@@ -543,7 +544,7 @@ server {
   # route from Kong (e.g. the keycloak-route in kong.yml). Without
   # this proxy, hard-refreshes at /auth/* fall through to Kong's
   # /auth → keycloak upstream and 500 with a DNS resolve failure
-  # when keycloak isn't deployed. With enable_keycloak, the `^~`
+  # when keycloak isn't running. The `^~`
   # /auth/realms/ and /auth/resources/ locations below are longer
   # prefixes and win, so Keycloak's login pages, forms and theme assets
   # never reach the dashboard (#2271 review 3).
@@ -685,7 +686,6 @@ server {
     rewrite "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" /digit-ui/$1 last;
   }
 
-{% if enable_keycloak | default(false) %}
   # Keycloak's public surface (via Kong's /auth route): /auth/realms/ is the
   # OIDC endpoints, login/registration forms and account console;
   # /auth/resources/ is the login theme's CSS, JS and images. Kong denies the
@@ -716,7 +716,6 @@ server {
   }
 {% endfor %}
 
-{% endif %}
 {% if digit_ui_mode == "static" %}
   # digit-ui in static mode: host nginx serves the build artifact from
   # /opt/digit-ui-esbuild/build/ directly. Built by the playbook
@@ -797,16 +796,7 @@ server {
     proxy_buffering off;
   }
 
-{% if nginx_features.root_to_digit_ui | default(false) %}
-  # Bare domain enters the canonical tenant route. Without a configured
-  # default, fail closed instead of resurrecting tenantless legacy login.
-{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
-  location = / { return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/citizen/login; }
-{% else %}
-  location = / { return 404; }
-{% endif %}
-{% endif %}
-
+{{ root_location() }}
   # API calls go to Kong directly.
   location / {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_kong_port }};
@@ -873,6 +863,7 @@ server {
     proxy_buffering off;
   }
 
+{{ root_location() }}
   # Everything else (ALL API) → Kong. THE fix for the login 504.
   location / {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_kong_port }};
@@ -904,6 +895,7 @@ server {
     proxy_read_timeout 120s;
     proxy_buffering off;
   }
+{{ root_location() }}
   location / {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
     proxy_set_header Host $host;

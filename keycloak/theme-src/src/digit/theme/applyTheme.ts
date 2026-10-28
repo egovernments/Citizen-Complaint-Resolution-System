@@ -300,6 +300,18 @@ export function computeThemeVars(config: unknown): ThemeResult | null {
             ]);
             if (fg) vars["--color-button-primary-text"] = fg;
         }
+        // The hover state gets a label judged on its own fill (#2645): Green
+        // and Gold rests on #FEC931 and hovers on #204F37, and no one colour
+        // reads on both. Only hover: this theme has no pressed button rule.
+        for (const state of ["hover"]) {
+            const name = `--color-button-primary-text-${state}`;
+            const text = vars["--color-button-primary-text"];
+            const fill = vars[`--color-button-primary-bg-${state}`];
+            if (name in vars || !text || !fill) continue;
+            const [textLum, fillLum] = [relativeLuminance(text), relativeLuminance(fill)];
+            const readable = textLum === null || fillLum === null || contrastWithLuminance(textLum, fillLum) >= AA_NORMAL_TEXT;
+            vars[name] = readable ? text : readableForegroundAcross([fill]) ?? text;
+        }
     }
 
     const headerLum = relativeLuminance(vars["--color-header-bg"]);

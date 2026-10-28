@@ -1,0 +1,62 @@
+# Same-origin /turbopass for the Configurator, answered by a shared Turbopass
+# elsewhere (https://<upstream.host><upstream.path>/...): the Ansible tier serves
+# /turbopass from the box itself, and the SPA's default TURBOPASS_URL is that
+# path. Installed only when the environment sets turbopass-proxy.upstream.host
+# (urban-helmfile.yaml).
+#
+# Why an nginx hop rather than an ExternalName Ingress: the browser sends this
+# site's cookies with every same-origin /turbopass request, including the
+# identity BFF's digit_identity_session (Path=/). ingress-nginx would forward
+# them to the other deployment, where its logs could replay live sessions, and
+# this cluster's controller allows no configuration snippets to drop them. Here
+# nginx clears Cookie and Authorization before proxying.
+
+labels:
+  app: "turbopass-proxy"
+  group: "web"
+
+ingress:
+  enabled: true
+  context: "turbopass"
+
+initContainers: {}
+
+image:
+  repository: "docker.io/library/nginx"
+  tag: "1.27-alpine"
+  pullPolicy: IfNotPresent
+
+replicas: "1"
+httpPort: 8080
+
+healthChecks:
+  enabled: true
+  livenessProbePath: "/health"
+  readinessProbePath: "/health"
+
+resources: |
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi
+
+upstream:
+  host: ""             # e.g. naipepea.digit.org
+  path: "/turbopass"   # Turbopass's base path on that host
+  # Re-resolved every 5 s (variable proxy_pass), so a moved upstream is
+  # picked up without a restart.
+  resolver: "kube-dns.kube-system.svc.cluster.local"
+
+# Rolls the pod when the nginx conf changes (common sets no deployment timestamp).
+additionalAnnotations: |
+  checksum/config: {{ include "turbopass-proxy.conf" . | sha256sum | quote }}
+
+extraVolumes: |
+  - name: conf
+    configMap:
+      name: turbopass-proxy
+extraVolumeMounts: |
+  - name: conf
+    mountPath: /etc/nginx/conf.d
+    readOnly: true

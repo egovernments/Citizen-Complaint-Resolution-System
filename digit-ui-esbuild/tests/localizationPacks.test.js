@@ -22,7 +22,7 @@ const ONBOARDING_ROOT = path.resolve(
 const MODULES = ["rainmaker-pgr", "rainmaker-common", "rainmaker-hr"];
 const PACK_SETS = [
   { name: "default-data-handler", root: SEED_ROOT, locales: ["fr_FR", "pt_PT"] },
-  { name: "onboarding", root: ONBOARDING_ROOT, locales: ["fr_FR", "pt_BR"] },
+  { name: "onboarding", root: ONBOARDING_ROOT, locales: ["fr_FR", "hi_IN", "pt_BR"] },
 ];
 const SOURCE_DIRS = [
   "products/pgr/src",
@@ -30,6 +30,10 @@ const SOURCE_DIRS = [
   "packages/libraries/src/services/auth",
   "packages/digit-ui-components-v2/src",
   "src",
+  // The dashboard's own pages load rainmaker-dashboard and pass English to
+  // every t(). Its card on the employee home renders before that module
+  // loads, so the card's title comes from these packs.
+  "products/dashboard/DashboardCard.js",
 ];
 
 // Keys from upstream DIGIT screens that CCRS bundles but never routes to
@@ -63,6 +67,7 @@ const RUNTIME_KEYS = [
 ];
 
 function sourceFiles(dir) {
+  if (fs.statSync(dir).isFile()) return [dir];
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) return sourceFiles(full);
@@ -180,7 +185,9 @@ for (const { name, root, locales } of PACK_SETS) {
 
 // A deployment's root and city get pg's packs for every locale in pg's
 // StateInfo (tenant_bootstrap), so the pg seed must carry the onboarding packs
-// those locales ship to new workspaces, word for word.
+// those locales ship to new workspaces, word for word. pg offers English,
+// French and Portuguese; Hindi ships to onboarded workspaces only.
+const PG_LOCALES = ["fr_FR", "pt_BR"];
 const DUMP = path.resolve(UI_ROOT, "../local-setup/db/full-dump.sql");
 const unescapeCopy = (value) =>
   value.replace(/\\(.)/g, (_, c) => ({ n: "\n", t: "\t", r: "\r" })[c] ?? c);
@@ -202,8 +209,7 @@ function pgSeed() {
 // Complaint-type labels belong to each workspace's own hierarchy, not to the
 // platform packs; pg seeds its demo categories itself.
 const WORKSPACE_OWNED = /^COMPLAINT_HIERARCHY\./;
-const onboarding = PACK_SETS.find((set) => set.name === "onboarding");
-for (const locale of onboarding.locales) {
+for (const locale of PG_LOCALES) {
   test(`the pg seed lists ${locale} and carries the onboarding ${locale} packs`, () => {
     const { messages, languages } = pgSeed();
     assert.ok(languages.includes(locale), `pg StateInfo languages are ${languages.join(", ")}`);

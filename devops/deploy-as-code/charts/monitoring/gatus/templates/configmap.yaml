@@ -7,6 +7,8 @@
 # `monitoring`-namespace pod by FQDN (<svc>.<ns>). Health paths are the plain
 # `/<context>/health` form this tier serves (the actuator paths the k3s file
 # uses return 404/400 here). Keep both catalogues maintained independently.
+{{- /* Releases the environment leaves out (disabledReleases) get no check. */}}
+{{- $disabled := .Values.disabledReleases | default list }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -56,6 +58,7 @@ data:
           - type: slack
 {{- end }}
 
+{{- if not (has "redis" $disabled) }}
       - name: Redis
         group: Infrastructure
         url: "tcp://redis.backbone:6379"
@@ -64,7 +67,9 @@ data:
           - "[CONNECTED] == true"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "kafka-kraft" $disabled) }}
       - name: Kafka
         group: Infrastructure
         url: "tcp://kafka-kraft.backbone:9092"
@@ -73,11 +78,13 @@ data:
           - "[CONNECTED] == true"
         alerts:
           - type: slack
+{{- end }}
 
       # TCP, not HTTP: ES on this tier runs with xpack security (TLS + basic
       # auth), so an unauthenticated http probe gets an EOF and https gets 401.
       # A TCP check reports reachability without coupling this dashboard to the
       # elastic credentials -- the same treatment Redis and Kafka get.
+{{- if not (has "elasticsearch" $disabled) }}
       - name: Elasticsearch
         group: Infrastructure
         url: "tcp://elasticsearch-master.backbone:9200"
@@ -86,8 +93,10 @@ data:
           - "[CONNECTED] == true"
         alerts:
           - type: slack
+{{- end }}
 
       # ==================== Core Services ====================
+{{- if not (has "mdms-v2" $disabled) }}
       - name: MDMS Service
         group: Core Services
         url: "http://mdms-v2.egov:8080/mdms-v2/health"
@@ -96,7 +105,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "egov-enc-service" $disabled) }}
       - name: Encryption Service
         group: Core Services
         url: "http://egov-enc-service.egov:8080/egov-enc-service/health"
@@ -105,7 +116,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "egov-idgen" $disabled) }}
       - name: ID Generation Service
         group: Core Services
         url: "http://egov-idgen.egov:8080/egov-idgen/health"
@@ -114,7 +127,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "egov-user" $disabled) }}
       - name: User Service
         group: Core Services
         url: "http://egov-user.egov:8080/user/health"
@@ -123,7 +138,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "egov-workflow-v2" $disabled) }}
       - name: Workflow Service
         group: Core Services
         url: "http://egov-workflow-v2.egov:8080/egov-workflow-v2/health"
@@ -132,7 +149,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "egov-localization" $disabled) }}
       - name: Localization Service
         group: Core Services
         url: "http://egov-localization.egov:8080/localization/health"
@@ -141,7 +160,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "boundary-service" $disabled) }}
       - name: Boundary Service
         group: Core Services
         url: "http://boundary-service.egov:8080/boundary-service/health"
@@ -150,8 +171,11 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if .Values.gatus.checks.boundaryManagement }}
       # No HTTP health endpoint; TCP probe only (matches the k3s catalogue).
+{{- if not (has "egov-bndry-mgmnt" $disabled) }}
       - name: Boundary Management Service
         group: Core Services
         url: "tcp://egov-bndry-mgmnt.egov:8080"
@@ -160,7 +184,10 @@ data:
           - "[CONNECTED] == true"
         alerts:
           - type: slack
+{{- end }}
+{{- end }}
 
+{{- if not (has "egov-accesscontrol" $disabled) }}
       - name: Access Control Service
         group: Core Services
         url: "http://egov-accesscontrol.egov:8080/access/health"
@@ -169,7 +196,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "egov-persister" $disabled) }}
       - name: Persister Service
         group: Core Services
         url: "http://egov-persister.egov:8080/common-persist/health"
@@ -178,7 +207,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "egov-filestore" $disabled) }}
       - name: Filestore Service
         group: Core Services
         url: "http://egov-filestore.egov:8080/filestore/health"
@@ -187,7 +218,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "egov-hrms" $disabled) }}
       - name: HRMS Service
         group: Core Services
         url: "http://egov-hrms.egov:8080/egov-hrms/health"
@@ -196,8 +229,10 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
       # No HTTP health path on this tier; TCP probe only.
+{{- if not (has "egov-url-shortening" $disabled) }}
       - name: URL Shortening Service
         group: Core Services
         url: "tcp://egov-url-shortening.egov:8080"
@@ -206,7 +241,9 @@ data:
           - "[CONNECTED] == true"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "audit-service" $disabled) }}
       - name: Audit Service
         group: Core Services
         url: "http://audit-service.egov:8080/audit-service/health"
@@ -215,7 +252,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "digit-config-service" $disabled) }}
       - name: Config Service
         group: Core Services
         url: "http://digit-config-service.egov:8080/config-service/health"
@@ -224,7 +263,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "digit-user-preferences-service" $disabled) }}
       - name: User Preferences Service
         group: Core Services
         url: "http://digit-user-preferences-service.egov:8080/health"
@@ -233,7 +274,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "egov-user-event" $disabled) }}
       - name: User Event Service
         group: Core Services
         url: "http://egov-user-event.egov:8080/egov-user-event/health"
@@ -242,9 +285,11 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
 {{- if .Values.gatus.groups.otp }}
       # ==================== OTP / Notifications ====================
+{{- if not (has "egov-otp" $disabled) }}
       - name: OTP Service
         group: OTP
         url: "http://egov-otp.egov:8080/otp/health"
@@ -253,7 +298,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "user-otp" $disabled) }}
       - name: User OTP Service
         group: OTP
         url: "http://user-otp.egov:8080/user-otp/health"
@@ -262,11 +309,13 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
 {{- end }}
 
 {{- if .Values.gatus.groups.search }}
       # ==================== Search ====================
+{{- if not (has "egov-indexer" $disabled) }}
       - name: Indexer Service
         group: Search
         url: "http://egov-indexer.egov:8080/egov-indexer/health"
@@ -275,8 +324,11 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if .Values.gatus.checks.inbox }}
       # No HTTP health path exposed on this tier; TCP probe only.
+{{- if not (has "inbox" $disabled) }}
       - name: Inbox Service
         group: Search
         url: "tcp://inbox.egov:8080"
@@ -286,9 +338,12 @@ data:
         alerts:
           - type: slack
 {{- end }}
+{{- end }}
+{{- end }}
 
 {{- if .Values.gatus.groups.mcp }}
       # ==================== MCP ====================
+{{- if not (has "digit-mcp" $disabled) }}
       - name: DIGIT MCP
         group: MCP
         url: "http://digit-mcp-digit-mcp.egov:3000/healthz"
@@ -298,9 +353,11 @@ data:
         alerts:
           - type: slack
 {{- end }}
+{{- end }}
 
 {{- if .Values.gatus.groups.notifications }}
       # ==================== Notifications (Novu) ====================
+{{- if not (has "novu" $disabled) }}
       - name: Novu API
         group: Notifications
         url: "http://novu-api.novu:3000/v1/health-check"
@@ -309,7 +366,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "novu" $disabled) }}
       - name: Novu WS
         group: Notifications
         url: "tcp://novu-ws.novu:3002"
@@ -318,7 +377,9 @@ data:
           - "[CONNECTED] == true"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "novu" $disabled) }}
       - name: Novu Dashboard
         group: Notifications
         url: "tcp://novu-dashboard.novu:4000"
@@ -327,7 +388,9 @@ data:
           - "[CONNECTED] == true"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "novu" $disabled) }}
       - name: Novu Mongo
         group: Notifications
         url: "tcp://novu-mongodb.novu:27017"
@@ -336,7 +399,9 @@ data:
           - "[CONNECTED] == true"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "novu-bridge" $disabled) }}
       - name: Novu Bridge
         group: Notifications
         url: "http://novu-bridge.egov:8080/novu-bridge/health"
@@ -346,8 +411,10 @@ data:
         alerts:
           - type: slack
 {{- end }}
+{{- end }}
 
       # ==================== Application ====================
+{{- if not (has "pgr-services" $disabled) }}
       - name: PGR Services
         group: Application
         url: "http://pgr-services.egov:8080/pgr-services/health"
@@ -356,7 +423,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "digit-ui" $disabled) }}
       - name: DIGIT UI
         group: Application
         url: "http://digit-ui.egov:80/digit-ui/"
@@ -365,7 +434,9 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+{{- end }}
 
+{{- if not (has "configurator" $disabled) }}
       - name: Configurator
         group: Application
         url: "http://configurator.egov:80/"
@@ -374,6 +445,7 @@ data:
           - "[STATUS] < 500"
         alerts:
           - type: slack
+{{- end }}
 
 {{- if .Values.gatus.groups.observability }}
       # ==================== Observability ====================

@@ -1,4 +1,6 @@
 import { normalizeOrganizationPayload, organizationOperationHash, type OrganizationEnsurePayload } from "../control-plane/operation-hash.js";
+import { config } from "../../infrastructure/config.js";
+import { TRIAL_ATTRIBUTES, trialsEnabled } from "../workspace-trial/trial.js";
 import { OnboardingError } from "./errors.js";
 import { withOnboardingLock, type OnboardingFence } from "./locks.js";
 
@@ -238,6 +240,12 @@ export class OnboardingPrimitives {
       if (lifecycle !== input.state || organizationAttribute(org, "lifecycleRestartNo") !== String(input.restartNo)) {
         await fence.assertHeld();
         org.attributes = { ...org.attributes, "digit.lifecycle": [input.state], "digit.lifecycleRestartNo": [String(input.restartNo)] };
+        // Stamp the trial end once, on first activation, in the same write. An
+        // existing end (e.g. moved by an operator) is never recomputed.
+        if (input.state === "ACTIVE" && lifecycle === "PROVISIONING" && trialsEnabled() &&
+            !org.attributes[TRIAL_ATTRIBUTES.endsAt]?.length) {
+          org.attributes[TRIAL_ATTRIBUTES.endsAt] = [new Date(Date.now() + config.workspaceTrialDays * 86_400_000).toISOString()];
+        }
         await this.dependencies.update(org);
         this.dependencies.invalidate();
       }

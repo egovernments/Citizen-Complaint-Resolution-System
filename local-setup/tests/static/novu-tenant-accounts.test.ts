@@ -130,7 +130,7 @@ describe('Ansible', () => {
   test('the switch defaults to on only where self-serve signup and Novu both run', () => {
     const t = task('novu tenant accounts — resolve the switch');
     expect(t).toContain("(enable_novu | default(false) | bool)");
-    expect(t).toContain("novu_tenant_accounts | default(enable_keycloak | default(false)) | bool");
+    expect(t).toContain("novu_tenant_accounts | default(true) | bool");
     expect(playbook.indexOf('- name: "novu tenant accounts — resolve the switch"'))
       .toBeLessThan(playbook.indexOf('- name: Write per-tenant compose .env'));
     expect(envTemplate).toContain('NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED={{ novu_tenant_accounts_on | default(false) | string | lower }}');

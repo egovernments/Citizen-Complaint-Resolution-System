@@ -76,8 +76,7 @@ tenant), and `MapConfigEditor.tsx` (live preview; framing it writes the position
 ## Citizen side
 
 The live tree is **`digit-ui-esbuild/products/pgr/`**. `frontend/micro-ui/…/modules/pgr/`
-and `digit-ui-v2/` also contain map code; check which tree a deployment serves before
-debugging.
+also contains map code; check which tree a deployment serves before debugging.
 
 `components/GeoLocations.js` calls Nominatim `reverse`, `search`, and a postcode lookup, and
 is the best-hardened caller. Three fixes in it are the accumulated scar tissue:
@@ -106,8 +105,11 @@ Basemap themes and every configuration semantic live in
 | `enable_turbopass` | `turbopass-search:local` | `127.0.0.1:13301` | `/turbopass/` | client defaults to `/turbopass` |
 
 It defaults to false in `local-setup/ansible/inventory/host_vars/_example.yml`, which also
-carries the port and `turbopass_overture_data_dir` — the offline Overture DB, built separately
-(see `turbopass/README.md`). The nginx `/turbopass/` block renders byte-identical when the flag
+carries the port and the boundary DB settings. When the flag is on, the deploy builds the offline
+boundary DB (Overture plus the official sets) for `turbopass_countries` into
+`turbopass_overture_data_dir` whenever the DB there doesn't hold them yet, and mounts it; the
+defaults are in `inventory/group_vars/digit.yml` (#2600). `--tags=turbopass` reruns only this
+part. The nginx `/turbopass/` block renders byte-identical when the flag
 is off (the trailing slash strips the prefix). The self-hosted Overpass add-on
 (`enable_overpass`) was retired in #999 once Phase 2 stopped querying Overpass; a deploy
 removes any leftover `bomet-overpass` container. Triage order for "OSM search finds nothing"

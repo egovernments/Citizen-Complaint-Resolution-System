@@ -1,0 +1,154 @@
+# cms-saas.digit.org — EKS cluster `ccrs-prod` (AWS 349271159511, ap-south-1).
+#
+# Layered over env.yaml by the `cms-saas` helmfile environment:
+#
+#   helmfile -f digit-helmfile.yaml -e cms-saas apply
+#
+# Only what is specific to this deployment lives here; every other value is
+# env.yaml's. Secrets are NOT in this file: the `cms-saas` environment reads
+# them from cms-saas-secrets.yaml (git-ignored; scripts/cms-saas-secrets-from-cluster.sh
+# writes it from the running cluster) and from Kubernetes Secrets the charts
+# reference by name (identity-secrets and pgr-onboarding, created by the
+# identity-bootstrap release).
+#
+# The layout follows the Ansible deployment of a `pg`-rooted host: pg is the
+# platform tenant and gets no identity Organization route or default slug; every
+# customer signs up through the Configurator as its own root tenant and
+# Organization (as on bometfeedbackhub.digit.org).
+
+global:
+  domain: cms-saas.digit.org
+
+configmaps:
+  egov-config:
+    data:
+      db-host: ccrs-prod-db.czvokiourya9.ap-south-1.rds.amazonaws.com
+      db-name: ccrsdb
+      db-url: "jdbc:postgresql://ccrs-prod-db.czvokiourya9.ap-south-1.rds.amazonaws.com:5432/ccrsdb"
+      db-otel-url: "jdbc:otel:postgresql://ccrs-prod-db.czvokiourya9.ap-south-1.rds.amazonaws.com:5432/ccrsdb"
+      egov-services-fqdn-name: "https://cms-saas.digit.org/"
+      egov-state-level-tenant-id: "pg"
+      state-level-tenant-id: "pg"
+      host-map: "{'pg':'https://cms-saas.digit.org/'}"
+      # DEV SETTING carried over from the first install (2026-08-26) so this file
+      # describes what runs. Not a production setting: remove once confirmed unused.
+      dev-enabled: "true"
+
+egov-user:
+  egov-state-level-tenant-id: "pg"
+  # DEV SETTING carried over from the first install: every citizen can sign in
+  # through egov-user's legacy OTP login with the fixed code below. Remove for a
+  # real launch; digit-ui signs citizens in through identity-bff now.
+  citizen-otp-fixed-enabled: "true"
+  citizen-otp-fixed: "123456"
+
+egov-enc-service:
+  state-level-tenant-id: "pg"
+  egov-state-level-tenant-id: "pg"
+
+egov-hrms:
+  # DEV SETTING carried over from the first install.
+  hrms-dev-mode: "true"
+
+egov-filestore:
+  fixed-bucketname: ccrs-prod-filestore-bucket
+
+ingress-nginx:
+  controller:
+    addHeaders:
+      Access-Control-Allow-Origin: "https://cms-saas.digit.org"
+
+digit-ui:
+  globalConfigs:
+    stateTenantId: "pg"
+    mapTenant: "pg"
+
+# Same-origin /turbopass, proxied to the shared Turbopass on naipepea.digit.org
+# (official boundary sets for 12 countries) with this site's cookies stripped:
+# the SPA's default TURBOPASS_URL, so the Geography step's Fetch and
+# Preconfigured options work without running Turbopass on this cluster.
+turbopass-proxy:
+  upstream:
+    host: naipepea.digit.org
+
+# Not run here (2026-10-27). Before switching off, each was checked on the
+# cluster: no request in 30 days (Loki) and no gateway or ingress traffic; the
+# Kafka-driven ones never received a message (consumer offsets). egov-indexer
+# did index every PGR event, but only into Elasticsearch, which nothing reads
+# with inbox off, so the search stack (indexer, Elasticsearch, Kibana) goes
+# together, as Ansible's enable_search_stack: false. The auxiliary releases
+# and otel-collector were never installed here. Remove a name to bring it
+# back; its status-page check (charts/monitoring/gatus) follows this list.
+disabledReleases:
+  - egov-otp                # citizen phone OTP is off (identity-bff)
+  - user-otp                # legacy citizen OTP login
+  - egov-user-event
+  - egov-notification-mail  # mail goes through Keycloak SMTP and Novu
+  - boundary-bulk-bff
+  - egov-indexer
+  - elasticsearch
+  - elasticsearch-data
+  - kibana
+  - kafka-connect
+  - pgadmin
+  - playground
+  - otel-collector
+
+monitoring:
+  metrics: true      # kube-prometheus-stack
+  logs: true         # loki-stack
+  dashboards: true   # grafana
+  gatus: true        # status page at /status
+
+identity:
+  enabled: true
+  keycloak:
+    # One immutable build for Keycloak and the BFF (helm-identity.md); the
+    # charts' own default is the rolling nightly-develop. This file is the last
+    # values layer, so THIS is the tag cms-saas runs. master-b4adf0d's
+    # configure-keycloak.sh aborts in the realm-configure hook (readonly
+    # KCADM_SERVER; fixed in keycloak/configure-keycloak.sh), so the keycloak
+    # release stays `failed` and a full apply skips identity-bff. Once an
+    # identity-keycloak build with that fix is published, set it here and in
+    # identity-bff below, then `helmfile -e cms-saas -l name=keycloak sync`.
+    image:
+      tag: "master-b4adf0d"
+    configure:
+      # Founders sign up with an emailed link (Configurator /signup).
+      magicLinkEnabled: true
+      # Google sign-in and signup (OAuth client in GCP project digit-egov; its
+      # redirect URI is <publicUrl>/auth/realms/digit/broker/google/endpoint).
+      # Secret: identity-secrets' keycloak-google-client-secret.
+      googleClientId: "32016611022-0mtps6ejkun3iscvmgquqfotr0q3qpk8.apps.googleusercontent.com"
+      smtp:
+        host: "smtp.gmail.com"
+        from: "digitcms@egovernments.org"
+        fromDisplayName: "DIGIT CMS"
+        port: "587"
+        starttls: true
+        auth: true
+        user: "digitcms@egovernments.org"   # password: identity-secrets' keycloak-smtp-password
+  identity-bff:
+    image:
+      tag: "master-b4adf0d"
+    config:
+      # Citizen phone-OTP sign-in off until an HTTP SMS sender exists: "log"
+      # would write every code to identity-bff's log (and so to Loki), letting
+      # anyone who reads it sign in as any citizen.
+      IDENTITY_OTP_SENDER: ""
+      # ACCOUNT_ADMIN employee on pg, created by identity-bootstrap.
+      DIGIT_ADMIN_USERNAME: "IDENTITY_ADMIN"
+  # Creates identity-secrets, pgr-onboarding, Keycloak's database and the two
+  # DIGIT employees (DIGIT_ADMIN_USERNAME above, pgr-services' provisioner below).
+  bootstrap:
+    enabled: true
+
+pgr-services:
+  # Self-service onboarding: every signup becomes its own root tenant and
+  # identity Organization; pg stays reserved.
+  mdmsHost: "http://egov-mdms-service.egov:8080/"
+  onboarding:
+    runnerEnabled: true
+    identityBffUrl: "http://identity-bff.egov:3000"
+    provisionerUsername: "PGR_PROVISIONER"
+    provisionerTenantId: "pg"

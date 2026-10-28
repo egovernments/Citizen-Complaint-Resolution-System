@@ -428,11 +428,11 @@ Staff who receive, assign and resolve complaints. Sheet name: `Employee`.
 
 | Column | Required | What it means | Example |
 |---|---|---|---|
-| `employeeCode` | yes | Staff id. **This is what they log in with** — see the note below | `EMP001` |
+| `employeeCode` | yes | Staff id. **Not** the sign-in name: employees log in with their email, see the note below | `EMP001` |
 | `name` | yes | Full name | `Amina Otieno` |
 | `userName` | no | Derived as `firstname.lastname` when blank | `amina.otieno` |
 | `mobileNumber` | yes | Must satisfy your deployment's phone rule (`core_mobile_configs.mobileNumberRegex`) | `712345001` |
-| `emailId` | no | | `amina@example.com` |
+| `emailId` | yes, to sign in | The employee's sign-in name | `amina@example.com` |
 | `gender` | no | `MALE` / `FEMALE` / … | `FEMALE` |
 | `dob` | **yes** | Date of birth, `YYYY-MM-DD`. Must make them at least 18 | `1988-04-12` |
 | `department` | yes | `code` from the Department sheet. **Comma-separated** for several — the first is current, the rest historical, and they can be assigned complaints in any of them | `WATER,ROADS` |
@@ -456,12 +456,18 @@ Staff who receive, assign and resolve complaints. Sheet name: `Employee`.
 hidden, so a `GRO`-only employee can process complaints but cannot raise one.
 Give at least one person `EMPLOYEE,CSR` if you want to test the whole flow.
 
-> **How they log in:** username = the **employee code** (`EMP001`), password =
-> `eGov@123` by default. HRMS overwrites whatever `userName` you supplied with
-> the employee code when it creates the record, and that is the value that
-> actually authenticates. Tell staff to change it on first login. The default
-> comes from `bootstrap_secrets.egov_hrms_default_password` in the deployment
-> config, and can only be set before the first deploy.
+> **How they log in:** with their **email address** (`emailId`), not the
+> employee code. Keycloak knows an employee only by email, so the code
+> (`EMP001`) is rejected as an unknown user. Employees invited from the
+> Configurator set their own password from the invitation email. HRMS
+> still overwrites whatever `userName` you supplied with the employee code, but
+> that is the HRMS record's identifier, not the sign-in name. The HRMS account
+> itself gets a random password that is not shown in the Configurator; with
+> `hrms_dev_mode` off, HRMS still sends it by SMS where SMS is configured, as it
+> always has. identity-bff replaces it at their first Keycloak sign-in. HRMS's default password (`eGov@123` unless you
+> changed `bootstrap_secrets.egov_hrms_default_password` before the first
+> deploy) applies only in `hrms_dev_mode`, to employees whose create request
+> carries no password, such as scripts or dataloaders calling HRMS directly.
 
 <details>
 <summary><b>Under the hood — dates and phone numbers</b></summary>
@@ -934,9 +940,8 @@ reachable.
 | **MCP server + REST shim** | `enable_mcp` (+ `nginx_features.mcp` for `/mcp` + `/v1/*`) | Automation/REST onboarding API, headless `city_setup_from_xlsx` | `build_mcp: true` builds from in-tree source; default is a pinned public image |
 | **Search stack (employee inbox)** | `enable_search_stack` | Elasticsearch + egov-indexer + inbox-v2 | Heavy (~3 GB RAM extra); without it the employee inbox 503s |
 | **Novu notification stack** | `enable_novu` (+ `build_novu_dashboard`) | Notification infra only (no config) | `enable-notifications.sh` above is the full turn-key path |
-| **Organization-aware identity** (required) | `enable_keycloak` + `nginx_features.keycloak` | Keycloak 26.7.3 at `/auth/` + Identity BFF at `/identity/v1`; password, magic link, Google/GitHub; Organization tenant choice | Required: it is the only sign-in path and the deploy refuses `enable_keycloak: false`. See `docs/setup/deployment/identity-bff.md`; do not enable the retired `/kc` adapter |
-| **Citizen UI v2** | `enable_digit_ui_v2` + `nginx_features.digit_ui_v2` | Vite + React 19 citizen SPA at `/citizen/` | Both flags, or the bundle sits on disk unreachable |
-| **Turbopass (boundary search)** | `enable_turbopass` (+ `turbopass_overture_data_dir`) | Phase 2 boundary search + fetch from the offline Overture DB; optional Geoapify | Build the Overture DB first — see `turbopass/README.md` |
+| **Organization-aware identity** (always on) | none (`nginx_features.keycloak` runs its post-deploy checks) | Keycloak 26.7.3 at `/auth/` + Identity BFF at `/identity/v1`; password, magic link, Google/GitHub; Organization tenant choice | Always deployed: it is the only sign-in path, and the deploy refuses a leftover `enable_keycloak: false`. See `docs/setup/deployment/identity-bff.md`; do not enable the retired `/kc` adapter |
+| **Turbopass (boundary search)** | `enable_turbopass` (+ `turbopass_countries`) | Phase 2 boundary search + fetch and preconfigured boundaries from the offline boundary DB; optional Geoapify | The deploy builds the DB for `turbopass_countries` on the first run (minutes per country, outbound HTTPS) — see `turbopass/README.md` |
 | **Real OTP (production SMS)** | `enable_otp_services` | Real OTP delivery instead of the console mock | ALSO remove the Kong mock plugin + set a real `SMS_PROVIDER_CLASS` — see `kong/kong.yml` notes |
 | **Integration-test dashboards** | `enable_integration_tests` + `nginx_features.integration_tests` (+ `_runner` pair for in-dashboard runs) | Published Playwright dashboards at `/tests/` | Runner is CPU/RAM heavy — shares the box with the live stack |
 | **Brand assets** | `nginx_features.brand_assets` | Local logo/banner mirror at `/brand/` | |

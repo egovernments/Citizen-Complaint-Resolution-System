@@ -9,10 +9,23 @@ every box, fresh or existing.
 
 ## Applying on an existing box
 
-`docker-compose.egov-digit.yaml` pulls a **pre-built** db-migrations image
-(`…/tilt-demo-db-migrations:latest`), so a new file here only reaches a box once
-that image is rebuilt and repushed. Until then, apply it by hand — the SQL is
-idempotent, so running it directly is equivalent to letting Flyway run it:
+`docker-compose.migrations.yml` **builds** the db-migrations image from
+`./docker/db-migrations`; it no longer pulls `…/tilt-demo-db-migrations:latest`.
+The deploy syncs that build context, but `up -d` reuses an image the box already
+built, so a new file here only reaches an existing box once the image is rebuilt,
+as in [migration guide §4](../../../../../docs/releases/2.20/migration-guide-v2.12-to-v2.20-beta.md#4-deploy):
+
+```sh
+cd /opt/digit
+COMPOSE_PROFILES=<profiles> docker compose <-f files> build db-migrations
+COMPOSE_PROFILES=<profiles> docker compose <-f files> up --no-deps db-migrations
+```
+
+Copy the profiles and `-f` files from the deploy log's `Active compose profiles for
+<tenant>:` and `compose files for <tenant>:` lines.
+
+Or apply one file by hand — the SQL is idempotent, so running it directly is
+equivalent to letting Flyway run it:
 
 ```sh
 # from the box, against the egov DB (adjust container/creds to the host)
@@ -113,3 +126,29 @@ stood before the flag, and this migration brings existing schemas level with
 
 Guarded and idempotent: a definition that already has `VOICE_INPUT` is skipped,
 so a fresh box and a re-run are no-ops.
+
+## V20261022000000__workspace_route_grants
+
+Grants `ACCOUNT_ADMIN` the Configurator's workspace routes
+(`/pgr-services/v2/onboarding/workspaces/_search`, `_update`, `_rename`) on every
+tenant that defines the `ACCOUNT_ADMIN` role. A root seeded before v2.20 has no
+action or role-action for them, so the Configurator gets
+`AccessDeniedException` there. New roots already get them: `full-dump.sql` for
+`pg`, the platform baseline for signup workspaces, and the MCP root bootstrap
+when MCP is on. On an existing Compose box the deploy rebuilds
+`db-history-normalize` but reuses the `db-migrations` image it built before, so
+this reaches the rest only once that image is rebuilt (see
+[migration guide §4](../../../../../docs/releases/2.20/migration-guide-v2.12-to-v2.20-beta.md#4-deploy)).
+
+The rows are `platform-baseline-v1.json`'s (ids 900000, 900001, 901000). The
+guards follow the MCP access floor:
+
+- An action is added only when the root has no action with that url and none
+  with that id. If an unrelated action already holds the id, that route is
+  left for a hand fix rather than granting `ACCOUNT_ADMIN` on the wrong endpoint.
+- `ACCOUNT_ADMIN` is granted the root's action for each workspace url, whatever
+  its id, so an action added by hand with a fresh id gets its grant too.
+
+A root that already holds the rows, and a re-run, are no-ops. `egov-accesscontrol`
+caches role-actions for 15 minutes (`cache.expiry.role.action.minutes`), so the
+grant takes effect after that, or after a restart.

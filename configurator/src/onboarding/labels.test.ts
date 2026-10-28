@@ -59,6 +59,16 @@ function staticCalls(): Map<string, string> {
   return found;
 }
 
+/**
+ * Keys the code no longer uses, with the text they were seeded with. Workspaces keep what they were
+ * seeded with and the upgrader never rewrites a key, so the pack keeps these unchanged and the
+ * reworded text lives under a new key.
+ */
+const RETIRED: Record<string, string> = {
+  'employees.signs_in_as': 'They sign in as %{username}.',
+  'bulk_employees.got_account': 'User account (username: employee code)',
+};
+
 /** The keys built at runtime, from the lists they come from. */
 function dynamicKeys(): Map<string, string> {
   const keys = new Map<string, string>();
@@ -84,6 +94,7 @@ function dynamicKeys(): Map<string, string> {
   for (const [level, english] of Object.entries(CONFIDENCE_HINT)) keys.set(`geography.confidence_hint.${level}`, english);
   for (const [status, english] of Object.entries(STATUS_LABEL)) keys.set(`geography.level_status.${status}`, english);
   keys.set('geography.turbopass_unavailable', TURBOPASS_UNAVAILABLE_MESSAGE);
+  for (const [key, english] of Object.entries(RETIRED)) keys.set(key, english);
   return keys;
 }
 
@@ -125,6 +136,33 @@ describe('onboarding labels', () => {
     expect(Object.fromEntries(list.filter(isOwn).map((m) => [m.code, m.message]))).toEqual(Object.fromEntries(own));
     const codes = english(list);
     expect([...shared.keys()].filter((code) => !codes.has(code))).toEqual([]);
+  });
+
+  // Onboarding offers English, French, Hindi and Portuguese, so each translated copy carries every key in its
+  // locale: the workspace pack all of en_IN's configurator-ui, the ansible bundle (the signup screen, before
+  // there is a workspace) every onboarding string. Placeholders and plural forms stay as in English.
+  const TRANSLATED = ['fr_FR', 'hi_IN', 'pt_BR'];
+  const tokens = (text: string) => [...text.matchAll(/%\{[^}]*\}|\|\|\|\||<\/?[a-z][^>]*>/gi)].map(([token]) => token).sort();
+  it.each(TRANSLATED)('%s carries every onboarding string, with the English placeholders', (locale) => {
+    const inLocale = (file: string, wanted: string) =>
+      new Map(read(file).filter((m) => m.locale === wanted).map((m) => [m.code, m.message]));
+    // The workspace pack keeps one file per locale; the bundle holds every locale in one.
+    const packFile = path.join(path.dirname(PACK), '..', locale, path.basename(PACK));
+    const wanted: [string, string, string[]][] = [
+      [PACK, packFile, [...inLocale(PACK, 'en_IN').keys()]],
+      [ANSIBLE, ANSIBLE, [...own.keys(), ...shared.keys()]],
+    ];
+    const problems = wanted.flatMap(([englishFile, file, codes]) => {
+      const english = inLocale(englishFile, 'en_IN');
+      const messages = inLocale(file, locale);
+      return codes.flatMap((code) => {
+        const message = messages.get(code);
+        const where = `${path.relative(REPO, file)} ${code}`;
+        if (!message?.trim()) return [`${where}: missing`];
+        return tokens(message).join() === tokens(english.get(code) ?? '').join() ? [] : [`${where}: placeholders differ`];
+      });
+    });
+    expect(problems).toEqual([]);
   });
 
   it('found the strings', () => {

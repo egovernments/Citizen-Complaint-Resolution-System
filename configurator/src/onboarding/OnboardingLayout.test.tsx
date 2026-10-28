@@ -6,8 +6,8 @@ import { ONBOARDING_STEPS } from './steps';
 import { DIGIT_DOCS, DOCS_HOME, ONBOARDING_GUIDE, docsFor } from './docs/docsLinks';
 import { englishT } from './i18n';
 
-const trackEvent = vi.fn();
-vi.mock('@/lib/telemetry', () => ({ trackEvent: (...args: unknown[]) => trackEvent(...args) }));
+const track = vi.fn();
+vi.mock('@/lib/analytics', () => ({ track: (...args: unknown[]) => track(...args) }));
 
 const app = { state: { tenant: 'acme', user: { name: 'Admin' }, completedPhases: [] as number[] }, logout: vi.fn(), toggleHelp: vi.fn() };
 vi.mock('@/App', () => ({ useApp: () => app }));
@@ -48,7 +48,7 @@ function windowIsWide(wide: boolean) {
 const rail = () => screen.getByRole('complementary', { name: 'Documentation' });
 
 beforeEach(() => {
-  trackEvent.mockClear();
+  track.mockClear();
   window.localStorage.clear();
   app.state.completedPhases = [];
   windowIsWide(false);
@@ -98,7 +98,7 @@ describe('the Documentation rail', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     expect(within(rail()).getByRole('link', { name: 'Open DIGIT Docs' })).toHaveAttribute('href', DIGIT_DOCS);
     fireEvent.click(link);
-    expect(trackEvent).toHaveBeenCalledWith('docs_click', { from: 'onboarding_docs', section: 'employees', link: 'employees' });
+    expect(track).toHaveBeenCalledWith('app:docs_open', { from: 'onboarding_docs', section: 'employees', link: 'employees' });
   });
 
   it('remembers being closed', () => {
@@ -166,8 +166,8 @@ describe('the setup card', () => {
   it('opens the next step', () => {
     app.state.completedPhases = [1];
     layoutAt('/onboarding/home');
-    expect(trackEvent).not.toHaveBeenCalledWith('phase_start', expect.objectContaining({ step: 'geography' }));
+    expect(track).not.toHaveBeenCalledWith('onboarding:step_view', { step: 'geography' });
     fireEvent.click(within(card(/^Next step:/)).getByRole('button', { name: 'Next step: Geography' }));
-    expect(trackEvent).toHaveBeenCalledWith('phase_start', expect.objectContaining({ step: 'geography' }));
+    expect(track).toHaveBeenCalledWith('onboarding:step_view', { step: 'geography' });
   });
 });

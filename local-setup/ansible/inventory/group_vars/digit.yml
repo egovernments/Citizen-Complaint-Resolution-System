@@ -58,6 +58,36 @@ digit_ui_mode: static
 # Off by default; tenants that use the inbox opt in via host_vars.
 enable_search_stack: false
 
+# Turbopass's offline boundary DB (enable_turbopass, set in host_vars). It backs
+# the configurator's "Fetch boundaries" and "Preconfigured boundaries", and the
+# deploy builds it for these countries (ISO 3166-1 alpha-2) whenever the DB in
+# turbopass_overture_data_dir doesn't hold all of them yet (#2600). The default
+# is every country the configurator's signup offers (SignupPage.tsx COUNTRIES),
+# so each self-serve workspace finds its own; a single-country box can narrow it.
+# The build needs outbound HTTPS to Docker Hub (python:3.11-slim) and PyPI for
+# the bootstrap image, extensions.duckdb.org (DuckDB's spatial, httpfs and
+# sqlite extensions, installed on every run), and, for the data, Overture's S3
+# bucket (overturemaps-us-west-2), HDX (data.humdata.org, whose downloads
+# redirect to s3.us-east-1.amazonaws.com) and geoBoundaries
+# (www.geoboundaries.org, whose files come from github.com, which redirects to
+# media.githubusercontent.com). Nothing it
+# downloads is pinned: a build takes the newest Overture release (unless
+# turbopass_overture_release names one) and whatever sets HDX and geoBoundaries
+# serve that day, so two builds can differ.
+# Measured 2026-10: these four take ~11 min, peak ~3.6 GiB and make a 320 MB DB
+# (India is most of all three); KE alone takes ~2.5 min and makes 29 MB.
+# [] = never build here. A box without that outbound access can serve a DB
+# built elsewhere: copy it into turbopass_overture_data_dir, and a DB that
+# already holds these countries is never rebuilt.
+# Rebuild a DB that already holds them with
+# -e '{"turbopass_rebuild_boundary_db": true}'.
+turbopass_countries: [KE, IN, ET, MZ]
+turbopass_overture_data_dir: "{{ digit_dir }}/turbopass-data"
+turbopass_rebuild_boundary_db: false
+# Memory cap for the build container, so it can't starve the stack on the box.
+# DuckDB (the Overture download step) sizes itself to it.
+turbopass_bootstrap_memory: 4g
+
 # Bring up self-hosted Matomo + its MariaDB + the report archiver
 # (~1 GB RAM; #1254). Off by default — analytics is opt-in, and on a
 # 16 GB box with no swap this is a real allocation.
@@ -154,6 +184,19 @@ opensre_max_investigations_per_day: 12
 # be able to say so.
 observability_level: traces
 
+# Containers whose bad health "validate — no container is restarting / unhealthy"
+# reports without failing the deploy. Only the observability tier: none of them
+# serves a request, and failing the gate skips everything after it.
+validate_health_warn_only:
+  - digit-tempo
+  - digit-loki
+  - digit-promtail
+  - digit-prometheus
+  - digit-grafana
+  - digit-otel-collector
+  - digit-node-exporter
+  - digit-postgres-exporter
+
 # SPA configuration — stable cross-tenant defaults.
 context_path: digit-ui
 gmaps_api_key: ""
@@ -238,6 +281,8 @@ citizen_banner_enabled: false
 nginx_features:
   brand_assets: false       # /brand/ alias — requires /var/www/brand on host
   configurator: false       # /configurator + /configurator/assets
+  root_to_configurator: true  # / (the bare domain) redirects to /configurator/ when
+                            # `configurator` is on; root_to_digit_ui takes precedence
   configurator_caching: false  # /configurator/assets/ long-cache headers
   status: true              # /status/ Gatus board (sub_filter rewrites). Default
                             # on since the board is never served unauthenticated:
@@ -409,7 +454,7 @@ digit_ui_esbuild_branch: main
 # instead, which then needs digit_ui_esbuild_repo pointed at a source tree.
 digit_ui_bundle_image: >-
   {{ (ccrs_tagged_images | default({})).get('digit-ui-esbuild')
-     or 'egovio/digit-ui-esbuild:2.12.1-7a38661' }}
+     or 'egovio/digit-ui-esbuild:master-b4adf0d' }}
 
 # ──────────────────────────────────────────────────────────────────────
 # One-tag deploys (#1729)
@@ -504,16 +549,16 @@ gatus_slack_webhook_url: ""
 # PGR tenant onboarding (#2269). The runner provisions self-service signups
 # and needs a platform provisioner: an EMPLOYEE at a ROOT tenant holding
 # MDMS_ADMIN, ACCOUNT_ADMIN, LOC_ADMIN and HRMS_ADMIN there
-# (OnboardingProvisionerClient). Signups only arrive through the identity
-# BFF, so the runner is rendered on only with enable_keycloak. When it is
-# on, playbook-deploy.yml ensures this account exists (create-if-absent,
-# then a token mint that checks its roles) and keeps its password in OpenBao
-# as `pgr_digit_provisioner_password` (generated when absent).
+# (OnboardingProvisionerClient). Signups arrive through the identity BFF.
+# When the runner is on, playbook-deploy.yml ensures this account exists
+# (create-if-absent, then a token mint that checks its roles) and keeps its
+# password in OpenBao as `pgr_digit_provisioner_password` (generated when
+# absent).
 #
 # Empty host_vars values fall back, so an inventory copied from an older
 # _example.yml (which shipped "") still gets a working account; a box that
 # already has the legacy identity_digit_provisioner_* account keeps it.
-pgr_onboarding_runner_effective: "{{ (pgr_onboarding_runner_enabled | default(true) | bool) and (enable_keycloak | default(false) | bool) }}"
+pgr_onboarding_runner_effective: "{{ pgr_onboarding_runner_enabled | default(true) | bool }}"
 pgr_provisioner_username: "{{ pgr_digit_provisioner_username | default('', true) or identity_digit_provisioner_username | default('', true) or 'PGR_PROVISIONER' }}"
 pgr_provisioner_tenant_id: "{{ pgr_digit_provisioner_tenant_id | default('', true) or identity_digit_provisioner_tenant_id | default('', true) or state_root | default('', true) or 'pg' }}"
 

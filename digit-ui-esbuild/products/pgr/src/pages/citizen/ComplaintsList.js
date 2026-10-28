@@ -165,7 +165,7 @@ export const ComplaintsList = () => {
 
   const goCreate = () => history.push(`/${window.contextPath}/citizen/pgr/create-complaint`);
   const detailsUrl = (id) => `${path}/${id}`;
-  const onOpen = (id, from) => trackEvent("pgr.my-complaints.open", { category: "pgr", label: from, value: searching ? 1 : 0 });
+  const onOpen = (id, from) => trackEvent("complaint:my_complaints_item_open", { label: from, value: searching ? 1 : 0 });
   const open = (id, from) => {
     onOpen(id, from);
     history.push(detailsUrl(id));
@@ -241,7 +241,7 @@ export const ComplaintsList = () => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onBlur={() => {
-                  if (searching) trackEvent("pgr.my-complaints.search", { category: "pgr", value: matches.length });
+                  if (searching) trackEvent("complaint:my_complaints_search", { value: matches.length });
                 }}
                 placeholder={tr("CS_MY_COMPLAINTS_SEARCH", "Search for a complaint")}
                 aria-label={tr("CS_MY_COMPLAINTS_SEARCH", "Search for a complaint")}

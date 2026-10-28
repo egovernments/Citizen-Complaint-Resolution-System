@@ -26,6 +26,7 @@ vi.mock('@/api/onboarding', async () => {
     checkIdentifier: vi.fn(),
     submitSignup: vi.fn(),
     searchOperation: vi.fn(),
+    retryOperation: vi.fn(),
     selectContext: vi.fn(),
     startSignIn: vi.fn(),
     requestMagicLinkSignup: vi.fn(),
@@ -34,6 +35,9 @@ vi.mock('@/api/onboarding', async () => {
 });
 
 import * as api from '@/api/onboarding';
+
+const track = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/analytics', async () => ({ ...(await vi.importActual<typeof import('@/lib/analytics')>('@/lib/analytics')), track }));
 
 const signedIn = { authenticated: true, user: { id: 'u', email: 'f@x.test', name: 'F', preferredUsername: 'f' } };
 
@@ -92,6 +96,18 @@ describe('sign-in gate', () => {
     const github = await screen.findByRole('button', { name: /continue with github/i });
     const mark = github.querySelector('svg[data-icon="inline-start"][data-provider="github"]');
     expect(mark?.querySelector('path')).toHaveAttribute('fill', '#181717');
+  });
+
+  it('labels a Keycloak provider "Sign up with" and shows the Google mark', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'google', label: 'Google', type: 'idp', idpHint: 'google' }],
+    });
+
+    render(<SignupPage />);
+
+    const google = await screen.findByRole('button', { name: /^sign up with google$/i });
+    expect(google.querySelector('svg[data-icon="inline-start"][data-provider="google"]')).not.toBeNull();
   });
 
   it('collects the signup identity in Configurator and shows check-email without opening Keycloak', async () => {
@@ -249,8 +265,7 @@ describe('wizard', () => {
     expect(key).toBeTruthy();
   });
 
-  it('leaves terms out of the payload until the operator agrees', async () => {
-    // A blank value is rejected where an absent field is accepted.
+  it('records the terms version without a checkbox: continuing past sign-in is the agreement', async () => {
     vi.mocked(api.createSignup).mockResolvedValue({ id: 'signup-1', status: 'DRAFT' } as never);
     render(<SignupPage />);
     await completeAccountStep();
@@ -260,7 +275,7 @@ describe('wizard', () => {
 
     await waitFor(() => expect(api.createSignup).toHaveBeenCalledTimes(1));
     const [draft] = vi.mocked(api.createSignup).mock.calls[0];
-    expect('acceptedTermsVersion' in draft).toBe(false);
+    expect(draft.acceptedTermsVersion).toBe('2026-09');
   });
 
   it('resumes an existing draft rather than starting a second', async () => {
@@ -314,6 +329,18 @@ describe('wizard', () => {
 
     await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County Government'));
     expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET');
+  });
+
+  it('offers English, French, Hindi and Portuguese, and drops a resumed language no longer offered', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue({ ...resumedDraft('KE-BOMET'), languages: ['en', 'sw', 'fr'] } as never);
+    render(<SignupPage />);
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    await screen.findByLabelText(/base country/i);
+
+    const pills = ['English', 'French', 'Hindi', 'Portuguese'].map((name) => screen.getByRole('button', { name }));
+    expect(pills.map((pill) => pill.getAttribute('aria-pressed'))).toEqual(['true', 'true', 'false', 'false']);
+    expect(screen.queryByRole('button', { name: /swahili/i })).toBeNull();
   });
 });
 
@@ -415,8 +442,7 @@ describe('provisioning', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
     await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
-    fireEvent.click(await screen.findByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /create account/i }));
   }
 
   const spinning = (label: RegExp) => !!screen.getByText(label).closest('li')?.querySelector('.animate-spin');
@@ -424,6 +450,8 @@ describe('provisioning', () => {
   it('shows the worker steps and offers a retry only when the failure is retryable', async () => {
     await submitWith({
       status: 'RETRYABLE_FAILED',
+      // PGR's last automatic attempt: nothing more will happen unless the founder retries.
+      attempt: 12,
       currentStep: 'ORGANIZATION',
       completedSteps: ['TENANT_FOUNDATION'],
       errorCode: 'ONBOARDING_VALIDATION_ERROR',
@@ -435,6 +463,7 @@ describe('provisioning', () => {
     expect(screen.getByText('Reference: ONBOARDING_VALIDATION_ERROR')).toBeInTheDocument();
     expect(screen.queryByText(/could not create the organization/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+    expect(track).toHaveBeenCalledWith('signup:provision_fail', { error_code: 'ONBOARDING_VALIDATION_ERROR', retryable: true });
   });
 
   it('hands a rejected founder number back to be corrected, rather than closing the signup (#2353)', async () => {
@@ -453,6 +482,27 @@ describe('provisioning', () => {
     fireEvent.click(change);
     expect(await screen.findByLabelText(/mobile number/i)).toHaveValue('+254700000199');
     expect(screen.getByRole('alert')).toHaveTextContent(/couldn’t be created with it/);
+  });
+
+  it('lets a founder whose setup failed sign out and start again with another email', async () => {
+    await submitWith({
+      status: 'TERMINAL_FAILED',
+      currentStep: 'FOUNDER_HRMS',
+      completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE'],
+      errorCode: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+      errorMessage: 'TENANT_ADMIN_ACCOUNT_REJECTED',
+    });
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    vi.mocked(api.logout).mockResolvedValue(undefined);
+
+    // The page re-renders while it polls the run, so wait for the settled screen.
+    await waitFor(() => expect(screen.getByText(/signed in as f@x\.test/i)).toBeInTheDocument());
+    fireEvent.click(await screen.findByRole('button', { name: /sign out and use a different email/i }));
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/configurator/signup'));
+    expect(api.logout).toHaveBeenCalledWith('current');
+    vi.unstubAllGlobals();
   });
 
   it('keeps the account code of a reopened draft when its name changes (#2353)', async () => {
@@ -910,6 +960,37 @@ describe('workspace readiness gate', () => {
   });
 });
 
+describe('expired trial workspace', () => {
+  // A locked founder lands here from a magic link, which returns to /configurator/signup.
+  const notice = { title: 'Your trial has ended', message: 'Talk to us to continue.' };
+  const locked = { organizationAlias: 'demo', tenantId: 'ke.demo', name: 'Demo Workspace', roles: [], code: 'WORKSPACE_TRIAL_EXPIRED' as const };
+  const open = { organizationAlias: 'kisumu-county', tenantId: 'kisumucounty', name: 'Kisumu County', roles: ['MDMS_ADMIN'] };
+
+  it('opens the dialog on load when every workspace is locked, and starts no signup', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [locked], selectionRequired: false, onboardingRequired: false, notice });
+    render(<SignupPage />);
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText(notice.title)).toBeInTheDocument();
+    expect(screen.getByText(notice.message)).toBeInTheDocument();
+    expect(api.selectContext).not.toHaveBeenCalled();
+    expect(api.findSignup).not.toHaveBeenCalled();
+  });
+
+  it('opens the dialog when _select answers 403 WORKSPACE_TRIAL_EXPIRED', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [open], selectionRequired: false, onboardingRequired: false });
+    vi.mocked(api.selectContext).mockRejectedValue(new api.OnboardingError(403, 'WORKSPACE_TRIAL_EXPIRED', 'Trial ended', { notice }));
+    render(<SignupPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /kisumu county/i }));
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText(notice.title)).toBeInTheDocument();
+    expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument();
+  });
+});
+
 describe('resuming a run that was already going', () => {
   const resumable = (status: 'SUBMITTED' | 'PROVISIONING') => ({
     id: 's1',
@@ -982,6 +1063,7 @@ describe('resuming a run that was already going', () => {
     vi.mocked(api.submitSignup).mockResolvedValue({
       ...runningOperation,
       status: 'RETRYABLE_FAILED',
+      attempt: 12,
       errorCode: 'DIGIT_UNAVAILABLE',
       errorMessage: 'DIGIT is not answering',
     } as never);
@@ -1106,6 +1188,26 @@ describe('a success that is not yet published', () => {
     expect(screen.getByRole('button', { name: /nairobi city/i })).toBeInTheDocument();
   });
 
+  it('opens the trial dialog, not the workspace, when the only published workspace is locked', async () => {
+    vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
+    const locked = { ...kisumu, code: 'WORKSPACE_TRIAL_EXPIRED' as const };
+
+    render(<SignupPage />);
+    await screen.findByText(/finishing setup/i);
+    // A fresh notice per read, as the network gives.
+    vi.mocked(api.tenants).mockImplementation(async () => ({
+      tenants: [locked], selectionRequired: false, onboardingRequired: false,
+      notice: { title: 'Your trial has ended', message: 'Talk to us to continue.' },
+    }));
+    await tick(3000);
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    await tick(3000);
+    // Bootstrap's read and the one after publication, and no more.
+    expect(api.tenants).toHaveBeenCalledTimes(2);
+    expect(api.selectContext).not.toHaveBeenCalled();
+  });
+
   it('falls back to the workspace picker if automatic entry fails for a single workspace', async () => {
     vi.mocked(findOperation).mockResolvedValue({ ...succeeded, lifecyclePublishedAt: 1 } as never);
     vi.mocked(api.selectContext).mockRejectedValue(new Error('Network failure'));
@@ -1220,6 +1322,109 @@ describe('polling while the worker runs', () => {
     await tick(3000);
     await waitFor(() => expect(screen.queryByText(/status check failed/i)).not.toBeInTheDocument());
     expect(findOperation).toHaveBeenCalledTimes(4);
+  });
+
+  const kisumu = { organizationAlias: 'kisumu-county', tenantId: 'kisumucounty', name: 'Kisumu County', roles: [] };
+  const published = {
+    ...running,
+    status: 'SUCCEEDED' as const,
+    currentStep: null,
+    completedSteps: ['TENANT_FOUNDATION', 'PLATFORM_BASELINE', 'FOUNDER_HRMS', 'ORGANIZATION', 'MEMBERSHIP', 'BINDING'],
+    lifecyclePublishedAt: 1,
+  };
+  const failedOnce = { ...running, status: 'RETRYABLE_FAILED' as const, currentStep: 'PLATFORM_BASELINE', completedSteps: ['TENANT_FOUNDATION'], errorCode: 'BOUNDARY_ENTITY_DOES_NOT_EXIST' };
+
+  it('keeps polling a retryable failure PGR still retries by itself, and continues once it succeeds (#2709)', async () => {
+    vi.mocked(api.submitSignup).mockResolvedValue(failedOnce as never);
+    vi.mocked(findOperation).mockResolvedValueOnce({ ...failedOnce, attempt: 2 } as never).mockResolvedValue(published as never);
+    await start();
+
+    expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
+    expect(screen.queryByText(/usually temporary/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    // The step being retried keeps spinning, and a run that has not ended reports no failure.
+    expect(screen.getByText(/setting up the basics/i).closest('li')?.querySelector('.animate-spin')).not.toBeNull();
+    expect(track).not.toHaveBeenCalledWith('signup:provision_fail', expect.anything());
+    await tick(3000);
+    expect(screen.getByText(/still setting up/i)).toBeInTheDocument();
+
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    await tick(3000);
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
+    expect(findOperation).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps polling a run past attempt 12 that PGR will still retry (nextRetryAt)', async () => {
+    // PGR restarts its budget on progress, so attempt alone can pass 12 while a retry is still due.
+    const pastTwelve = { ...failedOnce, attempt: 13, nextRetryAt: 5000 };
+    vi.mocked(api.submitSignup).mockResolvedValue(pastTwelve as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...pastTwelve }) as never);
+    await start();
+
+    expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
+    expect(screen.queryByText(/usually temporary/i)).not.toBeInTheDocument();
+    await tick(3000);
+    await tick(3000);
+    expect(findOperation).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows "Still setting up" when Try again finds PGR already retrying the run again', async () => {
+    vi.mocked(api.submitSignup).mockResolvedValue({ ...failedOnce, attempt: 12 } as never);
+    vi.mocked(api.retryOperation).mockRejectedValue(
+      new api.OnboardingError(400, 'ONBOARDING_OPERATION_NOT_RETRYABLE', 'The operation is not retryable'));
+    // Claimed and failed again between this page's last look and the click.
+    vi.mocked(findOperation).mockResolvedValue({ ...failedOnce, attempt: 13, nextRetryAt: 5000 } as never);
+    await start();
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }));
+    expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
+    expect(screen.queryByText(/can’t be retried from here/i)).not.toBeInTheDocument();
+  });
+
+  it('offers Try again next to "Still setting up" once the retrying run stops changing, and keeps polling', async () => {
+    // Nobody works the run (a stopped runner): every poll brings back the same run.
+    vi.mocked(api.submitSignup).mockResolvedValue(failedOnce as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...failedOnce }) as never);
+    vi.mocked(api.retryOperation).mockResolvedValue({ ...failedOnce, status: 'PENDING', attempt: 2, errorCode: null } as never);
+    await start();
+
+    expect(await screen.findByText(/still setting up/i)).toBeInTheDocument();
+    await tick(170_000);
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    await tick(10_000);
+    expect(screen.getByText(/longer than it should/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    await waitFor(() => expect(api.retryOperation).toHaveBeenCalledWith('op1'));
+
+    const calls = vi.mocked(findOperation).mock.calls.length;
+    await tick(3000);
+    expect(vi.mocked(findOperation).mock.calls.length).toBeGreaterThan(calls);
+  });
+
+  it('does not offer Try again while the retrying run keeps changing', async () => {
+    let updatedAt = 0;
+    vi.mocked(api.submitSignup).mockResolvedValue(failedOnce as never);
+    vi.mocked(findOperation).mockImplementation(async () => ({ ...failedOnce, updatedAt: ++updatedAt }) as never);
+    await start();
+
+    await tick(240_000);
+    expect(screen.getByText(/still setting up/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+  });
+
+  it('continues to the workspace when Try again finds the run already succeeded (#2709)', async () => {
+    vi.mocked(api.submitSignup).mockResolvedValue({ ...failedOnce, attempt: 12 } as never);
+    vi.mocked(api.retryOperation).mockRejectedValue(
+      new api.OnboardingError(400, 'ONBOARDING_OPERATION_NOT_RETRYABLE', 'The operation is not retryable'));
+    vi.mocked(findOperation).mockResolvedValue(published as never);
+    await start();
+
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [kisumu], selectionRequired: true, onboardingRequired: false });
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }));
+
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
+    expect(findOperation).toHaveBeenCalledWith('op1', undefined);
+    expect(screen.queryByText(/can’t be retried from here/i)).not.toBeInTheDocument();
   });
 });
 

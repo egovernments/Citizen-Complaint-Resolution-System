@@ -119,6 +119,15 @@
   }
 
   function isStr(v) { return typeof v === "string"; }
+
+  /* A tracking-plan name, `category:object_action` (docs/analytics/
+   * tracking-plan.md), is Matomo's Category and Action. Any other name keeps
+   * the caller's category and is its own action, as before. */
+  var PLAN_NAME = /^([a-z]+):([a-z][a-z_]*)$/;
+  function planParts(name) {
+    var m = PLAN_NAME.exec(String(name || ""));
+    return m ? { category: m[1], action: m[2] } : null;
+  }
   function trim(s) { return isStr(s) ? s.replace(/^\s+|\s+$/g, "") : ""; }
 
   /* Realm-safe array test. `x instanceof Array` is FALSE for an array created in
@@ -988,7 +997,8 @@
       },
       event: function (rec, ctx) {
         var e = ctx.event || {};
-        gtag("event", e.name || e.action || "event", {
+        /* GA4 names are letters, digits and underscores, up to 40. */
+        gtag("event", String(e.name || e.action || "event").replace(/[^A-Za-z0-9_]/g, "_").substring(0, 40), {
           event_category: e.category || "ui",
           event_label: e.label || "",
           value: typeof e.value === "number" ? e.value : undefined
@@ -1052,11 +1062,11 @@
         });
       },
       pageView: function (rec, ctx) {
-        phCall("capture", ["$pageview", { $current_url: ctx.url, page_title: ctx.title, tenant: ctx.tenant, state_tenant: ctx.stateTenant, entrance: ctx.entrance, surface: ctx.surface, locale: ctx.locale }]);
+        phCall("capture", ["$pageview", { $current_url: ctx.url, page_title: ctx.title, app: ctx.surface, tenant_id: ctx.tenant, tenant: ctx.tenant, state_tenant: ctx.stateTenant, entrance: ctx.entrance, surface: ctx.surface, locale: ctx.locale }]);
       },
       event: function (rec, ctx) {
         var e = ctx.event || {};
-        phCall("capture", [e.name || e.action || "event", { category: e.category || "ui", label: e.label || "", value: e.value, $current_url: ctx.url, tenant: ctx.tenant, entrance: ctx.entrance }]);
+        phCall("capture", [e.name || e.action || "event", { category: e.category || "ui", label: e.label || "", value: e.value, $current_url: ctx.url, app: ctx.surface, tenant_id: ctx.tenant, tenant: ctx.tenant, entrance: ctx.entrance }]);
       },
       captureError: function (rec, ctx) {
         var er = ctx.error || {};
@@ -1480,13 +1490,14 @@
           for (var hops = 0; el && hops < 5; hops++) {
             if (el.getAttribute && el.getAttribute("data-analytics-event")) {
               var eventName = scrub(String(el.getAttribute("data-analytics-event"))).substring(0, 60);
+              var plan = planParts(eventName);
               emitEvent({
                 name: eventName,
-                category: "click",
+                category: plan ? plan.category : "click",
                 /* Matomo identifies events by category + action; its optional
                  * third field is already used for our label. Keep the stable
                  * declarative name as the action so tags stay distinguishable. */
-                action: eventName,
+                action: plan ? plan.action : eventName,
                 label: scrub(String(el.getAttribute("data-analytics-label") || "")).substring(0, 60)
               });
               return;
@@ -1671,10 +1682,11 @@
       try {
         if (!live.length) return;
         props = props || {};
+        var plan = planParts(name);
         emitEvent({
           name: String(name || "event").substring(0, 60),
-          category: String(props.category || "ui").substring(0, 40),
-          action: String(props.action || name || "event").substring(0, 40),
+          category: plan ? plan.category : String(props.category || "ui").substring(0, 40),
+          action: plan ? plan.action : String(props.action || name || "event").substring(0, 40),
           label: scrub(String(props.label || "")).substring(0, 200),
           value: typeof props.value === "number" ? props.value : undefined
         });

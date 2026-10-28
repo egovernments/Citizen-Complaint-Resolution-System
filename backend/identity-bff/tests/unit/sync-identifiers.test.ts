@@ -4,8 +4,10 @@ import { closeCache, initCache } from "../../src/infrastructure/redis.js";
 import { currentPersonLease } from "../../src/modules/accounts/person-lease.js";
 import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), write: vi.fn(), mobile: vi.fn() }));
-vi.mock("../../src/modules/organizations/organization-service.js", () => ({ request: mocks.request }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), write: vi.fn(), mobile: vi.fn(), adminPhone: vi.fn() }));
+vi.mock("../../src/modules/organizations/organization-service.js", () => ({
+  request: mocks.request, keycloakPhoneIsAdminControlled: mocks.adminPhone,
+}));
 vi.mock("../../src/modules/accounts/digit-writer.js", () => ({ writeDigitIdentifiers: mocks.write }));
 vi.mock("../../src/modules/citizen-otp/mobile-validation.js", () => ({ mobileValidationForRoute: mocks.mobile }));
 let user: any;
@@ -28,6 +30,7 @@ beforeEach(() => {
     return { status: "written" };
   });
   mocks.mobile.mockResolvedValue({ countryCode: "+254", mobileNumberRegex: "^[17][0-9]{8}$" });
+  mocks.adminPhone.mockResolvedValue(true);
 });
 
 describe("verified identifier propagation", () => {
@@ -59,6 +62,18 @@ describe("verified identifier propagation", () => {
     mocks.write.mockResolvedValue({ status: "skipped-masked" });
     expect(await propagateIdentifiers("subject")).toEqual({ written: 0, unchanged: 0, skipped: 2 });
     expect(mocks.write).toHaveBeenCalledTimes(1);
+  });
+  it("never writes a phone users can edit in Keycloak to a citizen account (#2640)", async () => {
+    // pgr-services trusts the number on a BFF-created citizen account.
+    mocks.adminPhone.mockResolvedValue(false);
+    expect(await propagateIdentifiers("subject")).toEqual({ written: 1, unchanged: 0, skipped: 1 });
+    expect(mocks.write).toHaveBeenCalledTimes(1);
+    expect(mocks.write).toHaveBeenCalledWith(expect.objectContaining({ uuid: "staff" }), { emailId: "verified@example.test" });
+  });
+  it("asks Keycloak about phone editing only for a person with a citizen account", async () => {
+    user.attributes["digit.accounts"] = ['{"v":1,"entries":[]}'];
+    await propagateIdentifiers("subject");
+    expect(mocks.adminPhone).not.toHaveBeenCalled();
   });
   it("does not propagate staff identifiers to a removed binding", async () => {
     user.attributes["digit.bindings"] = ['{"v":1,"bindings":[]}'];

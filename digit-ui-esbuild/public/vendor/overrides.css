@@ -221,6 +221,15 @@
   color: var(--color-sidebar-text-default, #D1D5DB);
 }
 
+/* The resting primary label, captured at the root so the hover/pressed
+ * rules below can fall back to it (#2645). Writing
+ * `--color-button-primary-text: var(--...-hover, var(--color-button-primary-text))`
+ * would be a self-reference, i.e. a custom-property cycle, which makes the
+ * variable invalid even when the -hover colour is set. */
+:root {
+  --color-button-primary-text-resting: var(--color-button-primary-text, #FFFFFF);
+}
+
 /* Primary button hover — designer's "Primary Button / Background Hover"
  * (Nairobi: #E6B800). Upstream often uses theme(colors.primary.dark)
  * which compiles to a literal; this lets a tenant set a distinct hover
@@ -231,6 +240,9 @@
 button.digit-submit-bar:hover,
 button[class*="submit-bar"]:hover {
   background-color: var(--color-button-primary-bg-hover, #B8420C) !important;
+  /* The hover label, judged on the hover fill (#2645); the label rules
+   * inside the button (h2, svg) read this variable too. */
+  --color-button-primary-text: var(--color-button-primary-text-hover, var(--color-button-primary-text-resting, #FFFFFF));
   color: var(--color-button-primary-text, #FFFFFF) !important;
 }
 
@@ -242,6 +254,7 @@ button[class*="submit-bar"]:hover {
 button.digit-submit-bar:active,
 button[class*="submit-bar"]:active {
   background-color: var(--color-button-primary-bg-pressed, #A03A0A) !important;
+  --color-button-primary-text: var(--color-button-primary-text-pressed, var(--color-button-primary-text-resting, #FFFFFF));
 }
 
 /* Foreground (text + svg) on primary-2 surfaces. Vendor hardcodes
@@ -954,7 +967,10 @@ html .header-dropdown-option:hover * {
  * sidebar-icon white via background-color, so it works on the yellow
  * selected indicator and the dark green non-selected items alike. */
 .digit-sidebar-item .icon:empty {
-  background-color: var(--color-sidebar-selected-text, #FFFFFF);
+  /* Idle rows take the idle icon colour; the selected row's own rule below
+   * takes the selected text colour. The selected colour here made the idle
+   * glyphs vanish once a theme paired a light selected row with dark text (#2635). */
+  background-color: var(--color-sidebar-icon-default, var(--color-sidebar-text-default, #D1D5DB));
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'/></svg>");
   mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'/></svg>");
   -webkit-mask-size: 20px 20px;
@@ -2291,6 +2307,12 @@ button[class*="toast-close"] svg,
   background-color: var(--color-sidebar-selected-bg, var(--color-primary-1, #c84c0e)) !important;
   color: var(--color-sidebar-selected-text, #FFFFFF) !important;
 }
+/* The vendored stylesheet paints the selected row's label #FFFFFF directly,
+ * so the row's colour above never reached it: on a light selected fill (Green
+ * and Gold's gold) the label stayed white. Hover already follows the token. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:not(:hover) .item-label {
+  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+}
 /* SVG icon colours follow the row's foreground via the fallback
  * chain. Hover state matches the dark hover text; idle/selected
  * matches the white selected text. */
@@ -2314,7 +2336,9 @@ button[class*="toast-close"] svg,
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container,
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container input {
   background: rgba(255, 255, 255, 0.06) !important;
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  /* Text on the rail itself, not on the selected row: selected-text is chosen
+   * against the selected fill (dark on a gold row), which vanishes here. */
+  color: var(--color-sidebar-text-active, #FFFFFF) !important;
   border-color: rgba(255, 255, 255, 0.18) !important;
 }
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container ::placeholder {
@@ -2981,6 +3005,23 @@ button[class*="toast-close"] svg,
   border: 0 !important;
   box-shadow: none !important;
 }
+/* Hover and pressed keep fill and label as a pair (#2645): the resting
+ * fill above outranks the global hover/pressed fills, while the label
+ * variable is swapped for the hover fill. */
+.v2-pgr-details button.actionButton:hover,
+.v2-pgr-details button.submit-bar:hover,
+.v2-pgr-details button[class*="submit-bar"]:hover,
+.v2-pgr-details .digit-button-primary:hover {
+  background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
+  --color-button-primary-text: var(--color-button-primary-text-hover, var(--color-button-primary-text-resting, #FFFFFF));
+}
+.v2-pgr-details button.actionButton:active,
+.v2-pgr-details button.submit-bar:active,
+.v2-pgr-details button[class*="submit-bar"]:active,
+.v2-pgr-details .digit-button-primary:active {
+  background-color: var(--color-button-primary-bg-pressed, var(--color-button-primary-bg-hover, var(--color-primary-2, #CC9F00))) !important;
+  --color-button-primary-text: var(--color-button-primary-text-pressed, var(--color-button-primary-text-resting, #FFFFFF));
+}
 
 @media (max-width: 47.99rem) {
   .v2-pgr-details {
@@ -3542,6 +3583,7 @@ button[class*="toast-close"] svg,
 .v2-pgr-inbox button.digit-button-primary:hover,
 .v2-pgr-inbox .digit-button-primary:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
+  --color-button-primary-text: var(--color-button-primary-text-hover, var(--color-button-primary-text-resting, #FFFFFF));
 }
 /* Scoped to filled buttons: `.v2-pgr-inbox .digit-button-label` alone also
  * caught the tertiary/link labels on this page, which must not take the
@@ -3749,7 +3791,8 @@ button[class*="toast-close"] svg,
 .v2-workbench-view button[class*="submit-bar"],
 .v2-workbench-view .digit-button-primary {
   background-color: var(--color-button-primary-bg-default, var(--color-primary-2, #FEC931)) !important;
-  color: var(--color-text-primary, #0B0C0C) !important;
+  /* Reads the label variable, so the :hover swap below reaches it (#2645). */
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   border-radius: 6px !important;
   padding: 10px 24px !important;
   font-weight: 600 !important;
@@ -3762,6 +3805,7 @@ button[class*="toast-close"] svg,
 .v2-workbench-view button[class*="submit-bar"]:hover,
 .v2-workbench-view .digit-button-primary:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
+  --color-button-primary-text: var(--color-button-primary-text-hover, var(--color-button-primary-text-resting, #FFFFFF));
 }
 
 /* MDMS view "Actions" CTA + dropdown menu — vendor renders the button
@@ -3773,7 +3817,9 @@ button[class*="toast-close"] svg,
 .action-bar-wrap > button.submit-bar,
 .action-bar-wrap > button[class*="submit-bar"] {
   background-color: var(--color-button-primary-bg-default, var(--color-primary-2, #FEC931)) !important;
-  color: var(--color-text-primary, #0B0C0C) !important;
+  /* The resting label; the global submit-bar :hover rule swaps the variable
+   * for the hover fill's label, so both states come from one pair (#2645). */
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   border: 0 !important;
   border-radius: 6px !important;
   height: 40px !important;
@@ -3798,7 +3844,7 @@ button[class*="toast-close"] svg,
 .action-bar-wrap > button.submit-bar h2,
 .action-bar-wrap > button[class*="submit-bar"] h2,
 .action-bar-wrap > button.submit-bar .digit-button-label {
-  color: var(--color-text-primary, #0B0C0C) !important;
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   font-size: 0.875rem !important;
   font-weight: 600 !important;
   margin: 0 !important;
@@ -3884,7 +3930,8 @@ button[class*="toast-close"] svg,
 .v2-workbench-search button.submit-bar,
 .v2-workbench-search button[class*="submit-bar"] {
   background-color: var(--color-button-primary-bg-default, var(--color-primary-2, #FEC931)) !important;
-  color: var(--color-text-primary, #0B0C0C) !important;
+  /* Resting and hover labels come from one pair: :hover swaps the variable (#2645). */
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   border-radius: 6px !important;
   padding: 10px 24px !important;
   font-weight: 600 !important;
@@ -3903,6 +3950,7 @@ button[class*="toast-close"] svg,
 .v2-workbench-search button.submit-bar:hover,
 .v2-workbench-search button[class*="submit-bar"]:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
+  --color-button-primary-text: var(--color-button-primary-text-hover, var(--color-button-primary-text-resting, #FFFFFF));
   box-shadow: none !important;
   transform: none !important;
 }
@@ -3915,6 +3963,16 @@ button[class*="toast-close"] svg,
   text-transform: none !important;
   letter-spacing: 0 !important;
   margin: 0 !important;
+}
+/* Labels inside the filled buttons take the button's label pair; other
+ * labels on the page keep the body colour above. */
+.v2-workbench-search .mdms-add-btn .digit-button-label,
+.v2-workbench-search button.digit-submit-bar .digit-button-label,
+.v2-workbench-search button.submit-bar h2,
+.v2-workbench-search button.submit-bar .digit-button-label,
+.v2-workbench-search button[class*="submit-bar"] h2,
+.v2-workbench-search button[class*="submit-bar"] .digit-button-label {
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
 }
 
 /* Mobile: stack header actions, full-width filter inputs */
@@ -4430,7 +4488,8 @@ button.digit-submit-bar, button[class*="submit-bar"],
  * to the card edge when right-aligned. */
 button:not([class]):not(:has(> svg)):not(:has(> img)) {
   background-color: var(--color-button-primary-bg-default, var(--color-primary-2, #FEC931)) !important;
-  color: var(--color-text-primary, #0B0C0C) !important;
+  /* The fill's own label; :hover swaps the variable (#2645). */
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   padding: 10px 28px !important;
   font-weight: 500 !important;
   border-radius: 4px !important;
@@ -4447,6 +4506,8 @@ button:not([class]):not(:has(> svg)):not(:has(> img)) {
 }
 button:not([class]):not(:has(> svg)):not(:has(> img)):hover {
   background-color: var(--color-button-primary-bg-hover, #E6B800) !important;
+  /* Hover label judged on the hover fill; the resting colour reads it (#2645). */
+  --color-button-primary-text: var(--color-button-primary-text-hover, var(--color-button-primary-text-resting, #FFFFFF));
   box-shadow: 0 1px 3px 0 rgba(16, 24, 40, 0.10);
 }
 
@@ -6127,7 +6188,9 @@ button[role="combobox"],
 .digit-multiselectdropdown-wrap,
 .digit-multi-dropdown-wrap,
 .digit-select {
-  border: 1px solid var(--color-border, #d6d5d4) !important;
+  /* A field's edge is how people find it (WCAG 1.4.11, 3:1); applyTheme
+   * holds --color-input-border to that. The card border is decoration. */
+  border: 1px solid var(--color-input-border, var(--color-border, #d6d5d4)) !important;
   border-radius: 6px !important;
   background-color: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
   box-shadow: none !important;
@@ -6892,6 +6955,11 @@ header.digit-header .digit-dropdown-master {
   font-size: 1rem !important;
   font-weight: 600 !important;
   line-height: 1.4 !important;
+  /* The vendored title is one line with "…": on a phone "Citizen Complaint
+   * Resolution System" read "Citizen Complaint Resolution Sy…". Wrap it. */
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  text-overflow: clip !important;
 }
 
 .employee .digit-landing-page-card .digit-landingpage-divider {
@@ -7050,6 +7118,18 @@ header.digit-header .digit-dropdown-master {
   border-right: 0 !important;
   font-size: 0.875rem !important;
   color: var(--color-table-row-text, #363636) !important;
+}
+/* The table library cuts a plain-text cell to one line with "…", and there is
+ * no tooltip, so a long locality, a translated status ("En attente
+ * d'attribution…") or an owner's full name could not be read anywhere. Wrap
+ * them, as the complaint number column already does. Desktop only: phones get
+ * the cards below. */
+@media (min-width: 48rem) {
+  .employee .v2-pgr-inbox .rdt_TableCell > div[data-tag="allowRowEvents"] {
+    white-space: normal;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
 }
 .employee .v2-pgr-inbox .rdt_TableRow {
   border-bottom: 1px solid var(--color-table-border, #E5E7EB) !important;
@@ -8886,14 +8966,14 @@ html .header-dropdown-option:focus-visible {
  * the same as the rows above it. */
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary {
   border-color: rgba(255, 255, 255, 0.5) !important;
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  color: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary .digit-button-label {
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  color: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg,
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg path {
-  fill: var(--color-sidebar-selected-text, #FFFFFF) !important;
+  fill: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary:hover {
   background-color: rgba(255, 255, 255, 0.08) !important;
@@ -9463,6 +9543,8 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
 }
 .cms-mic-button:hover {
   background: var(--color-button-primary-bg-hover, var(--cms-fill));
+  /* Hover icon colour judged on the hover fill (#2645). */
+  color: var(--color-button-primary-text-hover, var(--cms-on-fill));
 }
 .cms-counter {
   margin-top: 10px;
@@ -10648,10 +10730,14 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
 .cms-complaints-table tbody tr:hover td {
   background: var(--color-table-hover, #F9FAFB);
 }
+/* A number carries its workspace's code (IN-CHANDIGARH-DEMO-PGR-2026-10-23-…),
+ * so it can be wider than its column. Wrap it, after a hyphen where one fits,
+ * rather than letting it run into Concern or cutting off the part that tells
+ * complaints apart. */
 .cms-complaints-number {
   color: var(--cms-accent);
   font-weight: 500;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
   text-underline-offset: 3px;
@@ -10668,6 +10754,16 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* In the table the Concern column narrows on a laptop (about 230px at
+ * 1024px), where one line cut real categories ("YOUTH PROGRAMME COMPL…").
+ * Two lines, then "…", with the full text in the title. */
+.cms-complaints-table .cms-complaints-concern {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .cms-complaints-desc {
   display: block;
@@ -10692,6 +10788,9 @@ svg.cms-complaints-go {
   width: 18px;
   height: 18px;
   vertical-align: middle;
+  /* In a phone row the chevron is a flex item next to the text; it shrank to
+   * 3px beside a long status or number. */
+  flex: none;
 }
 
 /* Status, in the theme's status colours, toned by where the complaint is. */
@@ -10701,13 +10800,17 @@ svg.cms-complaints-go {
   gap: 6px;
   max-width: 100%;
   padding: 3px 10px;
-  border-radius: 999px;
+  /* Half a one-line pill's height, so it still reads as a pill, and a
+   * two-line one stays a rounded box. */
+  border-radius: 12px;
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* A translated status can outgrow the column ("En attente d'attribution à
+   * un agent de terrain"). The text is a bare flex item, so an ellipsis never
+   * applied and it was cut mid-word with no way to read the rest. Wrap it. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .cms-status-pill::before {
   content: "";

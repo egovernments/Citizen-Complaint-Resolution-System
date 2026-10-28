@@ -83,7 +83,7 @@ export const analyticsProviderDescriptor: SchemaDescriptor = {
     {
       path: 'surfaces',
       label: 'Surfaces',
-      help: 'Comma separated: citizen, employee. Leave empty for both.',
+      help: 'Comma separated: citizen, employee, console. Leave empty for citizen and employee. Matomo only: the management console sends to a row only when it lists console, best on a Matomo site of its own.',
     },
     {
       path: 'sampleRate',

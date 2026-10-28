@@ -1,0 +1,62 @@
+# Path shim for MDMS v2, the Kubernetes counterpart of Compose's egov-mdms-service
+# (local-setup/nginx/mdms-proxy.conf). pgr-services' self-service onboarding
+# writes MDMS at hardcoded /egov-mdms-service/... paths (OnboardingSteps,
+# BaselineUpgrader, NotificationDefaultsStep), which mdms-v2 answers with a 404
+# since it serves /mdms-v2. Point pgr-services' mdmsHost here; /mdms-v2/ is
+# passed through unchanged, so its ordinary MDMS calls keep working.
+# Follow-up: one configurable MDMS path prefix in pgr-services would let Helm
+# point it at mdms-v2 directly and drop this chart.
+
+labels:
+  app: "egov-mdms-service"
+  group: "core"
+
+ingress:
+  enabled: false
+
+initContainers: {}
+
+# A pinned nginx (not a rolling tag, so IfNotPresent is safe).
+image:
+  repository: "docker.io/library/nginx"
+  tag: "1.27-alpine"
+  pullPolicy: IfNotPresent
+
+replicas: "1"
+httpPort: 8080
+
+healthChecks:
+  enabled: true
+  livenessProbePath: "/health"
+  readinessProbePath: "/health"
+
+resources: |
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi
+
+# mdms-v2, resolved per request (valid=5s), as the Compose shim does: a
+# recreated Service (new ClusterIP) is picked up without restarting the shim,
+# and a shim that starts before mdms-v2 exists does not crash-loop on "host
+# not found in upstream". nginx's resolver does not apply the pod's DNS search
+# domains, so the host must be fully qualified (unlike egov-service-host's
+# short mdms-v2.egov).
+upstream:
+  host: "mdms-v2.egov.svc.cluster.local"
+  port: 8080
+  resolver: "kube-dns.kube-system.svc.cluster.local"
+
+# Rolls the pod when the nginx conf changes (common sets no deployment timestamp).
+additionalAnnotations: |
+  checksum/config: {{ include "egov-mdms-service.conf" . | sha256sum | quote }}
+
+extraVolumes: |
+  - name: conf
+    configMap:
+      name: egov-mdms-service
+extraVolumeMounts: |
+  - name: conf
+    mountPath: /etc/nginx/conf.d
+    readOnly: true

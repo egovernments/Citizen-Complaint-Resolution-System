@@ -97,3 +97,13 @@ gatus:
     mcp: true
     notifications: true
     observability: true
+
+  # Per-service toggles for releases this deployment keeps disabled. Each must
+  # match the release's `installed:` flag in its helmfile, or the status page
+  # shows a service we never deployed as DOWN.
+  checks:
+    boundaryManagement: false  # urban/urban-helmfile.yaml: egov-bndry-mgmnt
+    inbox: false               # analytics/analytics-helmfile.yaml: inbox
+    # Every other release-backed check follows the environment's
+    # disabledReleases directly (templates/configmap.yaml): a release left out
+    # gets no check. These two are for releases a helmfile hard-codes off.

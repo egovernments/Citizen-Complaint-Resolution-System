@@ -95,13 +95,23 @@ export interface TenantOption {
   tenantId: string;
   name: string;
   roles: string[];
-  code?: 'DIGIT_ACCOUNT_INACTIVE';
+  code?: 'DIGIT_ACCOUNT_INACTIVE' | 'WORKSPACE_TRIAL_EXPIRED';
 }
 
 export interface TenantsResponse {
   tenants: TenantOption[];
   selectionRequired: boolean;
   onboardingRequired: boolean;
+  /** Present when any option is `WORKSPACE_TRIAL_EXPIRED`. Plain text only. */
+  notice?: WorkspaceTrialNotice;
+}
+
+/** Operator-configured text for an expired trial. The BFF sends the link only with both halves. */
+export interface WorkspaceTrialNotice {
+  title: string;
+  message: string;
+  linkLabel?: string;
+  linkUrl?: string;
 }
 
 /** Server-derived fields are readonly here so a caller cannot try to send them. */
@@ -231,6 +241,11 @@ export interface Operation {
    * the identity side does not list the new tenant.
    */
   lifecyclePublishedAt?: number | null;
+  /**
+   * When PGR retries a RETRYABLE_FAILED run by itself; null once its automatic retries are used up.
+   * Absent from a pgr-services older than this field.
+   */
+  nextRetryAt?: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -273,9 +288,12 @@ export interface DigitContext {
 export class OnboardingError extends Error {
   readonly status: number;
   readonly code: string | null;
+  /** The rest of the error body, e.g. the `notice` on WORKSPACE_TRIAL_EXPIRED. */
+  readonly details?: Record<string, unknown>;
 
-  constructor(status: number, code: string | null, message: string) {
+  constructor(status: number, code: string | null, message: string, details?: Record<string, unknown>) {
     super(message);
+    this.details = details;
     this.name = 'OnboardingError';
     this.status = status;
     this.code = code;
@@ -341,7 +359,7 @@ export async function call<T>(path: string, init: RequestInit = {}): Promise<T> 
       (record.message as string) ||
       (record.error as string) ||
       `Request failed (${response.status}).`;
-    throw new OnboardingError(response.status, code, message);
+    throw new OnboardingError(response.status, code, message, record);
   }
 
   return body as T;
@@ -581,10 +599,30 @@ export function isOperationReady(operation: Pick<Operation, 'status' | 'lifecycl
   return operation.status === 'SUCCEEDED' && Boolean(operation.lifecyclePublishedAt);
 }
 
-/** Settled means nothing more will change, so a success still being published is not. */
-export function isOperationSettled(operation: Pick<Operation, 'status' | 'lifecyclePublishedAt'>): boolean {
-  return isOperationReady(operation) ||
-    operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
+/**
+ * PGR retries a RETRYABLE_FAILED run by itself until its 12th attempt has failed
+ * (OnboardingRepository, `retry_count < 12`), backing off from 1 s to 60 s.
+ */
+export const AUTOMATIC_ATTEMPTS = 12;
+
+type RetryState = Pick<Operation, 'status'> & Partial<Pick<Operation, 'attempt' | 'nextRetryAt'>>;
+
+/**
+ * A retryable failure that PGR will retry by itself, so the founder waits rather than
+ * acts (#2709). `nextRetryAt` says so. `attempt` (counted from 1) is not enough alone:
+ * PGR restarts its budget on progress and on a manual retry, so a run can be past
+ * attempt 12 and still retried. Below attempt 12 a retry is always still due, which is
+ * all a pgr-services without `nextRetryAt` can tell.
+ */
+export function isRetryingAutomatically(operation: RetryState): boolean {
+  return operation.status === 'RETRYABLE_FAILED' &&
+    (operation.nextRetryAt != null || (operation.attempt ?? AUTOMATIC_ATTEMPTS) < AUTOMATIC_ATTEMPTS);
+}
+
+/** Settled means nothing more will change, so a success still being published, or a failure PGR still retries, is not. */
+export function isOperationSettled(operation: Pick<Operation, 'status' | 'lifecyclePublishedAt'> & RetryState): boolean {
+  return isOperationReady(operation) || operation.status === 'TERMINAL_FAILED' ||
+    (operation.status === 'RETRYABLE_FAILED' && !isRetryingAutomatically(operation));
 }
 
 /* -------------------------------------------------------------------------- */

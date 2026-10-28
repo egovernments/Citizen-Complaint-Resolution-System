@@ -42,8 +42,9 @@
     shims. The dashboard imports its own stylesheet, which esbuild emits as this
     entry's CSS bundle and generateHTML() links below.
 
-    globalConfigs.js IS required: STATE_LEVEL_TENANT_ID feeds getTenantId() for
-    both the analytics calls and the standalone localization fetch.
+    globalConfigs.js IS required for the deployment's runtime config. The tenant
+    itself comes from the /<slug>/ in the URL (src/publicDashboardTenant.js);
+    STATE_LEVEL_TENANT_ID is only the tenantless dev-route fallback.
   -->
   <script>if(typeof process==="undefined"){window.process={env:{NODE_ENV:"production",REACT_APP_STATE_LEVEL_TENANT_ID:""}}}</script>
   <script src="/digit-ui/globalConfigs.js"></script>

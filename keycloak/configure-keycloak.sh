@@ -44,10 +44,14 @@ in_keycloak() {
   if [ -z "${KEYCLOAK_KCADM_SERVER:-}" ]; then
     docker exec ${opts[@]+"${opts[@]}"} "$KEYCLOAK_CONTAINER" "$@"
   else
-    (
-      for assignment in ${assignments[@]+"${assignments[@]}"}; do export "${assignment?}"; done
-      exec "$@"
-    )
+    # The -e names include readonly script variables (KCADM_SERVER), which a
+    # subshell inherits and cannot assign, so `export` there aborts. `env
+    # NAME=VALUE cmd` would put the values (KCADM_PASSWORD) on env's argv, i.e.
+    # /proc/<pid>/cmdline. Instead a fresh bash, which inherits no readonly
+    # declarations, reads them as `export` lines from a pipe on fd 3: printf is
+    # a builtin, so no value reaches any argv, and stdin stays free for -i.
+    bash -c 'set -a; . /dev/fd/3; set +a; exec 3<&-; exec "$@"' in_keycloak "$@" \
+      3< <(for assignment in ${assignments[@]+"${assignments[@]}"}; do printf 'export %q\n' "$assignment"; done)
   fi
 }
 readonly KC_CONFIG=/tmp/identity-bff-kcadm.config
@@ -116,6 +120,9 @@ readonly BFF_SIGNUP_METHODS=${KEYCLOAK_BFF_SIGNUP_METHODS:-magic_link,google,git
 readonly PASSWORD_SETUP_REDIRECT="${IDENTITY_REDIRECT_URI%/callback}$PASSWORD_SETUP_PATH"
 readonly POST_LOGIN_REDIRECT=${IDENTITY_POST_LOGIN_REDIRECT:-/}
 # digit-ui lives at /{tenantSlug}/digit-ui/... on the same origin as the BFF.
+# IDENTITY_DIGIT_UI_BASE_URL is the site origin digit-ui is served from (e.g.
+# https://site/), not a /digit-ui/ path: the digit-ui clients' baseUrl appends
+# /digit-ui/<surface sign-in> to it (configure_digit_ui_client, #2644).
 readonly DIGIT_UI_BASE_URL=${IDENTITY_DIGIT_UI_BASE_URL:-${IDENTITY_REDIRECT_URI%%/identity/*}/}
 readonly ALLOWED_ORIGINS=${IDENTITY_ALLOWED_ORIGINS:-${IDENTITY_ALLOWED_ORIGIN:-}}
 ALLOWED_ORIGINS_JSON=$(printf '%s' "$ALLOWED_ORIGINS" | jq -Rc \
@@ -211,8 +218,20 @@ ensure_client() {
   printf '%s' "$client_uuid_value"
 }
 
+# The Keycloak-hosted login pages list every enabled identity provider, whatever
+# a client's sign-in methods say (CCRS #2647). A provider that no client offers
+# is hidden from them; hideOnLogin does not affect kc_idp_hint, which is how the
+# BFF starts a social sign-in.
+social_provider_offered() {
+  case ",$BFF_SIGNIN_METHODS,$EMPLOYEE_SIGNIN_METHODS,$CITIZEN_SIGNIN_METHODS," in
+    *",$1,"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 ensure_social_provider() {
-  local alias=$1 provider=$2 client_id=$3 client_secret=$4 display_name
+  local alias=$1 provider=$2 client_id=$3 client_secret=$4 display_name hide=true
+  social_provider_offered "$alias" && hide=false
   case "$alias" in
     google) display_name=Google ;;
     github) display_name=GitHub ;;
@@ -225,16 +244,20 @@ ensure_social_provider() {
   }
   if kc get "identity-provider/instances/$alias" -r "$REALM" >/dev/null 2>&1; then
     kc update "identity-provider/instances/$alias" -r "$REALM" \
-      -s enabled=true -s "displayName=$display_name" -s trustEmail=false -s storeToken=false \
+      -s enabled=true -s "hideOnLogin=$hide" -s "displayName=$display_name" -s trustEmail=false -s storeToken=false \
       -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" -s "config.syncMode=$IDP_SYNC_MODE" \
       -s "config.clientId=$client_id" -s "config.clientSecret=$client_secret" >/dev/null
   else
     kc create identity-provider/instances -r "$REALM" \
       -s "alias=$alias" -s "providerId=$provider" -s "displayName=$display_name" -s enabled=true \
-      -s trustEmail=false -s storeToken=false \
+      -s "hideOnLogin=$hide" -s trustEmail=false -s storeToken=false \
       -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" -s "config.syncMode=$IDP_SYNC_MODE" \
       -s "config.clientId=$client_id" -s "config.clientSecret=$client_secret" >/dev/null
   fi
+  # Providers reject an unregistered redirect URI (redirect_uri_mismatch), and it
+  # differs per realm. Keycloak serves under /auth on the public origin.
+  printf '%s identity provider: register redirect URI %s/auth/realms/%s/broker/%s/endpoint with the provider (hideOnLogin=%s)\n' \
+    "$alias" "${IDENTITY_REDIRECT_URI%%/identity/*}" "$REALM" "$alias" "$hide" >&2
 }
 
 ensure_mapper() {
@@ -338,20 +361,26 @@ configure_employee_flow() {
 # client's theme and, when `flow` is set, its browser flow (an empty `flow`
 # clears any override, so the realm's browser flow applies; an empty `theme`
 # likewise leaves login_theme absent, clearing an earlier value).
+# `<callback>/*` lets the BFF end an email change's redirect with the
+# workspace slug, which the employee theme reads from the emailed link (#2645).
+# `signin_path` is the surface's sign-in route under /digit-ui/, Keycloak's
+# "Back to Application" (baseUrl). The site root is no page: it falls through
+# to the API gateway (#2644). nginx sends this tenantless route to the default
+# tenant; the employee theme links to the person's own tenant when it knows it.
 # `digit.auth.signup.methods` is empty by design (no self-service sign-up).
 # Keycloak does not persist an empty client attribute (the JPA ClientAdapter
 # removes it), so writing "" through the JSON body clears any earlier value and
 # leaves the attribute ABSENT, which is how the BFF must read "no sign-up
 # methods" (and, for an empty citizen list, "no sign-in methods").
 configure_digit_ui_client() {
-  local client_id=$1 secret=$2 surface=$3 theme=$4 signin_methods=$5 flow=$6
+  local client_id=$1 secret=$2 surface=$3 theme=$4 signin_methods=$5 flow=$6 signin_path=$7
   local client_uuid_value flow_id=
   client_uuid_value=$(ensure_client "$client_id" "$secret" false)
   [ -z "$flow" ] || flow_id=$(flow_uuid "$flow")
   kc update "clients/$client_uuid_value" -r "$REALM" \
     -s standardFlowEnabled=true -s implicitFlowEnabled=false \
-    -s "baseUrl=$DIGIT_UI_BASE_URL" \
-    -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\",\"$PASSWORD_SETUP_REDIRECT\"]" \
+    -s "baseUrl=${DIGIT_UI_BASE_URL%/}/digit-ui/$signin_path" \
+    -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\",\"$IDENTITY_REDIRECT_URI/*\",\"$PASSWORD_SETUP_REDIRECT\"]" \
     -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
     -s "authenticationFlowBindingOverrides.browser=$flow_id" >/dev/null
   kc get "clients/$client_uuid_value" -r "$REALM" |
@@ -641,10 +670,10 @@ digit_ui_clients=skipped
 if [ -n "${KEYCLOAK_EMPLOYEE_CLIENT_SECRET:-}" ] && [ -n "${KEYCLOAK_CITIZEN_CLIENT_SECRET:-}" ]; then
   configure_employee_flow
   configure_digit_ui_client "$EMPLOYEE_CLIENT" "$KEYCLOAK_EMPLOYEE_CLIENT_SECRET" \
-    employee "$EMPLOYEE_LOGIN_THEME" "$EMPLOYEE_SIGNIN_METHODS" "$EMPLOYEE_FLOW"
+    employee "$EMPLOYEE_LOGIN_THEME" "$EMPLOYEE_SIGNIN_METHODS" "$EMPLOYEE_FLOW" employee/user/login
   kc update "clients/$DIGIT_UI_CLIENT_UUID/optional-client-scopes/$organization_scope" -r "$REALM" -n >/dev/null
   configure_digit_ui_client "$CITIZEN_CLIENT" "$KEYCLOAK_CITIZEN_CLIENT_SECRET" \
-    citizen '' "$CITIZEN_SIGNIN_METHODS" ''
+    citizen '' "$CITIZEN_SIGNIN_METHODS" '' citizen/login
   digit_ui_clients="$EMPLOYEE_CLIENT,$CITIZEN_CLIENT"
 else
   printf 'KEYCLOAK_EMPLOYEE_CLIENT_SECRET / KEYCLOAK_CITIZEN_CLIENT_SECRET unset: digit-ui clients not configured\n' >&2

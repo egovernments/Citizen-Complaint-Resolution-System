@@ -56,6 +56,9 @@ public class OnboardingProgress {
         return next;
     }
 
+    /** Whether an earlier attempt began this record and did not finish it. */
+    public boolean started(String key) { return "STARTED".equals(operation.getRecordProgress().get(key)); }
+
     public void record(String key, Runnable action) {
         if ("DONE".equals(operation.getRecordProgress().get(key))) return;
         operation.getRecordProgress().put(key, "STARTED");
