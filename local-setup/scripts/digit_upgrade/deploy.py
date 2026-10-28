@@ -50,7 +50,7 @@ HOST_PATHS = (Path("/etc/nginx"), Path("/var/www"), Path("/opt/digit-ui-esbuild"
 # Services that cache MDMS rows; restarted after kept rows are written back.
 MDMS_READERS = ("egov-mdms-service", "mdms-backend", "egov-accesscontrol")
 FINAL = {"deployed", "aborted", "rolled-back"}
-RECOVERABLE_BY_RESTART = {"backing-up", "predicting"}
+RECOVERABLE_BY_RESTART = {"backing-up", "predicting", "restart-failed"}
 
 
 def stop_process_group(process: subprocess.Popen, grace: float = 30) -> None:
@@ -457,9 +457,10 @@ class Deployment:
         backup = self.backup_parent / f"digit-upgrade-{stamp()}"
         backup.mkdir(mode=0o700)
         self.journal.enter("backing-up", backup=str(backup), stack=asdict(stack))
-        for container in self.docker.project_containers(stack.project):
-            if self.docker.inspect(container)[0]["Name"].lstrip("/") != POSTGRES:
-                self.docker.run(["docker", "stop", "--time", "60", container])
+        postgres_id = self.docker.inspect(POSTGRES)[0]["Id"]
+        writers = [c for c in self.docker.project_containers(stack.project) if not postgres_id.startswith(c)]
+        if writers:
+            self.docker.run(["docker", "stop", "--time", "60", *writers])  # in parallel
         self.log("writers stopped; dumping the database")
         dump = backup / "egov.dump"
         run_streaming(["docker", "exec", "-u", "postgres", POSTGRES, "pg_dump", "-U", DB_USER, "-d", DB_NAME, "-Fc"], stdout=dump)
@@ -590,25 +591,100 @@ class Deployment:
     # ── rollback ───────────────────────────────────────────────────────────
 
     def restart_previous(self, stack: StackRecord) -> None:
-        """Bring the previous stack back after a failure that changed no files or data."""
-        self._start_previous(stack)
+        """Bring the previous stack back after a failure that changed no files or data.
+
+        The stopped containers are started as they are: recreating them could
+        pick up an image a tag has moved to since (a rebuilt local image).
+        Only a service whose container is gone is recreated through Compose.
+        """
+        def start(services: list[str]) -> None:
+            ids = [self._container(stack, s) for s in services]
+            if any(ids):
+                self.docker.run(["docker", "start", *filter(None, ids)])
+            gone = [s for s, i in zip(services, ids) if not i]
+            if gone:
+                self.log(f"recreating services whose containers are gone: {', '.join(gone)}")
+                self._compose_up(stack, gone)
+
+        self._in_dependency_order(stack, start)
 
     def _start_previous(self, stack: StackRecord, check_database: Callable[[], None] | None = None) -> None:
-        # Tags may have been re-pointed by the new version's pulls; restart the
-        # exact images that were running.
+        """Recreate the previous stack from its restored Compose files and exact images."""
         for image in stack.images.values():
-            self.docker.run(["docker", "tag", image["id"], image["ref"]])
+            if "@" in image["ref"]:  # a digest-pinned reference cannot move
+                continue
+            if self.docker.run(["docker", "tag", image["id"], image["ref"]], check=False).returncode:
+                self.log(f"WARNING: the image {image['ref']} ran as ({image['id'][:19]}) no longer exists; "
+                         "its current image is used")
+
+        def start(services: list[str]) -> None:
+            self._compose_up(stack, services)
+            if services == ["postgres-db"] and check_database:
+                check_database()  # before any application can write
+
+        self._in_dependency_order(stack, start)
+
+    def _compose_up(self, stack: StackRecord, services: list[str]) -> None:
         args = ["docker", "compose", "--project-name", stack.project]
         for compose_file in stack.compose_files:
             args += ["-f", compose_file]
         # --no-deps: the services' dependencies include migration and seed
         # one-shots, which must not run against the restored data.
-        up = [*args, "up", "-d", "--no-deps", "--pull", "never"]
-        self.docker.run([*up, "postgres-db"], cwd=Path(stack.digit_dir))
-        self.docker.wait_for_postgres()
-        if check_database:
-            check_database()  # before any application can write
-        self.docker.run([*up, *(s for s in stack.services if s != "postgres-db")], cwd=Path(stack.digit_dir))
+        self.docker.run([*args, "up", "-d", "--no-deps", "--pull", "never", *services], cwd=Path(stack.digit_dir))
+
+    def _container(self, stack: StackRecord, service: str) -> str | None:
+        found = self.docker.run(
+            ["docker", "ps", "-a", "-q", "--filter", f"label=com.docker.compose.project={stack.project}",
+             "--filter", f"label=com.docker.compose.service={service}"], check=False,
+        ).stdout.split()
+        return found[0] if found else None
+
+    def _in_dependency_order(self, stack: StackRecord, start: Callable[[list[str]], None]) -> None:
+        """Start the services wave by wave along depends_on, each wave healthy before the next.
+
+        Starting everything at once (what `docker start` of the whole set does)
+        lets services that read MDMS or users at boot lose the race and stay
+        broken.  PostgreSQL always goes first, alone.
+        """
+        args = ["docker", "compose", "--project-name", stack.project]
+        for compose_file in stack.compose_files:
+            args += ["-f", compose_file]
+        config = json.loads(self.docker.run([*args, "--profile", "*", "config", "--no-interpolate", "--format", "json"],
+                                            cwd=Path(stack.digit_dir)).stdout)
+        wanted = set(stack.services)
+        needs = {
+            s: {d for d in (config["services"].get(s, {}).get("depends_on") or {}) if d in wanted} - {s}
+            for s in wanted
+        }
+        needs["postgres-db"] = set()
+        for service in wanted - {"postgres-db"}:
+            needs[service].add("postgres-db")
+        done: set[str] = set()
+        while len(done) < len(wanted):
+            wave = sorted(s for s in wanted - done if needs[s] <= done) or sorted(wanted - done)  # a cycle: the rest
+            start(wave)
+            self._wait_healthy(stack, wave, restart_once=True)
+            done |= set(wave)
+
+    def _wait_healthy(self, stack: StackRecord, services: list[str], *, restart_once: bool, seconds: int = 300) -> None:
+        deadline = time.monotonic() + seconds
+        pending = dict.fromkeys(services, restart_once)
+        while pending:
+            for service in list(pending):
+                container = self._container(stack, service)
+                state = self.docker.inspect(container)[0]["State"] if container else {}
+                health = (state.get("Health") or {}).get("Status")
+                if state.get("Running") and health in (None, "healthy"):
+                    del pending[service]
+                elif container and (not state.get("Running") or health == "unhealthy" or time.monotonic() > deadline):
+                    if not pending[service]:
+                        raise UpgradeError(f"{service} did not become healthy after a restart")
+                    self.log(f"{service} did not come up cleanly; restarting it once")
+                    self.docker.run(["docker", "restart", container])
+                    pending[service] = False
+                    deadline = time.monotonic() + seconds
+            if pending:
+                time.sleep(3)
 
     def cleanup_clone(self) -> None:
         """Remove what a killed prediction left: a copy of the production database."""
@@ -701,11 +777,18 @@ class Deployment:
         try:
             backup = self.backup(stack)
             predicted, keep = self.predict(backup, stack)
-        except BaseException:
+        except BaseException as exc:
             with signals_ignored():
-                self.restart_previous(stack)
-                self.cleanup_clone()
-                self.journal.enter("aborted")
+                try:
+                    self.restart_previous(stack)
+                    self.cleanup_clone()
+                except Exception as restart_error:
+                    self.journal.enter("restart-failed", error=str(exc), restart_error=str(restart_error))
+                    raise UpgradeError(
+                        f"{exc}\nTHE PREVIOUS STACK DID NOT RESTART: {restart_error}. Nothing was deployed; "
+                        f"fix the cause and run: digit-upgrade rollback {self.run_dir}"
+                    ) from exc
+                self.journal.enter("aborted", error=str(exc))
                 maintenance.off()
             raise
         try:

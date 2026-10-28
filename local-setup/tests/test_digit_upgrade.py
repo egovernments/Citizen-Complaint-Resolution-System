@@ -425,19 +425,55 @@ class ReviewRegressionTests(TempDirCase):
         self.assertIn("80,443", inserted)
         self.assertEqual(["!", "-i", "lo"], inserted[3:6])
 
-    def test_rollback_checks_the_database_before_any_application_starts(self):
-        docker = FakeDocker({})
+    def stack_docker(self, crash_first_start=()):
+        """A fake Docker with a three-level depends_on chain and per-container state."""
+        config = {"services": {
+            "postgres-db": {},
+            "egov-mdms-service": {"depends_on": {"postgres-db": {}, "mdms-migration": {}}},
+            "egov-user": {"depends_on": {"egov-mdms-service": {"condition": "service_healthy"}}},
+        }}
+        state = {}
+        starts = []
+
+        def runner(args, check=True, **_):
+            out = ""
+            if "config" in args:
+                out = json.dumps(config)
+            elif args[:3] == ["docker", "ps", "-a"]:
+                out = args[-1].split("=")[-1]  # the container id is the service name
+            elif args[:2] == ["docker", "inspect"]:
+                out = json.dumps([{"State": state[args[2]]}])
+            elif "up" in args or args[1] in ("start", "restart"):
+                names = args[args.index("never") + 1:] if "up" in args else args[2:]
+                starts.append((args[1] if args[1] != "compose" else "up", names))
+                for name in names:
+                    crashed = name in crash_first_start and args[1] != "restart"
+                    state[name] = {"Running": not crashed, "Health": {"Status": "healthy"}}
+            return subprocess.CompletedProcess(args, 0, out, "")
+
+        docker = deploy.Docker(runner)
         deployment = deploy.Deployment.__new__(deploy.Deployment)
-        deployment.docker = docker
-        docker.wait_for_postgres = lambda *a, **k: None
+        deployment.docker, deployment.log = docker, lambda message: None
         stack = deploy.StackRecord(digit_dir=str(self.tmp), project="digit", compose_files=["/c.yml"],
-                                   services=["egov-user", "postgres-db"], images={}, volumes=[], data_directory="/d")
+                                   services=["egov-user", "postgres-db", "egov-mdms-service"], images={},
+                                   volumes=[], data_directory="/d")
+        return deployment, stack, starts
+
+    def test_rollback_starts_in_dependency_waves_and_checks_the_database_first(self):
+        deployment, stack, starts = self.stack_docker()
         order = []
-        deployment._start_previous(stack, check_database=lambda: order.append("checked"))
-        ups = [c for c in docker.calls if "up" in c]
-        self.assertEqual(["postgres-db"], ups[0][ups[0].index("never") + 1:])
-        self.assertEqual(["egov-user"], ups[1][ups[1].index("never") + 1:])
-        self.assertEqual(["checked"], order)
+        deployment._start_previous(stack, check_database=lambda: order.append(len(starts)))
+        self.assertEqual([("up", ["postgres-db"]), ("up", ["egov-mdms-service"]), ("up", ["egov-user"])], starts)
+        self.assertEqual([1], order)  # right after PostgreSQL, before any application
+
+    def test_restart_starts_existing_containers_and_retries_a_lost_race_once(self):
+        deployment, stack, starts = self.stack_docker(crash_first_start={"egov-user"})
+        deployment.restart_previous(stack)
+        self.assertEqual(
+            [("start", ["postgres-db"]), ("start", ["egov-mdms-service"]), ("start", ["egov-user"]),
+             ("restart", ["egov-user"])],
+            starts,
+        )
 
 
 def leaks_in(root, rel, text, value):
