@@ -57,29 +57,32 @@
       when: upgrade_safe_mode | default(false) | bool
 
     # ── Local-edit drift guard ─────────────────────────────────────────────
-    # A redeploy re-renders configs/, kong/, nginx/, seeds/, notification-seed/
-    # and the top-level Compose files from this checkout, so a hand edit made
-    # on the server since the last deploy is silently overwritten. Every
-    # successful deploy records their hashes (last task of this play); here,
-    # before anything is written, any difference stops the run.
+    # A deploy re-renders the analysed configuration (scripts/deploy_state.py:
+    # configs/, kong/, nginx/, otel/, the Compose files, ...) from this checkout,
+    # so a hand edit made on the server since the last deploy would be silently
+    # overwritten. Every successful deploy records what it left (last task of
+    # this play); here, before anything is written, any difference stops the run.
     #
-    # Carry intended edits forward with the upgrade workflow
-    # (docs/setup/local/UPGRADE-DRY-RUN.md), or discard them deliberately with
-    # `-e allow_local_drift=true`. The guarded upgrade itself verifies local
-    # changes on its own, so it skips this check.
+    # Keep an edit by turning it into a local override with the upgrade workflow
+    # (docs/setup/local/UPGRADE.md); overrides are re-applied by every later
+    # deploy (see "Local overrides" below). Discard edits with
+    # `-e allow_local_drift=true`. The guarded upgrade verifies live state against
+    # its analysed backup itself, so it skips this check.
     #
-    # No manifest yet (first deploy, or a box deployed before this guard)
-    # cannot be checked; that is reported and the deploy continues.
+    # No record yet (first deploy, or a box deployed before this guard) cannot be
+    # checked; that is reported and the deploy continues.
     - name: "drift guard — check for hand edits since the last deploy"
       ansible.builtin.script:
-        cmd: "../scripts/deploy_drift.py check {{ digit_dir | quote }}"
+        cmd: "../scripts/deploy_state.py check {{ digit_dir | quote }}"
         executable: python3
-      register: deploy_drift_check
+      register: deploy_state_check
       changed_when: false
-      failed_when: deploy_drift_check.rc not in [0, 3]
+      failed_when: deploy_state_check.rc not in [0, 3]
       check_mode: false
       tags: ['always']
-      when: not (upgrade_safe_mode | default(false) | bool)
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - not (digit_render_only | default(false) | bool)
 
     - name: "drift guard — result"
       ansible.builtin.debug:
@@ -93,35 +96,56 @@
                                    ~ 'then cannot be told apart from its partial writes. '
                                    ~ 'This deploy records a fresh baseline.',
             'DRIFT': 'Hand edits found since the last deploy (see the next task).'
-          }[(deploy_drift_check.stdout | from_json).status] }}
+          }[(deploy_state_check.stdout | from_json).status] }}
       tags: ['always']
-      when: not (upgrade_safe_mode | default(false) | bool)
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - not (digit_render_only | default(false) | bool)
 
     - name: "drift guard — stop before overwriting hand edits"
       ansible.builtin.fail:
         msg: |
           Files under {{ digit_dir }} changed since the last successful deploy
-          ({{ (deploy_drift_check.stdout | from_json).recorded_at }}). This deploy would overwrite them.
-            modified: {{ (deploy_drift_check.stdout | from_json).modified | join(', ') or 'none' }}
-            added:    {{ (deploy_drift_check.stdout | from_json).added | join(', ') or 'none' }}
-            removed:  {{ (deploy_drift_check.stdout | from_json).removed | join(', ') or 'none' }}
-          To keep these changes, carry them forward with the upgrade workflow:
-            docs/setup/local/UPGRADE-DRY-RUN.md
+          ({{ (deploy_state_check.stdout | from_json).recorded_at }}). This deploy would overwrite them.
+            modified: {{ (deploy_state_check.stdout | from_json).modified | join(', ') or 'none' }}
+            added:    {{ (deploy_state_check.stdout | from_json).added | join(', ') or 'none' }}
+            removed:  {{ (deploy_state_check.stdout | from_json).removed | join(', ') or 'none' }}
+          To keep these changes, make them local overrides with the upgrade workflow:
+            docs/setup/local/UPGRADE.md
           To discard them and redeploy from this checkout, rerun with:
             ./deploy.sh {{ inventory_hostname }} -e allow_local_drift=true
       tags: ['always']
       when:
         - not (upgrade_safe_mode | default(false) | bool)
-        - deploy_drift_check.rc == 3
+        - not (digit_render_only | default(false) | bool)
+        - deploy_state_check.rc | default(0) == 3
         - not (allow_local_drift | default(false) | bool)
+
+    # A run limited by --tags does not re-render the edited files, so it cannot
+    # discard them: they would only become the recorded baseline.
+    - name: "drift guard — discarding hand edits needs a full deploy"
+      ansible.builtin.fail:
+        msg: >-
+          allow_local_drift discards hand edits by re-rendering them, which a run limited
+          by --tags does not do. Run a full ./deploy.sh {{ inventory_hostname }}
+          -e allow_local_drift=true first.
+      tags: ['always']
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - not (digit_render_only | default(false) | bool)
+        - deploy_state_check.rc | default(0) == 3
+        - allow_local_drift | default(false) | bool
+        - "'all' not in ansible_run_tags"
 
     - name: "drift guard — mark this deploy as in progress"
       ansible.builtin.script:
-        cmd: "../scripts/deploy_drift.py begin {{ digit_dir | quote }}"
+        cmd: "../scripts/deploy_state.py begin {{ digit_dir | quote }}"
         executable: python3
       changed_when: false
       tags: ['always']
-      when: not ansible_check_mode
+      when:
+        - not ansible_check_mode
+        - not (digit_render_only | default(false) | bool)
 
     # ── host_vars naming preflight ─────────────────────────────────────────
     # Ansible variables are lowercase (every key in inventory/host_vars/ is).
@@ -1618,12 +1642,14 @@
 
     # ==================== Deploy Directory ====================
     - name: Create DIGIT directory
+      tags: ['render']
       file:
         path: "{{ digit_dir }}"
         state: directory
 
     # ==================== Compose File ====================
     - name: Copy registry-prefixed Docker Compose file
+      tags: ['render']
       copy:
         src: ../docker-compose.egov-digit.yaml
         dest: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
@@ -1640,6 +1666,7 @@
     # name finds nothing left to change; "novu-bootstrap — fail: novu-bridge does not run
     # with state_root" checks the running container.
     - name: "Set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose before any container starts"
+      tags: ['render']
       ansible.builtin.replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg$'
@@ -1647,12 +1674,14 @@
       when: state_root != 'pg'
 
     - name: Copy idempotent Identity Keycloak configurator
+      tags: ['render']
       copy:
         src: ../../keycloak/configure-keycloak.sh
         dest: "{{ digit_dir }}/configure-identity-keycloak.sh"
         mode: '0750'
 
     - name: Copy the declared Identity Keycloak realm
+      tags: ['render']
       copy:
         src: ../../keycloak/realm.json
         dest: "{{ digit_dir }}/identity-keycloak-realm.json"
@@ -1661,6 +1690,7 @@
     # Sourced by the "notification stack — remove the retired OTP senders" tasks: proves
     # novu-bridge has taken over the login-OTP topic before the old senders go (#2097).
     - name: "Copy the core-SMS handoff check"
+      tags: ['render']
       ansible.builtin.copy:
         src: ../scripts/core-sms-handoff.sh
         dest: "{{ digit_dir }}/core-sms-handoff.sh"
@@ -1670,15 +1700,26 @@
     # what it changes and why it's gated. Default off; sandbox tenants
     # can flip `db_fast_path: true` in inventory/host_vars/<tenant>.yml.
     - name: Copy fast-path overlay (used only when db_fast_path is true)
+      tags: ['render']
       copy:
         src: ../docker-compose.fast-path.yml
         dest: "{{ digit_dir }}/docker-compose.fast-path.yml"
 
     - name: Copy existing-install upgrade safety overlay
+      tags: ['render']
       copy:
         src: ../docker-compose.upgrade-safe.yml
         dest: "{{ digit_dir }}/docker-compose.upgrade-safe.yml"
       when: upgrade_safe_mode | default(false) | bool
+
+    # Only the guarded upgrade layers it; a copy left behind by one must not
+    # sit in /opt/digit looking like a hand-added Compose file.
+    - name: Remove the upgrade safety overlay outside the guarded upgrade
+      tags: ['render']
+      file:
+        path: "{{ digit_dir }}/docker-compose.upgrade-safe.yml"
+        state: absent
+      when: not (upgrade_safe_mode | default(false) | bool)
 
     # ── DB-migration overlay (item #10) ────────────────────────────────────────
     # Per-service Flyway init containers + the db-history-normalize guard that
@@ -1694,6 +1735,7 @@
     # Ansible-only overlay + context rsync; CI-published -db images replaced
     # that), so the overlay needs no build context on the host.
     - name: Copy DB-migration overlay
+      tags: ['render']
       copy:
         src: ../docker-compose.migrations.yml
         dest: "{{ digit_dir }}/docker-compose.migrations.yml"
@@ -1702,6 +1744,7 @@
     # longer layered anywhere, so clear stale copies before someone -f's one
     # by hand against a migrations.yml it no longer matches.
     - name: Remove retired Ansible migrations overlay (if present)
+      tags: ['render']
       file:
         path: "{{ digit_dir }}/docker-compose.migrations.ansible.yml"
         state: absent
@@ -1712,6 +1755,7 @@
     # matching the k8s tier's always-on node_exporter DaemonSet. The scrape job
     # ships in otel/prometheus.yml (synced via digit_config_dirs below).
     - name: Copy monitoring overlay
+      tags: ['render']
       copy:
         src: ../docker-compose.monitoring.yml
         dest: "{{ digit_dir }}/docker-compose.monitoring.yml"
@@ -1724,6 +1768,7 @@
     # sync step, and `docker compose ... config` on the box always describes
     # the full set of things that COULD run.
     - name: Copy Matomo overlay
+      tags: ['render']
       copy:
         src: ../docker-compose.matomo.yml
         dest: "{{ digit_dir }}/docker-compose.matomo.yml"
@@ -1736,11 +1781,13 @@
     # it out of the image). logs/ is the agent's output, owned by the container
     # user (uid 10001) so it can write there.
     - name: Copy OpenSRE overlay
+      tags: ['render']
       copy:
         src: ../docker-compose.opensre.yml
         dest: "{{ digit_dir }}/docker-compose.opensre.yml"
 
     - name: Copy OpenSRE build context
+      tags: ['render']
       copy:
         src: ../opensre/
         dest: "{{ digit_dir }}/opensre/"
@@ -1748,28 +1795,32 @@
     # Where the runbook used to be mounted from, as a single file. Removed so
     # the build context does not carry a stale copy.
     - name: Remove the old OpenSRE runbook location
+      tags: ['render']
       file:
         path: "{{ digit_dir }}/opensre/known-issues.md"
         state: absent
 
     - name: Create the OpenSRE runbook directory
+      tags: ['render']
       file:
         path: "{{ digit_dir }}/opensre/runbook"
         state: directory
         mode: "0755"
 
     - name: Copy the known-issues runbook OpenSRE attaches to investigations
+      tags: ['render']
       copy:
         src: ../../docs/releases/2.12/operations/known-issues.md
         dest: "{{ digit_dir }}/opensre/runbook/known-issues.md"
         mode: "0644"
 
     - name: Create the OpenSRE log directory (owned by the container user)
+      tags: ['render']
       file:
         path: "{{ digit_dir }}/opensre/logs"
         state: directory
-        owner: "{{ omit if ansible_system == 'Darwin' else '10001' }}"
-        group: "{{ omit if ansible_system == 'Darwin' else '10001' }}"
+        owner: "{{ omit if (ansible_system == 'Darwin' or digit_render_only | default(false) | bool) else '10001' }}"
+        group: "{{ omit if (ansible_system == 'Darwin' or digit_render_only | default(false) | bool) else '10001' }}"
         mode: "0750"
 
     # Per-tenant compose overlay convention. If a file named
@@ -1790,9 +1841,10 @@
       # `--tags notifications` / `--tags master-repair` restart containers through it.
       # Untagged, it was skipped under --tags and every such restart died on an
       # undefined compose_files.
-      tags: ['always']
+      tags: ['always', 'render']
 
     - name: "Per-tenant compose overlay — copy to target (if present)"
+      tags: ['render']
       copy:
         src: "../docker-compose.{{ inventory_hostname }}.yml"
         dest: "{{ digit_dir }}/docker-compose.{{ inventory_hostname }}.yml"
@@ -1839,6 +1891,7 @@
     # `dest_name` is what ends up under {{ digit_dir }}/ on the target.
     # All live at the repo root since b8629c5f.
     - name: Synchronize config directories
+      tags: ['render']
       synchronize:
         src: "{{ item.value }}/"
         dest: "{{ digit_dir }}/{{ item.key }}/"
@@ -1905,6 +1958,7 @@
     # refuse to boot. `delete` keeps the target exact so a removed provider cannot
     # linger; the tests stay in the repo. The worker runs as uid 1000, hence the chmod.
     - name: "Novu worker providers — stage on target"
+      tags: ['render']
       when: enable_novu | default(false)
       synchronize:
         src: "../../backend/novu-bridge/novu-worker-providers/"
@@ -1935,6 +1989,7 @@
     # inode); so edit a staging copy, then `cat` it over the original — the
     # redirect truncates in place, preserving the inode the container will mount.
     - name: "Kong — stage a copy to pin CORS origins into"
+      tags: ['render']
       ansible.builtin.copy:
         src: "{{ digit_dir }}/kong/kong.yml"
         dest: "{{ digit_dir }}/kong/.kong.yml.pinned"
@@ -1946,6 +2001,7 @@
     # Origin scheme follows tls_enabled (Vinoth review) — a hardcoded https://
     # can never match the browser Origin on a plain-HTTP tenant.
     - name: "Kong — pin CORS origins to the tenant domain (staging copy)"
+      tags: ['render']
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: "(origins:\\s+# kong-cors-origins-marker\\n)(?:[ \\t]*-[ \\t]*.*\\n)+"
@@ -1956,6 +2012,7 @@
     # user-otp / egov-otp are never reached. Both mock `plugins:` lines carry a marker
     # comment; drop the key, its list items (same indent, `- `) and everything deeper.
     - name: "Kong — strip the OTP mocks when enable_otp_services (staging copy)"
+      tags: ['render']
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: "(?m)^([ \\t]*)plugins:[ \\t]*# kong-otp-mock-marker[ \\t]*\\n(?:\\1(?:-[ \\t]|[ \\t]+).*\\n)+"
@@ -1967,6 +2024,7 @@
     # identity_legacy_user_endpoints:true is the rollback switch for a
     # non-complete deployment. `| bool`: `-e ...=false` is the string "false".
     - name: "Kong — remove legacy identity endpoints from AUTH_OPTIONAL"
+      tags: ['render']
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: '(?m)^.*-- identity-legacy-user-endpoint\n'
@@ -1974,6 +2032,7 @@
       when: not (identity_legacy_user_endpoints | default(false) | bool)
 
     - name: "Kong — remove the legacy OTP validation mock route"
+      tags: ['render']
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: '(?ms)^# identity-legacy-otp-mock-start\n.*?^# identity-legacy-otp-mock-end\n'
@@ -1981,6 +2040,7 @@
       when: not (identity_legacy_user_endpoints | default(false) | bool)
 
     - name: "Kong — reopen legacy identity endpoints only when explicitly enabled"
+      tags: ['render']
       ansible.builtin.replace:
         path: "{{ digit_dir }}/kong/.kong.yml.pinned"
         regexp: '(?ms)^- name: identity-legacy-user-endpoints-denied # identity-legacy-user-deny-start\n.*?^# identity-legacy-user-deny-end\n'
@@ -1988,6 +2048,7 @@
       when: identity_legacy_user_endpoints | default(false) | bool
 
     - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
+      tags: ['render']
       ansible.builtin.shell: |
         set -euo pipefail
         cat "{{ digit_dir }}/kong/.kong.yml.pinned" > "{{ digit_dir }}/kong/kong.yml"
@@ -2004,6 +2065,7 @@
     # library, and a script whose sys.path resolution drifts can import the
     # pre-move version and silently run old code.
     - name: "Remove pre-#1743 Jupyter/dataloader directories left by an earlier deploy"
+      tags: ['render']
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
@@ -2020,6 +2082,7 @@
     # failed on every box. Drop this sync and `docker compose up` cannot resolve
     # that build context, so the MDMS data migrations stop reaching the host.
     - name: Synchronize docker build context dirs
+      tags: ['render']
       synchronize:
         src: "../docker/"
         dest: "{{ digit_dir }}/docker/"
@@ -2481,12 +2544,14 @@
           {{ configurator_boundary_search_limit | default('') }}
 
     - name: "Configurator SPA — ensure the runtime-config dir exists"
+      tags: ['render']
       ansible.builtin.file:
         path: "{{ digit_dir }}/configurator-runtime"
         state: directory
         mode: "0755"
 
     - name: "Configurator SPA — render runtime config.js"
+      tags: ['render']
       ansible.builtin.template:
         src: templates/configurator-config.js.j2
         dest: "{{ digit_dir }}/configurator-runtime/config.js"
@@ -2568,6 +2633,7 @@
         mode: '0644'
 
     - name: Add API proxy to digit-ui nginx config
+      tags: ['render']
       copy:
         content: |
           resolver 127.0.0.11 valid=10s;
@@ -2627,6 +2693,7 @@
 
     # ==================== Configure domain-specific settings ====================
     - name: Set Grafana domain in compose
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: 'api\.egov\.theflywheel\.in'
@@ -2645,12 +2712,14 @@
     # Both are tenant-shaped values the verbatim compose `copy:` resets
     # to upstream defaults on every deploy. Defensive same-pattern fix.
     - name: Set PARENT_LEVEL_TENANT_ID (egov-inbox) in compose
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)PARENT_LEVEL_TENANT_ID: pg$'
         replace: '\1PARENT_LEVEL_TENANT_ID: {{ state_root }}'
 
     - name: Set DIGIT_TENANT (digit-mcp) in compose
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)DIGIT_TENANT: pg$'
@@ -2673,6 +2742,7 @@
     # A backslash in a country code is unlikely in practice, but the fix is
     # free, so apply it here too for consistency.
     - name: Set EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE (egov-user) in compose
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: ''\+91''$'
@@ -2685,6 +2755,7 @@
     # Double every backslash in the tenant's mobileNumberRegex first so it
     # survives re.sub() and lands in the compose file unchanged.
     - name: Set EGOV_MOBILE_VALIDATION_DEFAULT_REGEX (egov-user) in compose
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: ''\^\[6-9\]\[0-9\]\{9\}\$''$'
@@ -2883,39 +2954,98 @@
       when:
         - build_digit_ui | default(false)
 
-    # The analyser's candidate is sanitized and deliberately non-deployable.
-    # The explicit deployment command materializes only the resolved local
-    # delta, fills secret fields from the existing deployment/OpenBao path, and
-    # passes that private overlay here.  Apply it after the normal target render
-    # and tenant rewrites, but before OpenBao or any application container starts.
-    - name: "upgrade-safe — reject unresolved redaction markers before applying the overlay"
+    # ==================== Local overrides ====================
+    # Hand edits an operator keeps on this box are local overrides, stored by
+    # scripts/deploy_state.py under {{ digit_dir }}/.digit-deploy-state/. They go
+    # on top of the render here: after every pre-start render task and tenant
+    # rewrite, before OpenBao or any container starts.
+    #
+    # A guarded upgrade (docs/setup/local/UPGRADE.md) ADOPTS its resolved local
+    # changes as the new override set. A normal deploy RE-APPLIES the stored set,
+    # and stops when this version renders an overridden file differently than
+    # when it was adopted: carrying the old copy forward would silently drop the
+    # new version's change, so that needs a rebase through the upgrade workflow.
+    # `-e drop_local_overrides=true` discards the overrides instead (and is the
+    # only thing that does; allow_local_drift is about unadopted hand edits).
+    - name: "local overrides — reject unresolved redaction markers in the upgrade overlay"
+      tags: ['always']
       ansible.builtin.command:
-        argv: [grep, -rIlF, --exclude-dir=.git, --, "<REDACTED>", "{{ upgrade_overlay_dir }}"]
+        argv: [grep, -rIlF, --, "<REDACTED>", "{{ upgrade_overlay_dir }}"]
       register: upgrade_redaction_markers
       # grep: 0 = a marker was found, 1 = none, >1 = error.
       failed_when: upgrade_redaction_markers.rc != 1
       changed_when: false
       delegate_to: localhost
       become: false
-      when: upgrade_safe_mode | default(false) | bool
+      when:
+        - upgrade_safe_mode | default(false) | bool
+        - not (digit_render_only | default(false) | bool)
 
-    - name: "upgrade-safe — apply resolved local configuration overlay"
+    - name: "local overrides — stage the upgrade overlay on the target"
+      tags: ['always']
       ansible.posix.synchronize:
         src: "{{ upgrade_overlay_dir }}/"
-        dest: "{{ digit_dir }}/"
-        archive: true
-        delete: false
-        delay_updates: false
+        dest: "{{ digit_dir }}/.digit-deploy-state/incoming/"
+        delete: true
         rsync_opts:
-          - "--inplace"
-      when: upgrade_safe_mode | default(false) | bool
+          - "--chmod=D700"
+      when:
+        - upgrade_safe_mode | default(false) | bool
+        - not (digit_render_only | default(false) | bool)
 
-    - name: "upgrade-safe — apply resolved local deletions"
-      ansible.builtin.file:
-        path: "{{ digit_dir }}/{{ item }}"
-        state: absent
-      loop: "{{ upgrade_deleted_paths }}"
-      when: upgrade_safe_mode | default(false) | bool
+    - name: "local overrides — stage the upgrade's resolved deletions"
+      tags: ['always']
+      ansible.builtin.copy:
+        content: "{{ upgrade_deleted_paths | to_json }}\n"
+        dest: "{{ digit_dir }}/.digit-deploy-state/incoming-deleted.json"
+        mode: "0600"
+      when:
+        - upgrade_safe_mode | default(false) | bool
+        - not (digit_render_only | default(false) | bool)
+
+    - name: "local overrides — adopt the upgrade's resolved local changes"
+      tags: ['always']
+      ansible.builtin.script:
+        cmd: >-
+          ../scripts/deploy_state.py adopt {{ digit_dir | quote }}
+          {{ (digit_dir ~ '/.digit-deploy-state/incoming') | quote }}
+          {{ (digit_dir ~ '/.digit-deploy-state/incoming-deleted.json') | quote }}
+        executable: python3
+      when:
+        - upgrade_safe_mode | default(false) | bool
+        - not (digit_render_only | default(false) | bool)
+
+    - name: "local overrides — re-apply onto this render"
+      tags: ['always']
+      ansible.builtin.script:
+        cmd: >-
+          ../scripts/deploy_state.py reapply {{ digit_dir | quote }}
+          {{ '--discard' if (drop_local_overrides | default(false) | bool) else '' }}
+        executable: python3
+      register: local_overrides
+      changed_when: (local_overrides.stdout | default('{}') | from_json).status | default('NONE') != 'NONE'
+      failed_when: local_overrides.rc | default(0) not in [0, 3]
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - not (digit_render_only | default(false) | bool)
+
+    - name: "local overrides — stop when this version changed an overridden file"
+      tags: ['always']
+      ansible.builtin.fail:
+        msg: |
+          This version renders these locally overridden files differently than the
+          version the overrides were made against:
+            {{ (local_overrides.stdout | from_json).conflicts | join('\n  ') }}
+          Carrying the old copies forward would silently drop this version's changes.
+          The configuration under {{ digit_dir }} was put back exactly as it was before
+          this run and nothing was restarted. Rebase the overrides onto this version
+          with the upgrade workflow (docs/setup/local/UPGRADE.md), or drop every
+          override and deploy this version's files with:
+            ./deploy.sh {{ inventory_hostname }} -e drop_local_overrides=true
+      when:
+        - not (upgrade_safe_mode | default(false) | bool)
+        - not (digit_render_only | default(false) | bool)
+        - local_overrides.rc | default(0) == 3
 
     # ==================== Secrets prep (OpenBao) — BEFORE the first compose-up ====================
     # Per-tenant secrets backend. Initialized once; subsequent runs auto-unseal
@@ -6608,6 +6738,7 @@
     # services pick up the real tenant context.
     # ────────────────────────────────────────────────────────────────
     - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (state-root) in compose"
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg$'
@@ -6625,6 +6756,7 @@
     # none). Either way "novu-bootstrap — fail: novu-bridge does not run with state_root"
     # checks the running container.
     - name: "post-bootstrap — set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose"
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg$'
@@ -6633,6 +6765,7 @@
       when: state_root != 'pg'
 
     - name: "post-bootstrap — set EGOV_STATE_LEVEL_TENANT_ID (state-root) in compose"
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)EGOV_STATE_LEVEL_TENANT_ID: pg$'
@@ -6647,6 +6780,7 @@
     # "Service returned null while fetching user" → HRMS crash-loops
     # on tenants whose state_root isn't pg. Manifest of #622.
     - name: "post-bootstrap — set EGOV_STATELEVEL_TENANT (HRMS variant) in compose"
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)EGOV_STATELEVEL_TENANT: pg$'
@@ -6656,6 +6790,7 @@
     # Keep UI links tenant-correct. Escalation tenant discovery does not read
     # this map; it reads STATE_LEVEL_TENANT_ID and discovers cities from MDMS.
     - name: "post-bootstrap — set EGOV_UI_APP_HOST_MAP (pgr-services tenant key) in compose"
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)EGOV_UI_APP_HOST_MAP: "\{pg:'
@@ -6663,6 +6798,7 @@
       when: state_root != 'pg'
 
     - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (city tier — enc-service + workflow) in compose"
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg\.citya$'
@@ -6670,6 +6806,7 @@
       when: state_root != 'pg'
 
     - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (inbox-service `mz` default) in compose"
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)STATE_LEVEL_TENANT_ID: mz$'
@@ -6683,6 +6820,7 @@
     # pg seed user while state_root has no system user at all and HRMS
     # crash-loops on the very thing the gate exists to prevent.
     - name: "post-bootstrap — point hrms-prereq-gate at state_root in compose"
+      tags: ['render']
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '("tenantId":")pg(","roleCodes":\["INTERNAL_MICROSERVICE_ROLE"\])'
@@ -8955,9 +9093,7 @@
     #     (state_root / digit_dir / upstream_kong_port are group/host vars and
     #     compose_files is computed by an `always` task, so all resolve under --tags).
     - name: "notif-seed — stage schemas, defaults, seeder and migration script on target"
-      when:
-        - not (upgrade_safe_mode | default(false) | bool)
-        - seed_notifications | default(enable_novu | default(false))
+      when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.copy:
         src: "{{ item }}"
@@ -10095,11 +10231,16 @@
     # capture every file this run rendered or rewrote.
     - name: "drift guard — record protected files after a successful deploy"
       ansible.builtin.script:
-        cmd: "../scripts/deploy_drift.py record {{ digit_dir | quote }}"
+        cmd: >-
+          ../scripts/deploy_state.py record {{ digit_dir | quote }}
+          {{ lookup('ansible.builtin.pipe', 'git -C ' ~ (playbook_dir | quote) ~ ' rev-parse HEAD 2>/dev/null || true')
+             if 'all' in ansible_run_tags else '' }}
         executable: python3
       changed_when: false
       tags: ['always']
-      when: not ansible_check_mode
+      when:
+        - not ansible_check_mode
+        - not (digit_render_only | default(false) | bool)
 
   handlers:
     - name: Reload nginx

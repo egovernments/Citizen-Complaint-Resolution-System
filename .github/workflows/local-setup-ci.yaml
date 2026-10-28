@@ -150,20 +150,49 @@ jobs:
       # in CI and their assertions were dead code — a template could be flipped
       # back to a pre-set data-wipe ack on a fully green build. A new file under
       # static/ now runs without anyone remembering to add it here.
-      # Guarded-upgrade analyser, deployer and normal-deploy drift guard. Named
-      # explicitly: other test_*.py here need pytest or a live stack.
-      - name: upgrade and drift-guard unit tests
-        run: >-
-          python3 -m unittest -v
-          local-setup.tests.test_upgrade_dry_run
-          local-setup.tests.test_upgrade_deploy
-          local-setup.tests.test_deploy_drift
-
       - name: static contract tests
         working-directory: local-setup/tests
         run: |
           npm ci
           npx jest static/
+
+  # Guarded upgrades (scripts/digit_upgrade) and the deploy state the playbook keeps
+  # (scripts/deploy_state.py). The render tests run playbook-deploy.yml for real with
+  # --tags render, as an unprivileged user with no Docker: that is the render contract
+  # the upgrade analyser depends on. They refuse to skip under CI, so a missing
+  # ansible-playbook or v2.12 tag is a red build, not a silently thinner one.
+  upgrade-tooling:
+    name: Upgrade tooling + render contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The legacy-render tests export the v2.12 tags.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install ansible-core and collections
+        run: |
+          python3 -m pip install ansible-core PyYAML
+          ansible-galaxy collection install ansible.posix community.general
+
+      - name: Unit tests
+        run: >-
+          python3 -m unittest -v
+          local-setup.tests.test_deploy_state
+          local-setup.tests.test_digit_upgrade
+          local-setup.tests.test_render_contract
+
+      - name: End to end (analyse, resolve, resume, deploy preflight)
+        run: python3 -m unittest -v local-setup.tests.test_upgrade_e2e
 
   test:
     runs-on: ubuntu-latest

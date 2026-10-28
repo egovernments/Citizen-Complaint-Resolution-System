@@ -1668,7 +1668,9 @@ describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
     expect(earlyTask).toContain("regexp: '^(\\s+)NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg$'");
     expect(earlyTask).toContain("replace: '\\1NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: {{ state_root }}'");
     expect(earlyTask).toContain("when: state_root != 'pg'");
-    expect(earlyTask).not.toMatch(/\n {6}tags:/); // not skippable on a tagged run that starts the bridge
+    // Not skippable on a tagged run that starts the bridge: no tag a deploy selects on. `render` is
+    // the render contract's (scripts/digit_upgrade); it selects the task for a scratch render only.
+    for (const line of earlyTask.match(/\n {6}tags:.*/g) ?? []) expect(line.trim()).toBe("tags: ['render']");
     // and the running container is still checked against state_root at the end
     expect(task('novu-bootstrap — fail: novu-bridge does not run with state_root')).toContain(
       "(bridge_core_tenant.stdout | default('') | trim) != state_root");
