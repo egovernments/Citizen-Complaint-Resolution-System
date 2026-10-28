@@ -159,8 +159,16 @@ class UpgradeEndToEndTests(unittest.TestCase):
         except NeedsOperator:
             pass  # the same conflict as test_1
         run_dir = next((Path(self._temp.name) / "auto-runs").glob("digit-upgrade-*"))
-        manifest = analyse.read_json(run_dir / "run.json")
-        self.assertEqual((self.base, "auto"), (manifest["base_commit"], manifest["base_ref_source"]))
+        auto = analyse.read_json(run_dir / "run.json")
+        given = analyse.read_json(self.run_dir / "run.json")
+        # Commits that render identically are equally correct bases; what must
+        # hold is that the analysis is the one the true base gives.
+        self.assertEqual("auto", auto["base_ref_source"])
+        self.assertEqual(given["tree_hashes"]["base"], auto["tree_hashes"]["base"])
+        self.assertEqual(given["local_changes"], auto["local_changes"])
+        candidates = auto["base_selection"]["candidates"]
+        chosen = next(c for c in candidates if c["commit"] == auto["base_commit"])
+        self.assertEqual(min(c["differing_lines"] for c in candidates), chosen["differing_lines"])
         self.assertIn("found from the files on the box", (run_dir / "report.md").read_text(encoding="utf-8"))
 
 if __name__ == "__main__":

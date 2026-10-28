@@ -60,8 +60,17 @@ previously recorded deployed version.
 Run it on the DIGIT server, from a checkout of the version you are upgrading
 **to**, with that tenant's host_vars in
 `local-setup/ansible/inventory/host_vars/<tenant>.yml` (`ansible_connection:
-local`). Needs Python 3, PyYAML, Git, `ansible-playbook` with the
-`ansible.posix` collection, `rsync`, `zstd` and `iptables`.
+local`). Needs Python 3, PyYAML, Git, `rsync`, `zstd`, `iptables`, and the same
+Ansible that `deploy.sh` uses, as `scripts/install-prereqs.sh` sets it up (its
+modules need the distribution's passlib and bcrypt; a private virtualenv without
+them fails part-way through the deploy).
+
+Update the tenant's host_vars for the target version **before** analysing:
+the analysis and the deploy run the target's `preflight.py` and refuse what it
+refuses, but some requirements are only checked by the playbook itself (in
+2.12.x → master, for example, Keycloak and its SMTP settings). Read the target's
+`_example.yml` and release notes. A missed one fails the deploy, which then
+rolls back cleanly, but costs a maintenance window.
 
 ### 1. Back up /opt/digit and analyse
 
