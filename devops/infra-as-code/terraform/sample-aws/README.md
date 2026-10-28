@@ -92,3 +92,37 @@ someone with `elasticloadbalancing:DeleteLoadBalancer` to delete it manually.
 ## Documentation
 
 Refer to our [Core Infrastructure Documentation](https://core.digit.org/guides/installation-guide/infrastructure-setup/aws/3.-provision-infrastructure) to deploy the infrastructure end-to-end.
+
+## cms-saas.digit.org
+
+The production cms-saas cluster (EKS `ccrs-prod`, AWS account 349271159511) is
+managed from this directory with the files in `environments/`:
+
+| File | In git | What |
+|---|---|---|
+| `cms-saas.tfvars` | yes | every input the deployment runs with |
+| `cms-saas.s3.tfbackend` | yes | state bucket, key and lock table; overrides `main.tf`'s `REPLACE_ME` |
+| `cms-saas.remote-state.backend.tf` | yes | backend of the `remote-state/` stack (the state bucket itself) |
+| `cms-saas.secret.tfvars` | **no** | `db_password` (the RDS master password), shared within the team out of band |
+
+```bash
+terraform init -reconfigure -backend-config=environments/cms-saas.s3.tfbackend
+terraform plan -var-file=environments/cms-saas.tfvars -var-file=environments/cms-saas.secret.tfvars
+```
+
+Both stacks keep their state in `s3://ccrs-prod-tfstate-349271159511`:
+`terraform-setup/terraform.tfstate` (this stack) and
+`remote-state/terraform.tfstate` (the bucket and lock table). To work on the
+latter:
+
+```bash
+cp environments/cms-saas.remote-state.backend.tf remote-state/backend_override.tf   # git-ignored
+cd remote-state && terraform init -reconfigure
+terraform plan -var=bucket_name=ccrs-prod-tfstate-349271159511
+```
+
+**Before an apply, read the plan.** As of 2026-10-28 it reports no create or
+destroy, and four in-place updates that are not input drift: the EKS module
+tracks the newest node AMI release and `vpc-cni` add-on, so an apply rolls the
+worker nodes onto the new AMI and upgrades the add-on, and the EBS CSI
+driver's IAM documents show as known after apply.

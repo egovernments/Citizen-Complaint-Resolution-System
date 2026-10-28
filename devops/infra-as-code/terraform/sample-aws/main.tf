@@ -186,7 +186,9 @@ module "db" {
   source                        = "../modules/db/aws"
   subnet_ids                    = "${module.network.private_subnets}"
   vpc_security_group_ids        = ["${module.network.rds_db_sg_id}"]
-  availability_zone             = "${element(var.availability_zones, 0)}"
+  # db_availability_zone when set (an environment whose RDS already sits in
+  # another zone: changing an instance's zone replaces it), else the workers' zone.
+  availability_zone             = var.db_availability_zone != "" ? var.db_availability_zone : element(var.availability_zones, 0)
   instance_class                = var.db_instance_class  ## postgres db instance type
   engine_version                = var.db_version   ## postgres version
   storage_type                  = "gp3"
