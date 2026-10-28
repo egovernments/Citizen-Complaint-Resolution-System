@@ -6,11 +6,11 @@
 
 ## A. Release overview
 
-CMS (Complaint Management System) v2.20 adds self-serve workspace onboarding, a single sign-in service built on Keycloak, per-tenant notifications, and a redesigned citizen and employee experience. It also includes every v2.12.1 patch fix.
+Complaint Management System (CMS) v2.20 adds self-serve workspace onboarding, a single sign-in service built on Keycloak, per-tenant notifications, and a redesigned citizen and employee experience. It also includes every v2.12.1 patch fix.
 
 | Item | Value |
 | --- | --- |
-| Product | CMS (Complaint Management System), built on the DIGIT platform |
+| Product | Complaint Management System (CMS), built on the DIGIT platform |
 | Release | v2.20, the self-serve SaaS release |
 | Builds on | v2.12 (September 2026) and its v2.12.1 patch (October 2026) |
 | Release date | To be confirmed |
@@ -18,12 +18,12 @@ CMS (Complaint Management System) v2.20 adds self-serve workspace onboarding, a 
 
 **Themes**
 
-1. **Self-serve onboarding.** A government signs up, sets up its own complaint system in five guided steps, and starts taking complaints without eGov engineers.
+1. **Self-serve onboarding.** A government admin signs up, sets up its own complaint system in five guided steps, and starts taking complaints without eGov engineers.
 2. **One sign-in for everyone.** Citizens, employees and administrators sign in through one secure service. People can belong to several workspaces.
-3. **Better complaint handling.** Escalation follows the officer's reporting line, roles are clearer, and the citizen and employee screens are redesigned.
+3. **Better complaint handling.** Escalation follows the officer's reporting line, roles are standardised, and the citizen and employee screens are enhanced.
 4. **Notifications per workspace.** Each workspace chooses its own SMS, email and WhatsApp providers and its own message wording.
-5. **Security and safe operations.** More than 30 partner security-audit findings are fixed (six remain open), and an upgrade can no longer wipe a database by accident.
-6. **More languages and channels.** French and Portuguese work out of the box, citizens can speak their complaint, and WhatsApp complaints are supported end to end.
+5. **Security and safe operations.** More than 30 partner security-audit findings are fixed (six remain open), and an upgrade no longer leads to a wipe in the database.
+6. **More languages and channels.** French and Portuguese available out of the box, citizens can speak their complaint, and WhatsApp complaints are supported end to end.
 
 ## B. Highlights at a glance
 
@@ -31,12 +31,12 @@ CMS (Complaint Management System) v2.20 adds self-serve workspace onboarding, a 
 | --- | --- | --- |
 | Self-serve workspace onboarding | A new government signs up and sets up in five guided steps (Branding, Geography, Departments, Employees, Complaint types), then opens the complaint desk. | Administrators, partners |
 | One secure sign-in | One sign-in for citizens, employees and admins, with invitations, sessions that stay alive while you work, and sign-out of other devices. | All users, security teams |
-| Reliable escalation | Complaints move up the officer's reporting line on time and once per level. Admins set the timings. | Citizens, officers, admins |
+| Enhanced escalation | Complaints move up the officer's reporting line on time and once per level. Admins set the timings. | Citizens, officers, admins |
 | Clearer complaint roles | Only the officer holding a complaint can escalate it. A Grievance Routing Officer assigns or rejects. | Employees |
 | Redesigned citizen journey | File a complaint in three steps, with voice input. "My Complaints" works as an inbox. | Citizens |
 | Redesigned employee console | New top bar and sidebar, tidier inbox search and filters, better on phones. | Employees |
 | Notifications per workspace | Each workspace has its own message providers, wording and delivery logs. | Administrators, operations |
-| French and Portuguese | Citizen and employee screens in French and Portuguese, and the chosen language is remembered. | Citizens, employees |
+| French and Portuguese | Citizen and employee screens are available in French and Portuguese out-of-the-box. | Citizens, employees |
 | Workspace trial (optional) | Partners can put new workspaces on a 30-day trial, with reminder emails before it ends. | Partners, operators |
 | Readable on every theme | Text, field borders and focus outlines meet accessibility contrast standards on all themes. | All users |
 | Security audit findings fixed | 30+ audit findings fixed, including two high-severity ones; six remain open (section H). Plus hundreds of library vulnerabilities. | Everyone |
@@ -46,7 +46,7 @@ CMS (Complaint Management System) v2.20 adds self-serve workspace onboarding, a 
 
 ### 1. Self-serve workspace onboarding
 
-A city or organisation can sign up on its own and get a working complaint system. A founder creates an account, then goes through five guided steps: Branding, Geography, Departments, Employees and Complaint types (with a resolution time per category). When setup is done, the console opens the complaint desk. Employees get invitations, and admins can see whether each invite was accepted. Self-serve workspaces created earlier pick up new defaults in the background without losing their own changes; workspaces set up by the deployment itself are not upgraded this way. Sign-up is offered in English, French, Hindi and Portuguese, and, where the deployment has set up Google, admins can sign up with their Google account. This cuts the engineering work needed to launch a new city.
+A city or organisation can sign up on its own and get a working complaint system. An admin creates an account, then goes through five guided steps: Branding, Geography, Departments, Employees and Complaint types (with a resolution time per category). When account setup is done, the Complaint Management Studio (also referred to as the 'Configurator') is displayed for any day-to-day admin updates. Employees get invitations, and admins can see whether each invite was accepted. Self-serve workspaces created earlier pick up new defaults in the background without losing their own changes; workspaces set up by the deployment itself are not upgraded this way. Sign-up is offered in English, French, Hindi and Portuguese, and, where the deployment has set up Google, admins can sign up with their Google account. This cuts the engineering work needed to launch a new account.
 
 ### 2. One secure sign-in
 
@@ -62,19 +62,19 @@ Citizens file a complaint in three steps and can speak the description instead o
 
 ### 5. French and Portuguese out of the box
 
-Citizen and employee screens ship in French and Portuguese. The device remembers the chosen language. The onboarding pages and the Geography step are translated too, and sign-up offers English, French, Hindi and Portuguese. Swahili is no longer offered for new sign-ups; existing Kenyan workspaces keep it. The French, Hindi and Portuguese onboarding text is machine-translated and still needs a native-speaker review, and some sign-up screen text is still in English.
+Citizen and employee screens ship in French and Portuguese out of the box. 
 
 ### 6. Complaints on WhatsApp
 
-Citizens can file and track complaints over WhatsApp, in the workspace's own language and country code. Staff see the real complainant, not the chatbot account.
+Citizens can file and track complaints over WhatsApp, in the workspace's own language and country code.
 
 ### 7. Official boundaries for Geography setup
 
-During setup, an admin can start from a country's official administrative boundaries instead of drawing them. Each level shows how confident the match is, and licences travel with the data. Chosen boundaries stay in an editable list until the admin saves. Google Maps can be used as the map.
+During setup, an admin can start from a country's pre-loaded administrative boundaries (if available) instead of drawing them. Each level shows the degree of validation of the data, and licences are tagged with the data. Chosen boundaries stay in an editable list until the admin saves. Google Maps can be used as the map provided the admin is to bring their own google API key.
 
 ### 8. Escalation policy editor
 
-Admins set when complaints escalate, for example at 80%, 120% and 200% of a complaint type's resolution time, and can override it per complaint type. The editor warns about settings that would not work and blocks saving them.
+Admins set when complaints escalate automatically, for example at 80%, 120% and 200% of a complaint type's resolution time, and can override it per complaint type. 
 
 ### 9. Workspace trial and reminder emails (optional)
 
@@ -92,50 +92,39 @@ The Configurator dashboard shows copyable links to the workspace's employee and 
 - **Read-only automation tools.** The automation server can be shared publicly with write actions switched off.
 - **Security scanning.** One scanner across the codebase, with a dashboard.
 
-## D. Enhancements
-
-These improve existing screens. The benefits are what each change is designed to do; no usage measurements were available.
+## D. UI/UX Enhancements
 
 **Employee console**
 
-- A full-width top bar with a collapsible sidebar, including a Complaints section.
-- Inbox search and filters line up, scroll correctly and work on tablets and phones.
-- A tenant switcher for staff who work across tenants.
-- The product is named "Complaint Management System" throughout.
-- Account and security settings read as one tidy page. Changing your email returns you to your workspace, and Edit Profile shows the new address.
-- Password-reset pages keep the workspace's colours.
+- Enhanced Employee experience UI
+- A workspace switcher for staff who work across workspaces.
 
 **Citizen app**
 
-- The same look as the employee app, with a collapsible sidebar.
-- Sign-up and sign-in screens share one design.
-- A home-page banner the admin sets during Branding.
-- "Complaint Category" and "Complaint Subcategory" are used everywhere.
+- Enhanced Citizen experience UI
+- Enhanced complaint filing flow
+- Voice-enabled complaint description intake in EN, PT and FR.
 
 **Public dashboard**
 
 - Controls in the Configurator: status, preview, KPI list and access settings.
-- KPI tiles show how fresh their data is, for example "updated 5 minutes ago".
-- The Add KPI list is searchable and sorted A–Z, and the citizen app links to the dashboard.
+- KPI tiles show how the last refresh their data is, for example "updated 5 minutes ago".
+- The Add KPI list is searchable and sorted alphabetically, and the citizen app links to the dashboard.
 
 **Configurator**
 
 - A searchable time-zone picker, and a help panel, guided tour and short videos for each setup step.
-- Translators can see the English text next to each translation.
-- Required fields are marked, logo files are checked, and branding can be changed later.
-- Complaint categories uploaded from a spreadsheet keep readable names in every language.
-- Only administrators can open the Configurator.
+- Branding changes can now be made in the Management Console.
+- Additional notification configuration options, now at an account level. 
 
 **Analytics**
 
-- Each workspace can send usage events to Matomo or PostHog, with no names, contact details or free text.
-- One consistent set of event names across all three apps.
-- Each partner uses its own analytics and error-tracking accounts.
+- Each workspace can send usage events to Matomo or PostHog, without sending PII.
+- Each partner can use its own analytics and error-tracking accounts.
 
 **Accessibility**
 
 - Text, field borders and focus outlines meet colour-contrast standards on every theme. Contrast failures dropped from 31 to 0 on citizen pages and from 87 to 0 on employee pages.
-- Keyboard and screen-reader improvements are not part of this release.
 
 **Quality**
 
