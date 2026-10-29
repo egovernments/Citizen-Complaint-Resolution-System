@@ -880,11 +880,6 @@ async function writeVerifiedSignupIdentityProfile(input: {
 }
 
 /**
- * Creates the structural Keycloak record before email verification so its
- * profile is complete when the action token is redeemed. It grants no tenant
- * membership or role and deliberately leaves `emailVerified` false.
- */
-/**
  * Whether an email already belongs to an account, so sign-up should send the
  * person to sign in instead. A provisional record this BFF created for an
  * unfinished sign-up is not an account yet: requesting another link resumes it.
@@ -903,6 +898,11 @@ export async function signupEmailBelongsToAccount(email: string): Promise<boolea
   return existing.enabled === false || !managedDraft;
 }
 
+/**
+ * Creates the structural Keycloak record before email verification so its
+ * profile is complete when the action token is redeemed. It grants no tenant
+ * membership or role and deliberately leaves `emailVerified` false.
+ */
 export async function ensureMagicLinkSignupIdentity(input: {
   email: string;
   firstName: string;

@@ -641,6 +641,31 @@ describe("identity BFF", () => {
       enabled: true,
       attributes: { "digit.identityBffSignup": ["true"] },
     });
+
+    // Asking again before the first link is used sends another one.
+    const linksBeforeRetry = (await (
+      await fetch(`${config.keycloakAdminUrl}/__test/magic-links`)
+    ).json() as unknown[]).length;
+    const retry = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authentication/magic-link-requests`,
+      {
+        method: "POST",
+        headers: {
+          Origin: "http://localhost:3000",
+          "Content-Type": "application/json",
+          "X-Forwarded-For": "203.0.113.33",
+        },
+        body: JSON.stringify({
+          firstName: "New",
+          lastName: "Founder",
+          email: "new.founder@example.com",
+        }),
+      },
+    );
+    expect(retry.status).toBe(202);
+    await expect.poll(async () => (await (
+      await fetch(`${config.keycloakAdminUrl}/__test/magic-links`)
+    ).json() as unknown[]).length).toBe(linksBeforeRetry + 1);
   });
 
   it("returns provider failures through a one-time, browser-safe result", async () => {
