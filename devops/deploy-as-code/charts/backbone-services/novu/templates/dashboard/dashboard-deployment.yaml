@@ -6,7 +6,7 @@ metadata:
   labels:
 {{- toYaml .Values.dashboard.labels | nindent 4 }}
 spec:
-  {{- include "novu.replicas" (dict "component" .Values.dashboard "root" $) | nindent 2 }}
+  {{- include "novu.replicas" (dict "component" .Values.dashboard) | nindent 2 }}
   selector:
     matchLabels:
 {{- toYaml .Values.dashboard.labels | nindent 6 }}

@@ -371,12 +371,12 @@ resource "aws_eks_addon" "aws_ebs_csi_driver" {
 # `kubectl top` reads. Without it those HPAs report <unknown> and never scale.
 # Its pods run on the worker nodes, so it waits for the node group like the
 # add-ons above; created before any node joins, it stays DEGRADED and times
-# out the apply. Pinned so an unrelated apply never upgrades it.
+# out the apply. No addon_version, like kube-proxy and coredns: EKS picks the
+# default for the cluster's version at create time, and later applies keep it.
 resource "aws_eks_addon" "metrics_server" {
   depends_on = [module.eks_managed_node_group]
   cluster_name      = var.cluster_name
   addon_name        = "metrics-server"
-  addon_version     = "v0.9.0-eksbuild.14"
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 }

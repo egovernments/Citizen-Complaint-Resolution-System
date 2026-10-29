@@ -11,22 +11,18 @@
 {{- end -}}
 
 {{- /* spec.replicas for a Deployment with an optional HPA. Call with
-       (dict "component" .Values.<api|worker|ws|dashboard> "root" $).
-       Without an HPA: the configured count. Under the HPA the count is the
-       HPA's, so render what is live: a fixed value would reset it on every
-       upgrade, and leaving the field out would reset it once (Helm's
-       three-way merge clears a field the old release set, so it defaults to
-       1). Nothing live yet (first install, or `helm template` / --dry-run,
-       where lookup returns nothing): leave it out and the HPA's minReplicas
-       applies. */ -}}
+       (dict "component" .Values.<api|worker|ws|dashboard>).
+       Without an HPA: the configured count. Under the HPA: left out, so the
+       count is the HPA's and no upgrade resets it. A fixed value here reset it
+       on every upgrade.
+       One-time cost: on a release that rendered `replicas` before, Helm's
+       three-way merge clears the field on the first upgrade without it, so
+       Kubernetes sets the Deployment to 1 and the HPA scales it back up on its
+       next sync (~15s plus pod start-up). Not `lookup` of the live count:
+       helm-diff renders client-side, where lookup returns nothing, so every
+       `helmfile diff` would show a reset and every apply a new revision. */ -}}
 {{- define "novu.replicas" -}}
-{{- $c := .component -}}
-{{- if not $c.autoscaling.enabled -}}
-replicas: {{ $c.replicas }}
-{{- else -}}
-{{- $live := lookup "apps/v1" "Deployment" (include "novu.namespace" .root) $c.name -}}
-{{- if and $live $live.spec.replicas -}}
-replicas: {{ $live.spec.replicas }}
-{{- end -}}
+{{- if not .component.autoscaling.enabled -}}
+replicas: {{ .component.replicas }}
 {{- end -}}
 {{- end -}}
