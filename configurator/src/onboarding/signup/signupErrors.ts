@@ -23,6 +23,7 @@ export const SIGNUP_ERRORS: Record<string, string> = {
   ONBOARDING_OPERATION_NOT_FOUND: 'We couldn’t find this setup run. Reload the page.',
   // Identity BFF: the email sign-up request.
   SIGNUP_UNAVAILABLE: 'Sign-up by email isn’t available right now. Try again later, or sign up another way.',
+  ACCOUNT_EXISTS: 'An account with this email already exists. Sign in instead, or reset your password from the sign-in page.',
   UNTRUSTED_ORIGIN: 'Sign-up can’t be started from this address. Open the sign-up page from the main site and try again.',
   UNSUPPORTED_RETURN_TO: 'Sign-up can’t be started from this address. Open the sign-up page from the main site and try again.',
   // Identity BFF: opening a workspace once it exists.

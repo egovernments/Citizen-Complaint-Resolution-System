@@ -56,6 +56,7 @@ export const ERROR_CODES = {
   // Sign-in methods and account actions.
   SIGNIN_METHODS_UNAVAILABLE: { status: 503, retry: "yes", meaning: "The Keycloak client's method catalogue can't be read" },
   SIGNUP_UNAVAILABLE: { status: 503, retry: "after-change", meaning: "Self sign-up (magic link) is not enabled" },
+  ACCOUNT_EXISTS: { status: 409, retry: "no", meaning: "Sign-up for an email that already has an account; sign in instead" },
   ACTION_NOT_ALLOWED: { status: 400, retry: "no", meaning: "The action is not in the client's digit.auth.account.actions" },
   CREDENTIAL_NOT_SECOND_FACTOR: { status: 409, retry: "no", meaning: "delete_credential targets a primary credential" },
   PROVIDER_ALREADY_LINKED: { status: 409, retry: "no", meaning: "idp_link for a provider that is already linked" },
