@@ -1010,6 +1010,7 @@
 {"code": "app.onboarding.requirements.departments", "message": "Adicione pelo menos um departamento e um cargo.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.requirements.employees", "message": "Adicione pelo menos um funcionário que possa fazer login.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.requirements.geography", "message": "Adicione pelo menos dois níveis de locais, por exemplo, condados e os bairros dentro deles.", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.onboarding.signup_errors.ACCOUNT_EXISTS", "message": "Já existe uma conta com este e-mail. Entre com ela ou redefina sua senha na página de login.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.signup_errors.ACCOUNT_LOCKED", "message": "Sua conta neste espaço de trabalho está bloqueada. Peça ao administrador para desbloqueá-la.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.signup_errors.CONFIGURATOR_ROLE_REQUIRED", "message": "O Configurador é para administradores do espaço de trabalho, e sua conta aqui não tem função de administrador. Use o app do funcionário ou peça acesso a um administrador.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.signup_errors.DIGIT_ACCOUNT_INACTIVE", "message": "Sua conta neste espaço de trabalho não está ativa. Peça ao administrador para reativá-la.", "module": "configurator-ui", "locale": "pt_BR"},

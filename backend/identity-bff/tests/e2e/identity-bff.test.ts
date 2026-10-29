@@ -487,7 +487,7 @@ describe("identity BFF", () => {
     );
     expect(hostedMagic.status).toBe(400);
 
-    const magic = await fetch(
+    const magicSignup = () => fetch(
       `http://localhost:${getAppPort()}/identity/v1/authentication/magic-link-requests`,
       {
         method: "POST",
@@ -497,13 +497,27 @@ describe("identity BFF", () => {
           "X-Forwarded-For": "203.0.113.30",
         },
         body: JSON.stringify({
-          firstName: "Magic",
-          lastName: "Founder",
+          firstName: "Demo",
+          lastName: "Person",
           email: "person@example.com",
           returnTo: "/client/signup",
         }),
       },
     );
+    const linksBeforeExisting = (await (
+      await fetch(`${config.keycloakAdminUrl}/__test/magic-links`)
+    ).json() as unknown[]).length;
+    // An established account is sent to sign in, and no email goes out.
+    const existing = await magicSignup();
+    expect(existing.status).toBe(409);
+    expect(await existing.json()).toMatchObject({ code: "ACCOUNT_EXISTS" });
+    expect((await (
+      await fetch(`${config.keycloakAdminUrl}/__test/magic-links`)
+    ).json() as unknown[])).toHaveLength(linksBeforeExisting);
+
+    // An unfinished sign-up (this BFF's provisional record) gets another link.
+    await kcUpdate("/users/identity-user-1", { attributes: { "digit.identityBffSignup": ["true"] } });
+    const magic = await magicSignup();
     expect(magic.status).toBe(202);
     expect(await magic.json()).toEqual({
       message: "Check your email for a link to continue creating your account.",
@@ -555,6 +569,8 @@ describe("identity BFF", () => {
       firstName: "Demo",
       lastName: "Person",
     });
+    // Finishing the sign-up leaves an ordinary account behind.
+    expect(magicUser.attributes?.["digit.identityBffSignup"]).toBeUndefined();
 
     await kcAdmin("/users", {
       id: "unverified-provider-user",
@@ -584,14 +600,8 @@ describe("identity BFF", () => {
         }),
       },
     );
-    expect(unverifiedProviderAttempt.status).toBe(202);
-    await expect.poll(async () => {
-      const log = await (
-        await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)
-      ).json() as string[];
-      return log.filter((entry) => entry.endsWith("/users")).length;
-    }).toBeGreaterThan(0);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(unverifiedProviderAttempt.status).toBe(409);
+    expect(await unverifiedProviderAttempt.json()).toMatchObject({ code: "ACCOUNT_EXISTS" });
     expect((await (
       await fetch(`${config.keycloakAdminUrl}/__test/magic-links`)
     ).json() as Array<Record<string, unknown>>)).toHaveLength(linksBeforeUnverifiedAttempt);

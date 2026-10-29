@@ -5,7 +5,7 @@ import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
 import { privateRateKey, withinLimit as withinRateLimit } from "../../infrastructure/rate-limit.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
-import { ensureMagicLinkSignupIdentity } from "../organizations/organization-service.js";
+import { ensureMagicLinkSignupIdentity, signupEmailBelongsToAccount } from "../organizations/organization-service.js";
 import { createLoginAttempt } from "../sessions/session-store.js";
 import { enabledIdentityMethods } from "./methods.js";
 import { returnDestination } from "./redirects.js";
@@ -82,8 +82,8 @@ async function processSignupMagicLink(input: {
     await sendSignupMagicLink(input);
     console.info("Signup magic-link request processed", { outcome: "sent" });
   } catch (error) {
-    // The public response is deliberately identical for existing, disabled,
-    // newly-created, and temporarily unavailable identities.
+    // An address that already has an account is answered before this runs;
+    // the rest share one public response.
     console.warn("Signup magic-link request failed", { error: (error as Error).message });
   }
 }
@@ -121,6 +121,19 @@ export function registerMagicLinkRoutes(app: express.Application): void {
       withinLimit(`${prefix}:email:${privateRateKey("magic-link", email)}`),
     ]);
     if (!ipAllowed || !emailAllowed) return response.status(202).json(ACCEPTED);
+
+    // An existing account signs in rather than signing up again. If Keycloak
+    // can't answer, the request carries on and the background step decides.
+    const accountExists = await signupEmailBelongsToAccount(email).catch((error) => {
+      console.warn("Signup account lookup failed", { error: (error as Error).message });
+      return false;
+    });
+    if (accountExists) {
+      return response.status(409).json(errorBody(
+        "ACCOUNT_EXISTS",
+        "An account with this email already exists. Sign in instead, or reset your password if you have forgotten it.",
+      ));
+    }
 
     const attempt = await createLoginAttempt({
       oidcClientId: config.keycloakMagicLinkClientId,
