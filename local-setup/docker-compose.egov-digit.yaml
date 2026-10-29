@@ -1742,7 +1742,7 @@ services:
     # (build/NIGHTLY-BUILDS.md "Release step").
     # PGR_SERVICES_IMAGE still overrides this one image (e.g. a local build) — then
     # pin the rest of the stack to the same build yourself.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:${NOTIFICATION_STACK_TAG:-master-dbd4f0e}}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:${NOTIFICATION_STACK_TAG:-v2.20}}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1894,7 +1894,7 @@ services:
   # necessarily public and unauthenticated at the network layer, so it relies on
   # Twilio signature validation (TWILIO_VALIDATE_SIGNATURE, on by default).
   xstate-chatbot-db:
-    image: ${XSTATE_CHATBOT_DB_IMAGE:-egovio/xstate-chatbot-db:master-dbd4f0e}
+    image: ${XSTATE_CHATBOT_DB_IMAGE:-egovio/xstate-chatbot-db:v2.20}
     container_name: xstate-chatbot-db
     profiles: ["chatbot"]
     depends_on:
@@ -1919,7 +1919,7 @@ services:
       - egov-network
 
   xstate-chatbot:
-    image: ${XSTATE_CHATBOT_IMAGE:-egovio/xstate-chatbot:master-dbd4f0e}
+    image: ${XSTATE_CHATBOT_IMAGE:-egovio/xstate-chatbot:v2.20}
     container_name: xstate-chatbot
     restart: unless-stopped
     profiles: ["chatbot"]
@@ -2055,7 +2055,7 @@ services:
     # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
     # the Container Build Pipeline, multi-arch); the bundle lives at
     # /var/web/digit-ui, matching the mounted digit-ui.conf root.
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-dbd4f0e}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:v2.20}
     container_name: digit-ui
     ports:
       - "${PROXY_BIND_IP:-127.0.0.1}:18080:80"
@@ -2089,7 +2089,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
     cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
-    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:master-dbd4f0e}
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:v2.20}
     container_name: configurator
     # Per-tenant runtime config, rendered by the ansible deploy from host_vars
     # (templates/configurator-config.js.j2) and mounted over the neutral
@@ -2447,7 +2447,7 @@ services:
     # pulls the public build published by this repo's own image pipeline
     # (build/build-config.yml -> egovio/digit-mcp). Override MCP_IMAGE to use a
     # different registry/tag.
-    image: ${MCP_IMAGE:-egovio/digit-mcp:master-dbd4f0e}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:v2.20}
     container_name: digit-mcp
     restart: unless-stopped
     depends_on:
@@ -2525,7 +2525,7 @@ services:
     # MCP_IMAGE override to a flag-carrying tag is required; the ansible deploy
     # verifies /v1/version reports readOnly=true after start and fails otherwise
     # (see playbook-deploy.yml, "assert the image honours MCP_READ_ONLY").
-    image: ${MCP_IMAGE:-egovio/digit-mcp:master-dbd4f0e}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:v2.20}
     container_name: digit-mcp-readonly
     restart: unless-stopped
     depends_on:
@@ -2862,7 +2862,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: ${DIGIT_CONFIG_SERVICE_IMAGE:-egovio/digit-config-service:master-dbd4f0e}
+    image: ${DIGIT_CONFIG_SERVICE_IMAGE:-egovio/digit-config-service:v2.20}
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2930,7 +2930,7 @@ services:
     # docker-compose.migrations.yml, so notification_stack_tag pins the pair.
     # DIGIT_USER_PREFERENCES_SERVICE_IMAGE overrides this one image; pin
     # DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE to the same build with it.
-    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:${NOTIFICATION_STACK_TAG:-master-dbd4f0e}}
+    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:${NOTIFICATION_STACK_TAG:-v2.20}}
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2977,7 +2977,7 @@ services:
     # Same build as pgr-services — see the ONE BUILD, ONE TAG note there.
     # NOVU_BRIDGE_IMAGE overrides this one image; novu-bridge-migration then still
     # follows NOTIFICATION_STACK_TAG unless NOVU_BRIDGE_DB_IMAGE is pinned too.
-    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:${NOTIFICATION_STACK_TAG:-master-dbd4f0e}}
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:${NOTIFICATION_STACK_TAG:-v2.20}}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]
@@ -3209,7 +3209,7 @@ services:
     # Built from keycloak/Dockerfile. It pins
     # Keycloak 26.7.3 and adds the email magic-link provider. Override with the
     # upstream image only when magic-link authentication is disabled.
-    image: ${IDENTITY_KEYCLOAK_IMAGE:-egovio/identity-keycloak:master-dbd4f0e}
+    image: ${IDENTITY_KEYCLOAK_IMAGE:-egovio/identity-keycloak:master-b6643bb}
     container_name: keycloak
     restart: unless-stopped
     profiles: ["keycloak"]
@@ -3252,7 +3252,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: ${IDENTITY_BFF_IMAGE:-egovio/identity-bff:master-dbd4f0e}
+    image: ${IDENTITY_BFF_IMAGE:-egovio/identity-bff:master-b6643bb}
     container_name: identity-bff
     restart: unless-stopped
     profiles: ["keycloak"]

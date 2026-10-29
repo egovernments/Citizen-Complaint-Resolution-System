@@ -40,7 +40,7 @@ initContainers:
     # Same build as the app image below and as novu-bridge — see "One build" below.
     image:
       repository: "pgr-services-db"
-      tag: "master-dbd4f0e"   # RELEASE STEP: develop-<sha8> — see "One build" below
+      tag: "v2.20"   # RELEASE STEP: develop-<sha8> — see "One build" below
       pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
     env: |
         {{- if index .Values "pgr-ismultischema-enabled" }}        
@@ -91,7 +91,7 @@ initContainers:
 # tag) in its env.yaml.
 image:
   repository: "pgr-services"
-  tag: "master-dbd4f0e"   # RELEASE STEP: develop-<sha8> of the merge build
+  tag: "v2.20"   # RELEASE STEP: develop-<sha8> of the merge build
   pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 replicas: "1"
 healthChecks:

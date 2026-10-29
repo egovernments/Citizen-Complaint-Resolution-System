@@ -20,12 +20,12 @@ initContainers:
     schemaTable: "xstate_chatbot_schema"
     image:
       repository: "xstate-chatbot-db"
-      tag: "master-dbd4f0e"
+      tag: "v2.20"
 
 # Container Configs
 image:
   repository: "xstate-chatbot"
-  tag: "master-dbd4f0e"
+  tag: "v2.20"
 # Must stay 1. Conversation state is a read-modify-write on one row per
 # citizen, serialised only within a process (session/persist-queue.js) and
 # written last-writer-wins (session/repo/postgres-repo.js updateState).

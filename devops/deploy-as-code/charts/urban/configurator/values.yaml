@@ -20,7 +20,7 @@ initContainers: {}
 # default (CONFIGURATOR_IMAGE in local-setup) so every tier runs the same build.
 image:
   repository: "configurator"
-  tag: "master-dbd4f0e"
+  tag: "v2.20"
 replicas: "1"
 httpPort: 80
 healthChecks:

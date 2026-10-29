@@ -46,7 +46,7 @@ ingress:
 # Same image and default tag as the Compose stack (IDENTITY_BFF_IMAGE).
 image:
   repository: "identity-bff"
-  tag: "master-dbd4f0e"   # PRODUCTION: pin an immutable tag
+  tag: "master-b6643bb"   # PRODUCTION: pin an immutable tag
   pullPolicy: IfNotPresent # Always while the tag is rolling (templates/deployment.yaml)
 replicas: "1"
 httpPort: 3000
