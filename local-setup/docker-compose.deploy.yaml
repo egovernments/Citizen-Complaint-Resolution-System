@@ -738,7 +738,7 @@ services:
       - egov-network
 
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-b4adf0d}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-dbd4f0e}
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -804,7 +804,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-b4adf0d}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-dbd4f0e}
     container_name: digit-ui
     ports:
       - "18080:80"

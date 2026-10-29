@@ -1292,12 +1292,14 @@ describe('digit-user-preferences-service runs the implementation its definition 
   const props = read(`${SRC}/src/main/resources/application.properties`);
   const values = readYaml(`${CHART}/values.yaml`);
 
-  // Every tag this image was published under before the rewrite is the Go binary: the
-  // 2.12 release (2.12-5137119, v2.12, v2.12.x) and the master channel (master-*). The
-  // set is closed, so a release cut from the Java tree needs no edit here. What stops a
-  // release from forgetting this image is that both its defaults follow the notification
-  // stack's one tag (the block above), which the release step pins in one go.
-  const GO_BUILD_TAG = /^(2\.12(-[0-9a-f]+)?|v2\.12(\.\d+)*|master(-.*)?)$/;
+  // Every tag this image was published under before the Java rewrite (9934255618) is the
+  // Go binary: the 2.12 release (2.12-5137119, v2.12, v2.12.x), the bare `master` channel,
+  // and the four master-<sha7> builds cut before the rewrite reached master. master-<sha7>
+  // tags cut since then are Java builds from this tree, so they are not in the set. The set
+  // is closed, so a release cut from the Java tree needs no edit here. What stops a release
+  // from forgetting this image is that both its defaults follow the notification stack's
+  // one tag (the block above), which the release step pins in one go.
+  const GO_BUILD_TAG = /^(2\.12(-[0-9a-f]+)?|v2\.12(\.\d+)*|master|master-(2242e47|298af68|8116812|7c91934))$/;
 
   // A compose service's environment as a map, whichever form (map or KEY=VALUE list) it
   // is written in. Values arrive as YAML scalars, so a trailing comment is not part of one.
