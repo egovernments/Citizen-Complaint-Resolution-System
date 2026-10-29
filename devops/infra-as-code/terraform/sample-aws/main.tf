@@ -245,6 +245,13 @@ module "eks" {
         }
       })
     }
+    # The resource metrics API (metrics.k8s.io) that every HorizontalPodAutoscaler
+    # in the charts scales on (novu's api/worker/ws/dashboard among them) and
+    # `kubectl top` reads. Without it those HPAs report <unknown> and never
+    # scale. Runs on the worker nodes, so not before_compute.
+    metrics-server = {
+      most_recent = true
+    }
   }
   compute_config = {
     enabled    = false
