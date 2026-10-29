@@ -39,6 +39,11 @@ helmfile -f digit-helmfile.yaml -e env apply
 
 That is what `.github/workflows/digit_install.yml` runs (manually triggered).
 
+Both `helmfile diff` and `helmfile apply` need the helm-diff plugin
+(`helm plugin install https://github.com/databus23/helm-diff`). Create the
+[Secrets created out of band](#secrets-created-out-of-band) first: with the
+default `env-secrets.yaml`, the releases that read them fail without them.
+
 ### cms-saas.digit.org
 
 cms-saas (EKS `ccrs-prod`) is its own environment: `charts/environments/cms-saas.yaml`
@@ -54,40 +59,8 @@ The environment lists `cms-saas-secrets.yaml` explicitly, so without it helmfile
 stops instead of deploying `env-secrets.yaml`'s placeholders over production.
 The identity stack's own Secrets (`identity-secrets`, `pgr-onboarding`) are not
 in that file: `identity-bootstrap` creates them in the cluster
-([helm-identity.md](../../docs/setup/deployment/helm-identity.md)).
-
-`helmfile diff` needs the helm-diff plugin (`helm plugin install https://github.com/databus23/helm-diff`).
-
-#### Secrets created out of band
-
-The charts read these Secrets but never create them. Create each one before
-the release that reads it, or that release fails:
-
-| Secret | Keys | Read by | Without it |
-|---|---|---|---|
-| `novu/novu-secrets` | `jwt-secret`, `store-encryption-key`, `novu-secret-key` | novu (`secrets.novu.existingSecret`) | novu-api, -worker and -ws fail with `CreateContainerConfigError` |
-| `monitoring/alertmanager-smtp` | `password` | kube-prometheus-stack (`alertmanagerSpec.secrets`) | Alertmanager stays at `Init:0/1` with no log ([prometheus.yaml](charts/monitoring/values/prometheus.yaml)) |
-| `monitoring/grafana-admin` | `admin-user`, `admin-password` | grafana (`adminExistingSecret`) | Grafana fails with `CreateContainerConfigError` |
-
-**Upgrading a release installed before these were external.** Helm deletes
-resources that drop out of a chart, and in older installs two of these Secrets
-belonged to the chart:
-
-- `novu-secrets` belonged to the novu release, so the next novu upgrade deletes
-  it. Before upgrading, hand it over:
-  ```bash
-  kubectl -n novu annotate secret novu-secrets helm.sh/resource-policy=keep \
-    meta.helm.sh/release-name- meta.helm.sh/release-namespace-
-  kubectl -n novu label secret novu-secrets app.kubernetes.io/managed-by-
-  ```
-- Grafana's admin login lived in the chart's own `grafana` Secret, which the
-  upgrade deletes. To keep the same login, copy it into `grafana-admin` before
-  upgrading:
-  ```bash
-  kubectl -n monitoring get secret grafana -o json \
-    | jq '{apiVersion, kind, type, data: {"admin-user": .data["admin-user"], "admin-password": .data["admin-password"]}, metadata: {name: "grafana-admin", namespace: "monitoring"}}' \
-    | kubectl apply -f -
-  ```
+([helm-identity.md](../../docs/setup/deployment/helm-identity.md)). cms-saas also
+needs the [Secrets created out of band](#secrets-created-out-of-band).
 
 ## Monitoring is not installed by default
 
@@ -119,3 +92,49 @@ Two long-lived defects came from precisely this (#1645 and #1648), which is why 
 ## Secrets
 
 `charts/environments/env-secrets.yaml` is SOPS-encrypted (`charts/.sops.yaml`). Secrets belong there and nowhere else — the encryption rule matches that one file, so a credential placed in a chart's values file is committed in the clear.
+
+### Secrets created out of band
+
+With the default `env-secrets.yaml`, these charts read the Secrets below but
+don't create them (`existingSecret` / `adminExistingSecret` name them).
+Create each one before the release that reads it. This applies to every
+environment, `-e env` included:
+
+| Secret | Keys | Read by | Without it |
+|---|---|---|---|
+| `novu/novu-secrets` | `jwt-secret`, `store-encryption-key`, `novu-secret-key` | novu (`secrets.novu.existingSecret`) | novu-api, -worker and -ws fail with `CreateContainerConfigError` |
+| `monitoring/alertmanager-smtp` | `password` | kube-prometheus-stack (`alertmanagerSpec.secrets`, mounted unconditionally) | Alertmanager stays at `Init:0/1` with no log ([prometheus.yaml](charts/monitoring/values/prometheus.yaml)) |
+| `monitoring/grafana-admin` | `admin-user`, `admin-password` | grafana (`adminExistingSecret`) | Grafana fails with `CreateContainerConfigError` |
+
+If you blank `existingSecret` (novu) or `adminExistingSecret` (grafana) and
+set the values inline instead, the chart creates its own Secret under the same
+name, `<release>-secrets` for novu. Don't also create it by hand: the
+install then fails with "exists and cannot be imported into the current
+release: invalid ownership metadata".
+
+**Upgrading a release installed before these were external.** Helm deletes
+resources that drop out of a chart, and in older installs two of these Secrets
+belonged to the chart:
+
+- `novu-secrets` belonged to the novu release, so the next novu upgrade deletes
+  it. Before upgrading, hand it over:
+  ```bash
+  kubectl -n novu annotate secret novu-secrets helm.sh/resource-policy=keep \
+    meta.helm.sh/release-name- meta.helm.sh/release-namespace-
+  kubectl -n novu label secret novu-secrets app.kubernetes.io/managed-by-
+  ```
+- Grafana's chart-made `grafana` Secret is deleted by the upgrade. Create
+  `grafana-admin` first, or Grafana doesn't start. Grafana only reads the
+  Secret when its database is new: on an existing install the admin password
+  lives in `grafana.db` on the PVC, so the login stays whatever it was, and a
+  different password in `grafana-admin` does nothing. Copy the old values so
+  the Secret matches the real login:
+  ```bash
+  kubectl -n monitoring get secret grafana -o json \
+    | jq '{apiVersion, kind, type, data: {"admin-user": .data["admin-user"], "admin-password": .data["admin-password"]}, metadata: {name: "grafana-admin", namespace: "monitoring"}}' \
+    | kubectl apply -f -
+  ```
+  To change the login, reset it in Grafana and then update the Secret to match:
+  ```bash
+  kubectl -n monitoring exec deploy/grafana -c grafana -- grafana cli admin reset-admin-password '<new-password>'
+  ```

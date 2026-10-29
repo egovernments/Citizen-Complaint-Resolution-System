@@ -245,13 +245,6 @@ module "eks" {
         }
       })
     }
-    # The resource metrics API (metrics.k8s.io) that every HorizontalPodAutoscaler
-    # in the charts scales on (novu's api/worker/ws/dashboard among them) and
-    # `kubectl top` reads. Without it those HPAs report <unknown> and never
-    # scale. Runs on the worker nodes, so not before_compute.
-    metrics-server = {
-      most_recent = true
-    }
   }
   compute_config = {
     enabled    = false
@@ -371,6 +364,27 @@ resource "aws_eks_addon" "aws_ebs_csi_driver" {
   service_account_role_arn = module.ebs_csi_driver_irsa.iam_role_arn
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
+}
+
+# The resource metrics API (metrics.k8s.io) that every HorizontalPodAutoscaler
+# in the charts scales on (novu's api/worker/ws/dashboard among them) and
+# `kubectl top` reads. Without it those HPAs report <unknown> and never scale.
+# Its pods run on the worker nodes, so it waits for the node group like the
+# add-ons above; created before any node joins, it stays DEGRADED and times
+# out the apply. Pinned so an unrelated apply never upgrades it.
+resource "aws_eks_addon" "metrics_server" {
+  depends_on = [module.eks_managed_node_group]
+  cluster_name      = var.cluster_name
+  addon_name        = "metrics-server"
+  addon_version     = "v0.9.0-eksbuild.14"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+}
+
+# First added inside module.eks's addons; ccrs-prod's state still has it there.
+moved {
+  from = module.eks.aws_eks_addon.this["metrics-server"]
+  to   = aws_eks_addon.metrics_server
 }
 
 

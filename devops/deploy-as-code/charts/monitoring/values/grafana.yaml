@@ -73,6 +73,11 @@ podDisruptionBudget: {}
 ## is already used by pod(s)") and the rollout hangs with the old pod holding
 ## the volume. Observed on cms-saas on 2026-10-29. Grafana is down for the
 ## restart (~30s).
+##
+## Recreate fixes rollouts only. Grafana must stay at ONE replica while that
+## PVC is ReadWriteOnce: `replicas: 2` or `autoscaling.enabled: true` puts a
+## second pod on another node, and it hangs in ContainerCreating with the same
+## Multi-Attach error.
 deploymentStrategy:
   type: Recreate
 
