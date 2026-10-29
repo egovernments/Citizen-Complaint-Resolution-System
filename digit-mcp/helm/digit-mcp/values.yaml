@@ -17,7 +17,7 @@ image:
   # most recent — so a sha pin silently disappears within about a week, taking
   # your rollback target with it. Pin a `develop-YYYYMMDD` or a release tag for
   # anything long-lived.
-  tag: "master-dbd4f0e"
+  tag: "v2.20"
   # Always, not IfNotPresent: the default tag moves. With IfNotPresent a node
   # that has the tag cached never re-pulls, so two replicas can run different
   # code indefinitely and `helm upgrade` is a no-op. If you pin an immutable

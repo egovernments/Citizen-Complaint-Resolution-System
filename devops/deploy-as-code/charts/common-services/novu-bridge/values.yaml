@@ -18,7 +18,7 @@ initContainers:
     # Same build as the app image below — see "One build" there.
     image:
       repository: "novu-bridge-db"
-      tag: "master-dbd4f0e"   # RELEASE STEP: develop-<sha8> — see "One build" below
+      tag: "v2.20"   # RELEASE STEP: develop-<sha8> — see "One build" below
       pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 
 # Container Configs
@@ -33,7 +33,7 @@ initContainers:
 # pgr-services.
 image:
   repository: "novu-bridge"
-  tag: "master-dbd4f0e"   # RELEASE STEP: develop-<sha8> of the merge build
+  tag: "v2.20"   # RELEASE STEP: develop-<sha8> of the merge build
   pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 replicas: "1"
 httpPort: 8080
