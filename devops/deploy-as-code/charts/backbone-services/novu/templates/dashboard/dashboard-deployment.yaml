@@ -6,7 +6,11 @@ metadata:
   labels:
 {{- toYaml .Values.dashboard.labels | nindent 4 }}
 spec:
+  # Under the HPA the replica count is its call: a fixed value here would reset
+  # it on every upgrade.
+  {{- if not .Values.dashboard.autoscaling.enabled }}
   replicas: {{ .Values.dashboard.replicas }}
+  {{- end }}
   selector:
     matchLabels:
 {{- toYaml .Values.dashboard.labels | nindent 6 }}

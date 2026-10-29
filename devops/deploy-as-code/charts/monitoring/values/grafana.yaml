@@ -67,8 +67,14 @@ podDisruptionBudget: {}
 
 ## See `kubectl explain deployment.spec.strategy` for more
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
+##
+## Recreate, not RollingUpdate: persistence below is a ReadWriteOnce PVC, so a
+## surge pod on another node never attaches it ("Multi-Attach error ... Volume
+## is already used by pod(s)") and the rollout hangs with the old pod holding
+## the volume. Observed on cms-saas on 2026-10-29. Grafana is down for the
+## restart (~30s).
 deploymentStrategy:
-  type: RollingUpdate
+  type: Recreate
 
 readinessProbe:
   httpGet:

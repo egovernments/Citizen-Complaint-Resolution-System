@@ -6,7 +6,11 @@ metadata:
   labels:
 {{- toYaml .Values.worker.labels | nindent 4 }}
 spec:
+  # Under the HPA the replica count is its call: a fixed value here would reset
+  # it on every upgrade.
+  {{- if not .Values.worker.autoscaling.enabled }}
   replicas: {{ .Values.worker.replicas }}
+  {{- end }}
   selector:
     matchLabels:
 {{- toYaml .Values.worker.labels | nindent 6 }}

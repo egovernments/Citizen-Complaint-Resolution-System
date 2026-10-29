@@ -56,6 +56,39 @@ The identity stack's own Secrets (`identity-secrets`, `pgr-onboarding`) are not
 in that file: `identity-bootstrap` creates them in the cluster
 ([helm-identity.md](../../docs/setup/deployment/helm-identity.md)).
 
+`helmfile diff` needs the helm-diff plugin (`helm plugin install https://github.com/databus23/helm-diff`).
+
+#### Secrets created out of band
+
+The charts read these Secrets but never create them. Create each one before
+the release that reads it, or that release fails:
+
+| Secret | Keys | Read by | Without it |
+|---|---|---|---|
+| `novu/novu-secrets` | `jwt-secret`, `store-encryption-key`, `novu-secret-key` | novu (`secrets.novu.existingSecret`) | novu-api, -worker and -ws fail with `CreateContainerConfigError` |
+| `monitoring/alertmanager-smtp` | `password` | kube-prometheus-stack (`alertmanagerSpec.secrets`) | Alertmanager stays at `Init:0/1` with no log ([prometheus.yaml](charts/monitoring/values/prometheus.yaml)) |
+| `monitoring/grafana-admin` | `admin-user`, `admin-password` | grafana (`adminExistingSecret`) | Grafana fails with `CreateContainerConfigError` |
+
+**Upgrading a release installed before these were external.** Helm deletes
+resources that drop out of a chart, and in older installs two of these Secrets
+belonged to the chart:
+
+- `novu-secrets` belonged to the novu release, so the next novu upgrade deletes
+  it. Before upgrading, hand it over:
+  ```bash
+  kubectl -n novu annotate secret novu-secrets helm.sh/resource-policy=keep \
+    meta.helm.sh/release-name- meta.helm.sh/release-namespace-
+  kubectl -n novu label secret novu-secrets app.kubernetes.io/managed-by-
+  ```
+- Grafana's admin login lived in the chart's own `grafana` Secret, which the
+  upgrade deletes. To keep the same login, copy it into `grafana-admin` before
+  upgrading:
+  ```bash
+  kubectl -n monitoring get secret grafana -o json \
+    | jq '{apiVersion, kind, type, data: {"admin-user": .data["admin-user"], "admin-password": .data["admin-password"]}, metadata: {name: "grafana-admin", namespace: "monitoring"}}' \
+    | kubectl apply -f -
+  ```
+
 ## Monitoring is not installed by default
 
 `digit-helmfile.yaml` ends with:
