@@ -105,12 +105,13 @@ identity:
   keycloak:
     # One immutable build for Keycloak and the BFF (helm-identity.md); the
     # charts' own default is the rolling nightly-develop. This file is the last
-    # values layer, so THIS is the tag cms-saas runs. master-b6643bb includes
-    # the configure-keycloak.sh realm-configure fix (readonly KCADM_SERVER,
-    # 158bc8037a) that kept the keycloak release `failed` on master-b4adf0d;
-    # apply with `helmfile -e cms-saas -l name=keycloak sync`.
+    # values layer, so THIS is the tag cms-saas runs. v2.20 is the release
+    # build, like every other CCRS image; it includes the configure-keycloak.sh
+    # realm-configure fix (readonly KCADM_SERVER, 158bc8037a) that kept the
+    # keycloak release `failed` on master-b4adf0d. Apply with
+    # `helmfile -e cms-saas -l name=keycloak sync`.
     image:
-      tag: "master-b6643bb"
+      tag: "v2.20"
     configure:
       # Founders sign up with an emailed link (Configurator /signup).
       magicLinkEnabled: true
@@ -128,7 +129,7 @@ identity:
         user: "digitcms@egovernments.org"   # password: identity-secrets' keycloak-smtp-password
   identity-bff:
     image:
-      tag: "master-b6643bb"
+      tag: "v2.20"
     config:
       # Citizen phone-OTP sign-in off until an HTTP SMS sender exists: "log"
       # would write every code to identity-bff's log (and so to Loki), letting

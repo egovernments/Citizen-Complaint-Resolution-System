@@ -3209,7 +3209,7 @@ services:
     # Built from keycloak/Dockerfile. It pins
     # Keycloak 26.7.3 and adds the email magic-link provider. Override with the
     # upstream image only when magic-link authentication is disabled.
-    image: ${IDENTITY_KEYCLOAK_IMAGE:-egovio/identity-keycloak:master-b6643bb}
+    image: ${IDENTITY_KEYCLOAK_IMAGE:-egovio/identity-keycloak:v2.20}
     container_name: keycloak
     restart: unless-stopped
     profiles: ["keycloak"]
@@ -3252,7 +3252,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: ${IDENTITY_BFF_IMAGE:-egovio/identity-bff:master-b6643bb}
+    image: ${IDENTITY_BFF_IMAGE:-egovio/identity-bff:v2.20}
     container_name: identity-bff
     restart: unless-stopped
     profiles: ["keycloak"]
