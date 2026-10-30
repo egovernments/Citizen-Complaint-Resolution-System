@@ -4,7 +4,7 @@
 
 **See also:** [Release notes](release-notes-v2.20.md), [Deployment changelog](release-config-changelog-v2.20.md) and the [Migration guide](migration-guide-v2.12-to-v2.20.md).
 
-All images are on Docker Hub. Tags are the defaults in `local-setup/docker-compose.egov-digit.yaml`, which the Docker Compose and Ansible deploys use. A `-db` image runs the service's database migrations.
+All images are on Docker Hub. Tags are the defaults in `local-setup/docker-compose.egov-digit.yaml` (Docker Compose and Ansible deploys) and in the Helm charts under `devops/deploy-as-code/charts/` (Kubernetes deploys). A `-db` image runs the service's database migrations.
 
 ## 1. CMS (PGR) services
 
@@ -67,3 +67,4 @@ These images come from the DIGIT platform and are not rebuilt for v2.20.
 
 - **Compose:** set the matching environment variable, for example `PGR_SERVICES_IMAGE=egovio/pgr-services:<tag>`.
 - **Ansible:** `./deploy.sh <tenant> --image-tag=<tag>` moves every CMS image in section 1; add `--image-tag-services=pgr-services` to move only some.
+- **Helm:** set `image.tag` for the release in your environment file, as `devops/deploy-as-code/charts/environments/cms-saas.yaml` does for Keycloak.
