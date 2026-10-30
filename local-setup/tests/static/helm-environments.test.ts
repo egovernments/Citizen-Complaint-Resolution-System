@@ -97,6 +97,18 @@ describe('the configurator chart renders the same runtime config as Ansible', ()
   });
 });
 
+describe('/egov-mdms-service is public on both tiers', () => {
+  test('Kong routes it on Compose/Ansible; the shim chart routes it through the gateway', () => {
+    // digit-ui's citizen home reads StateInfo at /egov-mdms-service/v1/_search; a 404 there
+    // is CORE_SOMETHING_WENT_WRONG on every tenant's citizen link.
+    expect(read('local-setup/kong/kong.yml')).toMatch(/- name: mdms-v1-compat-route\n {4}paths:\n {4}- \/egov-mdms-service\n/);
+    const chart = `${DEPLOY}/charts/core-services/egov-mdms-service`;
+    expect(read(`${chart}/values.yaml`)).toMatch(/^ingress:\n {2}enabled: true\n {2}zuul: true\n {2}context: "egov-mdms-service"$/m);
+    expect(read(`${chart}/templates/ingress.yaml`)).toContain('{{- template "common.ingress" . -}}');
+    expect(read(`${DEPLOY}/charts/environments/env.yaml`)).toMatch(/egov-open-endpoints-whitelist: ".*\/egov-mdms-service\/v1\/_search,/);
+  });
+});
+
 describe('the bare domain lands on the Configurator on both tiers', () => {
   test('Ansible: root_to_configurator (default on) redirects / exactly, after root_to_digit_ui', () => {
     const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');

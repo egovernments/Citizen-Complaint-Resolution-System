@@ -11,8 +11,15 @@ labels:
   app: "egov-mdms-service"
   group: "core"
 
+# The digit-ui still reads MDMS at /egov-mdms-service/v1/_search (citizen
+# home, StateInfo), which Kong serves on Compose/Ansible. Through the DIGIT
+# gateway like mdms-v2: the Service's zuul/route-path gives the gateway the
+# route (it reads the annotations at startup, so roll the gateway after the
+# first install), and its open-endpoint whitelist already lists the reads.
 ingress:
-  enabled: false
+  enabled: true
+  zuul: true
+  context: "egov-mdms-service"
 
 initContainers: {}
 
