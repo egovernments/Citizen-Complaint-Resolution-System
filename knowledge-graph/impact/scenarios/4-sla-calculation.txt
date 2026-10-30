@@ -1,0 +1,101 @@
+Impact of changing: field:ComplaintHierarchy.slaHours, config:pgr.business.level.sla, config:pgr.escalation.default.sla.ms, master:RAINMAKER-PGR.EscalationConfig, field:EscalationConfig.defaultSlaByLevel, field:EscalationConfig.overrides, field:BusinessService.businessServiceSla  (depth ≤ 2)
+
+Screens (14)
+  · screen:configurator/ComplaintHierarchyShow  ←renders— field:ComplaintHierarchy.slaHours   configurator/src/resources/complaint-hierarchies/ComplaintHierarchyTree.tsx:163
+  · screen:configurator/ComplaintsStep  ←writes— field:ComplaintHierarchy.slaHours   configurator/src/onboarding/ComplaintsStep.tsx:473
+  · screen:configurator/ComplaintTypeCreate  ←writes— field:ComplaintHierarchy.slaHours   configurator/src/resources/complaint-types/ComplaintTypeCreate.tsx:72
+  · screen:configurator/ComplaintTypeEdit  ←writes— field:ComplaintHierarchy.slaHours   configurator/src/resources/complaint-types/ComplaintTypeEdit.tsx:19
+  · screen:configurator/ComplaintTypeList  ←writes— field:ComplaintHierarchy.slaHours   configurator/src/resources/complaint-types/ComplaintTypeList.tsx:57
+  · screen:configurator/ComplaintTypeShow  ←renders— field:ComplaintHierarchy.slaHours   configurator/src/resources/complaint-types/ComplaintTypeShow.tsx:41
+  · screen:configurator/EscalationPolicyEditor  ←reads— master:RAINMAKER-PGR.EscalationConfig   configurator/src/admin/escalation/EscalationPolicyEditor.tsx:95
+  · screen:configurator/WorkflowServiceList  ←renders— field:BusinessService.businessServiceSla   configurator/src/resources/workflow-services/WorkflowServiceList.tsx:8
+  · screen:configurator/WorkflowServiceShow  ←renders— field:BusinessService.businessServiceSla   configurator/src/resources/workflow-services/WorkflowServiceShow.tsx:213
+  · screen:digit-ui/CreatePGRFlowV2  ←reads— field:ComplaintHierarchy.slaHours   digit-ui-esbuild/products/pgr/src/pages/citizen/Create/CreatePGRFlowV2.tsx:1005
+  · screen:digit-ui/PGRSearchInbox  ←renders— field:ComplaintHierarchy.slaHours   digit-ui-esbuild/products/pgr/src/configs/PGRSearchInboxConfig.js:147
+  ·· screen:configurator/ComplaintHierarchyCreate  ←calls— code:configurator/src/components/ComplaintHierarchySetup.tsx [inferred]   configurator/src/onboarding/ComplaintsStep.tsx:9
+  ·· screen:configurator/PgrDashboard  ←calls— code:configurator/src/hooks/useWeeklyReport.ts   configurator/src/pages/PgrDashboard.tsx:179
+  ·· screen:configurator/PublicDashboardConfigure  ←calls— code:configurator/src/api/services/mdms.ts   configurator/src/resources/public-dashboard/PublicDashboardConfigure.tsx:139
+
+Java classes (26)
+  · class:EscalationConfigurationService  ←reads— field:ComplaintHierarchy.slaHours   backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationConfigurationService.java:416
+  · class:MDMSUtils  ←reads— field:ComplaintHierarchy.slaHours   backend/pgr-services/src/main/java/org/egov/pgr/util/MDMSUtils.java:143
+  · class:MigrationService  ←reads— field:ComplaintHierarchy.slaHours   backend/pgr-services/src/main/java/org/egov/pgr/service/MigrationService.java:441
+  · class:MigrationUtils  ←reads— field:ComplaintHierarchy.slaHours   backend/pgr-services/src/main/java/org/egov/pgr/util/MigrationUtils.java:129
+  · class:PGRConfiguration  ←uses-config— config:pgr.business.level.sla   backend/pgr-services/src/main/java/org/egov/pgr/config/PGRConfiguration.java:211
+  · class:PGRConstants  ←reads— field:ComplaintHierarchy.slaHours   backend/pgr-services/src/main/java/org/egov/pgr/util/PGRConstants.java:115
+  · class:PGRQueryBuilder  ←reads— field:ComplaintHierarchy.slaHours   backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/PGRQueryBuilder.java:390
+  · class:PlatformBaseline  ←writes— master:RAINMAKER-PGR.EscalationConfig   backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json:64
+  ·· class:AccessPolicyRegistry  ←calls— class:MDMSUtils   backend/pgr-services/src/main/java/org/egov/pgr/policy/AccessPolicyRegistry.java:502
+  ·· class:AnalyticsCatalog  ←reads— field:complaint_facts.sla_target_ms   backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsCatalog.java:94
+  ·· class:AnalyticsPlanner  ←reads— table:complaint_facts   backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsPlanner.java:120
+  ·· class:AnalyticsService  ←reads— table:complaint_facts   backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsService.java:814
+  ·· class:BaselineUpgrader  ←calls— class:PlatformBaseline   backend/pgr-services/src/main/java/org/egov/pgr/onboarding/BaselineUpgrader.java:112
+  ·· class:DashboardRefreshScheduler  ←writes— table:complaint_facts   backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java:40
+  ·· class:EscalationScheduler  ←calls— class:EscalationConfigurationService   backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java:248
+  ·· class:EscalationService  ←calls— class:EscalationConfigurationService   backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java:126
+  ·· class:LegacyMasterAdapter  ←uses-state— wf:bs:PGR   backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/digit/LegacyMasterAdapter.java:44
+  ·· class:MigrationConsumer  ←calls— class:MigrationService   backend/pgr-services/src/main/java/org/egov/pgr/consumer/MigrationConsumer.java:44
+  ·· class:MigrationController  ←calls— class:MigrationService   backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/MigrationController.java:36
+  ·· class:NotificationService  ←calls— class:MDMSUtils   backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java:391
+  ·· class:OnboardingSteps  ←calls— class:PlatformBaseline   backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java:186
+  ·· class:PGRRepository  ←calls— class:PGRQueryBuilder   backend/pgr-services/src/main/java/org/egov/pgr/repository/PGRRepository.java:140
+  ·· class:PGRService  ←calls— class:MDMSUtils   backend/pgr-services/src/main/java/org/egov/pgr/service/PGRService.java:110
+  ·· class:PolicyDrivenScopeResolver  ←calls— class:MDMSUtils   backend/pgr-services/src/main/java/org/egov/pgr/policy/PolicyDrivenScopeResolver.java:211
+  ·· class:ServiceRequestValidator  ←calls— class:MDMSUtils   backend/pgr-services/src/main/java/org/egov/pgr/validator/ServiceRequestValidator.java:280
+  ·· class:WorkflowService  ←uses-state— wf:bs:PGR   backend/pgr-services/src/main/java/org/egov/pgr/service/WorkflowService.java:46
+
+Code / config modules (15)
+  · code:configurator/packages/data-provider/src/providers/dataProvider.ts  ←reads— master:RAINMAKER-PGR.EscalationConfig   configurator/packages/data-provider/src/providers/dataProvider.ts:308
+  · code:configurator/packages/data-provider/src/providers/resourceRegistry.ts  ←reads— master:RAINMAKER-PGR.EscalationConfig   configurator/packages/data-provider/src/providers/resourceRegistry.ts:238
+  · code:configurator/src/admin/escalation/escalationPolicyUtils.ts  ←reads— field:ComplaintHierarchy.slaHours   configurator/src/admin/escalation/escalationPolicyUtils.ts:288
+  · code:configurator/src/api/services/mdms.ts  ←reads— master:RAINMAKER-PGR.EscalationConfig   configurator/src/api/services/mdms.ts:304
+  · code:configurator/src/components/ComplaintHierarchySetup.tsx  ←writes— field:ComplaintHierarchy.slaHours   configurator/src/components/ComplaintHierarchySetup.tsx:155
+  · code:configurator/src/hooks/useWeeklyReport.ts  ←reads— field:ComplaintHierarchy.slaHours   configurator/src/hooks/useWeeklyReport.ts:333
+  · code:configurator/src/onboarding/complaints/complaintsApi.ts  ←writes— field:ComplaintHierarchy.slaHours   configurator/src/onboarding/complaints/complaintsApi.ts:216
+  · code:digit-ui-esbuild/packages/libraries/src/services/elements/MDMS.js  ←reads— field:ComplaintHierarchy.slaHours   digit-ui-esbuild/packages/libraries/src/services/elements/MDMS.js:1026
+  · code:digit-ui-esbuild/products/pgr/src/hooks/pgr/usePGRInboxSearch.js  ←reads— field:ComplaintHierarchy.slaHours   digit-ui-esbuild/products/pgr/src/hooks/pgr/usePGRInboxSearch.js:165
+  · code:digit-ui-esbuild/products/pgr/src/utils/index.js  ←reads— field:ComplaintHierarchy.slaHours   digit-ui-esbuild/products/pgr/src/utils/index.js:256
+  ·· code:digit-mcp/src/tools/pgr-workflow.ts  ←uses-state— wf:bs:PGR   digit-mcp/src/tools/pgr-workflow.ts:849
+  ·· code:digit-ui-esbuild/packages/libraries/src/hooks/pgr/useComplaintDetails.js  ←calls— code:digit-ui-esbuild/packages/libraries/src/services/elements/MDMS.js   digit-ui-esbuild/packages/libraries/src/hooks/pgr/useComplaintDetails.js:110
+  ·· code:digit-ui-esbuild/products/pgr/src/configs/PGRSearchInboxConfig.js  ←calls— code:digit-ui-esbuild/products/pgr/src/hooks/pgr/usePGRInboxSearch.js   digit-ui-esbuild/products/pgr/src/configs/PGRSearchInboxConfig.js:23
+  ·· code:local-setup/scripts/generate_event_catalogue.py  ←uses-state— wf:bs:PGR [inferred]   local-setup/scripts/generate_event_catalogue.py:21
+  ·· code:local-setup/scripts/notifications_convert.py  ←uses-state— wf:bs:PGR   local-setup/scripts/notifications_convert.py:86
+
+Tables / views (2)
+  · table:complaint_facts  ←derives-from— master:RAINMAKER-PGR.EscalationConfig   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:361
+  ·· table:complaint_open_state_daily  ←derives-from— table:complaint_facts   backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java:71
+
+Fields (4)
+  · field:complaint_events.business_sla_ms  ←derives-from— field:BusinessService.businessServiceSla   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:176
+  · field:complaint_facts.sla_target_ms  ←derives-from— field:ComplaintHierarchy.slaHours   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:525
+  ·· field:complaint_facts.sla_breached  ←derives-from— field:complaint_facts.sla_target_ms   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:409
+  ·· field:complaint_facts.sla_status_bucket  ←derives-from— field:complaint_facts.sla_target_ms   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:421
+
+Workflow states / actions (1)
+  · wf:bs:PGR  ←derives-from— field:BusinessService.businessServiceSla [inferred]   backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json:1180
+
+Deploy / CI artefacts (2)
+  · infra:configs/egov-indexer/pgr-services.yml  ←reads— field:ComplaintHierarchy.slaHours   configs/egov-indexer/pgr-services.yml:53
+  ·· infra:helm:egov-indexer  ←uses-config— infra:configs/egov-indexer/pgr-services.yml   devops/deploy-as-code/charts/environments/env.yaml:206
+
+Tests (17)
+  · test:backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationLadderPrecedenceTest.java  ←tests— field:ComplaintHierarchy.slaHours   backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationLadderPrecedenceTest.java:65
+  · test:backend/pgr-services/src/test/java/org/egov/pgr/util/MDMSUtilsSlaCacheTest.java  ←tests— field:ComplaintHierarchy.slaHours   backend/pgr-services/src/test/java/org/egov/pgr/util/MDMSUtilsSlaCacheTest.java:105
+  · test:configurator/packages/data-provider/src/providers/dataProvider.test.ts  ←tests— field:ComplaintHierarchy.slaHours   configurator/packages/data-provider/src/providers/dataProvider.test.ts:393
+  · test:configurator/src/admin/escalation/EscalationPolicyEditor.test.tsx  ←tests— field:ComplaintHierarchy.slaHours   configurator/src/admin/escalation/EscalationPolicyEditor.test.tsx:15
+  · test:configurator/src/admin/escalation/escalationPolicyUtils.test.ts  ←tests— field:ComplaintHierarchy.slaHours   configurator/src/admin/escalation/escalationPolicyUtils.test.ts:125
+  · test:configurator/src/components/ComplaintHierarchySetup.test.tsx  ←tests— field:ComplaintHierarchy.slaHours   configurator/src/components/ComplaintHierarchySetup.test.tsx:37
+  · test:configurator/src/onboarding/complaints/complaintsApi.test.ts  ←tests— field:ComplaintHierarchy.slaHours   configurator/src/onboarding/complaints/complaintsApi.test.ts:31
+  · test:tests/integration-tests/tests/admin/complaint-types.spec.ts  ←tests— field:ComplaintHierarchy.slaHours   tests/integration-tests/tests/admin/complaint-types.spec.ts:6
+  · test:tests/integration-tests/tests/admin/complaints.spec.ts  ←tests— field:ComplaintHierarchy.slaHours   tests/integration-tests/tests/admin/complaints.spec.ts:78
+  · test:tests/integration-tests/tests/api/pgr-escalation.spec.ts  ←tests— field:ComplaintHierarchy.slaHours   tests/integration-tests/tests/api/pgr-escalation.spec.ts:702
+  · test:tests/integration-tests/tests/lifecycle/pgr-sla-auto-escalate.spec.ts  ←tests— master:RAINMAKER-PGR.EscalationConfig   tests/integration-tests/tests/lifecycle/pgr-sla-auto-escalate.spec.ts:207
+  · test:tests/integration-tests/tests/utils/workspace-setup.ts  ←tests— field:ComplaintHierarchy.slaHours   tests/integration-tests/tests/utils/workspace-setup.ts:490
+  ·· test:tests/integration-tests/tests/citizen/file-complaint-wizard.spec.ts  ←tests— screen:digit-ui/CreatePGRFlowV2   tests/integration-tests/tests/citizen/file-complaint-wizard.spec.ts:265
+  ·· test:tests/integration-tests/tests/citizen/full-complaint-lifecycle-ui.spec.ts  ←tests— screen:digit-ui/CreatePGRFlowV2   tests/integration-tests/tests/citizen/full-complaint-lifecycle-ui.spec.ts:168
+  ·· test:tests/integration-tests/tests/employee/inbox-filters.spec.ts  ←tests— screen:digit-ui/PGRSearchInbox   tests/integration-tests/tests/employee/inbox-filters.spec.ts:59
+  ·· test:tests/integration-tests/tests/employee/inbox-search.spec.ts  ←tests— screen:digit-ui/PGRSearchInbox   tests/integration-tests/tests/employee/inbox-search.spec.ts:24
+  ·· test:tests/integration-tests/tests/employee/pgr-inbox-sort-922.spec.ts  ←tests— screen:digit-ui/PGRSearchInbox   tests/integration-tests/tests/employee/pgr-inbox-sort-922.spec.ts:51
+
+Total affected: 81 nodes via 118 edges.
+Mermaid written to 4-sla-calculation.mmd
