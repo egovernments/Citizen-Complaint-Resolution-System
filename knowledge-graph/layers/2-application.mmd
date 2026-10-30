@@ -1,0 +1,116 @@
+%% Layer 2 · Application — screens, first-party services and their key classes.
+%% Snapshot master @ 64d5abe92. Small grey text = impact-graph node id (query with impact/impact.mjs <id>).
+%% Deployed PGR UI is digit-ui-esbuild/products/pgr/src (esbuild.build.js aliases @egovernments/digit-ui-module-pgr to it);
+%% packages/modules/pgr is NOT built. Solid = confirmed, dotted = inferred.
+flowchart LR
+
+  subgraph SCREENS["Screens"]
+    direction TB
+    subgraph CIT["Citizen · digit-ui products/pgr"]
+      CF["File a complaint wizard<br/><small>screen:digit-ui/CreatePGRFlowV2</small>"]
+      CL["My complaints<br/><small>screen:digit-ui/ComplaintsList</small>"]
+      CD["Complaint details + timeline<br/><small>screen:digit-ui/ComplaintDetailsPage</small>"]
+      CR["Reopen · Rate<br/><small>screen:digit-ui/ReopenComplaint, SelectRating</small>"]
+    end
+    subgraph EMP["Employee · digit-ui products/pgr"]
+      EI["Inbox (filters, SLA days left)<br/><small>screen:digit-ui/PGRSearchInbox</small>"]
+      ED["Complaint details + actions<br/><small>screen:digit-ui/PGRDetails</small>"]
+      EC["Create on behalf<br/><small>screen:digit-ui/CreateComplaint</small>"]
+      DB["Dashboard (admin + public)<br/><small>screen:digit-ui/AdminDashboard</small>"]
+    end
+    subgraph STU["Studio · configurator"]
+      SO["Onboarding complaints step<br/><small>screen:configurator/ComplaintsStep</small>"]
+      ST["Complaint types (slaHours, dept)<br/><small>screen:configurator/ComplaintTypeEdit</small>"]
+      SE["Escalation policy editor<br/><small>screen:configurator/EscalationPolicyEditor</small>"]
+      SC["Complaints list / edit<br/><small>screen:configurator/ComplaintList, ComplaintEdit</small>"]
+      SN["Notification configure / logs<br/><small>screen:configurator/NotificationConfigure</small>"]
+      SW["Workflow services<br/><small>screen:configurator/WorkflowServiceShow</small>"]
+    end
+    subgraph BOT["WhatsApp · xstate-chatbot"]
+      WF1["File complaint flow<br/><small>screen:chatbot/fileComplaint</small>"]
+      WF2["Status update message (consumer off in compose)<br/><small>screen:chatbot/PGRStatusUpdateNotification</small>"]
+    end
+  end
+
+  subgraph CLIENTS["Shared API clients (duplicated)"]
+    direction TB
+    UPGR["products/pgr hooks + utils/urls.js<br/><small>code:digit-ui-esbuild/products/pgr/src/utils/urls.js</small>"]
+    DPC["configurator data-provider copy<br/><small>code:configurator/packages/data-provider/src/client/endpoints.ts</small>"]
+    DPM["digit-mcp data-provider<br/><small>code:digit-mcp/packages/data-provider/src/client/endpoints.ts</small>"]
+  end
+
+  subgraph PGR["pgr-services  <small>service:pgr-services</small>"]
+    direction TB
+    RC["RequestsApiController<br/><small>class:RequestsApiController</small>"]
+    PS["PGRService<br/><small>class:PGRService</small>"]
+    VAL["ServiceRequestValidator<br/><small>class:ServiceRequestValidator</small>"]
+    WS["WorkflowService<br/><small>class:WorkflowService</small>"]
+    ES["EscalationService + Scheduler<br/><small>class:EscalationService</small>"]
+    SAP["SearchAccessPolicyService<br/><small>class:SearchAccessPolicyService</small>"]
+    NS["NotificationService + ThinEventBuilder<br/><small>class:NotificationService</small>"]
+    MU["MDMSUtils (SLA, reopen window, depts)<br/><small>class:MDMSUtils</small>"]
+    AN["Analytics + Dashboard<br/><small>class:AnalyticsService</small>"]
+    ON["Onboarding runner + Workspace<br/><small>class:OnboardingRunner</small>"]
+  end
+
+  subgraph OTHER["Other first-party services"]
+    direction TB
+    NB["novu-bridge: DomainEventConsumer,<br/>ThinEventPipelineService, LegacyMasterAdapter<br/><small>service:novu-bridge</small>"]
+    BFF["identity-bff<br/><small>service:identity-bff</small>"]
+    UP["user-preferences<br/><small>service:digit-user-preferences-service</small>"]
+    CS["config-service (no Kong route)<br/><small>service:digit-config-service</small>"]
+    MCP["digit-mcp tools<br/><small>service:digit-mcp</small>"]
+  end
+
+  CF --> UPGR
+  CL --> UPGR
+  CD --> UPGR
+  CR --> UPGR
+  EI --> UPGR
+  ED --> UPGR
+  EC --> UPGR
+  SC --> DPC
+  SW --> DPC
+  ST --> DPC
+  MCP --> DPM
+  DPC -.->|diverged copy| DPM
+  UPGR -->|/pgr-services/v2/request/*| RC
+  DPC -->|/pgr-services/v2/request/*| RC
+  DB -->|analytics| AN
+  SO --> ON
+  SE -.->|EscalationConfig master| ES
+  SN --> NB
+  WF1 -->|_create| RC
+  RC --> PS
+  PS --> VAL
+  PS --> WS
+  PS --> ES
+  PS --> SAP
+  VAL --> MU
+  ES --> MU
+  AN --> SAP
+  ON -->|/internal/identity/v1/*| BFF
+  ON -->|/tenants/_provision| NB
+  NB --> UP
+  BFF -->|/messages/_dispatch| NB
+
+  subgraph LINKS["Connections to other layers"]
+    direction TB
+    L1["1 · Business: 375 uses-state + 61 realises<br/><small>1-business.mmd</small>"]
+    L3["3 · Data: reads 232 · writes 110 · renders 20<br/><small>3-data.mmd</small>"]
+    L4["4 · Integration: invokes 183 core API calls · publishes 11<br/><small>4-integration.mmd</small>"]
+    L5["5 · Infrastructure: 184 APIs part-of deployables<br/><small>5-infrastructure.mmd</small>"]
+  end
+  PGR -.-> L1
+  PGR -.-> L3
+  PGR -.-> L4
+  OTHER -.-> L5
+
+  classDef screen fill:#fff4dd,stroke:#a8741a,color:#3d2a06
+  classDef app fill:#e3edff,stroke:#2d5fb8,color:#0f2350
+  classDef client fill:#f5f5f5,stroke:#9aa0a6,color:#3c4043
+  classDef link fill:#ffffff,stroke:#9aa0a6,color:#3c4043,stroke-dasharray:4 3
+  class CF,CL,CD,CR,EI,ED,EC,DB,SO,ST,SE,SC,SN,SW,WF1,WF2 screen
+  class RC,PS,VAL,WS,ES,SAP,NS,MU,AN,ON,NB,BFF,UP,CS,MCP app
+  class UPGR,DPC,DPM client
+  class L1,L3,L4,L5 link

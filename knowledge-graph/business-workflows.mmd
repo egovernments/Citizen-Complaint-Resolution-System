@@ -1,0 +1,113 @@
+%% CCRS / CMS v2.20 — complaint lifecycle (business workflow)
+%% States/actions/roles: PGR BusinessService in local-setup/dataloader/templates/PgrWorkflowConfig.json
+%%   (same graph in utilities/default-data-handler/.../PgrWorkflowConfig.json, utilities/crs_dataloader/templates/,
+%%    and backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json). businessServiceSla = 432000000 ms (5 days).
+%% Code: backend/pgr-services/src/main/java/org/egov/pgr/ (PGRService, ServiceRequestValidator, EscalationService, NotificationService).
+%% Solid = CONFIRMED, dotted = INFERRED.
+flowchart TB
+
+  subgraph SM["1 · Workflow state machine (egov-workflow-v2, business service PGR)"]
+    direction LR
+    S0(("start"))
+    PFA["PENDINGFORASSIGNMENT"]
+    PFR["PENDINGFORREASSIGNMENT<br/>stateSla 300000"]
+    LME["PENDINGATLME<br/>stateSla 300000"]
+    RES["RESOLVED<br/>terminal flag, still actionable"]
+    REJ["REJECTED<br/>terminal flag, still actionable"]
+    CAR(["CLOSEDAFTERRESOLUTION"])
+    CAJ(["CLOSEDAFTERREJECTION"])
+    CAN(["CANCELLED<br/>no inbound action"])
+
+    S0 -->|"APPLY · CITIZEN, CSR"| PFA
+    PFA -->|"ASSIGN · GRO, PGR_VIEWER"| LME
+    PFA -->|"REJECT · GRO, PGR_VIEWER"| REJ
+    PFR -->|"ASSIGN · GRO, PGR_VIEWER"| LME
+    PFR -->|"REJECT · GRO, PGR_VIEWER"| REJ
+    LME -->|"REASSIGN · PGR_LME, PGR_VIEWER"| PFR
+    LME -->|"RESOLVE · PGR_LME, PGR_VIEWER"| RES
+    LME -->|"ESCALATE · PGR_LME, PGR_VIEWER, SYSTEM"| LME
+    RES -->|"RATE · CFC, CITIZEN"| CAR
+    REJ -->|"RATE · CFC, CITIZEN"| CAJ
+    RES -->|"REOPEN · CFC, CITIZEN, CSR, PGR_VIEWER"| PFA
+    REJ -->|"REOPEN · CFC, CITIZEN, CSR, PGR_VIEWER"| PFA
+  end
+
+  subgraph REG["2 · Registration  POST /pgr-services/v2/request/_create"]
+    direction TB
+    C1["RequestsApiController#requestsCreatePost"]
+    C2["PGRService#create"]
+    C3["MDMSUtils#mDMSCall<br/>ComplaintHierarchy + Department"]
+    C4["ServiceRequestValidator#validateCreate<br/>user · source · boundary · serviceCode · dept(opt)"]
+    C5["EnrichmentService#enrichCreateRequest<br/>accountId, UUIDs, UserService#upsertUser"]
+    C6["IdGenRepository#getId<br/>pgr.servicerequestid"]
+    C7["additionalDetail.department = dept code"]
+    C8["WorkflowService#updateWorkflowStatus<br/>→ /egov-wf/process/_transition"]
+    C9{{"save-pgr-request<br/>inbox-pgr-events"}}
+    C10["egov-persister → INSERT<br/>eg_pgr_service_v2 / address / document"]
+    C1 --> C2 --> C3 --> C4 --> C5 --> C6 --> C7 --> C8 --> C9 --> C10
+  end
+
+  subgraph UPD["3 · Status change  POST /pgr-services/v2/request/_update"]
+    direction TB
+    U1["RequestsApiController#requestsUpdatePost"]
+    U2["PGRService#update → updateWithEscalationLock"]
+    U3["ServiceRequestValidator#validateUpdate<br/>assignee required on ASSIGN · dept vs HRMS · validateReOpen"]
+    U4["EscalationService#prepareUpdate<br/>assignmentChangedAt, escalationLevel"]
+    U5["EnrichmentService#enrichUpdateRequest"]
+    U6["WorkflowService → _transition<br/>applicationStatus copied from workflow"]
+    U7{{"update-pgr-request<br/>inbox-pgr-events"}}
+    U8["egov-persister → UPDATE<br/>eg_pgr_service_v2 + address (rating on RATE)"]
+    U1 --> U2 --> U3 --> U4 --> U5 --> U6 --> U7 --> U8
+  end
+
+  subgraph REOPEN["4 · Reopen rule  ServiceRequestValidator#validateReOpen"]
+    R1["CITIZEN caller must equal accountId"]
+    R2["now − lastModifiedTime ≤ REOPENSLA<br/>MDMS RAINMAKER-PGR.UIConstants (fallback 72h)"]
+    R3["COMMENT by citizen refreshes lastmodifiedtime"]
+    R1 --> R2
+    R3 -.->|extends window| R2
+  end
+
+  subgraph ESC["5 · Escalation + SLA"]
+    direction TB
+    E1["EscalationScheduler#scanAndEscalate<br/>every 300000 ms · pgr.escalation.enabled=false by default"]
+    E2["EscalationConfigurationService#resolve<br/>MDMS RAINMAKER-PGR.EscalationConfig"]
+    E3["SLA = ComplaintHierarchy.slaHours × level %<br/>clock from createdTime"]
+    E4["EscalationService#prepareEscalation<br/>assignee := HRMS reportingTo"]
+    E5["EscalationLockManager<br/>pg_try_advisory_xact_lock"]
+    E6{{"pgr-escalation-events<br/>(no consumer in repo)"}}
+    E1 --> E2 --> E3 --> E4
+    E4 --> E5
+    E4 -->|"_update ESCALATE as SYSTEM"| U2
+    U2 -->|ESCALATE only| E6
+  end
+
+  subgraph NOTIF["6 · Acknowledgement + notifications"]
+    direction TB
+    N1["NotificationConsumer#listen<br/>pattern: save-pgr-request | update-pgr-request"]
+    N2["NotificationService#process<br/>resolve assignee · shorten link · HRMS"]
+    N3["ThinEventBuilder#build<br/>COMPLAINTS.WORKFLOW.&lt;ACTION&gt;.&lt;STATE&gt;"]
+    N4{{"complaints.domain.events"}}
+    N5["novu-bridge DomainEventConsumer<br/>→ ThinEventPipelineService"]
+    N6["NOTIFICATIONS.* routing + templates<br/>user-preference consent (fail-open)"]
+    N7["Novu → SMS / email / WhatsApp"]
+    N8["nb_dispatch_log"]
+    N1 --> N2 --> N3 --> N4 --> N5 --> N6 --> N7
+    N5 --> N8
+  end
+
+  C9 --> N1
+  U7 --> N1
+  C8 -.-> S0
+  U6 -.-> LME
+
+  classDef state fill:#f1e8ff,stroke:#6a3fa3,color:#2b1450
+  classDef closed fill:#eceff2,stroke:#56606b,color:#1d242b
+  classDef step fill:#e3edff,stroke:#2d5fb8,color:#0f2350
+  classDef topic fill:#ffe9e4,stroke:#b14a32,color:#4a1408
+  classDef rule fill:#fff4dd,stroke:#a8741a,color:#3d2a06
+  class PFA,PFR,LME,RES,REJ state
+  class CAR,CAJ,CAN,S0 closed
+  class C1,C2,C3,C4,C5,C6,C7,C8,C10,U1,U2,U3,U4,U5,U6,U8,E1,E2,E4,E5,N1,N2,N3,N5,N7,N8 step
+  class C9,U7,E6,N4 topic
+  class R1,R2,R3,E3,N6 rule

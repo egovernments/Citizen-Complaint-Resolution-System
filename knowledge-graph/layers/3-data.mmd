@@ -1,0 +1,111 @@
+%% Layer 3 · Data — tables, derived views, impact-relevant fields and MDMS masters, with how each is derived.
+%% Snapshot master @ 64d5abe92. Small grey text = impact-graph node id. Column-level detail: ../data-model.mmd.
+%% Solid = confirmed, dotted = inferred.
+flowchart LR
+
+  subgraph MASTERS["MDMS masters (eg_mdms_data)"]
+    direction TB
+    MCH["ComplaintHierarchy leaf: department, slaHours<br/><small>master:RAINMAKER-PGR.ComplaintHierarchy</small>"]
+    MEC["EscalationConfig: ladder, overrides, maxDepth<br/><small>master:RAINMAKER-PGR.EscalationConfig</small>"]
+    MUI["UIConstants: REOPENSLA<br/><small>master:RAINMAKER-PGR.UIConstants</small>"]
+    MDP["Department<br/><small>master:common-masters.Department</small>"]
+    MNT["NOTIFICATIONS.EventCatalogue / Routing / Template<br/><small>master:NOTIFICATIONS.Routing</small>"]
+    MLG["Legacy RAINMAKER-PGR.Notification*<br/>(per-tenant fallback)<br/><small>master:RAINMAKER-PGR.NotificationRouting</small>"]
+    MDS["dss.DashboardConfig (timeZone, public flag)<br/><small>master:dss.DashboardConfig</small>"]
+  end
+
+  subgraph CORE["Complaint tables · written only by egov-persister"]
+    direction TB
+    TS["eg_pgr_service_v2<br/><small>table:eg_pgr_service_v2</small>"]
+    TA["eg_pgr_address_v2<br/><small>table:eg_pgr_address_v2</small>"]
+    TD["eg_pgr_document_v2<br/><small>table:eg_pgr_document_v2</small>"]
+  end
+
+  subgraph FIELDS["Impact-relevant fields"]
+    direction TB
+    FAS["applicationStatus (copied from workflow)<br/><small>field:Service.applicationStatus</small>"]
+    FSC["serviceCode<br/><small>field:Service.serviceCode</small>"]
+    FDP["additionalDetail.department (dept code)<br/><small>field:Service.additionalDetail.department</small>"]
+    FEL["additionalDetail.escalationLevel + 5 escalation keys<br/><small>field:Service.additionalDetail.escalationLevel</small>"]
+    FRT["rating<br/><small>field:Service.rating</small>"]
+    FLM["auditDetails.lastModifiedTime (reopen clock)<br/><small>field:Service.auditDetails.lastModifiedTime</small>"]
+    FCT["auditDetails.createdTime (SLA clock)<br/><small>field:Service.auditDetails.createdTime</small>"]
+    FSH["ComplaintHierarchy.slaHours<br/><small>field:ComplaintHierarchy.slaHours</small>"]
+    FBS["businessServiceSla (workflow)<br/><small>field:BusinessService.businessServiceSla</small>"]
+  end
+
+  subgraph PLATFORM["Platform tables read directly"]
+    direction TB
+    PWF["eg_wf_processinstance_v2 · eg_wf_state_v2 ·<br/>eg_wf_assignee_v2 · eg_wf_businessservice_v2"]
+    PUS["eg_user"]
+    PBR["boundary_relationship"]
+  end
+
+  subgraph MV["Analytics read models (pgr-services Flyway)"]
+    direction TB
+    VEV["complaint_events MV: status, is_escalation<br/><small>table:complaint_events</small>"]
+    VFA["complaint_facts MV: application_status, is_open,<br/>sla_target_ms, sla_breached, department_code<br/><small>table:complaint_facts</small>"]
+    VDY["complaint_open_state_daily<br/><small>table:complaint_open_state_daily</small>"]
+    VLG["pgr_mv_kpi / monthly / dimension<br/><small>table:pgr_mv_kpi</small>"]
+  end
+
+  subgraph CMS["Other CMS tables"]
+    direction TB
+    TNB["nb_dispatch_log · nb_tenant_account"]
+    TUP["user_preference"]
+    THP["eg_pgr_hrms_projection"]
+    TON["eg_pgr_onboarding_*"]
+  end
+
+  TS --- FAS
+  TS --- FSC
+  TS --- FDP
+  TS --- FEL
+  TS --- FRT
+  TS --- FLM
+  TS --- FCT
+  TA -->|FK parentid| TS
+  TD -->|FK service_id| TS
+  FSC -->|logical| MCH
+  FDP -->|derives-from at create| MCH
+  MCH --- FSH
+  MCH -->|department code| MDP
+  VEV -->|derives-from| PWF
+  VEV -->|derives-from| TS
+  VFA -->|derives-from| VEV
+  VFA -->|department_code from| MCH
+  VFA -->|sla_target_ms from| FSH
+  VFA -->|ladder| MEC
+  VFA -->|fallback| FBS
+  VFA -->|ward| PBR
+  VFA -->|actor| PUS
+  VFA -->|timezone| MDS
+  VDY -->|daily snapshot| VFA
+  VLG -->|derives-from| TS
+  FAS -.->|"inferred: MV status comes from eg_wf_state_v2, not this column"| VEV
+  MUI -.->|window applied to| FLM
+  MNT -->|routes| TNB
+  MLG -.->|fallback| TNB
+
+  subgraph LINKS["Connections to other layers"]
+    direction TB
+    L1["1 · Business: 12 data → state literals in MV SQL<br/>(RESOLVED, REJECTED, CLOSEDAFTER*)<br/><small>1-business.mmd</small>"]
+    L2["2 · Application: 232 reads · 110 writes · 20 screen renders<br/><small>2-application.mmd</small>"]
+    L5["5 · Infrastructure: persister / indexer YAML: 17 field and table mappings<br/><small>5-infrastructure.mmd</small>"]
+  end
+  MV -.-> L1
+  FIELDS -.-> L2
+  CORE -.-> L5
+
+  classDef master fill:#fff4dd,stroke:#a8741a,color:#3d2a06
+  classDef table fill:#e4f5ec,stroke:#1f7a4d,color:#0b3320
+  classDef field fill:#f3fbf6,stroke:#1f7a4d,color:#0b3320
+  classDef plat fill:#eceff2,stroke:#56606b,color:#1d242b
+  classDef mv fill:#e6f2f7,stroke:#2b6a86,color:#0d2a36
+  classDef link fill:#ffffff,stroke:#9aa0a6,color:#3c4043,stroke-dasharray:4 3
+  class MCH,MEC,MUI,MDP,MNT,MLG,MDS master
+  class TS,TA,TD,TNB,TUP,THP,TON table
+  class FAS,FSC,FDP,FEL,FRT,FLM,FCT,FSH,FBS field
+  class PWF,PUS,PBR plat
+  class VEV,VFA,VDY,VLG mv
+  class L1,L2,L5 link

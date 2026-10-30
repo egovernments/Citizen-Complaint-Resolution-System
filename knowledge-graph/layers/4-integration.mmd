@@ -1,0 +1,110 @@
+%% Layer 4 · Integration — Kafka topics, DIGIT core APIs and external systems, with who sits on each side.
+%% Snapshot master @ 64d5abe92. Small grey text = impact-graph node id. Wider view: ../integrations.mmd.
+%% Red border = topic with no consumer or no producer in this repo. Solid = confirmed, dotted = inferred.
+flowchart LR
+
+  subgraph PRODUCERS["Producers"]
+    direction TB
+    PS["pgr PGRService<br/><small>class:PGRService</small>"]
+    PN["pgr NotificationService<br/><small>class:NotificationService</small>"]
+    NBP["novu-bridge DLQ publish"]
+    UOT["user-otp"]
+    HR["egov-hrms"]
+  end
+
+  subgraph TOPICS["Kafka topics"]
+    direction TB
+    T1{{"save-pgr-request<br/><small>topic:save-pgr-request</small>"}}
+    T2{{"update-pgr-request<br/><small>topic:update-pgr-request</small>"}}
+    T3{{"inbox-pgr-events<br/><small>topic:inbox-pgr-events</small>"}}
+    T4{{"complaints.domain.events<br/><small>topic:complaints.domain.events</small>"}}
+    T5{{"pgr-escalation-events<br/><small>no consumer</small>"}}
+    T6{{"save/update-hrms-employee"}}
+    T7{{"egov.core.notification.sms"}}
+    T8{{"egov.core.notification.email<br/><small>no consumer</small>"}}
+    T9{{"notifications.events<br/><small>no producer</small>"}}
+    T10{{"novu-bridge.dlq<br/><small>no consumer</small>"}}
+  end
+
+  subgraph CONSUMERS["Consumers"]
+    direction TB
+    CP["egov-persister<br/><small>pgr-services-persister.yml</small>"]
+    CI["egov-indexer<br/><small>pgr-services.yml, pgr-inbox-indexer.yml</small>"]
+    CN["pgr NotificationConsumer<br/><small>class:NotificationConsumer</small>"]
+    CH["pgr HrmsProjectionConsumer"]
+    CB["novu-bridge DomainEventConsumer · CoreSmsConsumer"]
+    CX["xstate-chatbot status listener<br/><small>KAFKA_CONSUMER_ENABLED=false in compose</small>"]
+  end
+
+  PS --> T1
+  PS --> T2
+  PS --> T3
+  PS -->|ESCALATE| T5
+  PN --> T4
+  NBP --> T10
+  UOT --> T7
+  UOT --> T8
+  HR --> T6
+  T1 --> CP
+  T1 --> CI
+  T1 --> CN
+  T2 --> CP
+  T2 --> CI
+  T2 --> CN
+  T2 -.-> CX
+  T3 --> CI
+  T4 --> CB
+  T6 --> CP
+  T6 --> CH
+  T7 --> CB
+  T9 --> CB
+  CN -->|re-publishes as thin event| PN
+
+  subgraph CONTRACT["Event contract"]
+    TE["thin event v1: eventName =<br/>COMPLAINTS.WORKFLOW.&lt;ACTION&gt;.&lt;STATE&gt;<br/><small>code:docs/releases/2.20/notifications/contract/thin-event-v1.schema.json</small>"]
+  end
+  T4 --- TE
+
+  subgraph COREAPI["DIGIT core APIs called (sync HTTP)"]
+    direction TB
+    AWF["egov-workflow-v2: process/_transition, process/_search,<br/>businessservice/_search<br/><small>service:egov-workflow-v2</small>"]
+    AMD["mdms-v2: v1/_search, v2/_search|_create|_update<br/>(/egov-mdms-service/* is the same endpoint)<br/><small>service:mdms-v2</small>"]
+    AUS["egov-user: _search, _details, oauth/token, users/_create|_update novalidate<br/><small>service:egov-user</small>"]
+    ABD["boundary-service: boundary/_search, relationships/_search<br/><small>service:boundary-service</small>"]
+    AHR["egov-hrms: employees/_search<br/><small>service:egov-hrms</small>"]
+    AOT["idgen · enc-service · accesscontrol · localization ·<br/>filestore · url-shortening · otp"]
+  end
+
+  subgraph EXT["External systems"]
+    direction TB
+    XN["Novu 2.3.0 (+ worker provider shims)<br/><small>ext:novu</small>"]
+    XT["Twilio · SMSCountry · SMTP · Jasmin · Ozeki"]
+    XK["Keycloak + Google / GitHub OAuth"]
+    XG["Overture · geoBoundaries · Geoapify · Google Maps"]
+  end
+
+  CB --> XN
+  XN --> XT
+
+  subgraph LINKS["Connections to other layers"]
+    direction TB
+    L2["2 · Application: 183 invokes of core APIs,<br/>11 publishes, 9 consumes<br/><small>2-application.mmd</small>"]
+    L5["5 · Infrastructure: 47 config keys / env vars name these topics and hosts;<br/>Kong routes front the core APIs<br/><small>5-infrastructure.mmd</small>"]
+  end
+  COREAPI -.-> L2
+  TOPICS -.-> L5
+
+  classDef prod fill:#e3edff,stroke:#2d5fb8,color:#0f2350
+  classDef topic fill:#ffe9e4,stroke:#b14a32,color:#4a1408
+  classDef orphan fill:#ffe9e4,stroke:#d4002a,stroke-width:3px,color:#4a1408
+  classDef cons fill:#e6f2f7,stroke:#2b6a86,color:#0d2a36
+  classDef core fill:#f1e8ff,stroke:#6a3fa3,color:#2b1450
+  classDef ext fill:#eceff2,stroke:#56606b,color:#1d242b
+  classDef link fill:#ffffff,stroke:#9aa0a6,color:#3c4043,stroke-dasharray:4 3
+  class PS,PN,NBP,UOT,HR prod
+  class T1,T2,T3,T4,T6,T7 topic
+  class T5,T8,T9,T10 orphan
+  class CP,CI,CN,CH,CB,CX,TE cons
+  class AWF,AMD,AUS,ABD,AHR,AOT core
+  class XN,XT,XK,XG ext
+  class L2,L5 link

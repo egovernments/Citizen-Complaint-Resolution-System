@@ -1,0 +1,190 @@
+%% CCRS / CMS v2.20 — pgr-services API dependency graph (request → controller → service → data / events / external)
+%% All paths are under context /pgr-services. Package root: backend/pgr-services/src/main/java/org/egov/pgr/
+%% 30 endpoints in 6 controllers; the onboarding/workspace/analytics groups are collapsed to one node per controller group.
+%% Solid = CONFIRMED, dotted = INFERRED.
+flowchart LR
+
+  subgraph API["REST endpoints"]
+    direction TB
+    A1["POST /v2/request/_create"]
+    A2["POST /v2/request/_update"]
+    A3["POST /v2/request/_search"]
+    A4["POST /v2/request/_count"]
+    A5["POST /v2/request/_plainsearch<br/>(no record scoping)"]
+    A6["POST /v2/request/inbox/_search · _count"]
+    A7["GET /v2/dashboard<br/>(no RequestInfo, Cache-Control public)"]
+    A8["POST /v2/employee/_context"]
+    A9["POST /v2/analytics/* (10)<br/>incl. 4 anonymous public/*"]
+    A10["POST /v2/onboarding/* (7)<br/>signups, identifiers, operations"]
+    A11["POST /v2/onboarding/workspaces/* (3)"]
+    A12["POST /migration/_transform<br/>(migration.enabled=false)"]
+  end
+
+  subgraph CTRL["Controllers (web/controllers, analytics, onboarding)"]
+    direction TB
+    RC["RequestsApiController"]
+    EC["EmployeeContextController"]
+    AC["AnalyticsController"]
+    OC["OnboardingApiController"]
+    WC["WorkspaceApiController"]
+    MC["MigrationController"]
+  end
+
+  subgraph SVC["Services"]
+    direction TB
+    PS["PGRService<br/>create · update · search · count · plainSearch"]
+    VAL["ServiceRequestValidator"]
+    ENR["EnrichmentService"]
+    US["UserService"]
+    WS["WorkflowService"]
+    ESC["EscalationService +<br/>EscalationLockManager"]
+    SAP["SearchAccessPolicyService +<br/>PolicyDrivenScopeResolver"]
+    FV["FieldVisibilityService"]
+    EDS["EncryptionDecryptionService"]
+    VS["VisibilityService"]
+    DS["DashboardService"]
+    ECS["EmployeeContextService"]
+    AS["AnalyticsService +<br/>AnalyticsCapabilityService"]
+    OS["OnboardingService +<br/>OnboardingRunner / OnboardingSteps"]
+    WSS["WorkspaceService +<br/>WorkspaceGateway"]
+    MS["MigrationService"]
+    PR["Producer#push"]
+  end
+
+  subgraph REPO["Repositories / SQL"]
+    direction TB
+    PGRR["PGRRepository + PGRQueryBuilder"]
+    DR["DashboardRepository"]
+    HPR["HrmsProjectionRepository"]
+    OR["OnboardingRepository /<br/>WorkspaceRepository"]
+    SRR["ServiceRequestRepository<br/>(generic HTTP, null on non-4xx)"]
+    IGR["IdGenRepository (HTTP)"]
+  end
+
+  subgraph DB["Tables / views"]
+    direction TB
+    T1[("eg_pgr_service_v2")]
+    T2[("eg_pgr_address_v2")]
+    T3[("eg_pgr_document_v2")]
+    T4[("pgr_mv_* · complaint_facts ·<br/>complaint_events · complaint_open_state_daily")]
+    T5[("eg_pgr_hrms_projection")]
+    T6[("eg_pgr_onboarding_*")]
+  end
+
+  subgraph KAFKA["Kafka topics published"]
+    K1{{"save-pgr-request"}}
+    K2{{"update-pgr-request"}}
+    K3{{"inbox-pgr-events"}}
+    K4{{"pgr-escalation-events"}}
+    K5{{"save-pgr-request-batch ·<br/>save-wf-transitions-batch"}}
+  end
+
+  subgraph EXTSVC["Outbound HTTP (DIGIT + CMS)"]
+    direction TB
+    X1["egov-workflow-v2<br/>process/_transition · process/_search ·<br/>businessservice/_search"]
+    X2["mdms /egov-mdms-service/v1/_search"]
+    X3["egov-user /user/_search ·<br/>users/_createnovalidate · _details"]
+    X4["boundary-service boundary/_search ·<br/>boundary-relationships/_search"]
+    X5["egov-hrms /employees/_search"]
+    X6["egov-idgen /id/_generate"]
+    X7["egov-enc-service crypto/v1/*"]
+    X8["egov-accesscontrol<br/>/access/v1/actions/mdms/_get"]
+    X9["identity-bff /internal/identity/v1/*"]
+    X10["novu-bridge /novu-adapter/v1/tenants/*"]
+    X11["egov-localization (onboarding)"]
+  end
+
+  A1 --> RC
+  A2 --> RC
+  A3 --> RC
+  A4 --> RC
+  A5 --> RC
+  A6 --> RC
+  A7 --> RC
+  A8 --> EC
+  A9 --> AC
+  A10 --> OC
+  A11 --> WC
+  A12 --> MC
+
+  RC -->|create/update/search/count/plainSearch| PS
+  RC -->|inbox scope MINE/TEAM| VS
+  RC -->|dashboard| DS
+  EC --> ECS
+  AC --> AS
+  OC --> OS
+  WC --> WSS
+  MC --> MS
+
+  PS --> VAL
+  PS --> ENR
+  PS --> WS
+  PS --> ESC
+  PS --> SAP
+  PS --> FV
+  PS --> EDS
+  PS --> PGRR
+  PS --> PR
+  ENR --> US
+  ENR --> IGR
+  VS --> HPR
+  VS --> WS
+  AS --> SAP
+  DS --> DR
+  OS --> OR
+  WSS --> OR
+
+  PGRR --> T1
+  PGRR --> T2
+  PGRR --> T3
+  DR --> T4
+  DR --> T1
+  AS --> T4
+  HPR --> T5
+  OR --> T6
+
+  PR -->|create| K1
+  PR -->|update| K2
+  PR -->|create + update| K3
+  PR -->|ESCALATE| K4
+  MS --> K5
+  K1 -.->|egov-persister INSERT| T1
+  K2 -.->|egov-persister UPDATE| T1
+
+  WS --> SRR
+  US --> SRR
+  VAL --> SRR
+  ESC --> SRR
+  SRR --> X1
+  SRR --> X2
+  SRR --> X3
+  VAL --> X4
+  SAP --> X4
+  VAL --> X5
+  ESC --> X5
+  SAP --> X5
+  ECS --> X5
+  IGR --> X6
+  EDS --> X7
+  SAP --> X8
+  AS --> X8
+  OC --> X9
+  OS --> X9
+  OS --> X10
+  OS --> X11
+  WSS -->|/user/_details ACCOUNT_ADMIN| X3
+
+  classDef api fill:#fff4dd,stroke:#a8741a,color:#3d2a06
+  classDef ctrl fill:#f1e8ff,stroke:#6a3fa3,color:#2b1450
+  classDef svc fill:#e3edff,stroke:#2d5fb8,color:#0f2350
+  classDef repo fill:#e6f2f7,stroke:#2b6a86,color:#0d2a36
+  classDef db fill:#e4f5ec,stroke:#1f7a4d,color:#0b3320
+  classDef topic fill:#ffe9e4,stroke:#b14a32,color:#4a1408
+  classDef ext fill:#eceff2,stroke:#56606b,color:#1d242b
+  class A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11,A12 api
+  class RC,EC,AC,OC,WC,MC ctrl
+  class PS,VAL,ENR,US,WS,ESC,SAP,FV,EDS,VS,DS,ECS,AS,OS,WSS,MS,PR svc
+  class PGRR,DR,HPR,OR,SRR,IGR repo
+  class T1,T2,T3,T4,T5,T6 db
+  class K1,K2,K3,K4,K5 topic
+  class X1,X2,X3,X4,X5,X6,X7,X8,X9,X10,X11 ext
