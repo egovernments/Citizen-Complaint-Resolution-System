@@ -2,7 +2,7 @@
 
 **Covers:** v2.12 → v2.20 (including the v2.12.1 patch), as of `master` at `63472b4a1` and `develop` at `42e914005` (27 Oct 2026). **Who this is for:** citizens, government administrators, partners and anyone evaluating the release.
 
-**See also:** [Deployment changelog](release-config-changelog-v2.20.md) for the settings to change and the upgrade steps, [Known issues](known_issues_2.20.md), and the [Migration guide](migration-guide-v2.12-to-v2.20.md).
+**See also:** [Deployment changelog](release-config-changelog-v2.20.md) for the settings to change and the upgrade steps, [Known issues](known_issues_2.20.md), [Image tags](images-v2.20.md), and the [Migration guide](migration-guide-v2.12-to-v2.20.md).
 
 ## A. Release overview
 
