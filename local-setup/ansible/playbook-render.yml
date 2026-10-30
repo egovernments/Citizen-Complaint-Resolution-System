@@ -1,0 +1,38 @@
+---
+# digit-render-contract: 1
+#
+# Render this version's /opt/digit configuration into a scratch directory,
+# without deploying. Used by the upgrade analyser (scripts/digit_upgrade) to
+# compute exactly what a deploy of this version would write.
+#
+# It runs playbook-deploy.yml itself, restricted to the tasks tagged `render`:
+# the deterministic writes into {{ digit_dir }}. Nothing tagged `render` may
+# need the network, Docker, OpenBao or a database; facts it needs come from
+# host_vars and `always` tasks. local-setup/tests/test_render_contract.py
+# enforces that and fails when a new write into an analysed path is untagged.
+#
+#   ansible-playbook -i <inventory> --limit <tenant> playbook-render.yml \
+#     --tags render -e digit_dir=<scratch>
+#
+# The analyser builds the inventory and passes these flags; do not run it
+# against a real deployment directory.
+- name: Render guard
+  hosts: digit
+  gather_facts: false
+  tasks:
+    - name: Refuse to render without the render tag or into a live directory
+      ansible.builtin.assert:
+        that:
+          - "'render' in ansible_run_tags"
+          - digit_dir is defined
+          - digit_dir is not match('^/opt/digit/?$')
+        fail_msg: >-
+          playbook-render.yml must run with --tags render and a scratch
+          digit_dir (got {{ digit_dir | default('undefined') }}).
+      tags: ['render']
+
+- name: Render
+  ansible.builtin.import_playbook: playbook-deploy.yml
+  vars:
+    digit_render_only: true
+    deploy_become: false
