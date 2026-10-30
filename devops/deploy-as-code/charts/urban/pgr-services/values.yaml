@@ -193,6 +193,14 @@ env: |
       configMapKeyRef:
         name: egov-service-host
         key: egov-localization
+  # PGR's ABAC lookup (MDMSUtils#fetchAccessControlActions). Unset, it defaults to
+  # localhost:8080 (PGR itself) and every employee complaint search fails with
+  # "access-control call failed". Compose/Ansible set it too.
+  - name: EGOV_ACCESSCONTROL_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: egov-accesscontrol
   {{- if .Values.gatewayHost }}
   - name: EGOV_GATEWAY_HOST
     value: {{ .Values.gatewayHost | quote }}

@@ -108,6 +108,14 @@ describe('pgr-services gets the gateway origin on both tiers', () => {
     expect(values).toMatch(/^gatewayHost: "http:\/\/gateway\.egov:8080"$/m);
     expect(values).toContain('  - name: EGOV_GATEWAY_HOST\n    value: {{ .Values.gatewayHost | quote }}');
   });
+  test('EGOV_ACCESSCONTROL_HOST too (its localhost:8080 default is PGR itself: employee searches fail)', () => {
+    expect(read('backend/pgr-services/src/main/resources/application.properties'))
+      .toMatch(/^egov\.accesscontrol\.host=http:\/\/localhost:8080$/m);
+    expect(read('local-setup/docker-compose.egov-digit.yaml')).toMatch(/^ {6}EGOV_ACCESSCONTROL_HOST: http:\/\/egov-accesscontrol:8090$/m);
+    expect(read(`${DEPLOY}/charts/urban/pgr-services/values.yaml`)).toContain(
+      '  - name: EGOV_ACCESSCONTROL_HOST\n    valueFrom:\n      configMapKeyRef:\n        name: egov-service-host\n        key: egov-accesscontrol');
+    expect(read(`${DEPLOY}/charts/environments/env.yaml`)).toMatch(/^ {8}egov-accesscontrol: "http:\/\/egov-accesscontrol\.egov:8080\/"$/m);
+  });
 });
 
 describe('the bare domain lands on the Configurator on both tiers', () => {
