@@ -6,9 +6,30 @@ labels:
 # Ingress Configs
 ingress:
   enabled: true
-  zuul: true
+  # Not behind the Spring gateway, see templates/ingress.yaml.
+  zuul: false
   context: "novu-bridge"
   namespace: "egov"
+  # Keep in line with Kong's novu-bridge-proxy routes (the Ansible deployment).
+  publicPaths:
+    - logs
+    - integrations
+    - preferences
+    - providers
+    - providers/catalog
+    - providers/templates
+    - providers/twilio-templates
+    - providers/verify
+    - providers/test-send
+    - providers/_update
+    - providers/_delete
+    - receipts/novu
+    - receipts/smscountry
+    - contract/envelope
+    - contract/openapi
+    - contract/thin-event
+    - config/source
+    - dispatch/_resolve
 
 # Init Containers - DB Migration
 initContainers:
