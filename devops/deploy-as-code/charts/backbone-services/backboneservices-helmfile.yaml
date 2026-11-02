@@ -500,6 +500,7 @@ releases:
     # A pinned key (novu-bridge.novu-api-key) is the operator's own: no bootstrap, as in Ansible.
     - bootstrap:
         enabled: {{ not (index .Values "novu-bridge" "novu-api-key") }}
+        tenantAccountsSecret: {{ if index .Values "novu-bridge" "tenant-accounts" "enabled" }}novu-bridge-tenant-accounts{{ else }}""{{ end }}
     # Serve on THIS deployment's domain over TLS (#1644). The chart default
     # named another environment's hostname and had no tls block at all, so the
     # dashboard was reachable only by Host-header and only over plain HTTP.

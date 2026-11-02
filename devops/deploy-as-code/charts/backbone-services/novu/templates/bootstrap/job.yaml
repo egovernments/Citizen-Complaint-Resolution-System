@@ -60,6 +60,8 @@ spec:
               value: {{ .Values.bootstrap.adminSecret | quote }}
             - name: API_KEY_SECRET
               value: {{ .Values.bootstrap.apiKeySecret | quote }}
+            - name: TENANT_ACCOUNTS_SECRET
+              value: {{ .Values.bootstrap.tenantAccountsSecret | quote }}
             - name: NOVU_API_PORT
               value: {{ .Values.api.port | quote }}
             - name: NOVU_ADMIN_EMAIL
