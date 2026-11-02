@@ -1,0 +1,9 @@
+{{- if .Values.bootstrap.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: novu-bootstrap-scripts
+  namespace: {{ include "novu.namespace" . }}
+data:
+{{- (.Files.Glob "files/bootstrap/*").AsConfig | nindent 2 }}
+{{- end }}

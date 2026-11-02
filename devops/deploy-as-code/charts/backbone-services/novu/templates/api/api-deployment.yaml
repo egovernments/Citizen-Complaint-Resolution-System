@@ -29,6 +29,10 @@ spec:
           {{- if .Values.api.env }}
           env:
 {{- tpl .Values.api.env $ | nindent 12 }}
+            # Public sign-up stays off: the first signup would own the organization. The
+            # first account comes from templates/bootstrap/job.yaml.
+            - name: DISABLE_USER_REGISTRATION
+              value: "true"
           {{- end }}
           {{- with .Values.api.resources }}
           resources:

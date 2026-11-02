@@ -1052,6 +1052,15 @@ describe('Novu workflow creation deployment contract', () => {
     expect(novuValues).toMatch(/^ {4}repository: "ghcr\.io\/novuhq\/novu\/worker"\n {4}tag: "2\.3\.0"$/m);
   });
 
+  // The k8s bootstrap Job runs copies of the Ansible deployment's Novu scripts: a chart cannot
+  // read files outside its own directory. A fix to one must reach the other.
+  test('the novu chart bootstrap scripts are identical to the Ansible ones', () => {
+    for (const script of ['novu-mint-key.sh', 'bootstrap-novu-whatsapp.sh', 'load-dotenv.sh']) {
+      expect(read(`devops/deploy-as-code/charts/backbone-services/novu/files/bootstrap/${script}`))
+        .toBe(read(`backend/novu-bridge/config/${script}`));
+    }
+  });
+
   // M1 (re-review): novu-bridge must know whether the worker preloads those providers
   // (NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS), and it must come from the SAME switch as the mount,
   // or the two can disagree and the bridge offers providers whose every send fails.
