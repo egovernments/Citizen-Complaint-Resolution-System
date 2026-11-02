@@ -283,6 +283,8 @@ bootstrap:
   # In bridgeNamespace, read by novu-bridge when novu-api-key is not pinned.
   bridgeNamespace: "egov"
   apiKeySecret: "novu-bridge-novu-api-key"
+  # Set by the helmfile when novu-bridge.tenant-accounts.enabled. Blank creates nothing.
+  tenantAccountsSecret: ""
 
 worker:
   name: "novu-worker"
