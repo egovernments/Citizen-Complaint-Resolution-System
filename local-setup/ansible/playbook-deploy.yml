@@ -3099,6 +3099,20 @@
     # What else Sherlog needs: Loki (its log rules, the journal, the logs investigations read) and Tempo, which only
     # observability_level traces runs; and somewhere for live mode's reports (in CCRS, GitHub issues: the Slack
     # webhook carries alerts, not reports).
+    # The model settings: a provider Sherlog knows, spelled as it expects (an unknown one falls back to OpenAI and
+    # sends the key there), and with anthropic a model HolmesGPT can route to Anthropic (an empty one is an OpenAI
+    # model).
+    - name: "Sherlog — its model settings"
+      ansible.builtin.assert:
+        that:
+          - (sherlog_model_provider | default('')) in ['', 'openai', 'anthropic']
+          - (sherlog_model_provider | default('')) != 'anthropic' or (sherlog_holmes_model | default('')) is match('anthropic/.+')
+        fail_msg: >-
+          sherlog_model_provider must be empty, openai or anthropic (got '{{ sherlog_model_provider | default('') }}'),
+          and with anthropic, sherlog_holmes_model must be anthropic/<model> (got '{{ sherlog_holmes_model | default('') }}').
+        quiet: true
+      when: enable_sherlog | default(false) | bool
+
     - name: "Sherlog — needs observability_level traces (Loki and Tempo)"
       ansible.builtin.assert:
         that: (observability_level | default('traces')) == 'traces'
