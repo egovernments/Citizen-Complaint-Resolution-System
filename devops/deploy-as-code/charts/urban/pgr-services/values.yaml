@@ -115,6 +115,13 @@ heap: "-Xmx192m -Xms192m"
 # pgr-services at theirs.
 mdmsHost: ""
 
+# EGOV_GATEWAY_HOST: the origin the workspace settings API (_rename and the other
+# Workspace writes) sends MDMS / localization writes through, on the admin's own
+# token, so the gateway's auth and role checks apply. Compose/Ansible point it at
+# Kong; here it is the DIGIT gateway service. Blank leaves it unset, and every
+# workspace write then fails with WORKSPACE_DEPENDENCY_UNAVAILABLE.
+gatewayHost: "http://gateway.egov:8080"
+
 # Self-service tenant onboarding (#2269). DISABLED by default here: the runner
 # provisions every signup as a platform provisioner account, and this chart does
 # not create one. Before enabling, create an EMPLOYEE on a ROOT tenant (no dot)
@@ -186,6 +193,18 @@ env: |
       configMapKeyRef:
         name: egov-service-host
         key: egov-localization
+  # PGR's ABAC lookup (MDMSUtils#fetchAccessControlActions). Unset, it defaults to
+  # localhost:8080 (PGR itself) and every employee complaint search fails with
+  # "access-control call failed". Compose/Ansible set it too.
+  - name: EGOV_ACCESSCONTROL_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: egov-accesscontrol
+  {{- if .Values.gatewayHost }}
+  - name: EGOV_GATEWAY_HOST
+    value: {{ .Values.gatewayHost | quote }}
+  {{- end }}
   - name: EGOV_INFRA_SEARCHER_HOST
     valueFrom:
       configMapKeyRef:
