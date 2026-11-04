@@ -112,6 +112,7 @@ jobs:
               else. Add or update a test that would have caught it, if the repository has tests for that code.
             - "proposal": the right answer is a design choice: a change that prevents, limits or detects the problem
               (a default, a resource limit, a route, a guard, a clean-up, an alert). Make it as for a fix.
+            To delete a file (or rename one: Write the new file, delete the old), list it in "delete_paths".
             For "fix" and "proposal", "title" is a short title for the pull request (a proposal's starts with
             "Proposal:"), and "body" says what was wrong, the evidence from the issue, what you changed, and which
             tests you added (CI runs them; you cannot). A proposal's body also says which choice a person has to make
@@ -121,7 +122,7 @@ jobs:
             --max-turns 40
             --allowedTools "Read,Glob,Grep,Edit,Write"
             --disallowedTools "Bash,WebFetch,WebSearch,NotebookEdit,Edit(.github/**),Write(.github/**),Edit(.git/**),Write(.git/**),Edit(.sherlog-autofix/**),Write(.sherlog-autofix/**),Read(.git/**),Read(//proc/**),Read(//sys/**),Read(~/.config/**),Read(~/.claude/**),Read(~/.ssh/**),Read(~/.gitconfig),Read(//home/runner/work/_temp/**),Read(//tmp/**)"
-            --json-schema '{"type":"object","additionalProperties":false,"required":["outcome"],"properties":{"outcome":{"enum":["fix","proposal","decline","comment_on_pr"]},"title":{"type":"string","maxLength":200},"body":{"type":"string","maxLength":20000},"comment":{"type":"string","maxLength":20000}}}'
+            --json-schema '{"type":"object","additionalProperties":false,"required":["outcome"],"properties":{"outcome":{"enum":["fix","proposal","decline","comment_on_pr"]},"title":{"type":"string","maxLength":200},"body":{"type":"string","maxLength":20000},"comment":{"type":"string","maxLength":20000},"delete_paths":{"type":"array","maxItems":50,"items":{"type":"string","maxLength":300}}}}'
 
       # The agent's edits as a patch, checked here and again in publish.
       - name: Patch
@@ -133,6 +134,15 @@ jobs:
           printf '%s' "$OUTCOME_JSON" > "$RUNNER_TEMP/out/outcome.json"
           jq -e '.outcome' "$RUNNER_TEMP/out/outcome.json" > /dev/null
           rm -rf .sherlog-autofix
+          # Edit and Write cannot delete: files the fix deletes (or renames, with Write for the new name) are listed
+          # in delete_paths. Only tracked files, inside the repository, and nothing under .github/.
+          jq -r '.delete_paths // [] | .[]' "$RUNNER_TEMP/out/outcome.json" | while IFS= read -r path; do
+            case "$path" in
+              /*|*..*|.github/*|.git/*|.sherlog-autofix/*|"") echo "::error::refusing to delete '$path'"; exit 1 ;;
+            esac
+            git ls-files --error-unmatch -- "$path" > /dev/null || { echo "::error::'$path' is not a tracked file"; exit 1; }
+            git rm -q -- "$path"
+          done
           git add -A
           git diff --cached --binary > "$RUNNER_TEMP/out/change.patch"
           git diff --cached --name-only
