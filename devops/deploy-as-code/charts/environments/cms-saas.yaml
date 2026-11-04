@@ -80,7 +80,7 @@ turbopass-proxy:
 # and otel-collector were never installed here. Remove a name to bring it
 # back; its status-page check (charts/monitoring/gatus) follows this list.
 disabledReleases:
-  - egov-otp                # citizen phone OTP is off (identity-bff)
+  - egov-otp                # identity-bff uses the fixed citizen OTP, never egov-otp
   - user-otp                # legacy citizen OTP login
   - egov-user-event
   - egov-notification-mail  # mail goes through Keycloak SMTP and Novu
@@ -131,10 +131,14 @@ identity:
     image:
       tag: "v2.20"
     config:
-      # Citizen phone-OTP sign-in off until an HTTP SMS sender exists: "log"
-      # would write every code to identity-bff's log (and so to Loki), letting
-      # anyone who reads it sign in as any citizen.
+      # No SMS sender yet: "log" would write every code to identity-bff's log
+      # (and so to Loki), letting anyone who reads it sign in as any citizen.
       IDENTITY_OTP_SENDER: ""
+      # Demo citizen sign-in, as bomet runs it: the fixed code 123456 signs in
+      # ANY citizen number (egov-user here already accepts it). Acceptable only
+      # while cms-saas holds no real citizen data; turn off once an `http`
+      # SMS sender is configured.
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: "true"
       # ACCOUNT_ADMIN employee on pg, created by identity-bootstrap.
       DIGIT_ADMIN_USERNAME: "IDENTITY_ADMIN"
   # Creates identity-secrets, pgr-onboarding, Keycloak's database and the two

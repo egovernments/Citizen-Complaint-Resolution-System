@@ -77,7 +77,9 @@ describe('the cms-saas helmfile environment', () => {
     const values = read(`${DEPLOY}/charts/environments/cms-saas.yaml`);
     expect(values).not.toMatch(/^\s*secrets:/m);
     // A key named like a credential, with a value (comments may name Secret keys).
-    expect(values).not.toMatch(/^\s*[\w.-]*(password|secret|token)[\w.-]*:\s*\S/im);
+    // A boolean is a switch, not a credential (CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED).
+    expect(values).not.toMatch(/^\s*[\w.-]*(password|secret|token)[\w.-]*:\s*(?!"?(?:true|false)"?\s*(?:#.*)?$)\S/im);
+    expect('  KEYCLOAK_ADMIN_PASSWORD: "hunter2"').toMatch(/^\s*[\w.-]*(password|secret|token)[\w.-]*:\s*(?!"?(?:true|false)"?\s*(?:#.*)?$)\S/im);
   });
 });
 
