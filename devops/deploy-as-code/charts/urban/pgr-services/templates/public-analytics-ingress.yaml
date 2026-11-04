@@ -1,0 +1,50 @@
+{{- /*
+  The anonymous public-dashboard aliases, straight to pgr-services, as Kong's exact
+  pgr-public-analytics-* routes do. Their controller methods discard RequestInfo and force the
+  PUBLIC floor.
+
+  They must NOT go on the Spring gateway's open list: the gateway does not strip client-supplied
+  userInfo from anonymous requests, so every other service behind that list would need to distrust
+  it too. Bypassing the gateway leaves it with no anonymous route to these paths at all.
+
+  The trailing $ is required: the host's ingresses use regex matching (use-regex), under which an
+  unanchored path is an open prefix. nginx prefers the longer path over the /pgr-services prefix.
+
+  limit-rpm counts per address nginx sees. Behind a load balancer without proxy protocol that is
+  the balancer's, shared by all visitors, so publicAnalytics.limitRpm is a coarse flood guard
+  rather than Kong's 60 per client per minute.
+*/ -}}
+{{- if .Values.publicAnalytics.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ template "common.name" . }}-public-analytics
+  namespace: {{ .Values.global.namespace | default .Values.ingress.namespace | default .Values.namespace }}
+  annotations:
+{{- toYaml .Values.ingress.annotations | nindent 4 }}
+    nginx.ingress.kubernetes.io/limit-rpm: {{ .Values.publicAnalytics.limitRpm | quote }}
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ .Values.publicAnalytics.maxBodySize | quote }}
+  labels:
+{{- include "common.labels" . | nindent 4 }}
+spec:
+  rules:
+  - host: {{ .Values.global.domain }}
+    http:
+      paths:
+{{- range .Values.publicAnalytics.paths }}
+      - path: /{{ $.Values.ingress.context }}/v2/analytics/public/{{ . }}$
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: {{ template "common.name" $ }}
+            port:
+              number: {{ $.Values.httpPort }}
+{{- end }}
+{{- if ne .Values.global.setup "quickstart" }}
+  tls:
+  - hosts:
+    - {{ .Values.global.domain }}
+    secretName: {{ .Values.global.domain }}-tls-certs
+{{- end }}
+{{- end }}

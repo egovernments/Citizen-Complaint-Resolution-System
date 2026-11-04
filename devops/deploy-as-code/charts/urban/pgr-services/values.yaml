@@ -26,6 +26,18 @@ deploymentStrategy:
   type: Recreate
 
 
+# Anonymous public-dashboard routes; see templates/public-analytics-ingress.yaml.
+publicAnalytics:
+  enabled: true
+  limitRpm: 600
+  maxBodySize: "1m"
+  # Keep in line with Kong's pgr-public-analytics-* routes (the Ansible deployment).
+  paths:
+    - packs
+    - _query
+    - catalog/_search
+    - _options
+
 # Ingress Configs
 ingress:
   enabled: true
