@@ -42,6 +42,25 @@ else
   echo "novu-bootstrap: stored the API key in $BRIDGE_NAMESPACE/$API_KEY_SECRET"
 fi
 
+# Per-tenant accounts: the login, encryption key and internal tokens the bridge needs. Generated
+# once and then left alone: a new encryption key would strand every stored tenant key.
+if [[ -n "${TENANT_ACCOUNTS_SECRET:-}" ]] \
+  && [[ -z "$(kubectl -n "$BRIDGE_NAMESPACE" get secret "$TENANT_ACCOUNTS_SECRET" -o name --ignore-not-found)" ]]; then
+  password="$(secret_field "$POD_NAMESPACE" "$ADMIN_SECRET" password)"
+  if [[ -z "$password" ]]; then
+    echo "novu-bootstrap: FAILED no admin password in Secret $ADMIN_SECRET for $TENANT_ACCOUNTS_SECRET" >&2
+    exit 1
+  fi
+  random_hex() { python3 -c "import secrets; print(secrets.token_hex($1))"; }
+  kubectl -n "$BRIDGE_NAMESPACE" create secret generic "$TENANT_ACCOUNTS_SECRET" \
+    --from-literal=novu-admin-email="$NOVU_ADMIN_EMAIL" \
+    --from-literal=novu-admin-password="$password" \
+    --from-literal=encryption-key="$(random_hex 32)" \
+    --from-literal=internal-admin-token="$(random_hex 24)" \
+    --from-literal=internal-send-token="$(random_hex 24)" >/dev/null
+  echo "novu-bootstrap: created $BRIDGE_NAMESPACE/$TENANT_ACCOUNTS_SECRET"
+fi
+
 # Not fatal, as in Ansible: a transient Novu error must not fail the release, and the next
 # upgrade retries. A bridge with no workflows reports NB_NOVU_TRIGGER_FAILED on each send.
 NOVU_BASE_URL="$NOVU_API_URL" NOVU_API_KEY="$key" NOVU_ENV_NAME="$NOVU_ENV_NAME" \

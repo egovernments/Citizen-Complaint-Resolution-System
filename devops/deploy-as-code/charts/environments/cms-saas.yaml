@@ -148,6 +148,13 @@ identity:
   bootstrap:
     enabled: true
 
+# As the Ansible deployment: each signup workspace gets its own Novu organization, and sending
+# does not consult user preferences.
+novu-bridge:
+  preference-enabled: false
+  tenant-accounts:
+    enabled: true
+
 pgr-services:
   # Self-service onboarding: every signup becomes its own root tenant and
   # identity Organization; pg stays reserved.
@@ -155,5 +162,6 @@ pgr-services:
   onboarding:
     runnerEnabled: true
     identityBffUrl: "http://identity-bff.egov:3000"
+    notificationAccountUrl: "http://novu-bridge.egov:8080/novu-bridge"
     provisionerUsername: "PGR_PROVISIONER"
     provisionerTenantId: "pg"

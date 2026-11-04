@@ -65,10 +65,13 @@ heap: "-Xmx192m -Xms192m"
 # is not set (the helmfile sets it for both this chart and the novu worker).
 digit-worker-providers: true
 provider-admin-tenants: ""
+# false sends without consulting a user's notification preferences, as Ansible deployments do.
+preference-enabled: true
 # Per-tenant Novu accounts (#2203): one Novu ORGANIZATION per root tenant, created by the bridge
 # signed in as the Novu platform admin (the account whose key is novu-api-key). OFF by default.
-# Turning it on needs the Secret named below in this namespace, created out of band (never
-# committed), with keys:
+# Turning it on needs the Secret named below in this namespace, never committed. The novu
+# release's bootstrap Job creates it when the environment enables this and pins no novu-api-key;
+# otherwise create it out of band. Keys:
 #   novu-admin-email, novu-admin-password   the Novu platform admin login
 #   encryption-key                          >= 32 random chars; encrypts the stored tenant API keys
 #   encryption-key-previous                 (optional) the previous key during a rotation
@@ -140,7 +143,7 @@ env: |
   - name: NOVU_BRIDGE_DEFAULT_LOCALE
     value: "en_IN"
   - name: NOVU_BRIDGE_PREFERENCE_ENABLED
-    value: "true"
+    value: {{ index .Values "preference-enabled" | toString | quote }}
   - name: NOVU_BRIDGE_PREFERENCE_HOST
     valueFrom:
       configMapKeyRef:
