@@ -187,8 +187,17 @@ env: |
     value: {{ index .Values "provider-admin-tenants" | default "" | quote }}
   - name: NOVU_BASE_URL
     value: {{ index .Values "novu-base-url" | quote }}
+  # Pinned in the environment, else the key the novu release's bootstrap Job stored.
   - name: NOVU_API_KEY
+  {{- if index .Values "novu-api-key" }}
     value: {{ index .Values "novu-api-key" | quote }}
+  {{- else }}
+    valueFrom:
+      secretKeyRef:
+        name: novu-bridge-novu-api-key
+        key: api-key
+        optional: true
+  {{- end }}
   # Per-tenant Novu accounts (#2203); see tenant-accounts above.
   - name: NOVU_BRIDGE_TENANT_ACCOUNTS_ENABLED
     value: {{ index .Values "tenant-accounts" "enabled" | toString | quote }}
