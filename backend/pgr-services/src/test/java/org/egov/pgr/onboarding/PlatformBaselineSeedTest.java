@@ -32,10 +32,11 @@ public class PlatformBaselineSeedTest {
      * v14 the onboarding tour's Complaints Template text, under the new key app.onboarding.home.tour.complaints.body_choice (en_IN configurator-ui);
      * v15 every configurator-ui key in the fr_FR, hi_IN and pt_BR packs, and hi_IN rainmaker-common, -pgr and -hr packs;
      * v16 the dashboard catalog (dss.KpiDefinition and dss.DashboardPack schemas and records), so a workspace that turns
-     * its public dashboard on serves its own curated public pack.
+     * its public dashboard on serves its own curated public pack;
+     * v17 the employee working-context action for every employee role, which the Spring gateway needs (Kong exempts it).
      */
-    private static final String VERSION = "16";
-    private static final String SHA256 = "016d35140da1e44e312a0c6d1156852b5f0f80b231a43dd0f449232fc3e930f0";
+    private static final String VERSION = "17";
+    private static final String SHA256 = "a319811ae18ca8f473e0989ff4f0ee8257902c9637a3b8370c7413750078a5ee";
     @Test public void contentChangesComeWithAVersionBump() throws Exception {
         byte[] bytes;
         try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }
@@ -61,6 +62,20 @@ public class PlatformBaselineSeedTest {
             if (key.equals("roles") && value.isArray()) value.forEach(r -> out.add(r.isTextual() ? r.asText() : r.path("code").asText()));
         });
         node.forEach(child -> roleRefs(child, out));
+    }
+
+    /** HRMS does not guarantee a shared base role, so behind the Spring gateway every employee role needs this action. */
+    @Test public void everyEmployeeRoleMayReadItsWorkingContext() {
+        String id = null;
+        for (JsonNode row : seed.records()) if ("ACCESSCONTROL-ACTIONS-TEST.actions-test".equals(row.path("schemaCode").asText())
+                && "/pgr-services/v2/employee/_context".equals(row.path("data").path("url").asText())) id = row.path("data").path("id").asText();
+        assertTrue("no action for the working context", id != null);
+        Set<String> granted = new TreeSet<>();
+        for (JsonNode row : seed.records()) if ("ACCESSCONTROL-ROLEACTIONS.roleactions".equals(row.path("schemaCode").asText())
+                && id.equals(row.path("data").path("actionid").asText())) granted.add(row.path("data").path("rolecode").asText());
+        Set<String> expected = new TreeSet<>(codes("ACCESSCONTROL-ROLES.roles", "code"));
+        expected.removeAll(Set.of("CITIZEN", "ANONYMOUS"));
+        assertEquals(expected, granted);
     }
 
     @Test public void seedCarriesNoLiteralTenantIds() {
