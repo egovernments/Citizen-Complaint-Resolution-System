@@ -203,6 +203,25 @@
       when: _v2_keys | length > 0
 
 
+    # Sherlog's model settings, from inventory alone, so a typo stops the run before anything is deployed. The
+    # provider must be one Sherlog knows, spelled as it expects: an unknown one falls back to OpenAI and sends the key
+    # there. The provider and the model must agree both ways: anthropic needs an anthropic/<model> (empty is an
+    # OpenAI model), and an anthropic/ model with another provider sends the Anthropic key to OpenAI. No spaces.
+    - name: "preflight — Sherlog's model provider and model agree"
+      ansible.builtin.assert:
+        that:
+          - (sherlog_model_provider | default('')) in [''] + (sherlog_model_providers | list)
+          - (sherlog_holmes_model | default('')) is match('^[A-Za-z0-9._:/-]*$')
+          - ((sherlog_model_provider | default('')) == 'anthropic') == ((sherlog_holmes_model | default('')) is match('anthropic/'))
+          - (sherlog_model_provider | default('')) != 'anthropic' or (sherlog_holmes_model | default('')) is match('^anthropic/[A-Za-z0-9._:-]+$')
+        fail_msg: >-
+          sherlog_model_provider must be empty or one of {{ sherlog_model_providers | list | join(', ') }}
+          (got '{{ sherlog_model_provider | default('') }}'), and sherlog_holmes_model (got
+          '{{ sherlog_holmes_model | default('') }}') must have no spaces and be anthropic/<model> exactly when the
+          provider is anthropic.
+        quiet: true
+      when: enable_sherlog | default(false) | bool
+
     # A string would be joined one character at a time: `-e turbopass_countries=KE`
     # or `turbopass_countries: KE,IN` becomes COUNTRIES=K,E, which the bootstrap
     # rejects on every deploy (review on #2608). Fail once, before anything
@@ -3099,20 +3118,6 @@
     # What else Sherlog needs: Loki (its log rules, the journal, the logs investigations read) and Tempo, which only
     # observability_level traces runs; and somewhere for live mode's reports (in CCRS, GitHub issues: the Slack
     # webhook carries alerts, not reports).
-    # The model settings: a provider Sherlog knows, spelled as it expects (an unknown one falls back to OpenAI and
-    # sends the key there), and with anthropic a model HolmesGPT can route to Anthropic (an empty one is an OpenAI
-    # model).
-    - name: "Sherlog — its model settings"
-      ansible.builtin.assert:
-        that:
-          - (sherlog_model_provider | default('')) in ['', 'openai', 'anthropic']
-          - (sherlog_model_provider | default('')) != 'anthropic' or (sherlog_holmes_model | default('')) is match('anthropic/.+')
-        fail_msg: >-
-          sherlog_model_provider must be empty, openai or anthropic (got '{{ sherlog_model_provider | default('') }}'),
-          and with anthropic, sherlog_holmes_model must be anthropic/<model> (got '{{ sherlog_holmes_model | default('') }}').
-        quiet: true
-      when: enable_sherlog | default(false) | bool
-
     - name: "Sherlog — needs observability_level traces (Loki and Tempo)"
       ansible.builtin.assert:
         that: (observability_level | default('traces')) == 'traces'
