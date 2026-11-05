@@ -17,8 +17,32 @@
 import { AppContainer, PrivateRoute } from "@egovernments/digit-ui-react-components";
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Switch } from "react-router-dom";
+import { Redirect, Switch } from "react-router-dom";
 import { useLocation } from "react-router-dom";
+import CountyFirst from "./CreateComplaint/CountyFirst"; // ours (#1857)
+import { getPGREmployeeLinks } from "../../utils/employeeLinks"; // ours (#1857)
+
+// ours#615: the create-complaint route follows its menu entry. Only an employee whose access actions offer
+// /employee/pgr/create-complaint (the "File a Complaint" entry, ACCESSCONTROL role-actions) gets the form; anyone
+// else is sent home instead of seeing a form whose submit the API refuses.
+const offersCreateComplaint = (actions) =>
+  (actions || []).some((a) => /\/employee\/pgr\/create-complaint\/?$/.test(a?.navigationURL || ""));
+
+// ours (#1857): the route follows the MENU entry it is reached from - the PGR module's own "File a Complaint" link
+// (utils/employeeLinks, role CSR) - as well as the access actions: at a state whose role-actions carry no employee
+// create-complaint row (digit-3's ke), the menu offered File a Complaint and this guard sent its click back home.
+// Whoever the menu does not offer it (an LME, a SUPERUSER alone) is still sent home (#615).
+const menuOffersCreate = (t) => getPGREmployeeLinks(t).some((link) => link.key === "create");
+
+const CreateComplaintGuard = ({ component: Component }) => {
+  const { t } = useTranslation();
+  const { isLoading, data } = Digit.Hooks.useAccessControl();
+  if (isLoading) return null;
+  // ours (#1857): at a county-layout state the form is the chosen county's (CountyFirst)
+  return offersCreateComplaint(data?.actions) || menuOffersCreate(t)
+    ? <CountyFirst component={Component} />
+    : <Redirect to={`/${window?.contextPath}/employee`} />;
+};
 
 const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
   const { t } = useTranslation(); // Hook for translations
@@ -68,7 +92,7 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
         {/* Route for Create Complaint Form */}
         <PrivateRoute
           path={`${path}/create-complaint`}
-          component={() => <PGRCreateComplaint />}
+          component={() => <CreateComplaintGuard component={PGRCreateComplaint} />}
         />
 
         {/* Routes for Complaint submission success/failure response */}
