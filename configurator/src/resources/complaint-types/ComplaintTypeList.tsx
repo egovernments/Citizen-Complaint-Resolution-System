@@ -3,7 +3,9 @@ import {
   DigitDatagrid,
   SearchFilterInput,
   ReferenceFilterInput,
+  SelectFilterInput,
 } from '@/admin';
+import { slaDaysText } from './slaDays';
 import type { DigitColumn } from '@/admin';
 import { StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
@@ -22,6 +24,14 @@ const filters = [
     source="department"
     reference="departments"
     label="Department"
+    alwaysOn
+  />,
+  // ours (cfgreview F18, #1564): inactive (test) rows were mixed in with no way to leave them out
+  <SelectFilterInput
+    key="_isActive"
+    source="_isActive"
+    label="Status"
+    choices={[{ id: 'true', name: 'Active' }, { id: 'false', name: 'Inactive' }]}
     alwaysOn
   />,
 ];
@@ -54,7 +64,8 @@ const columns: DigitColumn[] = [
       );
     },
   },
-  { source: 'slaHours', label: 'app.fields.sla_hours', editable: { type: 'number' } },
+  // ours (cfgreview F18, #1564): days, as the form takes it (the list showed 336 hours)
+  { source: 'slaHours', label: 'SLA (days)', render: (record) => slaDaysText(record.slaHours) },
   {
     source: '_isActive',
     label: 'app.fields.status',
