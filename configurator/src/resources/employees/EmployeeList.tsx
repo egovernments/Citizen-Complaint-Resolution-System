@@ -5,6 +5,7 @@ import type { DigitColumn } from '@/admin';
 import { StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 import { Button } from '@/components/ui/button';
+import { employeeRoles, employeeStatus } from './employeeColumns';
 
 const filters = [
   <SearchFilterInput key="q" source="q" alwaysOn />,
@@ -21,6 +22,8 @@ const filters = [
   <TextFilterInput key="code" source="code" label="Employee Code" />,
 ];
 
+// ours (cfgreview F16, #1562): one Status column (the two overlapped: HRMS status and the user's active flag), and
+// Roles and Tenant columns, so the list shows who is a GRO and where.
 const columns: DigitColumn[] = [
   { source: 'code', label: 'Employee Code' },
   { source: 'user.name', label: 'app.fields.name' },
@@ -28,8 +31,23 @@ const columns: DigitColumn[] = [
   {
     source: 'employeeStatus',
     label: 'app.fields.status',
-    render: (record) => <StatusChip value={record.employeeStatus} />,
+    render: (record) => {
+      const s = employeeStatus(record);
+      return <StatusChip value={s.active} labels={{ true: s.label, false: s.label }} />;
+    },
   },
+  {
+    source: 'user.roles',
+    label: 'Roles',
+    sortable: false,
+    render: (record) => {
+      const r = employeeRoles(record);
+      return r.shown.length
+        ? <span title={r.all.join(', ')}>{r.shown.join(', ')}{r.more ? ` +${r.more}` : ''}</span>
+        : <span className="text-muted-foreground">--</span>;
+    },
+  },
+  { source: 'tenantId', label: 'Tenant' },
   {
     source: 'assignments',
     label: 'app.fields.department',
@@ -54,29 +72,25 @@ const columns: DigitColumn[] = [
         : <span className="text-muted-foreground">--</span>;
     },
   },
-  {
-    source: 'isActive',
-    label: 'app.fields.active',
-    render: (record) => (
-      <StatusChip value={record.isActive} labels={{ true: 'Active', false: 'Inactive' }} />
-    ),
-  },
 ];
 
 export function EmployeeList() {
   return (
-    <div className="space-y-3">
-      <div className="flex justify-end">
+    <DigitList
+      title="app.resources.employees"
+      hasCreate
+      sort={{ field: 'code', order: 'ASC' }}
+      filters={filters}
+      actions={
         <Button asChild variant="outline" size="sm" className="gap-1.5">
           <Link to="/manage/employees/bulk">
-            <Upload className="w-4 h-4" />
+            <Upload className="w-4 h-4" aria-hidden="true" />
             Bulk import
           </Link>
         </Button>
-      </div>
-      <DigitList title="app.resources.employees" hasCreate sort={{ field: 'code', order: 'ASC' }} filters={filters}>
-        <DigitDatagrid columns={columns} rowClick="show" />
-      </DigitList>
-    </div>
+      }
+    >
+      <DigitDatagrid columns={columns} rowClick="show" />
+    </DigitList>
   );
 }
