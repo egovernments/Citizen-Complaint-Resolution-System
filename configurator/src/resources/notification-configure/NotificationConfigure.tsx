@@ -74,6 +74,7 @@ import {
   catalogueModules,
   eventChannels,
   eventLabel,
+  plainEventLabel,
   eventsForModule,
   placeholderNames,
   type EventCatalogueRow,
@@ -650,8 +651,10 @@ function EventRow({
     <div className="py-2 border-b border-border/60 last:border-b-0">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <span className="text-sm font-medium">{eventLabel(ctx.event)}</span>
-          <div className="font-mono text-[11px] text-muted-foreground">{ctx.eventName}</div>
+          {/* ours (cfgreview F26, #1572): the event in words; its codes (PENDINGATLME, the event name) on hover */}
+          <span className="text-sm font-medium" title={`${eventLabel(ctx.event)} - ${ctx.eventName}`} data-testid="event-label">
+            {plainEventLabel(eventLabel(ctx.event))}
+          </span>
           {ctx.actors.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-0.5">
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1">actors:</span>
