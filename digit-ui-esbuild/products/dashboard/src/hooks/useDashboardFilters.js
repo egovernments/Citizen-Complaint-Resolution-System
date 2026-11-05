@@ -47,6 +47,7 @@ export function useDashboardFilters({ persistent = true, timeZone } = {}) {
             complaintType: selection.code,
             complaintTypePath: selection.path,
             complaintTypeLeaf: selection.leaf,
+            complaintTypeCodes: selection.codes ?? null, // #637
           };
         } else {
           next = { ...prev, [groupId]: value };
