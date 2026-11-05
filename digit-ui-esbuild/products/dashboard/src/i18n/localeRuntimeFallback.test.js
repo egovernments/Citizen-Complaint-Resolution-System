@@ -78,7 +78,8 @@ test("standalone dynamic labels resolve active locale before the en_IN pack", as
   });
   try {
     await api.ensureMessages();
-    assert.deepEqual(requests.sort(), ["en_IN", "pt_PT"]);
+    // ours#950: the tenant's HierarchySchema read (no locale) precedes the bundles; only bundle requests counted
+    assert.deepEqual(requests.filter(Boolean).sort(), ["en_IN", "pt_PT"]);
     assert.equal(api.translate("COMMON_MASTERS_DEPARTMENT_WATER"), "Água");
     assert.equal(api.exists("COMMON_MASTERS_DEPARTMENT_ADMIN"), true);
     assert.equal(api.translate("COMMON_MASTERS_DEPARTMENT_ADMIN"), "Administration");
