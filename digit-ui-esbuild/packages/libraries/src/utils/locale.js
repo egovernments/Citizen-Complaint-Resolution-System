@@ -1,3 +1,4 @@
+import { tenantKeyPrefix } from "./tenantLabel";
 /**
  * Custom utils related for all locale related items
  *
@@ -10,13 +11,13 @@
  */
 
 export const getLocalityCode = (locality, tenantId) => {
-  if (typeof locality === "string") return locality.includes("_") ? locality : `${tenantId.replace(".", "_").toUpperCase()}_ADMIN_${locality}`;
-  else if (locality.code) return locality.code.includes("_") ? locality : `${tenantId.replace(".", "_").toUpperCase()}_ADMIN_${locality.code}`;
+  if (typeof locality === "string") return locality.includes("_") ? locality : `${tenantKeyPrefix(tenantId)}_ADMIN_${locality}`;
+  else if (locality.code) return locality.code.includes("_") ? locality : `${tenantKeyPrefix(tenantId)}_ADMIN_${locality.code}`;
 };
 
 export const getRevenueLocalityCode = (locality, tenantId) => {
-  if (typeof locality === "string") return locality.includes("_") ? locality : `${tenantId.replace(".", "_").toUpperCase()}_REVENUE_${locality}`;
-  else if (locality.code) return locality.code.includes("_") ? locality : `${tenantId.replace(".", "_").toUpperCase()}_REVENUE_${locality.code}`;
+  if (typeof locality === "string") return locality.includes("_") ? locality : `${tenantKeyPrefix(tenantId)}_REVENUE_${locality}`;
+  else if (locality.code) return locality.code.includes("_") ? locality : `${tenantKeyPrefix(tenantId)}_REVENUE_${locality.code}`;
 };
 
 export const stringReplaceAll = (str = "", searcher = "", replaceWith = "") => {
