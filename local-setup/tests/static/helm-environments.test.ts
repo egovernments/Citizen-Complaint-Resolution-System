@@ -236,4 +236,15 @@ describe('review round 4', () => {
     const job = read(`${DEPLOY}/charts/identity/identity-bootstrap/templates/job.yaml`);
     expect(job).not.toContain('hook-failed');
   });
+
+  test('public-dashboard aliases reach pgr-services directly, never through the gateway open list', () => {
+    const values = read(`${DEPLOY}/charts/urban/pgr-services/values.yaml`);
+    const kong = read('local-setup/kong/kong.yml');
+    for (const alias of ['packs', '_query', 'catalog/_search', '_options']) {
+      expect(values).toContain(`    - ${alias}\n`);
+      expect(kong).toContain(`~/pgr-services/v2/analytics/public/${alias}$`);
+    }
+    // The gateway forwards client-supplied userInfo on anonymous requests.
+    expect(read(`${DEPLOY}/charts/environments/env.yaml`)).not.toContain('/v2/analytics/public/');
+  });
 });
