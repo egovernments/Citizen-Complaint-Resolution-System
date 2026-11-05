@@ -1,4 +1,4 @@
-import { useListContext } from 'ra-core';
+import { useState } from 'react';
 import { DigitList, DigitDatagrid } from '@/admin';
 import type { DigitColumn } from '@/admin';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,12 +17,15 @@ const ALL_MODULES = '__all__';
  *  strings) is first since that's the common reason to come here. The list is
  *  curated because the localization service has no module-enumeration endpoint;
  *  any module not listed can still be reached by typing its code in search. */
+// ours (cfgreview F20, #1566): the list opened on every module, i.e. thousands of system keys
+// (ACCESSCONTROL_ACTIONS_TEST_*); it opens on the complaint and category labels a county admin edits.
+const DEFAULT_MODULE = 'rainmaker-pgr';
 const MODULE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'rainmaker-pgr', label: 'Complaint and category labels (rainmaker-pgr)' },
   { value: ALL_MODULES, label: 'All modules' },
   { value: 'configurator-ui', label: 'Configurator UI (configurator-ui)' },
   { value: 'rainmaker-common', label: 'rainmaker-common' },
   { value: 'rainmaker-common-masters', label: 'rainmaker-common-masters' },
-  { value: 'rainmaker-pgr', label: 'rainmaker-pgr' },
   { value: 'rainmaker-hr', label: 'rainmaker-hr' },
   { value: 'rainmaker-hrms', label: 'rainmaker-hrms' },
   { value: 'rainmaker-workbench', label: 'rainmaker-workbench' },
@@ -30,18 +33,10 @@ const MODULE_OPTIONS: { value: string; label: string }[] = [
   { value: 'egov-hrms', label: 'egov-hrms' },
 ];
 
-/** Module filter. Writes `module` into the list filter state; the localization
- *  data provider passes it straight to the localization search so the grid
- *  shows just that module's messages (e.g. the configurator's own strings). */
-function ModuleSelector() {
-  const { filterValues, setFilters } = useListContext();
-  const current = String(filterValues.module ?? '');
-  const onChange = (v: string) => {
-    const next = { ...filterValues };
-    if (v === ALL_MODULES) delete next.module;
-    else next.module = v;
-    setFilters(next, undefined, true);
-  };
+/** Module filter. ours (#1566): the chosen module is the list's permanent `module` filter (default
+ *  rainmaker-pgr; "All modules" is the ALL_MODULES sentinel, which the data provider ignores), passed straight to
+ *  the localization search so the grid shows just that module's messages. */
+function ModuleSelector({ current, onChange }: { current: string; onChange: (v: string) => void }) {
   return (
     <div className="flex items-center gap-2 mb-3">
       <span className="text-xs font-medium text-muted-foreground">Module:</span>
@@ -86,8 +81,12 @@ export function LocalizationList() {
   // previously the configurator app's own fixed UI-chrome locale list, which
   // showed languages the tenant never configured and the wrong regional code
   // for shared languages (e.g. pt_BR instead of a tenant's pt_PT) — #1712.
-  const { locales } = useAvailableLocales();
+  const { locales: all } = useAvailableLocales();
+  // ours (cfgreview F20, #1566): "default" is a fallback the apps read, not a language anyone fills in; its column
+  // read "missing" on every row. Create / Edit still offer it.
+  const locales = all.filter((l) => l.value !== 'default');
   const localeCodes = locales.map((l) => l.value);
+  const [module, setModule] = useState(DEFAULT_MODULE);
   return (
     <DigitList
       title="app.resources.localization"
@@ -97,9 +96,14 @@ export function LocalizationList() {
       // Permanent filter so the FIRST getList already pivots every locale.
       // LocalesFilterSetup used to apply this in a debounced effect, so the
       // badge flashed en_IN-only (~7900) then the union (~14000).
-      filter={{ locales: localeCodes }}
+      filter={{ locales: localeCodes, module }}
     >
-      <ModuleSelector />
+      <p className="mb-2 text-xs text-muted-foreground" data-testid="localization-applies-note">
+        A saved label is live on the server at once. The citizen and employee apps keep the labels they loaded in the
+        browser for up to 24 hours (their label cache), so an open app shows the change after that, or after its site
+        data is cleared.
+      </p>
+      <ModuleSelector current={module} onChange={setModule} />
       <MultiLocaleDatagrid locales={locales} />
     </DigitList>
   );
