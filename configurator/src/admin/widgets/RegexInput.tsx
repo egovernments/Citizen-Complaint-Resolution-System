@@ -3,6 +3,7 @@ import { useInput, type InputProps } from 'ra-core';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Check, X } from 'lucide-react';
+import { useShowFieldError } from '@/admin/useShowFieldError';
 
 interface RegexInputProps extends InputProps {
   label?: string;
@@ -24,7 +25,7 @@ export function RegexInput({ label, help, ...inputProps }: RegexInputProps) {
     compileError = e instanceof Error ? e.message : 'invalid regex';
   }
   const matches = regex && sample ? regex.test(sample) : null;
-  const hasError = fieldState.invalid && fieldState.isTouched;
+  const hasError = useShowFieldError(fieldState);
 
   return (
     <div>
