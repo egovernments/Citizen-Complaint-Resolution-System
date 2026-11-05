@@ -460,6 +460,9 @@ enable_mcp: true
 # issues repo and its token. Settings and their defaults: group_vars/digit.yml.
 # enable_sherlog: false
 # sherlog_mode: shadow                    # shadow: reports stay on the box; live: sent
+# sherlog_model_provider: ""              # empty: OpenAI. With an Anthropic key: anthropic, and also
+# sherlog_holmes_model: ""                # anthropic/<model>, e.g. anthropic/claude-sonnet-4-6
+# sherlog_daily_investigations: 30        # each investigation is many model calls: size to the key's budget
 # sherlog_github_issues_repo: ""          # owner/repo for one issue per problem (required in live mode)
 # OpenBao: sherlog_github_issues_token (fine-grained, Issues read/write on that repo only),
 #          sherlog_alert_slack_webhook_url (critical/warning alerts to Slack)
