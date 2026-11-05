@@ -7,28 +7,15 @@ import {
   getSlaRiskStatusPillClass,
   SLA_RISK_TABLE_STYLES,
 } from "../config/visualizationStyles";
-import { complaintDetailHref } from "../config/complaintsAtRiskPresentation";
+import { buildAtRiskColumns, complaintDetailHref } from "../config/complaintsAtRiskPresentation";
 import useDashboardT from "../i18n/useDashboardT";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
 import DashboardTableFrame, { SrOnlyTableHead } from "./DashboardTableFrame";
 
-// Built at render (never a module constant) so headers track the language.
-const buildColumns = (t) => [
-  { id: "id", label: t("DASHBOARD_COL_ID", "ID"), align: "left", type: "text" },
-  { id: "typeLabel", label: t("DASHBOARD_COL_TYPE", "Category"), align: "left", type: "text" },
-  { id: "subtypeLabel", label: t("DASHBOARD_COL_SUBTYPE", "Subcategory"), align: "left", type: "text" },
-  { id: "locality", label: t("DASHBOARD_COL_LOCALITY", "Locality"), align: "left", type: "text" },
-  { id: "ownerName", label: t("DASHBOARD_COL_OWNER", "Owner"), align: "left", type: "text" },
-  { id: "ownerRole", label: t("DASHBOARD_COL_OWNER_ROLE", "Owner role"), align: "left", type: "text" },
-  { id: "statusLabel", label: t("DASHBOARD_COL_STATUS", "Status"), align: "left", type: "text" },
-  { id: "slaLabel", label: t("DASHBOARD_COL_SLA_STATUS", "SLA status"), align: "left", type: "text" },
-  { id: "breachDurationMs", label: t("DASHBOARD_COL_BREACH_DURATION", "Breach duration"), align: "left", type: "integer" },
-];
-
 const ComplaintsAtRiskTable = ({ rows = [] }) => {
   const { t, language, i18nTick } = useDashboardT();
-  const COLUMNS = useMemo(() => buildColumns(t), [t, language, i18nTick]);
+  const COLUMNS = useMemo(() => buildAtRiskColumns(t), [t, language, i18nTick]);
   const tableStyles = DATA_TABLE_STYLES;
   const slaStyles = SLA_RISK_TABLE_STYLES;
   const { sortState, handleSort, sortRows } = useTableSort(COLUMNS, {
