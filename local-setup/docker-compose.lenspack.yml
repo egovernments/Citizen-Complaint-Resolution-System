@@ -1,0 +1,17 @@
+# Opt-in overlay: the dashboard with its analytics served by lenspack, side by
+# side with pgr-services. See docs/design/dashboard-analytics-on-lenspack.md.
+services:
+  ccrs-lenspack:
+    build:
+      context: https://github.com/theflywheel/lenspack.git#94b0b32
+      dockerfile: examples/ccrs/Dockerfile
+    environment:
+      CCRS_PG_URL: postgres://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov
+      CCRS_UPSTREAM: http://kong:8000
+      CCRS_ANALYTICS_UPSTREAM: http://kong:8000
+      CCRS_TENANT: ${STATE_LEVEL_TENANT_ID:-ke}
+    ports:
+      - "127.0.0.1:8795:8795"
+    depends_on: [postgres-db, kong]
+    networks: [egov-network]
+    profiles: [lenspack]
