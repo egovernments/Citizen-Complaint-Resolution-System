@@ -209,6 +209,12 @@ function ManagementAdminResources() {
               : <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
         ))}
 
+        {/* ours (cfgreview F24, #1570): Members inside the app layout (it rendered bare, with no menu or header); its own
+            CustomRoutes block so the other patches' route hunks keep their anchors */}
+        <CustomRoutes>
+          <Route path="/members" element={<MembersPage />} />
+        </CustomRoutes>
+
         {/* Custom routes */}
         <CustomRoutes>
           <Route path="/notification-configure" element={<NotificationConfigure />} />
@@ -542,7 +548,7 @@ function App() {
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <Routes>
           <Route path="/account" element={<AccountPage />} />
-          <Route path="/members" element={state.isAuthenticated ? <MembersPage /> : <Navigate to="/login" />} />
+          <Route path="/members" element={state.isAuthenticated ? <Navigate to="/manage/members" replace /> : <Navigate to="/login" />} />
           <Route path="/workspace-settings" element={state.isAuthenticated ? <WorkspacePage /> : <Navigate to="/login" />} />
           <Route path="/login" element={<LoginPage />} />
           {/* Self-serve onboarding (CCRS#1999). Public: the whole point is that
