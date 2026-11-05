@@ -148,6 +148,10 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const mapRef = useRef(null);
   const searchInputRef = useRef(null);
   const hasInitialized = useRef(false);
+  // ours#1039: react-leaflet's MapContainer reads center / minZoom / maxZoom only at mount, so mounting it before
+  // MapConfig resolved fetched the fallback centre's tiles and never applied the tenant's zoom bounds. The map
+  // mounts once the effect below has applied MapConfig (it also runs when the MDMS read fails: fallbacks then).
+  const [mapCanMount, setMapCanMount] = useState(false);
   // Coords of the last reverse-geocode ATTEMPT (not success). The formData
   // sync effect below must never re-request coords that were already tried:
   // a failed / rate-limited Nominatim call writes {lat, lng} without an
@@ -198,6 +202,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   useEffect(() => {
     if (!isReady || hasInitialized.current) return;
     hasInitialized.current = true;
+    setMapCanMount(true);
     // This key was historically global to the browser session, so it could
     // leak a pin from a previous complaint (and between citizen/employee
     // flows). Wizard-local formData is the sole restoration source now.
@@ -496,6 +501,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
           zIndex: 0
         }}>
+          {mapCanMount ? (
           <MapContainer
             center={[coords.lat, coords.lng]}
             zoom={markerPos ? DEFAULT_ZOOM : OVERVIEW_ZOOM}
@@ -542,6 +548,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
               <Polygon positions={polygonPoints} color={accentColor} />
             )}
           </MapContainer>
+          ) : null}
 
           {isSearching && (
             <div style={{
