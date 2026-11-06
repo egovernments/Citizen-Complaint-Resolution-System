@@ -1,0 +1,9 @@
+{
+ "labels": [
+  "Low",
+  "Medium",
+  "High",
+  "Critical"
+ ],
+ "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+}
