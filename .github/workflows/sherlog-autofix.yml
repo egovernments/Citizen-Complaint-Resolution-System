@@ -4,7 +4,10 @@
 #
 # Setup (the workflow does nothing until all of these are done):
 #   1. Repository variable SHERLOG_ISSUES_AUTHOR: the GitHub login whose token Sherlog opens issues with
-#      (sherlog_github_issues_token). Only issues that login opened are acted on; empty, nothing runs.
+#      (sherlog_github_issues_token). Only issues that login opened are acted on; empty, nothing runs. That
+#      account needs the Write role here: when Sherlog reopens an issue or adds the label itself, it is the actor,
+#      and the action refuses actors without write access. Its token can still be fine-grained, Issues only. A
+#      GitHub App needs no role: allowed_bots below lets it through.
 #   2. Repository secret ANTHROPIC_API_KEY, or CLAUDE_CODE_OAUTH_TOKEN (a Claude subscription token made with
 #      `claude setup-token`). The agent job uses whichever is set.
 #   3. Labels `sherlog` (Sherlog adds it to its issues) and `sherlog-autofix` (starts this workflow).
@@ -15,11 +18,14 @@
 #
 # Runs when the label sherlog-autofix is added to an issue Sherlog opened (a person adds it, or Sherlog does when
 # sherlog_github_autofix is `gate`), and again when such an issue is reopened because the problem came back.
+# Sherlog closes its issue when the alert resolves (GITHUB_ISSUES_CLOSE_ON_RESOLVE, on by default: keep it on) and
+# reopens it when the problem comes back, so a fix that did not hold starts a new run. The pull request's "Fixes #N"
+# does not close the issue when the base is not the default branch: GitHub closes issues only from that branch.
 #
 # Two jobs, so the agent never holds a token that can write:
 #   investigate  the agent, with a read-only token, no shell and no git: it reads the code and the issue and may
 #                edit files. It returns its outcome as structured output; the job turns its edits into a patch.
-#   publish      no agent: checks the patch (nothing under .github/, no symlinks, size), commits it to a new
+#   publish      no agent: checks the patch (no protected paths, no symlinks, size), commits it to a new
 #                branch, pushes without force and opens the draft pull request, or posts the comment.
 # The agent reads only the issue body and the comments SHERLOG_ISSUES_AUTHOR wrote, not anyone else's comments.
 # Log lines quoted in the issue are still written by users of the system: the prompt treats them as data, and the
@@ -34,6 +40,21 @@ permissions: {}
 
 env:
   BASE_BRANCH: develop
+
+  # Paths the fix must never touch, at any depth and in any case: CI (.github/), git's own files and the files that
+  # change how git treats others, and the files that configure coding agents and editors (a hook in a .claude/
+  # settings file or a devcontainer command would run on the computer of whoever opens the branch). The agent's
+  # tools deny them too; the Patch step refuses to delete them, and publish refuses a patch that touches them.
+  PROTECTED_PATHS: '(^|/)(\.github|\.git|\.sherlog-autofix|\.claude|\.vscode|\.devcontainer)(/|$)|(^|/)(\.gitmodules|\.gitattributes|\.mcp\.json|claude(\.local)?\.md|agents\.md)$'
+  # The open pull request for the issue, if any. Run before the agent and again just before publishing, from this one
+  # definition so that both agree. Only branches of this repository count: anyone can open a pull request from a
+  # fork on a branch called sherlog/issue-N. A variable, not a script file: the workflow runs from the default
+  # branch, but checks out BASE_BRANCH.
+  FIND_OPEN_PR: |
+    gh pr list --state open --base "$BASE_BRANCH" --search "head:sherlog/issue-$ISSUE" --limit 100 \
+        --json number,headRefName,isCrossRepository \
+      | jq -r --arg n "$ISSUE" '[.[] | select(.isCrossRepository == false and
+          (.headRefName | test("^sherlog/issue-" + $n + "(-[0-9]+){0,2}$")))][0].number // ""'
 
 jobs:
   investigate:
@@ -66,8 +87,9 @@ jobs:
 
       # The issue as the agent sees it: the body and only the comments Sherlog wrote ("the problem came back").
       # Comments by anyone else never reach the agent, and HTML comments (hidden from people reading the issue)
-      # are removed. Also: is a pull request for this issue already open? Only branches in this repository count:
-      # anyone can open a pull request from a fork on a branch called sherlog/issue-N.
+      # are removed, including an unclosed one, which hides the rest of the text. gh drops the "[bot]" of a GitHub
+      # App's login, the event keeps it: compare without it. Also: is a pull request for this issue already open?
+      # And the ignored files before the agent runs, to spot any it adds (git add skips them).
       - name: Issue context
         id: context
         env:
@@ -78,15 +100,15 @@ jobs:
           set -euo pipefail
           mkdir -p .sherlog-autofix
           gh issue view "$ISSUE" --json title,body,comments \
-            | jq -r --arg a "$AUTHOR" 'def visible: gsub("(?s)<!--.*?-->"; "");
+            | jq -r --arg a "$AUTHOR" 'def visible: gsub("(?s)<!--.*?-->"; "") | gsub("(?s)<!--.*$"; "");
+                def login: sub("\\[bot\\]$"; "");
                 "# " + .title + "\n\n" + (.body | visible) + "\n" +
-                ([.comments[] | select(.author.login == $a)
+                ([.comments[] | select((.author.login | login) == ($a | login))
                   | "\n---\nComment by Sherlog, " + .createdAt + ":\n\n" + (.body | visible)] | join(""))' \
             > .sherlog-autofix/issue.md
-          open_pr=$(gh pr list --state open --base "$BASE_BRANCH" --limit 1000 --json number,headRefName,isCrossRepository \
-            | jq -r --arg n "$ISSUE" '[.[] | select(.isCrossRepository == false and
-                (.headRefName | test("^sherlog/issue-" + $n + "(-[0-9]+){0,2}$")))][0].number // ""')
+          open_pr=$(bash -euo pipefail -c "$FIND_OPEN_PR")
           echo "open_pr=$open_pr" >> "$GITHUB_OUTPUT"
+          git ls-files --others --ignored --exclude-standard | sort > "$RUNNER_TEMP/ignored-before"
           echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Agent
@@ -110,10 +132,12 @@ jobs:
 
             You can read and search the code and edit files. You cannot run commands, use git, reach GitHub or the
             web: you return your outcome as the structured output, and a later step publishes it. Edit only files
-            in this repository, never anything under .github/, .git/ or .sherlog-autofix/, and never .gitmodules or
-            .gitattributes. Do not mention people (@name) or other issues' closing keywords in your text.
+            in this repository, never anything under .github/, .git/ or .sherlog-autofix/, nor the files that
+            configure git, coding agents or editors (.gitmodules, .gitattributes, .claude/, .mcp.json, CLAUDE.md,
+            AGENTS.md, .vscode/, .devcontainer/), at any depth: a change there is refused. Do not mention people
+            (@name) or other issues' closing keywords in your text.
 
-            ${{ steps.context.outputs.open_pr && format('A draft pull request for this issue is already open: #{0}. The problem came back. Do not edit any file. Read the newest comments in the issue file and return outcome "comment_on_pr", with a comment saying whether the new evidence has the same cause (the fix still applies; the problem returned only because it is not merged or deployed yet) or a different one, and why.', steps.context.outputs.open_pr) || 'Return exactly one outcome:' }}
+            ${{ steps.context.outputs.open_pr && format('A draft pull request for this issue is already open: #{0}. The problem came back. Do not edit any file. Read the newest comments in the issue file and return outcome "comment_on_pr", with a comment saying whether the new evidence has the same cause (the fix still applies; the problem returned only because it is not merged or deployed yet) or a different one, and why. The outcomes listed below apply only when no pull request is open: do not use them.', steps.context.outputs.open_pr) || 'Return exactly one outcome:' }}
 
             - "decline": the cause is entirely outside this repository and nothing in it could prevent, limit or
               detect the problem (for example an expired certificate, an outage of another system, a secret).
@@ -132,7 +156,7 @@ jobs:
             --max-turns 40
             --permission-mode acceptEdits
             --allowedTools "Read,Glob,Grep"
-            --disallowedTools "Bash,WebFetch,WebSearch,NotebookEdit,Task,Edit(.github/**),Write(.github/**),Edit(**/.git/**),Write(**/.git/**),Edit(**/.gitmodules),Write(**/.gitmodules),Edit(**/.gitattributes),Write(**/.gitattributes),Edit(.sherlog-autofix/**),Write(.sherlog-autofix/**),Edit(.claude/**),Write(.claude/**),Edit(.mcp.json),Write(.mcp.json),Edit(~/.*),Write(~/.*),Edit(~/.*/**),Write(~/.*/**),Edit(//tmp/**),Write(//tmp/**),Edit(//home/runner/work/_temp/**),Write(//home/runner/work/_temp/**),Edit(//home/runner/work/_actions/**),Write(//home/runner/work/_actions/**),Read(**/.git/**),Read(//proc/**),Read(//sys/**),Read(//etc/**),Read(//root/**),Read(~/.*),Read(~/.*/**),Read(//home/runner/work/_temp/**),Read(//home/runner/work/_actions/**),Read(//home/runner/runners/**),Read(//tmp/**)"
+            --disallowedTools "Bash,WebFetch,WebSearch,NotebookEdit,Task,Edit(**/.github/**),Write(**/.github/**),Edit(**/.git/**),Write(**/.git/**),Edit(**/.gitmodules),Write(**/.gitmodules),Edit(**/.gitattributes),Write(**/.gitattributes),Edit(**/.sherlog-autofix/**),Write(**/.sherlog-autofix/**),Edit(**/.claude/**),Write(**/.claude/**),Edit(**/.mcp.json),Write(**/.mcp.json),Edit(**/CLAUDE.md),Write(**/CLAUDE.md),Edit(**/CLAUDE.local.md),Write(**/CLAUDE.local.md),Edit(**/AGENTS.md),Write(**/AGENTS.md),Edit(**/.vscode/**),Write(**/.vscode/**),Edit(**/.devcontainer/**),Write(**/.devcontainer/**),Edit(~/.*),Write(~/.*),Edit(~/.*/**),Write(~/.*/**),Edit(//tmp/**),Write(//tmp/**),Edit(//home/runner/work/_temp/**),Write(//home/runner/work/_temp/**),Edit(//home/runner/work/_actions/**),Write(//home/runner/work/_actions/**),Read(**/.git/**),Read(//proc/**),Read(//sys/**),Read(//etc/**),Read(//root/**),Read(~/.*),Read(~/.*/**),Read(//home/runner/work/_temp/**),Read(//home/runner/work/_actions/**),Read(//home/runner/runners/**),Read(//tmp/**)"
             --json-schema '{"type":"object","additionalProperties":false,"required":["outcome"],"properties":{"outcome":{"enum":["fix","proposal","decline","comment_on_pr"]},"title":{"type":"string","maxLength":200},"body":{"type":"string","maxLength":20000},"comment":{"type":"string","maxLength":20000},"delete_paths":{"type":"array","maxItems":50,"items":{"type":"string","maxLength":300}}}}'
 
       # The agent's edits as a patch, checked here and again in publish.
@@ -151,16 +175,33 @@ jobs:
           printf '%s' "$OUTCOME_JSON" > "$RUNNER_TEMP/out/outcome.json"
           jq -e '.outcome' "$RUNNER_TEMP/out/outcome.json" > /dev/null
           rm -rf .sherlog-autofix
+          # What publish adds to the pull request: entries of delete_paths not deleted, and ignored files the agent wrote.
+          notes="$RUNNER_TEMP/out/notes.md"
+          : > "$notes"
           # Edit and Write cannot delete: files the fix deletes (or renames, with Write for the new name) are listed
-          # in delete_paths. Only tracked files, inside the repository, and nothing under .github/.
+          # in delete_paths. Only tracked files (not folders), inside the repository, and no protected path. An entry
+          # that is none of these is skipped and noted, so the rest of the outcome is still published.
           jq -r '.delete_paths // [] | .[]' "$RUNNER_TEMP/out/outcome.json" | while IFS= read -r path; do
-            case "$path" in
-              /*|*..*|.github/*|.git/*|.sherlog-autofix/*|"") echo "::error::refusing to delete '$path'"; exit 1 ;;
-            esac
-            git ls-files --error-unmatch -- "$path" > /dev/null || { echo "::error::'$path' is not a tracked file"; exit 1; }
-            git rm -q -- "$path"
+            why=""
+            case "$path" in /*|*..*|"") why="outside the repository" ;; esac
+            if [ -z "$why" ] && printf '%s\n' "$path" | grep -q -i -E "$PROTECTED_PATHS"; then why="a protected path"
+            elif [ -z "$why" ] && [ -d "$path" ]; then why="a folder: list its files instead"
+            elif [ -z "$why" ] && ! git ls-files --error-unmatch -- "$path" > /dev/null 2>&1; then why="not a tracked file"
+            fi
+            if [ -n "$why" ]; then
+              echo "::warning::not deleting '$path': $why"
+              printf -- '- Not deleted, %s: `%s`\n' "$why" "$path" >> "$notes"
+            else
+              git rm -q -f -- "$path"   # -f: the agent may also have edited it
+            fi
           done
           git add -A
+          # git add skips files that .gitignore excludes: a part of the fix written there would be missing.
+          git ls-files --others --ignored --exclude-standard | sort \
+            | comm -13 "$RUNNER_TEMP/ignored-before" - | while IFS= read -r path; do
+              echo "::warning::'$path' is excluded by .gitignore and not in the patch"
+              printf -- '- Not included, excluded by .gitignore: `%s`\n' "$path" >> "$notes"
+            done
           git diff --cached --binary --no-renames > "$RUNNER_TEMP/out/change.patch"
           git diff --cached --name-status --no-renames
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
@@ -205,35 +246,42 @@ jobs:
           set -euo pipefail
           out="$RUNNER_TEMP/out"
           # The agent's text cannot mention people or close other issues: "@" and closing keywords before an issue
-          # reference are broken with a zero-width space. The workflow adds its own "Fixes #N".
+          # reference (#N, owner/repo#N or an issue or pull request URL) are broken with a zero-width space. The
+          # workflow adds its own "Fixes #N".
           neutral() {
             python3 -c 'import re, sys
           s = sys.stdin.read()
           s = re.sub(r"@(?=[A-Za-z0-9])", "@\u200b", s)
-          s = re.sub(r"(?i)\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b(?=\s*:?\s*(?:[\w.-]+/[\w.-]+)?#\d)",
+          ref = r"(?:(?:[\w.-]+/[\w.-]+)?#\d|https?://(?:www\.)?github\.com/[\w.-]+/[\w.-]+/(?:issues|pull)/\d)"
+          s = re.sub(r"(?i)\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b(?=\s*:?\s*" + ref + ")",
                      lambda m: m.group(1)[0] + "\u200b" + m.group(1)[1:], s)
           sys.stdout.write(s)'
           }
-          open_pr_now() {
-            gh pr list --state open --base "$BASE_BRANCH" --limit 1000 --json number,headRefName,isCrossRepository \
-              | jq -r --arg n "$ISSUE" '[.[] | select(.isCrossRepository == false and
-                  (.headRefName | test("^sherlog/issue-" + $n + "(-[0-9]+){0,2}$")))][0].number // ""'
-          }
+          has_text() { grep -q '[^[:space:]]' "$1"; }   # jq -r writes a newline even for empty text
           outcome=$(jq -r '.outcome' "$out/outcome.json")
           jq -r '.comment // ""' "$out/outcome.json" | neutral > "$out/comment.md"
           jq -r '.body // ""' "$out/outcome.json" | neutral > "$out/body.md"
           title=$(jq -r '.title // ""' "$out/outcome.json" | tr -d '\r\n' | neutral)
+          touch "$out/notes.md"
+          neutral < "$out/notes.md" > "$out/notes.safe.md"
           echo "outcome: $outcome"
 
+          # A pull request is open: the run only comments there. Any other outcome is not published as a change; its
+          # text is posted instead, so the run is not lost.
           if [ -n "$OPEN_PR" ]; then
-            [ "$outcome" = comment_on_pr ] && [ -s "$out/comment.md" ] || { echo "::error::expected a comment on #$OPEN_PR"; exit 1; }
+            if [ "$outcome" != comment_on_pr ] || ! has_text "$out/comment.md"; then
+              { printf 'Sherlog autofix ran again for #%s and returned "%s", not a comment on this pull request. Its text:\n\n' "$ISSUE" "$outcome"
+                if has_text "$out/comment.md"; then cat "$out/comment.md"; elif has_text "$out/body.md"; then cat "$out/body.md"; else echo "(none)"; fi
+              } > "$out/fallback.md"
+              mv "$out/fallback.md" "$out/comment.md"
+            fi
             gh pr comment "$OPEN_PR" --body-file "$out/comment.md"
             exit 0
           fi
 
           case "$outcome" in
             decline)
-              [ -s "$out/comment.md" ] || { echo "::error::decline without a comment"; exit 1; }
+              has_text "$out/comment.md" || { echo "::error::decline without a comment"; exit 1; }
               gh issue comment "$ISSUE" --body-file "$out/comment.md"
               exit 0 ;;
             fix|proposal) ;;
@@ -243,16 +291,16 @@ jobs:
           if [ ! -s "$out/change.patch" ]; then
             printf 'Sherlog autofix returned "%s" but changed no file, so no pull request was opened.\n\n' "$outcome" > "$out/note.md"
             cat "$out/body.md" >> "$out/note.md"
+            ! has_text "$out/notes.safe.md" || { printf '\n\n' >> "$out/note.md"; cat "$out/notes.safe.md" >> "$out/note.md"; }
             gh issue comment "$ISSUE" --body-file "$out/note.md"
             exit 0
           fi
           # The checks the agent's tools already enforce, again here where the agent cannot interfere.
           [ "$(stat -c %s "$out/change.patch")" -le 1048576 ] || { echo "::error::patch over 1 MiB"; exit 1; }
           git apply --index --whitespace=nowarn "$out/change.patch"
-          # Paths: nothing in .github/, .git/ or .sherlog-autofix/ at any depth and in any case, no .gitmodules or
-          # .gitattributes (they change how git treats other files).
-          if git diff --cached --name-only --no-renames | grep -i -E '(^|/)(\.github|\.git|\.sherlog-autofix)(/|$)|(^|/)\.git(modules|attributes)$'; then
-            echo "::error::the patch changes .github/, .git/, .sherlog-autofix/, .gitmodules or .gitattributes"; exit 1
+          # Paths: no protected path (PROTECTED_PATHS), at any depth and in any case.
+          if git diff --cached --name-only --no-renames | grep -i -E "$PROTECTED_PATHS"; then
+            echo "::error::the patch changes a protected path (CI, git, coding-agent or editor configuration)"; exit 1
           fi
           # Modes: regular files only (100644), or a file that was already executable and stays so. No symlinks
           # (120000), submodules (160000) or new executables.
@@ -263,7 +311,7 @@ jobs:
           [ -n "$title" ] || title="Sherlog autofix for #$ISSUE"
 
           # Another run for this issue may have opened its pull request since this run looked: comment there instead.
-          now=$(open_pr_now)
+          now=$(bash -euo pipefail -c "$FIND_OPEN_PR")
           if [ -n "$now" ]; then
             { printf 'Another Sherlog autofix run opened this pull request first. This run (%s) also proposed a change, not published:\n\n' "$outcome"
               printf '**%s**\n\n' "$title"; cat "$out/body.md"; } > "$out/late.md"
@@ -285,6 +333,10 @@ jobs:
 
           {
             cat "$out/body.md"
+            if has_text "$out/notes.safe.md"; then
+              printf '\n\n**Not in this pull request** (check whether the fix needs them):\n\n'
+              cat "$out/notes.safe.md"
+            fi
             printf '\n\n---\nOpened by the Sherlog autofix workflow (%s). Review it as code from an untrusted source: the\n' "$outcome"
             printf 'issue it is based on quotes log lines written by users of the system.\n'
             if [ -n "$CI_NOTE" ]; then
