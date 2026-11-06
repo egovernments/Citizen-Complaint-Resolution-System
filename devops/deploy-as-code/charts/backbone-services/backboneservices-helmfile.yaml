@@ -489,6 +489,8 @@ releases:
   chart: ./novu
   version: 2.3.0
   namespace: novu
+  # Above the bootstrap Job's activeDeadlineSeconds (novu/values.yaml): helm waits for the hook.
+  timeout: 900
   {{- if not (has "cert-manager" $disabled) }}
   # The bootstrap Job's Role lives in egov, which a fresh install creates with cert-manager.
   needs:

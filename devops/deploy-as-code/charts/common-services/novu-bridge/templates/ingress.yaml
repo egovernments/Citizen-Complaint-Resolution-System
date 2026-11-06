@@ -1,48 +1,20 @@
 {{- /*
   Routes the public bridge paths straight to novu-bridge, the same exact-path list as
-  Kong's novu-bridge-proxy service in the Ansible deployment. Not common.ingress: that
-  takes one Prefix path and would expose the whole /novu-bridge context.
+  Kong's novu-bridge-proxy service in the Ansible deployment. common.ingress.exact rather
+  than common.ingress: that takes one Prefix path and would expose the whole /novu-bridge
+  context.
 
   These endpoints authenticate inside the bridge (ProxyAuthFilter: Bearer header, no
   body token). The Spring gateway cannot carry them: it fails every bodiless GET with
   NullPointerException "value" (CorrelationIdFilterHelper).
 
   Everything else stays unreachable from outside, /tenants and /messages (machine APIs)
-  and /health included. The trailing $ is required: the host's ingresses use regex
-  matching (use-regex), under which nginx renders even pathType Exact as an open prefix.
+  and /health included.
 */ -}}
 {{- if .Values.ingress.enabled }}
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: {{ template "common.name" . }}
-  namespace: {{ .Values.global.namespace | default .Values.ingress.namespace | default .Values.namespace }}
-  annotations:
-{{- toYaml .Values.ingress.annotations | nindent 4 }}
-{{- if .Values.ingress.waf.enabled }}
-{{- toYaml .Values.ingress.waf.annotations | nindent 4 }}
-{{- end }}
-  labels:
-{{- include "common.labels" . | nindent 4 }}
-spec:
-  rules:
-  - host: {{ .Values.global.domain }}
-    http:
-      paths:
+{{- $paths := list }}
 {{- range .Values.ingress.publicPaths }}
-      - path: /{{ $.Values.ingress.context }}/novu-adapter/v1/{{ . }}$
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: {{ template "common.name" $ }}
-            port:
-              number: {{ $.Values.httpPort }}
+{{- $paths = append $paths (printf "/%s/novu-adapter/v1/%s" $.Values.ingress.context .) }}
 {{- end }}
-{{- if ne .Values.global.setup "quickstart" }}
-  tls:
-  - hosts:
-    - {{ .Values.global.domain }}
-    secretName: {{ .Values.global.domain }}-tls-certs
-{{- end }}
+{{- include "common.ingress.exact" (dict "root" . "paths" $paths) }}
 {{- end }}

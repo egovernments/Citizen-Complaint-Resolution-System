@@ -26,13 +26,19 @@ spec:
           ports:
             - name: http
               containerPort: {{ .Values.api.port }}
-          {{- if .Values.api.env }}
+          {{- if or .Values.api.env .Values.bootstrap.enabled }}
           env:
-{{- tpl .Values.api.env $ | nindent 12 }}
-            # Public sign-up stays off: the first signup would own the organization. The
-            # first account comes from templates/bootstrap/job.yaml.
+          {{- with .Values.api.env }}
+{{- tpl . $ | nindent 12 }}
+          {{- end }}
+          {{- if .Values.bootstrap.enabled }}
+            # Public sign-up stays off: the first signup would own the organization. The first
+            # account comes from templates/bootstrap/job.yaml. With bootstrap off (the environment
+            # pins novu-bridge.novu-api-key) Novu's default applies, so an operator can still sign
+            # up in the dashboard to create the account and key they pin.
             - name: DISABLE_USER_REGISTRATION
               value: "true"
+          {{- end }}
           {{- end }}
           {{- with .Values.api.resources }}
           resources:

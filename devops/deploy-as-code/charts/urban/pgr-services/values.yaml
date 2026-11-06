@@ -29,7 +29,9 @@ deploymentStrategy:
 # Anonymous public-dashboard routes; see templates/public-analytics-ingress.yaml.
 publicAnalytics:
   enabled: true
-  limitRpm: 600
+  # Shared by every visitor (see the template): one dashboard load is ~20 requests (packs,
+  # catalog/_search, one _query per tile), so this allows ~300 loads a minute site-wide.
+  limitRpm: 6000
   maxBodySize: "1m"
   # Keep in line with Kong's pgr-public-analytics-* routes (the Ansible deployment).
   paths:

@@ -1061,6 +1061,32 @@ describe('Novu workflow creation deployment contract', () => {
     }
   });
 
+  // A failed hook fails the novu release, and helmfile then stops before core, common and urban.
+  test('the k8s Novu bootstrap never fails the hook, and fits in the release timeout', () => {
+    const chart = 'devops/deploy-as-code/charts/backbone-services/novu';
+    const run = read(`${chart}/files/bootstrap/run.sh`);
+    expect(run).not.toMatch(/set -[a-z]*e/);
+    expect(run).not.toMatch(/exit [1-9]/);
+    expect(run.trimEnd().endsWith('exit 0')).toBe(true);
+    // A new key reaches the bridge only when its pod restarts.
+    expect(run).toContain('rollout restart deployment "$BRIDGE_DEPLOYMENT"');
+    const values = read(`${chart}/values.yaml`);
+    const num = (key: string) => Number(new RegExp(`^ {2}${key}: (\\d+)$`, 'm').exec(values)![1]);
+    const timeout = Number(/chart: \.\/novu\n(?:.*\n)*? {2}timeout: (\d+)\n/.exec(
+      read('devops/deploy-as-code/charts/backbone-services/backboneservices-helmfile.yaml'))![1]);
+    expect(num('publicApiWaitSeconds') + num('privateApiWaitSeconds')).toBeLessThan(num('activeDeadlineSeconds'));
+    expect(num('activeDeadlineSeconds')).toBeLessThan(timeout);
+  });
+
+  // Registration closed only when the Job makes the account; with a pinned key the operator signs up.
+  test('novu-api closes sign-up exactly when the bootstrap is on, whatever api.env holds', () => {
+    const api = read('devops/deploy-as-code/charts/backbone-services/novu/templates/api/api-deployment.yaml');
+    const block = api.slice(api.indexOf('{{- if .Values.bootstrap.enabled }}'));
+    expect(block).toContain('- name: DISABLE_USER_REGISTRATION\n              value: "true"');
+    expect(api).toContain('{{- if or .Values.api.env .Values.bootstrap.enabled }}');
+    expect(api).not.toContain('{{- if .Values.api.env }}');
+  });
+
   // M1 (re-review): novu-bridge must know whether the worker preloads those providers
   // (NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS), and it must come from the SAME switch as the mount,
   // or the two can disagree and the bridge offers providers whose every send fails.

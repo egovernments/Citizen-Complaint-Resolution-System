@@ -47,6 +47,11 @@ rules:
     resources: ["secrets"]
     resourceNames: [{{ .Values.bootstrap.apiKeySecret | quote }}]
     verbs: ["get", "patch"]
+  # rollout restart after a new key: a patch of the pod template's restartedAt annotation.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: [{{ .Values.bootstrap.bridgeDeployment | quote }}]
+    verbs: ["get", "patch"]
   {{- with .Values.bootstrap.tenantAccountsSecret }}
   - apiGroups: [""]
     resources: ["secrets"]

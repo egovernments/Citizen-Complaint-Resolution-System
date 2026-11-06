@@ -5,6 +5,12 @@
   The public novu-api keeps registration off at all times. Novu can only create its first
   account with registration on, so this pod runs a private novu-api (a native sidecar, against
   the same Mongo and Redis) with it on. Nothing outside the pod can reach that one.
+
+  The sidecar has no startupProbe, so the script starts at once: it checks the stored key against
+  the public novu-api and waits for the sidecar only when it has to mint one. Its waits are
+  bounded (bootstrap.publicApiWaitSeconds, bootstrap.privateApiWaitSeconds) and the script never
+  exits non-zero, so the hook only fails if the pod itself does. activeDeadlineSeconds stays
+  under the release's helm timeout (backboneservices-helmfile.yaml), with room for image pulls.
 */ -}}
 {{- if .Values.bootstrap.enabled }}
 apiVersion: batch/v1
@@ -17,7 +23,7 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation
 spec:
   backoffLimit: 1
-  activeDeadlineSeconds: 280
+  activeDeadlineSeconds: {{ .Values.bootstrap.activeDeadlineSeconds }}
   ttlSecondsAfterFinished: 86400
   template:
     spec:
@@ -36,12 +42,6 @@ spec:
 {{- tpl .Values.api.env $ | nindent 12 }}
             - name: DISABLE_USER_REGISTRATION
               value: "false"
-          startupProbe:
-            httpGet:
-              path: /v1/health-check
-              port: {{ .Values.api.port }}
-            periodSeconds: 5
-            failureThreshold: 40
           {{- with .Values.api.resources }}
           resources:
 {{- toYaml . | nindent 12 }}
@@ -64,6 +64,14 @@ spec:
               value: {{ .Values.bootstrap.tenantAccountsSecret | quote }}
             - name: NOVU_API_PORT
               value: {{ .Values.api.port | quote }}
+            - name: NOVU_API_SERVICE
+              value: "{{ .Values.api.name }}.{{ include "novu.namespace" . }}.svc.cluster.local:{{ .Values.api.service.port }}"
+            - name: PUBLIC_API_WAIT_SECONDS
+              value: {{ .Values.bootstrap.publicApiWaitSeconds | quote }}
+            - name: PRIVATE_API_WAIT_SECONDS
+              value: {{ .Values.bootstrap.privateApiWaitSeconds | quote }}
+            - name: BRIDGE_DEPLOYMENT
+              value: {{ .Values.bootstrap.bridgeDeployment | quote }}
             - name: NOVU_ADMIN_EMAIL
               value: {{ .Values.bootstrap.adminEmail | quote }}
             - name: NOVU_ORG_NAME

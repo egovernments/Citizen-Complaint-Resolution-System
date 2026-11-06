@@ -1,0 +1,98 @@
+{{- /*
+  After each install or upgrade, rolls the DIGIT gateway if it does not yet route
+  /egov-mdms-service (it reads zuul/route-path annotations only at startup). See
+  files/gateway-route-check.sh.
+*/ -}}
+{{- if and .Values.ingress.enabled .Values.ingress.zuul .Values.gatewayRouteCheck.enabled }}
+{{- $ns := .Values.global.namespace | default .Values.namespace | default .Release.Namespace }}
+{{- $c := .Values.gatewayRouteCheck }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: egov-mdms-service-gateway-route-check
+  namespace: {{ $ns }}
+data:
+  run.sh: |-
+{{ .Files.Get "files/gateway-route-check.sh" | indent 4 }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: egov-mdms-service-gateway-route-check
+  namespace: {{ $ns }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: egov-mdms-service-gateway-route-check
+  namespace: {{ $ns }}
+rules:
+  # rollout status lists and watches the one Deployment by name; rollout restart patches it.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: [{{ $c.gateway.name | quote }}]
+    verbs: ["get", "list", "watch", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: egov-mdms-service-gateway-route-check
+  namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: egov-mdms-service-gateway-route-check
+subjects:
+  - kind: ServiceAccount
+    name: egov-mdms-service-gateway-route-check
+    namespace: {{ $ns }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: egov-mdms-service-gateway-route-check
+  namespace: {{ $ns }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ add $c.waitSeconds 60 }}
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      serviceAccountName: egov-mdms-service-gateway-route-check
+      restartPolicy: Never
+      containers:
+        - name: check
+          image: "{{ $c.image.repository }}:{{ $c.image.tag }}"
+          imagePullPolicy: {{ $c.image.pullPolicy }}
+          command: ["bash", "/scripts/run.sh"]
+          env:
+            - name: NAMESPACE
+              value: {{ $ns | quote }}
+            - name: GATEWAY
+              value: {{ $c.gateway.name | quote }}
+            - name: GATEWAY_PORT
+              value: {{ $c.gateway.port | quote }}
+            - name: ROUTE
+              value: "/{{ .Values.ingress.context }}/v1/_search"
+            - name: TENANT
+              value: {{ $c.tenantId | quote }}
+            - name: WAIT_SECONDS
+              value: {{ $c.waitSeconds | quote }}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              memory: "64Mi"
+      volumes:
+        - name: scripts
+          configMap:
+            name: egov-mdms-service-gateway-route-check
+{{- end }}

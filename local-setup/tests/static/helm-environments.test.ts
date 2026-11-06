@@ -77,9 +77,11 @@ describe('the cms-saas helmfile environment', () => {
     const values = read(`${DEPLOY}/charts/environments/cms-saas.yaml`);
     expect(values).not.toMatch(/^\s*secrets:/m);
     // A key named like a credential, with a value (comments may name Secret keys).
-    // A boolean is a switch, not a credential (CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED).
-    expect(values).not.toMatch(/^\s*[\w.-]*(password|secret|token)[\w.-]*:\s*(?!"?(?:true|false)"?\s*(?:#.*)?$)\S/im);
-    expect('  KEYCLOAK_ADMIN_PASSWORD: "hunter2"').toMatch(/^\s*[\w.-]*(password|secret|token)[\w.-]*:\s*(?!"?(?:true|false)"?\s*(?:#.*)?$)\S/im);
+    expect(values).not.toMatch(/^\s*[\w.-]*(password|secret|token)[\w.-]*:\s*\S/im);
+  });
+
+  test('no fixed citizen OTP: cms-saas takes public signups, so it would sign in real citizens', () => {
+    expect(read(`${DEPLOY}/charts/environments/cms-saas.yaml`)).not.toMatch(/^\s*CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:\s*"?true/m);
   });
 });
 
@@ -281,5 +283,34 @@ describe('review round 4', () => {
     }
     // The gateway forwards client-supplied userInfo on anonymous requests.
     expect(read(`${DEPLOY}/charts/environments/env.yaml`)).not.toContain('/v2/analytics/public/');
+  });
+
+  // Hand-written Ingresses dropped the chart's host, TLS, WAF and additional-annotation overrides.
+  test('the direct exact-path ingresses go through common.ingress.exact', () => {
+    for (const file of ['urban/pgr-services/templates/public-analytics-ingress.yaml', 'common-services/novu-bridge/templates/ingress.yaml']) {
+      const template = read(`${DEPLOY}/charts/${file}`);
+      expect(template).toContain('include "common.ingress.exact"');
+      expect(template).not.toContain('kind: Ingress');
+    }
+    const common = read(`${DEPLOY}/charts/common/templates/_ingress.yaml`);
+    const exact = common.slice(common.indexOf('{{- define "common.ingress.exact" -}}'));
+    for (const helper of ['common.ingress.annotations', 'common.ingress.host', 'common.ingress.tls']) {
+      expect(exact).toContain(`include "${helper}" $`);
+    }
+    expect(exact).toContain('- path: {{ . }}$\n        pathType: ImplementationSpecific');
+  });
+});
+
+describe('the gateway picks up the /egov-mdms-service route without an operator', () => {
+  const chart = `${DEPLOY}/charts/core-services/egov-mdms-service`;
+  test('a post-install/upgrade hook restarts the gateway only on its own 404', () => {
+    const job = read(`${chart}/templates/gateway-route-check.yaml`);
+    expect(job).toContain('helm.sh/hook: post-install,post-upgrade');
+    expect(read(`${chart}/values.yaml`)).toMatch(/^gatewayRouteCheck:\n {2}enabled: true$/m);
+    const script = read(`${chart}/files/gateway-route-check.sh`);
+    expect(script).toContain(`if [[ "$code" == 404 ]] && grep -q '"error":"Not Found"'`);
+    expect(script).toContain('rollout restart deployment "$GATEWAY"');
+    // A failed hook fails the release.
+    expect(script).not.toMatch(/exit [1-9]/);
   });
 });
