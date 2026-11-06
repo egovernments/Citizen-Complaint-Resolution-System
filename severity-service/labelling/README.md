@@ -20,8 +20,7 @@ CSV, one row per complaint:
 | Column | Meaning |
 | --- | --- |
 | `complaint_id` | Id of the complaint |
-| `description` | Cleaned complaint text |
-| `complaint_type` | PGR display name |
+| `description` | Cleaned complaint text (the only model input) |
 | `label_a`, `label_b` | The two independent labels |
 | `final_label` | Agreed label (Low / Medium / High / Critical) |
 | `notes` | Optional free text on borderline cases |

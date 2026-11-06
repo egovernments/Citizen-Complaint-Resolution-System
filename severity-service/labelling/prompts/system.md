@@ -8,7 +8,8 @@ Principles:
 - Urgent wording such as 'urgent' or 'immediately' does not raise the level by itself.
 - Repeated or duplicate reports of the same issue do not raise the level.
 - Judge the most serious thing in the text; if it meets a higher level, use the higher level.
-- If the text is too short or unclear, label by the usual impact of the complaint type and mark it unclear.
+- Use the complaint text only. The complaint type is not an input to the label or to the model.
+- If the text is too short or unclear to judge, choose the lowest level that fits and mark it unclear.
 - For a near tie, record the lower label, write the higher one in notes and send it to the third reviewer.
 
 Apply the levels from most to least severe and stop at the first that matches.

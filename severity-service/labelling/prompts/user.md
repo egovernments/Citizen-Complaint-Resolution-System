@@ -1,4 +1,3 @@
-Complaint type: {complaint_type}
 Complaint text: {description}
 
 Answer with JSON only:
