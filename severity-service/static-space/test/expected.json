@@ -1,0 +1,194 @@
+[
+ {
+  "text": "Street light not working in our lane for the last week",
+  "severity": "High",
+  "confidence": 0.7087,
+  "probabilities": {
+   "Low": 0.0018,
+   "Medium": 0.2878,
+   "High": 0.7087,
+   "Critical": 0.0017
+  },
+  "needs_review": false
+ },
+ {
+  "text": "Stray dogs chased and bit a child near the school gate",
+  "severity": "High",
+  "confidence": 0.7038,
+  "probabilities": {
+   "Low": 0.0012,
+   "Medium": 0.0179,
+   "High": 0.7038,
+   "Critical": 0.2771
+  },
+  "needs_review": false
+ },
+ {
+  "text": "Garbage has not been collected for 5 days and it is stinking",
+  "severity": "High",
+  "confidence": 0.8573,
+  "probabilities": {
+   "Low": 0.0012,
+   "Medium": 0.1412,
+   "High": 0.8573,
+   "Critical": 0.0004
+  },
+  "needs_review": false
+ },
+ {
+  "text": "Water stagnated in the street, mosquitoes breeding, many people have fever",
+  "severity": "High",
+  "confidence": 0.9266,
+  "probabilities": {
+   "Low": 0.0019,
+   "Medium": 0.0626,
+   "High": 0.9266,
+   "Critical": 0.0089
+  },
+  "needs_review": false
+ },
+ {
+  "text": "Big pothole on main road, two bikers fell yesterday",
+  "severity": "Medium",
+  "confidence": 0.4817,
+  "probabilities": {
+   "Low": 0.0265,
+   "Medium": 0.4817,
+   "High": 0.3114,
+   "Critical": 0.1805
+  },
+  "needs_review": true
+ },
+ {
+  "text": "Live electric wire fell on the road near the bus stop, someone got a shock",
+  "severity": "Critical",
+  "confidence": 0.9535,
+  "probabilities": {
+   "Low": 0.0002,
+   "Medium": 0.007,
+   "High": 0.0392,
+   "Critical": 0.9535
+  },
+  "needs_review": false
+ },
+ {
+  "text": "Open manhole without cover on the busy road, a child almost fell in",
+  "severity": "Critical",
+  "confidence": 0.7889,
+  "probabilities": {
+   "Low": 0.001,
+   "Medium": 0.0111,
+   "High": 0.199,
+   "Critical": 0.7889
+  },
+  "needs_review": false
+ },
+ {
+  "text": "Sewage overflowing into houses, dengue cases reported in the area",
+  "severity": "High",
+  "confidence": 0.9849,
+  "probabilities": {
+   "Low": 0.0002,
+   "Medium": 0.0033,
+   "High": 0.9849,
+   "Critical": 0.0116
+  },
+  "needs_review": false
+ },
+ {
+  "text": "Tree fell on the road blocking traffic and damaged a parked car",
+  "severity": "Critical",
+  "confidence": 0.4372,
+  "probabilities": {
+   "Low": 0.014,
+   "Medium": 0.1334,
+   "High": 0.4154,
+   "Critical": 0.4372
+  },
+  "needs_review": true
+ },
+ {
+  "text": "Need a copy of birth certificate",
+  "severity": "Low",
+  "confidence": 0.8861,
+  "probabilities": {
+   "Low": 0.8861,
+   "Medium": 0.1101,
+   "High": 0.0036,
+   "Critical": 0.0002
+  },
+  "needs_review": false
+ },
+ {
+  "text": "Illegal advertisement board put up on footpath",
+  "severity": "Low",
+  "confidence": 0.976,
+  "probabilities": {
+   "Low": 0.976,
+   "Medium": 0.0208,
+   "High": 0.0018,
+   "Critical": 0.0013
+  },
+  "needs_review": false
+ },
+ {
+  "text": "தஶு street light off call",
+  "severity": "Medium",
+  "confidence": 0.9363,
+  "probabilities": {
+   "Low": 0.0136,
+   "Medium": 0.9363,
+   "High": 0.0364,
+   "Critical": 0.0138
+  },
+  "needs_review": false
+ },
+ {
+  "text": "Dogs & cattle on road near market",
+  "severity": "Medium",
+  "confidence": 0.9293,
+  "probabilities": {
+   "Low": 0.0071,
+   "Medium": 0.9293,
+   "High": 0.0578,
+   "Critical": 0.0058
+  },
+  "needs_review": false
+ },
+ {
+  "text": "தெரு விளக்கு எரியவில்லை",
+  "severity": "Medium",
+  "confidence": 0.9394,
+  "probabilities": {
+   "Low": 0.0024,
+   "Medium": 0.9394,
+   "High": 0.0555,
+   "Critical": 0.0027
+  },
+  "needs_review": false
+ },
+ {
+  "text": "Road is broken near my house",
+  "severity": "Medium",
+  "confidence": 0.7619,
+  "probabilities": {
+   "Low": 0.0498,
+   "Medium": 0.7619,
+   "High": 0.1854,
+   "Critical": 0.0029
+  },
+  "needs_review": false
+ },
+ {
+  "text": "Something strange happening at the park",
+  "severity": "Low",
+  "confidence": 0.8039,
+  "probabilities": {
+   "Low": 0.8039,
+   "Medium": 0.14,
+   "High": 0.0362,
+   "Critical": 0.0198
+  },
+  "needs_review": false
+ }
+]
