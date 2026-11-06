@@ -489,9 +489,20 @@ releases:
   chart: ./novu
   version: 2.3.0
   namespace: novu
+  # Above the bootstrap Job's activeDeadlineSeconds (novu/values.yaml): helm waits for the hook.
+  timeout: 900
+  {{- if not (has "cert-manager" $disabled) }}
+  # The bootstrap Job's Role lives in egov, which a fresh install creates with cert-manager.
+  needs:
+    - egov/cert-manager
+  {{- end }}
   values:
     - ./novu/values.yaml
     - {{ .Values | toYaml | nindent 8 }}
+    # A pinned key (novu-bridge.novu-api-key) is the operator's own: no bootstrap, as in Ansible.
+    - bootstrap:
+        enabled: {{ not (index .Values "novu-bridge" "novu-api-key") }}
+        tenantAccountsSecret: {{ if index .Values "novu-bridge" "tenant-accounts" "enabled" }}novu-bridge-tenant-accounts{{ else }}""{{ end }}
     # Serve on THIS deployment's domain over TLS (#1644). The chart default
     # named another environment's hostname and had no tls block at all, so the
     # dashboard was reachable only by Host-header and only over plain HTTP.

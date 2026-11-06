@@ -79,6 +79,10 @@ describe('the cms-saas helmfile environment', () => {
     // A key named like a credential, with a value (comments may name Secret keys).
     expect(values).not.toMatch(/^\s*[\w.-]*(password|secret|token)[\w.-]*:\s*\S/im);
   });
+
+  test('no fixed citizen OTP: cms-saas takes public signups, so it would sign in real citizens', () => {
+    expect(read(`${DEPLOY}/charts/environments/cms-saas.yaml`)).not.toMatch(/^\s*CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:\s*"?true/m);
+  });
 });
 
 describe('the configurator chart renders the same runtime config as Ansible', () => {
@@ -94,6 +98,39 @@ describe('the configurator chart renders the same runtime config as Ansible', ()
     // Mounted over the copy the image ships, under the image's base path.
     const values = read(`${DEPLOY}/charts/urban/configurator/values.yaml`);
     expect(values).toContain('mountPath: /usr/share/nginx/html/configurator/config.js');
+  });
+});
+
+describe('pgr-services gets the gateway origin on both tiers', () => {
+  test('EGOV_GATEWAY_HOST is set by Compose and by the chart (workspace writes 503 without it)', () => {
+    // WorkspaceWriteClient.origin() refuses a blank egov.gateway.host, so _rename and the
+    // other workspace writes answer WORKSPACE_DEPENDENCY_UNAVAILABLE.
+    expect(read('backend/pgr-services/src/main/resources/application.properties'))
+      .toMatch(/^egov\.gateway\.host=\$\{EGOV_GATEWAY_HOST:\}$/m);
+    expect(read('local-setup/docker-compose.egov-digit.yaml')).toMatch(/^ {6}EGOV_GATEWAY_HOST: http:\/\/kong:8000$/m);
+    const values = read(`${DEPLOY}/charts/urban/pgr-services/values.yaml`);
+    expect(values).toMatch(/^gatewayHost: "http:\/\/gateway\.egov:8080"$/m);
+    expect(values).toContain('  - name: EGOV_GATEWAY_HOST\n    value: {{ .Values.gatewayHost | quote }}');
+  });
+  test('EGOV_ACCESSCONTROL_HOST too (its localhost:8080 default is PGR itself: employee searches fail)', () => {
+    expect(read('backend/pgr-services/src/main/resources/application.properties'))
+      .toMatch(/^egov\.accesscontrol\.host=http:\/\/localhost:8080$/m);
+    expect(read('local-setup/docker-compose.egov-digit.yaml')).toMatch(/^ {6}EGOV_ACCESSCONTROL_HOST: http:\/\/egov-accesscontrol:8090$/m);
+    expect(read(`${DEPLOY}/charts/urban/pgr-services/values.yaml`)).toContain(
+      '  - name: EGOV_ACCESSCONTROL_HOST\n    valueFrom:\n      configMapKeyRef:\n        name: egov-service-host\n        key: egov-accesscontrol');
+    expect(read(`${DEPLOY}/charts/environments/env.yaml`)).toMatch(/^ {8}egov-accesscontrol: "http:\/\/egov-accesscontrol\.egov:8080\/"$/m);
+  });
+});
+
+describe('/egov-mdms-service is public on both tiers', () => {
+  test('Kong routes it on Compose/Ansible; the shim chart routes it through the gateway', () => {
+    // digit-ui's citizen home reads StateInfo at /egov-mdms-service/v1/_search; a 404 there
+    // is CORE_SOMETHING_WENT_WRONG on every tenant's citizen link.
+    expect(read('local-setup/kong/kong.yml')).toMatch(/- name: mdms-v1-compat-route\n {4}paths:\n {4}- \/egov-mdms-service\n/);
+    const chart = `${DEPLOY}/charts/core-services/egov-mdms-service`;
+    expect(read(`${chart}/values.yaml`)).toMatch(/^ingress:\n {2}enabled: true\n {2}zuul: true\n {2}context: "egov-mdms-service"$/m);
+    expect(read(`${chart}/templates/ingress.yaml`)).toContain('{{- template "common.ingress" . -}}');
+    expect(read(`${DEPLOY}/charts/environments/env.yaml`)).toMatch(/egov-open-endpoints-whitelist: ".*\/egov-mdms-service\/v1\/_search,/);
   });
 });
 
@@ -246,5 +283,34 @@ describe('review round 4', () => {
     }
     // The gateway forwards client-supplied userInfo on anonymous requests.
     expect(read(`${DEPLOY}/charts/environments/env.yaml`)).not.toContain('/v2/analytics/public/');
+  });
+
+  // Hand-written Ingresses dropped the chart's host, TLS, WAF and additional-annotation overrides.
+  test('the direct exact-path ingresses go through common.ingress.exact', () => {
+    for (const file of ['urban/pgr-services/templates/public-analytics-ingress.yaml', 'common-services/novu-bridge/templates/ingress.yaml']) {
+      const template = read(`${DEPLOY}/charts/${file}`);
+      expect(template).toContain('include "common.ingress.exact"');
+      expect(template).not.toContain('kind: Ingress');
+    }
+    const common = read(`${DEPLOY}/charts/common/templates/_ingress.yaml`);
+    const exact = common.slice(common.indexOf('{{- define "common.ingress.exact" -}}'));
+    for (const helper of ['common.ingress.annotations', 'common.ingress.host', 'common.ingress.tls']) {
+      expect(exact).toContain(`include "${helper}" $`);
+    }
+    expect(exact).toContain('- path: {{ . }}$\n        pathType: ImplementationSpecific');
+  });
+});
+
+describe('the gateway picks up the /egov-mdms-service route without an operator', () => {
+  const chart = `${DEPLOY}/charts/core-services/egov-mdms-service`;
+  test('a post-install/upgrade hook restarts the gateway only on its own 404', () => {
+    const job = read(`${chart}/templates/gateway-route-check.yaml`);
+    expect(job).toContain('helm.sh/hook: post-install,post-upgrade');
+    expect(read(`${chart}/values.yaml`)).toMatch(/^gatewayRouteCheck:\n {2}enabled: true$/m);
+    const script = read(`${chart}/files/gateway-route-check.sh`);
+    expect(script).toContain(`if [[ "$code" == 404 ]] && grep -q '"error":"Not Found"'`);
+    expect(script).toContain('rollout restart deployment "$GATEWAY"');
+    // A failed hook fails the release.
+    expect(script).not.toMatch(/exit [1-9]/);
   });
 });

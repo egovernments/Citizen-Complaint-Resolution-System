@@ -1,0 +1,75 @@
+{{- if .Values.bootstrap.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: novu-bootstrap
+  namespace: {{ include "novu.namespace" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: novu-bootstrap
+  namespace: {{ include "novu.namespace" . }}
+rules:
+  # Kubernetes cannot limit create by resourceNames, so create is a separate rule.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ .Values.bootstrap.adminSecret | quote }}]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: novu-bootstrap
+  namespace: {{ include "novu.namespace" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: novu-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: novu-bootstrap
+    namespace: {{ include "novu.namespace" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: novu-bootstrap
+  namespace: {{ .Values.bootstrap.bridgeNamespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ .Values.bootstrap.apiKeySecret | quote }}]
+    verbs: ["get", "patch"]
+  # rollout restart after a new key: a patch of the pod template's restartedAt annotation.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: [{{ .Values.bootstrap.bridgeDeployment | quote }}]
+    verbs: ["get", "patch"]
+  {{- with .Values.bootstrap.tenantAccountsSecret }}
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ . | quote }}]
+    verbs: ["get"]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: novu-bootstrap
+  namespace: {{ .Values.bootstrap.bridgeNamespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: novu-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: novu-bootstrap
+    namespace: {{ include "novu.namespace" . }}
+{{- end }}

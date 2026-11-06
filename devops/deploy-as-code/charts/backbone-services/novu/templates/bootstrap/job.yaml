@@ -1,0 +1,96 @@
+{{- /*
+  Creates the Novu admin, API key and channel workflows on install and upgrade, as the Ansible
+  deployment does. See files/bootstrap/run.sh.
+
+  The public novu-api keeps registration off at all times. Novu can only create its first
+  account with registration on, so this pod runs a private novu-api (a native sidecar, against
+  the same Mongo and Redis) with it on. Nothing outside the pod can reach that one.
+
+  The sidecar has no startupProbe, so the script starts at once: it checks the stored key against
+  the public novu-api and waits for the sidecar only when it has to mint one. Its waits are
+  bounded (bootstrap.publicApiWaitSeconds, bootstrap.privateApiWaitSeconds) and the script never
+  exits non-zero, so the hook only fails if the pod itself does. activeDeadlineSeconds stays
+  under the release's helm timeout (backboneservices-helmfile.yaml), with room for image pulls.
+*/ -}}
+{{- if .Values.bootstrap.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: novu-bootstrap
+  namespace: {{ include "novu.namespace" . }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: {{ .Values.bootstrap.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      serviceAccountName: novu-bootstrap
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: private-api
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          restartPolicy: Always
+          env:
+{{- tpl .Values.api.env $ | nindent 12 }}
+            - name: DISABLE_USER_REGISTRATION
+              value: "false"
+          {{- with .Values.api.resources }}
+          resources:
+{{- toYaml . | nindent 12 }}
+          {{- end }}
+      containers:
+        - name: bootstrap
+          image: "{{ .Values.bootstrap.image.repository }}:{{ .Values.bootstrap.image.tag }}"
+          imagePullPolicy: {{ .Values.bootstrap.image.pullPolicy }}
+          command: ["bash", "/scripts/run.sh"]
+          env:
+            - name: POD_NAMESPACE
+              value: {{ include "novu.namespace" . }}
+            - name: BRIDGE_NAMESPACE
+              value: {{ .Values.bootstrap.bridgeNamespace }}
+            - name: ADMIN_SECRET
+              value: {{ .Values.bootstrap.adminSecret | quote }}
+            - name: API_KEY_SECRET
+              value: {{ .Values.bootstrap.apiKeySecret | quote }}
+            - name: TENANT_ACCOUNTS_SECRET
+              value: {{ .Values.bootstrap.tenantAccountsSecret | quote }}
+            - name: NOVU_API_PORT
+              value: {{ .Values.api.port | quote }}
+            - name: NOVU_API_SERVICE
+              value: "{{ .Values.api.name }}.{{ include "novu.namespace" . }}.svc.cluster.local:{{ .Values.api.service.port }}"
+            - name: PUBLIC_API_WAIT_SECONDS
+              value: {{ .Values.bootstrap.publicApiWaitSeconds | quote }}
+            - name: PRIVATE_API_WAIT_SECONDS
+              value: {{ .Values.bootstrap.privateApiWaitSeconds | quote }}
+            - name: BRIDGE_DEPLOYMENT
+              value: {{ .Values.bootstrap.bridgeDeployment | quote }}
+            - name: NOVU_ADMIN_EMAIL
+              value: {{ .Values.bootstrap.adminEmail | quote }}
+            - name: NOVU_ORG_NAME
+              value: {{ .Values.bootstrap.orgName | quote }}
+            - name: NOVU_ENV_NAME
+              value: {{ .Values.bootstrap.environment | quote }}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+      volumes:
+        - name: scripts
+          configMap:
+            name: novu-bootstrap-scripts
+{{- end }}

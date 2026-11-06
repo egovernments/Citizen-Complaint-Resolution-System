@@ -1,67 +1,142 @@
+{{- /*
+  The parts every Ingress here shares, honouring the same per-chart overrides:
+  ingress.namespace, ingress.annotations, ingress.waf, ingress.additionalAnnotations,
+  ingress.host / ingress.hostName and ingress.tls.
+*/ -}}
+{{- define "common.ingress.namespace" -}}
+{{- if .Values.global.namespace }}
+  {{- .Values.global.namespace }}
+{{- else if .Values.ingress.namespace }}
+  {{- .Values.ingress.namespace }}
+{{- else }}
+  {{- .Values.namespace }}
+{{- end }}
+{{- end -}}
+
+{{- define "common.ingress.annotations" -}}
+{{- toYaml .Values.ingress.annotations }}
+{{- if .Values.ingress.waf.enabled }}
+{{ toYaml .Values.ingress.waf.annotations }}
+{{- end }}
+{{- if .Values.ingress.additionalAnnotations }}
+{{ tpl .Values.ingress.additionalAnnotations . }}
+{{- end }}
+{{- end -}}
+
+{{- /* The rule's "- host:" line(s); the caller adds http: under it. */ -}}
+{{- define "common.ingress.host" -}}
+{{- if .Values.ingress.host }}
+{{- tpl .Values.ingress.host . }}
+{{- else if .Values.ingress.hostName }}
+- host: {{ .Values.ingress.hostName }}
+{{- else }}
+- host: {{ .Values.global.domain }}
+{{- end }}
+{{- end -}}
+
+{{- /* The tls: list items; empty on quickstart. */ -}}
+{{- define "common.ingress.tls" -}}
+{{- if .Values.ingress.tls }}
+{{- tpl .Values.ingress.tls . }}
+{{- else if .Values.ingress.hostName }}
+- hosts:
+  - {{ .Values.ingress.hostName }}
+  secretName: {{ .Values.ingress.hostName }}-tls-certs
+{{- else }}
+- hosts:
+  - {{ .Values.global.domain }}
+  secretName: {{ .Values.global.domain }}-tls-certs
+{{- end }}
+{{- end -}}
+
+{{- /* One Prefix path, /<ingress.context>, to the gateway (ingress.zuul) or the chart's Service. */ -}}
 {{- define "common.ingress" -}}
 {{- if .Values.ingress.enabled -}}
 ---
-apiVersion: networking.k8s.io/v1 
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ template "common.name" . }}
-{{- if .Values.global.namespace }}
-  namespace: {{ .Values.global.namespace }}
-{{- else if .Values.ingress.namespace }}
-  namespace: {{ .Values.ingress.namespace }}    
-{{- else }}  
-  namespace: {{ .Values.namespace }}  
-{{- end }}     
+  namespace: {{ include "common.ingress.namespace" . }}
   annotations:
-{{- toYaml .Values.ingress.annotations | nindent 4 }}   
-{{- if .Values.ingress.waf.enabled }}      
-{{- toYaml .Values.ingress.waf.annotations | nindent 4 }} 
-{{- end  }}
-{{- if .Values.ingress.additionalAnnotations }}                                   
-  {{- tpl  .Values.ingress.additionalAnnotations . | nindent 4 }}
-{{- end }} 
+{{- include "common.ingress.annotations" . | nindent 4 }}
   labels:
-{{- include "common.labels" . | nindent 4 }}                            
+{{- include "common.labels" . | nindent 4 }}
 spec:
   rules:
-{{- if .Values.ingress.host }}   
-  {{- tpl  .Values.ingress.host . | nindent 2 }}
-{{- else if .Values.ingress.hostName }} 
-  - host: {{ .Values.ingress.hostName }}
-{{- else }}  
-  - host: {{ .Values.global.domain }}
-{{- end }}  
+{{- include "common.ingress.host" . | nindent 2 }}
     http:
       paths:
       - backend:
-{{- if .Values.ingress.zuul }}          
+{{- if .Values.ingress.zuul }}
           service:
             name: gateway
             port:
               number: 8080
-{{ else }}
+{{- else }}
           service:
             name: {{ .Values.ingress.serviceName | default (include "common.name" .) }}
             port:
               number: {{ .Values.ingress.servicePort | default .Values.httpPort }}
-{{- end }}            
+{{- end }}
         path: /{{ .Values.ingress.context }}
         pathType: Prefix
-{{- if ne .Values.global.setup "quickstart" }}        
+{{- if ne .Values.global.setup "quickstart" }}
   tls:
-{{- if .Values.ingress.tls }}
-  {{- tpl  .Values.ingress.tls . | nindent 2 }}
-{{- else }} 
-{{- if .Values.ingress.hostName }}
-  - hosts: 
-    - {{ .Values.ingress.hostName }}
-    secretName: {{ .Values.ingress.hostName }}-tls-certs  
-{{- else }}      
-  - hosts:
-    - {{ .Values.global.domain }}
-    secretName: {{ .Values.global.domain }}-tls-certs 
-{{- end }} 
-{{- end }} 
+{{- include "common.ingress.tls" . | nindent 2 }}
 {{- end }}
-{{- end -}} 
-{{- end -}} 
+{{- end -}}
+{{- end -}}
+
+{{- /*
+  Exact paths straight to the chart's Service, bypassing the gateway, with the same overrides as
+  common.ingress. Called with a dict:
+    root         the chart context (.)
+    name         the Ingress name (default: common.name)
+    paths        full request paths, each matched exactly
+    annotations  extra annotations (map), on top of the chart's ingress annotations
+
+  Each path renders as "<path>$" with pathType ImplementationSpecific: ingress-nginx renders every
+  path on a host as a regex once any ingress there sets use-regex, and then even pathType Exact is
+  an open prefix. A path must therefore not contain regex metacharacters other than literal ones
+  that also match themselves (letters, digits, /, _, -).
+*/ -}}
+{{- define "common.ingress.exact" -}}
+{{- $ := .root -}}
+{{- range .paths }}
+{{- if not (regexMatch "^/[A-Za-z0-9/_-]+$" .) }}
+{{- fail (printf "common.ingress.exact: %q is not a plain path" .) }}
+{{- end }}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .name | default (include "common.name" $) }}
+  namespace: {{ include "common.ingress.namespace" $ }}
+  annotations:
+{{- include "common.ingress.annotations" $ | nindent 4 }}
+{{- with .annotations }}
+{{- toYaml . | nindent 4 }}
+{{- end }}
+  labels:
+{{- include "common.labels" $ | nindent 4 }}
+spec:
+  rules:
+{{- include "common.ingress.host" $ | nindent 2 }}
+    http:
+      paths:
+{{- range .paths }}
+      - path: {{ . }}$
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: {{ $.Values.ingress.serviceName | default (include "common.name" $) }}
+            port:
+              number: {{ $.Values.ingress.servicePort | default $.Values.httpPort }}
+{{- end }}
+{{- if ne $.Values.global.setup "quickstart" }}
+  tls:
+{{- include "common.ingress.tls" $ | nindent 2 }}
+{{- end }}
+{{- end -}}
