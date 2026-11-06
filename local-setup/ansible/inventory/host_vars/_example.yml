@@ -472,6 +472,12 @@ enable_mcp: true
 #   components: {logs: {threshold: 20}}
 #   investigate: {skip_services: [loki, promtail, postgres-db]}
 
+# severity-service: complaint-severity scorer (FastAPI + CatBoost). Internal port
+# 8000 only — no public route. Built locally from the vendored severity-service/
+# (severity-service:local); needs network on the first build (torch + encoder).
+# Values: true | false.
+enable_severity: false
+
 # ────────── digit-mcp read-only (public) ──────────
 # A SEPARATE, publicly-exposable read-only MCP (digit-mcp-readonly). With
 # MCP_READ_ONLY=1 every write-risk tool is absent (tenant_destroy, decrypt_data,

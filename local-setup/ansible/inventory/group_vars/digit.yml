@@ -416,6 +416,13 @@ wsl_memory_gb: 12
 wsl_swap_gb: 16
 wsl_processors: 6
 
+# severity-service (complaint-severity scorer, internal port 8000 only, no public
+# route). Off by default; true adds the `severity` compose profile and builds the
+# vendored severity-service/ on the target (severity-service:local).
+enable_severity: false
+# On-target directory the vendored severity-service/ is rsynced to for the build.
+severity_repo: "{{ digit_dir }}/severity-service"
+
 # On-target directory for digit-mcp when build_mcp is true. Vendored deploys
 # rsync CCRS digit-mcp/ here; a git mcp_repo_url clones/updates here instead.
 mcp_repo: "{{ digit_dir }}/digit-mcp"

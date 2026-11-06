@@ -1945,6 +1945,12 @@
       ansible.builtin.set_fact:
         mcp_image: "{{ mcp_image | default('digit-mcp:local' if (build_mcp | default(false)) else '') }}"
 
+    # Severity image: always built locally from the vendored severity-service/
+    # (there is no published image). Compose reads it via ${SEVERITY_IMAGE}.
+    - name: "Resolve severity image tag"
+      ansible.builtin.set_fact:
+        severity_image: "{{ severity_image | default('severity-service:local') }}"
+
     # Novu dashboard: when `build_novu_dashboard: true` we build a subpath-rebased
     # image locally (backend/novu-dashboard/Dockerfile, tag novu-dashboard:local)
     # so the SPA serves under /novu with a single strip-prefix nginx location;
@@ -2000,6 +2006,7 @@
               + (['search']        if enable_search_stack  | default(false) else [])
               + (['mcp']           if enable_mcp           | default(false) else [])
               + (['mcp-readonly']  if enable_mcp_readonly  | default(false) else [])
+              + (['severity']      if enable_severity      | default(false) else [])
               + (['notifications'] if enable_novu          | default(false) else [])
               + (['chatbot']       if enable_chatbot       | default(false) else [])
               + ['keycloak']
@@ -2726,6 +2733,45 @@
       when:
         - enable_mcp | default(false)
         - build_mcp | default(false)
+
+    # ==================== Build severity-service image locally ============
+    # When `enable_severity: true`, rsync the vendored severity-service/ to the
+    # target and `docker build` it there (severity-service:local). Runs BEFORE
+    # pull so the local-only tag is present; pull skips it, `up -d` uses it.
+    - name: "Severity build — ensure workspace on target"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/.build"
+        state: directory
+        mode: "0755"
+      when: enable_severity | default(false)
+
+    - name: "Severity build — copy severity-build.sh to target"
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/files/severity-build.sh"
+        dest: "{{ digit_dir }}/.build/severity-build.sh"
+        mode: "0755"
+      when: enable_severity | default(false)
+
+    - name: "Severity build — sync vendored severity-service source to target"
+      synchronize:
+        src: "{{ playbook_dir }}/../../severity-service/"
+        dest: "{{ severity_repo }}/"
+        delete: false
+        rsync_opts:
+          - "--omit-dir-times"
+          - "--exclude=__pycache__"
+          - "--exclude=.pytest_cache"
+      when: enable_severity | default(false)
+
+    - name: "Build severity-service image locally (when enable_severity)"
+      ansible.builtin.command: >-
+        bash {{ digit_dir }}/.build/severity-build.sh
+        "{{ severity_repo }}"
+        "{{ severity_image }}"
+        "{{ docker_default_platform | default('') }}"
+      register: severity_build_run
+      changed_when: true
+      when: enable_severity | default(false)
 
     # ==================== Build novu-dashboard image locally ==============
     # When `build_novu_dashboard: true`, derive a subpath-rebased dashboard
@@ -4664,6 +4710,41 @@
       until: mcp_health.rc == 0
       changed_when: false
       when: enable_mcp | default(false)
+
+    # ==================== Severity service: health wait + scoring probe ====================
+    # The service publishes no host port (internal-only), so probe from inside the
+    # container. The probe goes beyond /health: it scores one sample complaint and
+    # fails the deploy unless the answer is a valid severity label.
+    - name: Wait for severity-service health (up to 5 min)
+      ansible.builtin.command: >-
+        docker exec severity-service python -c
+        "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health')"
+      register: severity_health
+      retries: 30
+      delay: 10
+      until: severity_health.rc == 0
+      changed_when: false
+      when: enable_severity | default(false)
+
+    - name: "severity — score a sample complaint (probe)"
+      ansible.builtin.command: >-
+        docker exec severity-service python -c
+        "import json,urllib.request as u;
+        r=u.Request('http://127.0.0.1:8000/severity',
+        json.dumps({'description':'Open drain overflowing near the school, sewage on the road','complaint_type':'Others'}).encode(),
+        {'Content-Type':'application/json'});
+        print(u.urlopen(r).read().decode())"
+      register: severity_probe
+      changed_when: false
+      when: enable_severity | default(false)
+
+    - name: "severity — assert the probe returned a valid severity label"
+      ansible.builtin.assert:
+        that:
+          - (severity_probe.stdout | from_json).severity in ['Low', 'Medium', 'High', 'Critical']
+        fail_msg: "severity-service answered but returned no valid severity: {{ severity_probe.stdout | default('') }}"
+        success_msg: "severity-service scoring OK ({{ (severity_probe.stdout | from_json).severity }})."
+      when: enable_severity | default(false)
 
     # ==================== Verify the read-only MCP actually dropped writes ====================
     # A digit-mcp image that predates MCP_READ_ONLY ignores the env var and serves the FULL
