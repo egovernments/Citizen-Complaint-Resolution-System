@@ -4711,6 +4711,41 @@
       changed_when: false
       when: enable_mcp | default(false)
 
+    # ==================== Severity service: health wait + scoring probe ====================
+    # The service publishes no host port (internal-only), so probe from inside the
+    # container. The probe goes beyond /health: it scores one sample complaint and
+    # fails the deploy unless the answer is a valid severity label.
+    - name: Wait for severity-service health (up to 5 min)
+      ansible.builtin.command: >-
+        docker exec severity-service python -c
+        "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health')"
+      register: severity_health
+      retries: 30
+      delay: 10
+      until: severity_health.rc == 0
+      changed_when: false
+      when: enable_severity | default(false)
+
+    - name: "severity — score a sample complaint (probe)"
+      ansible.builtin.command: >-
+        docker exec severity-service python -c
+        "import json,urllib.request as u;
+        r=u.Request('http://127.0.0.1:8000/severity',
+        json.dumps({'description':'Open drain overflowing near the school, sewage on the road','complaint_type':'Others'}).encode(),
+        {'Content-Type':'application/json'});
+        print(u.urlopen(r).read().decode())"
+      register: severity_probe
+      changed_when: false
+      when: enable_severity | default(false)
+
+    - name: "severity — assert the probe returned a valid severity label"
+      ansible.builtin.assert:
+        that:
+          - (severity_probe.stdout | from_json).severity in ['Low', 'Medium', 'High', 'Critical']
+        fail_msg: "severity-service answered but returned no valid severity: {{ severity_probe.stdout | default('') }}"
+        success_msg: "severity-service scoring OK ({{ (severity_probe.stdout | from_json).severity }})."
+      when: enable_severity | default(false)
+
     # ==================== Verify the read-only MCP actually dropped writes ====================
     # A digit-mcp image that predates MCP_READ_ONLY ignores the env var and serves the FULL
     # write toolset (tenant_destroy, mdms_create, user_create, ...) on the public
