@@ -1,1 +1,2 @@
-output/
+output/*
+!output/sample2000_gemini_labels.csv

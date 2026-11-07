@@ -140,7 +140,7 @@ def label_batch(model, key, system, rows, rpm_gap, provider="gemini"):
             if e.code == 429:
                 low = detail.lower()
                 if "PerDay" in detail or "per day" in low or "(tpd)" in low or "(rpd)" in low:
-                    raise DailyQuota(detail[:300])
+                    raise DailyQuota(detail[:1500])
                 m = (re.search(r"retry in ([\d.]+)s", detail) or re.search(r'"retryDelay":\s*"(\d+)', detail)
                      or re.search(r"try again in (?:(\d+)m)?([\d.]+)s", low))
                 if m and m.re.pattern.startswith("try again"):
