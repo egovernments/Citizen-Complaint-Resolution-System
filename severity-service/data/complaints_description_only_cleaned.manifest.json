@@ -1,0 +1,43 @@
+{
+  "counts": {
+    "discarded": {
+      "duplicate_conflicting_label": 249,
+      "duplicate_same_label": 129899,
+      "over_per_label_cap": 42873,
+      "too_short_after_cleaning": 5661
+    },
+    "selected_by_label": {
+      "Critical": 4368,
+      "High": 20000,
+      "Low": 15475,
+      "Medium": 20000
+    },
+    "selected_total": 59843,
+    "source_by_label": {
+      "Critical": 4934,
+      "High": 64754,
+      "Low": 20002,
+      "Medium": 150076
+    }
+  },
+  "created_at_utc": "2026-11-07T04:53:21.440687+00:00",
+  "format_version": 1,
+  "input_file": "GCC_PGR_FY2024-25_labelled_1.xlsx",
+  "input_sha256": "f48bafa61fd8926fc7f92bcfc7deeb182cdd34d1ba88053c9db8661dac7275a0",
+  "output_sha256": "cf0ef8baca6caacaf261e7174858af6c9224d3fff321f97d2c8d4bb88bb61a2a",
+  "selection": {
+    "dedupe": "casefolded punctuation-insensitive cleaned description; conflicting labels excluded",
+    "input_columns": [
+      "TEXT_FOR_MODEL",
+      "SEVERITY"
+    ],
+    "model_input": "description only",
+    "output_columns": [
+      "complaint_id",
+      "description",
+      "label"
+    ],
+    "per_label_cap": 20000,
+    "pii_handling": "addresses after @, emails, URLs, Indian phones, Aadhaar, PAN, complaint references, postcodes, and common explicit name/address fields removed"
+  }
+}
