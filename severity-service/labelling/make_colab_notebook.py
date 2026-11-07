@@ -31,9 +31,9 @@ from getpass import getpass
 
 IN_COLAB = "COLAB_RELEASE_TAG" in os.environ or "google.colab" in sys.modules
 
-PROVIDER = "groq"            # "groq" or "gemini": which free API labels the remaining rows
+PROVIDER = "gemini"          # "gemini" or "groq": which free API labels the remaining rows
 RUN_ARGS = (["--provider", "groq", "--model", "openai/gpt-oss-120b", "--batch-size", "30", "--rpm", "1"]
-            if PROVIDER == "groq" else ["--provider", "gemini"])
+            if PROVIDER == "groq" else ["--provider", "gemini", "--model", "gemini-3.1-flash-lite", "--batch-size", "100"])
 KEYNAME = "GROQ_API_KEY" if PROVIDER == "groq" else "GEMINI_API_KEY"
 
 if IN_COLAB:
