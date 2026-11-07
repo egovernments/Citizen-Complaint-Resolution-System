@@ -177,11 +177,15 @@ def main() -> int:
     ap.add_argument("--rpm", type=float, default=float(os.environ.get("REQUESTS_PER_MINUTE", "10")))
     ap.add_argument("--limit", type=int, default=0, help="only the first N rows (pilot)")
     ap.add_argument("--sample", type=int, default=0, help="random N rows (seeded); use with a separate --output")
+    ap.add_argument("--start", type=int, default=0, help="first row position to process (0-based)")
+    ap.add_argument("--end", type=int, default=0, help="stop before this row position (0 = to the end)")
+    ap.add_argument("--key-env", default="", help="name of the env var holding the API key (e.g. GEMINI_API_KEY_2)")
+    ap.add_argument("--also-done", nargs="*", default=[], help="other label files whose ids are treated as already done")
     ap.add_argument("--list-models", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
-    keyname = "GROQ_API_KEY" if a.provider == "groq" else "GEMINI_API_KEY"
+    keyname = a.key_env or ("GROQ_API_KEY" if a.provider == "groq" else "GEMINI_API_KEY")
     key = os.environ.get(keyname, "")
     if not a.model:
         a.model = (os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b") if a.provider == "groq"
@@ -208,12 +212,15 @@ def main() -> int:
         rows = random.Random(42).sample(rows, min(a.sample, len(rows)))
     elif a.limit:
         rows = rows[: a.limit]
+    if a.start or a.end:
+        rows = rows[a.start : (a.end or None)]
     out = Path(a.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     done = set()
-    if out.exists():
-        with open(out, encoding="utf-8", newline="") as f:
-            done = {r["complaint_id"] for r in csv.DictReader(f)}
+    for path in [out, *map(Path, a.also_done)]:
+        if path.exists():
+            with open(path, encoding="utf-8", newline="") as f:
+                done |= {r["complaint_id"] for r in csv.DictReader(f)}
     todo = [r for r in rows if r["complaint_id"] not in done]
     print(f"{len(rows)} rows, {len(done)} already labelled, {len(todo)} to do, {a.provider}/{a.model}, "
           f"{-(-len(todo) // a.batch_size)} requests", flush=True)
