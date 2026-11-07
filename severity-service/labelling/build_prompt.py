@@ -20,10 +20,13 @@ def render(rubric: dict) -> str:
         "Principles:",
         *[f"- {p}" for p in rubric["principles"]],
         "",
-        "Apply the levels from most to least severe and stop at the first that matches.",
+        "Decision rules:",
+        *[f"- {r}" for r in rubric.get("decision_rules", [])],
     ]
     for lv in sorted(rubric["levels"], key=lambda l: -l["id"]):
         out += ["", f"{lv['label']}: {lv['meaning']}", *[f"- {c}" for c in lv["criteria"]]]
+        if lv.get("examples"):
+            out += ["Examples:", *[f'- "{e}"' for e in lv["examples"]]]
     return "\n".join(out) + "\n"
 
 

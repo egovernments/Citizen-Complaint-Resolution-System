@@ -8,7 +8,7 @@ Everything needed to label complaints for the severity **evaluation set** (about
 
 ## Process
 
-1. Draw a sample of complaints. PII must already be removed and duplicates dropped; that happens upstream and is not part of this folder.
+1. Draw a sample of complaints from `data/complaints_description_only_cleaned.csv`, where PII is already removed and duplicates are dropped (see `data/README.md`). Rubric v0.2 was aligned to the labels in that dataset.
 2. Two people label each complaint independently, using only `rubric.json`. Neither sees the other's label or the model's prediction.
 3. Disagreements are resolved by a third reviewer, and the final label is recorded along with both original labels.
 4. Report accuracy and Critical recall against the model, and annotator agreement (Cohen's kappa) between the two labellers.
