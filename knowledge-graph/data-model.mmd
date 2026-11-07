@@ -1,0 +1,223 @@
+%% CCRS / CMS v2.20 — data model (tables, cross-service links, master data)
+%% Tables: Flyway SQL under backend/*/src/main/resources/db/migration/main/ and backend/xstate-chatbot/nodejs/db/.
+%% Relationship labels: "FK" = real database foreign key; "logical" = enforced in code only (no FK).
+%% Platform tables (eg_user, eg_wf_*, eg_hrms_*, eg_mdms_data, boundary_relationship) are owned by DIGIT core images.
+erDiagram
+
+  EG_PGR_SERVICE_V2 {
+    varchar id UK "UUID set by EnrichmentService"
+    varchar tenantId PK
+    varchar serviceRequestId PK "idgen pgr.servicerequestid = workflow businessId"
+    varchar serviceCode "ComplaintHierarchy leaf code"
+    varchar accountId "citizen eg_user.uuid"
+    varchar applicationStatus "mirrors workflow state"
+    smallint rating "set on RATE via update persister"
+    varchar source "web, whatsapp, mobile, RB Bot"
+    jsonb additionalDetails "department code, serviceName, escalation keys"
+    jsonb extended_attributes "schema-driven, PII encrypted"
+    boolean active
+    bigint createdtime
+    bigint lastmodifiedtime "reopen window measured from here"
+  }
+
+  EG_PGR_ADDRESS_V2 {
+    varchar id PK
+    varchar parentid FK "eg_pgr_service_v2.id"
+    varchar locality "boundary code, NOT NULL"
+    numeric latitude
+    numeric longitude
+    jsonb additionaldetails
+  }
+
+  EG_PGR_DOCUMENT_V2 {
+    varchar id PK
+    varchar service_id FK "eg_pgr_service_v2.id"
+    varchar filestore_id "egov-filestore id"
+    varchar document_type
+  }
+
+  EG_PGR_HRMS_PROJECTION {
+    varchar uuid PK "employee user uuid"
+    varchar tenantid
+    varchar reporting_to "manager uuid"
+    varchar department
+  }
+
+  COMPLAINT_FACTS {
+    varchar service_request_id UK "materialized view, 1 row per complaint"
+    bigint sla_target_ms "slaHours or EscalationConfig or businessServiceSla"
+    boolean sla_breached
+    boolean filed_on_behalf "createdby differs from accountid"
+  }
+
+  COMPLAINT_EVENTS {
+    varchar event_id UK "materialized view, 1 row per workflow transition"
+    varchar service_request_id
+    varchar assignee_uuid
+  }
+
+  COMPLAINT_OPEN_STATE_DAILY {
+    date snapshot_date PK
+    varchar service_request_id PK
+    boolean is_open
+    boolean sla_breached
+  }
+
+  EG_PGR_ONBOARDING_SIGNUP {
+    uuid id PK
+    varchar owner_issuer UK
+    varchar owner_subject UK
+    varchar status "DRAFT PROVISIONING ACTIVE FAILED"
+    varchar requested_tenant_id
+  }
+
+  EG_PGR_ONBOARDING_OPERATION {
+    uuid id PK
+    uuid signup_id FK
+    varchar status "PENDING RUNNING SUCCEEDED RETRYABLE_FAILED TERMINAL_FAILED"
+    varchar current_step
+  }
+
+  EG_PGR_ONBOARDING_IDENTIFIER {
+    varchar identifier_type PK
+    varchar normalized_value PK
+    uuid signup_id FK
+  }
+
+  EG_PGR_ONBOARDING_WORKSPACE {
+    varchar tenant_id PK
+    varchar status "NOT_STARTED IN_PROGRESS DONE"
+    jsonb steps
+  }
+
+  EG_USER {
+    varchar uuid PK "platform, egov-user"
+    varchar mobileNumber
+    varchar type "CITIZEN EMPLOYEE SYSTEM"
+  }
+
+  EG_WF_PROCESSINSTANCE_V2 {
+    varchar id PK "platform, egov-workflow-v2"
+    varchar businessid "= serviceRequestId"
+    varchar status "eg_wf_state_v2.uuid"
+    varchar action
+    smallint rating
+  }
+
+  EG_WF_ASSIGNEE_V2 {
+    varchar processinstanceid FK
+    varchar assignee "employee user uuid"
+  }
+
+  EG_HRMS_ASSIGNMENT {
+    varchar employeeid "platform, egov-hrms"
+    varchar department
+    varchar designation
+    varchar reportingto "used for escalation"
+  }
+
+  EG_HRMS_JURISDICTION {
+    varchar employeeid
+    varchar hierarchy
+    varchar boundary
+  }
+
+  BOUNDARY_RELATIONSHIP {
+    varchar code "platform, boundary-service"
+    varchar parent
+    varchar ancestralmaterializedpath
+  }
+
+  MDMS_COMPLAINT_HIERARCHY {
+    varchar code PK "RAINMAKER-PGR.ComplaintHierarchy (replaces retired ServiceDefs)"
+    varchar parentCode
+    varchar department "common-masters.Department code"
+    int slaHours "leaf rows only"
+  }
+
+  MDMS_DEPARTMENT {
+    varchar code PK "common-masters.Department"
+    varchar name
+  }
+
+  MDMS_ESCALATION_CONFIG {
+    varchar code PK "RAINMAKER-PGR.EscalationConfig"
+    int maxDepth
+    json defaultSlaPercentageByLevel
+    json eligibleStatuses "PENDINGATLME"
+  }
+
+  MDMS_UICONSTANTS {
+    varchar code PK "RAINMAKER-PGR.UIConstants"
+    bigint REOPENSLA "259200000 ms"
+  }
+
+  MDMS_NOTIFICATIONS {
+    varchar eventName PK "NOTIFICATIONS.EventCatalogue / Routing / Template / Channel"
+    varchar audience
+    varchar channel
+    varchar locale
+  }
+
+  NB_DISPATCH_LOG {
+    uuid id PK "novu-bridge"
+    varchar transaction_id UK
+    varchar channel UK
+    varchar recipient_value UK
+    varchar reference_number "complaint number"
+    varchar status
+  }
+
+  NB_TENANT_ACCOUNT {
+    varchar tenant_id PK "novu-bridge per-tenant Novu org"
+    varchar novu_organization_id
+    varchar api_key_ciphertext "AES-256-GCM"
+  }
+
+  USER_PREFERENCE {
+    uuid id PK "digit-user-preferences-service"
+    varchar user_id UK
+    varchar tenant_id UK
+    varchar preference_code UK "USER_NOTIFICATION_PREFERENCES"
+    jsonb payload "channels, language, consent"
+  }
+
+  EG_CONFIG_DATA {
+    varchar tenantid PK "digit-config-service"
+    varchar schemacode PK "TemplateBinding, ProviderDetail, NotificationChannel"
+    varchar uniqueidentifier PK
+    jsonb data
+  }
+
+  EG_CHAT_STATE_V2 {
+    int id PK "xstate-chatbot"
+    varchar user_id UK
+    jsonb state
+  }
+
+  EG_PGR_SERVICE_V2 ||--|| EG_PGR_ADDRESS_V2 : "FK parentid"
+  EG_PGR_SERVICE_V2 ||--o{ EG_PGR_DOCUMENT_V2 : "FK service_id"
+  EG_USER ||--o{ EG_PGR_SERVICE_V2 : "logical accountId"
+  EG_PGR_SERVICE_V2 ||--o{ EG_WF_PROCESSINSTANCE_V2 : "logical businessid"
+  EG_WF_PROCESSINSTANCE_V2 ||--o{ EG_WF_ASSIGNEE_V2 : "FK"
+  EG_WF_ASSIGNEE_V2 }o--|| EG_USER : "logical assignee"
+  EG_PGR_SERVICE_V2 }o--|| MDMS_COMPLAINT_HIERARCHY : "logical serviceCode"
+  MDMS_COMPLAINT_HIERARCHY }o--|| MDMS_DEPARTMENT : "logical department"
+  EG_PGR_ADDRESS_V2 }o--|| BOUNDARY_RELATIONSHIP : "logical locality"
+  EG_HRMS_ASSIGNMENT }o--|| MDMS_DEPARTMENT : "logical department"
+  EG_HRMS_ASSIGNMENT }o--|| EG_USER : "logical reportingto"
+  EG_HRMS_JURISDICTION }o--|| BOUNDARY_RELATIONSHIP : "logical boundary"
+  EG_HRMS_ASSIGNMENT ||--o| EG_PGR_HRMS_PROJECTION : "projected via Kafka"
+  MDMS_ESCALATION_CONFIG ||--o{ EG_PGR_SERVICE_V2 : "escalation policy"
+  MDMS_UICONSTANTS ||--o{ EG_PGR_SERVICE_V2 : "reopen window"
+  EG_PGR_SERVICE_V2 ||--|| COMPLAINT_FACTS : "MV source"
+  EG_WF_PROCESSINSTANCE_V2 ||--|| COMPLAINT_EVENTS : "MV source"
+  COMPLAINT_FACTS ||--o{ COMPLAINT_OPEN_STATE_DAILY : "daily snapshot"
+  EG_PGR_ONBOARDING_SIGNUP ||--o| EG_PGR_ONBOARDING_OPERATION : "FK signup_id"
+  EG_PGR_ONBOARDING_SIGNUP ||--o{ EG_PGR_ONBOARDING_IDENTIFIER : "FK signup_id"
+  EG_PGR_ONBOARDING_SIGNUP ||--o| EG_PGR_ONBOARDING_WORKSPACE : "logical tenant"
+  EG_PGR_SERVICE_V2 ||--o{ NB_DISPATCH_LOG : "logical reference_number"
+  MDMS_NOTIFICATIONS ||--o{ NB_DISPATCH_LOG : "routes + templates"
+  EG_USER ||--o{ USER_PREFERENCE : "logical user_id"
+  EG_PGR_ONBOARDING_WORKSPACE ||--o| NB_TENANT_ACCOUNT : "logical tenant"
+  EG_USER ||--o| EG_CHAT_STATE_V2 : "logical user_id"

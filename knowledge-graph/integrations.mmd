@@ -1,0 +1,187 @@
+%% CCRS / CMS v2.20 — integration graph: Kafka topics, DIGIT platform calls, notification flow, external systems
+%% Broker: redpanda (alias kafka) in local-setup/docker-compose.egov-digit.yaml. Topic names from application.properties,
+%% persister/indexer YAML under configs/, and compose env. Solid = CONFIRMED, dotted = INFERRED.
+%% Red-bordered topics have no producer or no consumer anywhere in this repo.
+flowchart LR
+
+  subgraph PROD["Producers"]
+    direction TB
+    PGR["pgr-services<br/>Producer#push"]
+    HRMS["egov-hrms"]
+    WF["egov-workflow-v2"]
+    MDMS["mdms-v2"]
+    BND["boundary-service"]
+    UOTP["user-otp"]
+    NB_P["novu-bridge"]
+    XS_P["xstate-chatbot"]
+  end
+
+  subgraph TOPICS["Kafka topics"]
+    direction TB
+    T1{{"save-pgr-request"}}
+    T2{{"update-pgr-request"}}
+    T3{{"inbox-pgr-events"}}
+    T4{{"complaints.domain.events"}}
+    T5{{"pgr-escalation-events"}}
+    T6{{"save/update-hrms-employee"}}
+    T7{{"save-wf-transitions ·<br/>save/update-wf-businessservice"}}
+    T8{{"save/update-mdms-data"}}
+    T9{{"boundary entity / relationship topics"}}
+    T10{{"egov.core.notification.sms"}}
+    T11{{"egov.core.notification.email"}}
+    T12{{"notifications.events"}}
+    T13{{"novu-bridge.dlq"}}
+    T14{{"chatbot-telemetry-v2"}}
+  end
+
+  subgraph CONS["Consumers"]
+    direction TB
+    PERS["egov-persister<br/>configs/egov-persister/*.yml"]
+    IDX["egov-indexer<br/>pgr-services.yml, pgr-inbox-indexer.yml"]
+    NC["pgr NotificationConsumer"]
+    HPC["pgr HrmsProjectionConsumer<br/>(pgr.visibility.enabled)"]
+    NB_C["novu-bridge<br/>DomainEventConsumer · CoreSmsConsumer"]
+    XS_C["xstate-chatbot<br/>pgr-status-update-events.js"]
+    NONE["(no consumer in repo)"]
+  end
+
+  PGR --> T1
+  PGR --> T2
+  PGR --> T3
+  PGR -->|via NotificationService| T4
+  PGR -->|ESCALATE| T5
+  HRMS --> T6
+  WF --> T7
+  MDMS --> T8
+  BND --> T9
+  UOTP --> T10
+  UOTP --> T11
+  NB_P --> T13
+  XS_P --> T14
+
+  T1 --> PERS
+  T1 --> IDX
+  T1 --> NC
+  T2 --> PERS
+  T2 --> IDX
+  T2 --> NC
+  T2 --> XS_C
+  T3 --> IDX
+  T4 --> NB_C
+  T6 --> PERS
+  T6 --> HPC
+  T7 --> PERS
+  T8 --> PERS
+  T9 --> PERS
+  T10 --> NB_C
+  T12 --> NB_C
+  T5 --> NONE
+  T11 --> NONE
+  T13 --> NONE
+  T14 --> NONE
+  NC -->|ThinEventBuilder| T4
+
+  subgraph NOTIFY["Notification delivery"]
+    direction TB
+    NB["novu-bridge<br/>ThinEventPipelineService · DispatchPipelineService"]
+    MD_N["MDMS NOTIFICATIONS.*<br/>(legacy RAINMAKER-PGR.Notification* fallback)"]
+    LOC["egov-localization"]
+    PREF["user-preferences<br/>/user-preference/v1/_search<br/>fail.open=true"]
+    USR["egov-user /user/_search"]
+    NOVU["Novu api + worker 2.3.0"]
+    SHIM["novu-worker-providers shim<br/>smscountry · jasmin · ozeki"]
+    TWI["Twilio SMS / WhatsApp"]
+    SMTP["SMTP (nodemailer)"]
+    SMSC["SMSCountry HTTP"]
+    LOG[("nb_dispatch_log")]
+  end
+
+  NB_C --> NB
+  NB --> MD_N
+  NB --> LOC
+  NB --> PREF
+  NB --> USR
+  NB -->|/v1/events/trigger| NOVU
+  NB -->|direct provider| SMSC
+  NB --> LOG
+  NOVU --> SHIM
+  NOVU --> TWI
+  NOVU --> SMTP
+
+  subgraph IDENT["Identity + auth"]
+    direction TB
+    KONG["Kong pre-function"]
+    UDET["egov-user /user/_details"]
+    AUTHZ["egov-accesscontrol<br/>/access/v1/actions/_authorize"]
+    BFF["identity-bff"]
+    KC["Keycloak OIDC + admin API<br/>+ magic-link"]
+    IDP["Google / GitHub"]
+    OTP["egov-otp /otp/v1/_create"]
+  end
+
+  KONG -->|every authenticated request| UDET
+  KONG --> AUTHZ
+  BFF --> KC
+  KC --> IDP
+  BFF -->|token mint, user sync| UDET
+  BFF --> OTP
+  BFF -->|/messages/_dispatch| NB
+  PGR -->|onboarding /internal/identity/v1/*| BFF
+  PGR -->|/tenants/_provision| NB
+
+  subgraph PLATFORM["DIGIT core called by pgr-services (sync HTTP)"]
+    direction TB
+    P1["egov-workflow-v2"]
+    P2["mdms (v1 + v2)"]
+    P3["egov-user"]
+    P4["boundary-service"]
+    P5["egov-hrms"]
+    P6["egov-idgen"]
+    P7["egov-enc-service"]
+    P8["egov-accesscontrol"]
+    P9["egov-url-shortening"]
+    P10["egov-localization"]
+  end
+
+  PGR --> P1
+  PGR --> P2
+  PGR --> P3
+  PGR --> P4
+  PGR --> P5
+  PGR --> P6
+  PGR --> P7
+  PGR --> P8
+  PGR --> P9
+  PGR -->|onboarding| P10
+
+  subgraph EXT["Other external systems"]
+    direction TB
+    GMAPS["Google Maps / OSM tiles"]
+    OVT["Overture S3 · Overpass ·<br/>geoBoundaries · Geoapify"]
+    MATOMO["Matomo · PostHog"]
+    OTEL["OTel collector → Tempo · Loki · Prometheus"]
+    WAP["Twilio / Kaleyra / ValueFirst<br/>(chatbot WhatsApp)"]
+  end
+
+  CFG["configurator"] --> GMAPS
+  CFG --> MATOMO
+  TP["turbopass"] --> OVT
+  XS_P --> WAP
+  XS_P -->|reverse geocode| GMAPS
+  KONG --> OTEL
+  PGR -.->|OTel Java agent| OTEL
+
+  classDef prod fill:#e3edff,stroke:#2d5fb8,color:#0f2350
+  classDef topic fill:#ffe9e4,stroke:#b14a32,color:#4a1408
+  classDef orphan fill:#ffe9e4,stroke:#d4002a,stroke-width:3px,color:#4a1408
+  classDef cons fill:#e6f2f7,stroke:#2b6a86,color:#0d2a36
+  classDef notify fill:#e4f5ec,stroke:#1f7a4d,color:#0b3320
+  classDef ident fill:#f1e8ff,stroke:#6a3fa3,color:#2b1450
+  classDef ext fill:#eceff2,stroke:#56606b,color:#1d242b
+  class PGR,HRMS,WF,MDMS,BND,UOTP,NB_P,XS_P,CFG,TP prod
+  class T1,T2,T3,T4,T6,T7,T8,T9,T10 topic
+  class T5,T11,T12,T13,T14 orphan
+  class PERS,IDX,NC,HPC,NB_C,XS_C,NONE cons
+  class NB,MD_N,LOC,PREF,USR,NOVU,SHIM,TWI,SMTP,SMSC,LOG notify
+  class KONG,UDET,AUTHZ,BFF,KC,IDP,OTP ident
+  class P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,GMAPS,OVT,MATOMO,OTEL,WAP ext

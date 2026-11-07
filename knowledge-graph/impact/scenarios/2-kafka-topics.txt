@@ -1,0 +1,150 @@
+Impact of changing: topic:save-pgr-request, topic:update-pgr-request, topic:complaints.domain.events  (depth ≤ 2)
+
+Screens (1)
+  ·· screen:chatbot/PGRStatusUpdateNotification  ←calls— code:backend/xstate-chatbot/nodejs/src/machine/service/pgr-status-update-events.js   backend/xstate-chatbot/nodejs/src/machine/service/pgr-status-update-events.js:23
+
+First-party APIs (31)
+  ·· api:GET /novu-bridge/novu-adapter/v1/config/source  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/contract/envelope  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/contract/openapi  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/contract/thin-event  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/integrations  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/logs  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/preferences  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/providers/catalog  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/providers/templates  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/providers/twilio-templates  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/receipts/{provider}  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/tenants  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/tenants/{tenantId}  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:GET /novu-bridge/novu-adapter/v1/tenants/{tenantId}/providers  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/dispatch/_dry-run  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/dispatch/_resolve  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/dispatch/_validate  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/messages/_dispatch  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/messages/_send  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/providers  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/providers/_delete  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/providers/_update  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/providers/test-send  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/providers/verify  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/receipts/{provider}  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/tenants/_backfill  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/tenants/{tenantId}/_deprovision  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/tenants/{tenantId}/_provision  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/tenants/{tenantId}/providers  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/tenants/{tenantId}/providers/_delete  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+  ·· api:POST /novu-bridge/novu-adapter/v1/tenants/{tenantId}/providers/_update  ←part-of— service:novu-bridge [derived]   (context path → deployable)
+
+Java classes (26)
+  · class:DomainEventConsumer  ←consumes— topic:complaints.domain.events   backend/novu-bridge/src/main/resources/application.properties:18
+  · class:NotificationConsumer  ←consumes— topic:save-pgr-request   backend/pgr-services/src/main/java/org/egov/pgr/consumer/NotificationConsumer.java:39
+  · class:NotificationService  ←publishes— topic:complaints.domain.events   backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java:157
+  · class:PGRService  ←publishes— topic:save-pgr-request   backend/pgr-services/src/main/java/org/egov/pgr/service/PGRService.java:147
+  ·· class:ChannelPolicyClient  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/service/policy/ChannelPolicyClient.java:32
+  ·· class:CoreSmsConsumer  ←calls— class:DomainEventConsumer   backend/novu-bridge/src/main/java/org/egov/novubridge/consumer/CoreSmsConsumer.java:81
+  ·· class:DashboardQueryBuilder  ←reads— table:eg_pgr_service_v2   backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java:60
+  ·· class:DigitLocalizationProvider  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/digit/DigitLocalizationProvider.java:31
+  ·· class:DigitUserSearch  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/digit/DigitUserSearch.java:32
+  ·· class:DispatchLogRepository  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/repository/DispatchLogRepository.java:22
+  ·· class:DispatchPipelineService  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java:35
+  ·· class:EscalationScheduler  ←calls— class:PGRService   backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java:197
+  ·· class:LegacyMasterAdapter  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/digit/LegacyMasterAdapter.java:33
+  ·· class:MdmsNotificationConfigRepository  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/digit/MdmsNotificationConfigRepository.java:45
+  ·· class:NotificationResolver  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/NotificationResolver.java:58
+  ·· class:NovuBridgeConfiguration  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/config/NovuBridgeConfiguration.java:20
+  ·· class:NovuClient  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/service/NovuClient.java:30
+  ·· class:PGRQueryBuilder  ←reads— table:eg_pgr_service_v2   backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/PGRQueryBuilder.java:41
+  ·· class:PGRRepository  ←reads— table:eg_pgr_service_v2   backend/pgr-services/src/main/java/org/egov/pgr/repository/PGRRepository.java:88
+  ·· class:PreferenceServiceClient  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/service/PreferenceServiceClient.java:21
+  ·· class:Producer  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/producer/Producer.java:12
+  ·· class:RequestsApiController  ←calls— class:PGRService   backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java:72
+  ·· class:TenantAccountRepository  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/service/account/TenantAccountRepository.java:19
+  ·· class:ThinEvent  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/web/models/ThinEvent.java:29
+  ·· class:ThinEventPipelineService  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/service/thin/ThinEventPipelineService.java:19
+  ·· class:ThinEventValidator  ←part-of— service:novu-bridge   backend/novu-bridge/src/main/java/org/egov/novubridge/service/thin/ThinEventValidator.java:17
+
+Code / config modules (11)
+  · code:backend/xstate-chatbot/nodejs/src/machine/service/pgr-status-update-events.js  ←consumes— topic:update-pgr-request   backend/xstate-chatbot/nodejs/src/machine/service/pgr-status-update-events.js:19
+  ·· code:backend/xstate-chatbot/nodejs/src/channel/twilio.js  ←part-of— service:xstate-chatbot   backend/xstate-chatbot/nodejs/src/channel/twilio.js:40
+  ·· code:backend/xstate-chatbot/nodejs/src/channel/value-first.js  ←part-of— service:xstate-chatbot   backend/xstate-chatbot/nodejs/src/channel/value-first.js:26
+  ·· code:backend/xstate-chatbot/nodejs/src/env-variables.js  ←part-of— service:xstate-chatbot   backend/xstate-chatbot/nodejs/src/env-variables.js:10
+  ·· code:backend/xstate-chatbot/nodejs/src/machine/pgr-machine.js  ←part-of— service:xstate-chatbot   backend/xstate-chatbot/nodejs/src/machine/pgr-machine.js:217
+  ·· code:backend/xstate-chatbot/nodejs/src/machine/service/egov-pgr.js  ←part-of— service:xstate-chatbot   backend/xstate-chatbot/nodejs/src/machine/service/egov-pgr.js:800
+  ·· code:backend/xstate-chatbot/nodejs/src/machine/service/egov-user-profile.js  ←part-of— service:xstate-chatbot   backend/xstate-chatbot/nodejs/src/machine/service/egov-user-profile.js:20
+  ·· code:backend/xstate-chatbot/nodejs/src/machine/service/service-loader.js  ←calls— code:backend/xstate-chatbot/nodejs/src/machine/service/pgr-status-update-events.js   backend/xstate-chatbot/nodejs/src/machine/service/service-loader.js:9
+  ·· code:backend/xstate-chatbot/nodejs/src/machine/util/localisation-service.js  ←part-of— service:xstate-chatbot   backend/xstate-chatbot/nodejs/src/machine/util/localisation-service.js:125
+  ·· code:backend/xstate-chatbot/nodejs/src/session/telemetry.js  ←part-of— service:xstate-chatbot   backend/xstate-chatbot/nodejs/src/session/telemetry.js:58
+  ·· code:backend/xstate-chatbot/nodejs/src/session/user-service.js  ←part-of— service:xstate-chatbot   backend/xstate-chatbot/nodejs/src/session/user-service.js:111
+
+Tables / views (7)
+  · table:eg_pgr_service_v2  ←derives-from— topic:save-pgr-request   configs/egov-persister/pgr-services-persister.yml:6
+  ·· table:complaint_events  ←derives-from— table:eg_pgr_service_v2   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:14
+  ·· table:complaint_facts  ←derives-from— table:eg_pgr_service_v2   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:437
+  ·· table:pgr_mv_dimension  ←derives-from— table:eg_pgr_service_v2   backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql:51
+  ·· table:pgr_mv_kpi  ←derives-from— table:eg_pgr_service_v2   backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql:4
+  ·· table:pgr_mv_monthly  ←derives-from— table:eg_pgr_service_v2   backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql:21
+  ·· table:pgr_mv_monthly_source  ←derives-from— table:eg_pgr_service_v2   backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql:37
+
+Deployables (4)
+  · service:egov-indexer  ←consumes— topic:save-pgr-request   configs/egov-indexer/pgr-services.yml:5
+  · service:egov-persister  ←consumes— topic:save-pgr-request   configs/egov-persister/pgr-services-persister.yml:6
+  · service:novu-bridge  ←consumes— topic:complaints.domain.events   local-setup/docker-compose.egov-digit.yaml:3021
+  · service:xstate-chatbot  ←consumes— topic:update-pgr-request   backend/xstate-chatbot/nodejs/src/machine/service/pgr-status-update-events.js:19
+
+Deploy / CI artefacts (49)
+  · infra:compose:novu-bridge  ←uses-config— topic:complaints.domain.events   local-setup/docker-compose.egov-digit.yaml:3021
+  · infra:compose:pgr-services  ←uses-config— topic:complaints.domain.events   local-setup/docker-compose.egov-digit.yaml:1823
+  · infra:configs/egov-indexer/pgr-services.yml  ←maps— topic:save-pgr-request   configs/egov-indexer/pgr-services.yml:5
+  · infra:configs/egov-persister/pgr-services-persister.yml  ←maps— topic:save-pgr-request   configs/egov-persister/pgr-services-persister.yml:6
+  · infra:devops/deploy-as-code/charts/common-services/novu-bridge/values.yaml  ←uses-config— topic:complaints.domain.events   devops/deploy-as-code/charts/common-services/novu-bridge/values.yaml:94
+  · infra:devops/deploy-as-code/charts/core-services/xstate-chatbot/values.yaml  ←uses-config— topic:update-pgr-request [inferred]   devops/deploy-as-code/charts/core-services/xstate-chatbot/values.yaml:225
+  · infra:local-setup/ansible/playbook-deploy.yml  ←uses-config— topic:complaints.domain.events   local-setup/ansible/playbook-deploy.yml:7018
+  ·· infra:.github/workflows/build.yml  ←builds— service:xstate-chatbot   .github/workflows/build.yml:17
+  ·· infra:.github/workflows/xstate-chatbot-ci.yml  ←tests— service:xstate-chatbot   .github/workflows/xstate-chatbot-ci.yml:12
+  ·· infra:build/build-config.yml  ←builds— service:xstate-chatbot   build/build-config.yml:65
+  ·· infra:compose:egov-indexer  ←deploys— service:egov-indexer   local-setup/docker-compose.egov-digit.yaml:550
+  ·· infra:compose:egov-indexer-migration  ←deploys— service:egov-indexer   local-setup/docker-compose.migrations.yml:518
+  ·· infra:compose:egov-persister  ←deploys— service:egov-persister   local-setup/docker-compose.egov-digit.yaml:1296
+  ·· infra:compose:identity-bff  ←uses-config— service:novu-bridge   local-setup/docker-compose.egov-digit.yaml:3317
+  ·· infra:compose:novu-bridge-migration  ←deploys— service:novu-bridge   local-setup/docker-compose.migrations.yml:101
+  ·· infra:compose:xstate-chatbot  ←deploys— service:xstate-chatbot   local-setup/docker-compose.egov-digit.yaml:1922
+  ·· infra:compose:xstate-chatbot-db  ←deploys— service:xstate-chatbot   local-setup/docker-compose.egov-digit.yaml:1897
+  ·· infra:configmap:egov-service-host  ←uses-config— service:egov-indexer   devops/deploy-as-code/charts/environments/env.yaml:109
+  ·· infra:configs/egov-persister/pgr-migration-batch.yml  ←maps— table:eg_pgr_service_v2   configs/egov-persister/pgr-migration-batch.yml:10
+  ·· infra:devops/deploy-as-code/charts/urban/pgr-services/values.yaml  ←uses-config— service:novu-bridge   devops/deploy-as-code/charts/urban/pgr-services/values.yaml:330
+  ·· infra:helm:egov-indexer  ←uses-config— infra:configs/egov-indexer/pgr-services.yml   devops/deploy-as-code/charts/environments/env.yaml:206
+  ·· infra:helm:egov-persister  ←uses-config— infra:configs/egov-persister/pgr-services-persister.yml   devops/deploy-as-code/charts/environments/env.yaml:213
+  ·· infra:helmfile:devops/deploy-as-code/charts/common-services/common-services-helmfile.yaml  ←deploys— service:novu-bridge   devops/deploy-as-code/charts/common-services/common-services-helmfile.yaml:38
+  ·· infra:helmfile:devops/deploy-as-code/charts/core-services/coreservices-helmfile.yaml  ←deploys— service:egov-persister   devops/deploy-as-code/charts/core-services/coreservices-helmfile.yaml:86
+  ·· infra:kong-route:/common-persist  ←routes-to— service:egov-persister   local-setup/kong/kong.yml:821
+  ·· infra:kong-route:/egov-indexer  ←routes-to— service:egov-indexer   local-setup/kong/kong.yml:1223
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/config/source  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1084
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/contract/envelope  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1072
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/contract/openapi  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1073
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/contract/thin-event  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1074
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/dispatch/_resolve  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1093
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/gateways  ←routes-to— service:novu-bridge [inferred]   local-setup/kong/kong.yml:1122
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/integrations  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:996
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/logs  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:990
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/messages  ←routes-to— service:novu-bridge [inferred]   local-setup/kong/kong.yml:1146
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/preferences  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1002
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/providers  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1008
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/providers/_delete  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1053
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/providers/_update  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1047
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/providers/catalog  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1040
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/providers/templates  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1014
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/providers/test-send  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1026
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/providers/twilio-templates  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1032
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/providers/verify  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1020
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/receipts/novu  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1062
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/receipts/smscountry  ←routes-to— service:novu-bridge   local-setup/kong/kong.yml:1063
+  ·· infra:kong-route:/novu-bridge/novu-adapter/v1/tenants  ←routes-to— service:novu-bridge [inferred]   local-setup/kong/kong.yml:1145
+  ·· infra:kong-route:/xstate-chatbot  ←routes-to— service:xstate-chatbot   local-setup/kong/kong.yml:1177
+  ·· infra:local-setup/docker-compose.egov-digit.yaml  ←deploys— service:xstate-chatbot   local-setup/docker-compose.egov-digit.yaml:1922
+
+Tests (1)
+  · test:backend/pgr-services/src/test/java/org/egov/pgr/service/NotificationServiceTest.java  ←tests— topic:save-pgr-request   backend/pgr-services/src/test/java/org/egov/pgr/service/NotificationServiceTest.java:179
+
+Total affected: 130 nodes via 156 edges.
+Mermaid written to 2-kafka-topics.mmd

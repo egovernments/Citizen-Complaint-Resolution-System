@@ -1,0 +1,217 @@
+%% CCRS / CMS v2.20 — complete knowledge graph (overview)
+%% Snapshot: master @ 64d5abe92 (2026-10-30). Evidence: knowledge-graph/README.md.
+%% Solid arrow  = CONFIRMED in source/config.   Dotted arrow = INFERRED (see README "Confirmed vs inferred").
+%% Detail lives in the per-topic graphs; this file keeps one node per major concept.
+flowchart LR
+
+  subgraph BIZ["A · Business domain"]
+    direction TB
+    Citizen(["Citizen"])
+    Employee(["Employee (GRO / LME)"])
+    Admin(["Workspace admin"])
+    Complaint["Complaint<br/>(Service / ServiceRequest)"]
+    ComplaintType["Complaint type<br/>ComplaintHierarchy leaf"]
+    Status["Complaint status<br/>(workflow state)"]
+    Assignment["Assignment<br/>(workflow assignee)"]
+    Escalation["Escalation"]
+    SLA["SLA<br/>slaHours / businessServiceSla"]
+    Department["Department"]
+    Jurisdiction["Jurisdiction<br/>(boundary)"]
+    Notification["Notification"]
+    Rating["Rating / feedback"]
+    Workspace["Workspace (tenant)<br/>self-serve signup"]
+  end
+
+  subgraph APP["B · Application components"]
+    direction TB
+    DigitUI["digit-ui-esbuild<br/>(citizen + employee UI)"]
+    Configurator["configurator<br/>(DIGIT Studio)"]
+    Chatbot["xstate-chatbot<br/>(WhatsApp)"]
+    MCP["digit-mcp<br/>(70 MCP tools)"]
+    PGR["pgr-services"]
+    ReqCtl["RequestsApiController"]
+    PGRSvc["PGRService"]
+    WfSvc["WorkflowService"]
+    EscSvc["EscalationService +<br/>EscalationScheduler"]
+    NotifSvc["NotificationService +<br/>ThinEventBuilder"]
+    PGRRepo["PGRRepository /<br/>PGRQueryBuilder"]
+    Onboard["Onboarding runner +<br/>WorkspaceService"]
+    Analytics["AnalyticsController /<br/>AnalyticsService"]
+    NovuBridge["novu-bridge"]
+    ConfigSvc["digit-config-service"]
+    PrefSvc["digit-user-preferences-service"]
+    BFF["identity-bff"]
+    Turbopass["turbopass search-api"]
+  end
+
+  subgraph DATA["C · Data layer"]
+    direction TB
+    PG[("PostgreSQL (shared 'egov' DB)<br/>via PgBouncer")]
+    TSvc["eg_pgr_service_v2"]
+    TAddr["eg_pgr_address_v2"]
+    TDoc["eg_pgr_document_v2"]
+    TProj["eg_pgr_hrms_projection"]
+    TOnb["eg_pgr_onboarding_*"]
+    MVs["complaint_facts / complaint_events<br/>(materialized views)"]
+    TNb["nb_dispatch_log /<br/>nb_tenant_account"]
+    TPref["user_preference"]
+    TCfg["eg_config_data"]
+    ES[("Elasticsearch<br/>pgr-services / inbox-pgr-services")]
+    MDMSData["MDMS masters<br/>RAINMAKER-PGR.* · NOTIFICATIONS.*<br/>common-masters.Department"]
+    Redis[("Redis")]
+  end
+
+  subgraph INT["D · Integration layer"]
+    direction TB
+    Kong["Kong gateway<br/>(Lua auth + RBAC)"]
+    Keycloak["Keycloak 26.7.3"]
+    TSave{{"save-pgr-request"}}
+    TUpd{{"update-pgr-request"}}
+    TDomain{{"complaints.domain.events"}}
+    TInbox{{"inbox-pgr-events"}}
+    TEsc{{"pgr-escalation-events"}}
+    THrms{{"save/update-hrms-employee"}}
+    Persister["egov-persister"]
+    Indexer["egov-indexer"]
+    Workflow["egov-workflow-v2"]
+    User["egov-user"]
+    MDMS["mdms-v2"]
+    HRMS["egov-hrms"]
+    Boundary["boundary-service"]
+    IdGen["egov-idgen"]
+    Enc["egov-enc-service"]
+    AccessCtl["egov-accesscontrol"]
+    Novu["Novu 2.3.0"]
+    Providers["SMS / email / WhatsApp providers<br/>(Twilio, SMSCountry, SMTP …)"]
+  end
+
+  subgraph INFRA["E · Infrastructure"]
+    direction TB
+    Compose["Docker Compose<br/>docker-compose.egov-digit.yaml + overlays"]
+    Ansible["Ansible deploy.sh /<br/>playbook-deploy.yml"]
+    Helm["Helmfile + charts<br/>devops/deploy-as-code"]
+    CI["GitHub Actions<br/>build-images.yml + parity checks"]
+    BuildCfg["build/build-config.yml"]
+  end
+
+  %% Business relationships
+  Citizen -->|raises| Complaint
+  Complaint -->|belongs to| ComplaintType
+  ComplaintType -->|owned by| Department
+  ComplaintType -->|defines| SLA
+  Complaint -->|has| Status
+  Complaint -->|assigned via| Assignment
+  Assignment -->|to| Employee
+  Employee -->|works in| Department
+  Employee -->|covers| Jurisdiction
+  Complaint -->|located in| Jurisdiction
+  Escalation -->|moves assignment to reportingTo of| Employee
+  SLA -->|drives| Escalation
+  Complaint -->|triggers| Notification
+  Citizen -->|gives| Rating
+  Admin -->|creates| Workspace
+
+  %% Application wiring
+  Citizen --> DigitUI
+  Citizen --> Chatbot
+  Employee --> DigitUI
+  Admin --> Configurator
+  DigitUI -->|/pgr-services/v2/request/*| Kong
+  Configurator -->|onboarding, MDMS, HRMS| Kong
+  Configurator -->|/identity/v1/*| Kong
+  Configurator -->|/turbopass/boundary/search| Turbopass
+  Chatbot -->|_create| Kong
+  MCP --> Kong
+  Kong -->|/pgr-services| PGR
+  Kong -->|/identity/v1| BFF
+  Kong -->|/novu-bridge| NovuBridge
+  Kong -->|/user-preference| PrefSvc
+  PGR --- ReqCtl
+  ReqCtl --> PGRSvc
+  PGRSvc --> WfSvc
+  PGRSvc --> EscSvc
+  PGRSvc --> PGRRepo
+  PGR --- Analytics
+  PGR --- Onboard
+  PGR --- NotifSvc
+
+  %% Integrations
+  WfSvc -->|_transition| Workflow
+  PGRSvc -->|ComplaintHierarchy, Department| MDMS
+  PGRSvc -->|user search / create| User
+  PGRSvc -->|complaint number| IdGen
+  PGRSvc -->|locality check| Boundary
+  PGRSvc -->|extended attrs| Enc
+  EscSvc -->|reportingTo| HRMS
+  PGRSvc -->|search scope policy| AccessCtl
+  PGRSvc -->|publishes| TSave
+  PGRSvc -->|publishes| TUpd
+  PGRSvc -->|publishes| TInbox
+  PGRSvc -->|ESCALATE only| TEsc
+  TSave --> Persister
+  TUpd --> Persister
+  TSave --> Indexer
+  TUpd --> Indexer
+  TInbox --> Indexer
+  TSave --> NotifSvc
+  TUpd --> NotifSvc
+  TUpd --> Chatbot
+  NotifSvc -->|publishes| TDomain
+  TDomain --> NovuBridge
+  HRMS --> THrms
+  THrms --> TProj
+  NovuBridge -->|NOTIFICATIONS.*| MDMS
+  NovuBridge -->|consent| PrefSvc
+  NovuBridge -->|trigger| Novu
+  Novu --> Providers
+  BFF -->|OIDC + admin API| Keycloak
+  BFF -->|DIGIT token| User
+  BFF --> Redis
+  Onboard -->|/internal/identity/v1/*| BFF
+  Onboard -->|/tenants/_provision| NovuBridge
+  Kong -->|/user/_details, _authorize| User
+  Kong --> AccessCtl
+
+  %% Data
+  Persister --> TSvc
+  Persister --> TAddr
+  Persister --> TDoc
+  PGRRepo -->|reads| TSvc
+  PGRRepo -->|reads| TAddr
+  PGRRepo -->|reads| TDoc
+  Onboard --> TOnb
+  Analytics --> MVs
+  MVs -->|built from| TSvc
+  NovuBridge --> TNb
+  PrefSvc --> TPref
+  ConfigSvc --> TCfg
+  Indexer --> ES
+  MDMS --> MDMSData
+  TSvc --> PG
+  TOnb --> PG
+  TNb --> PG
+  TPref --> PG
+  TCfg --> PG
+  TProj --> PG
+  ComplaintType -.->|stored as| MDMSData
+
+  %% Infrastructure
+  BuildCfg --> CI
+  CI -->|egovio/*:v2.20 images| Compose
+  CI -->|egovio/*:v2.20 images| Helm
+  Ansible -->|renders + runs| Compose
+  Compose -.->|runs| PGR
+  Helm -.->|deploys| PGR
+
+  classDef biz fill:#fff4dd,stroke:#a8741a,color:#3d2a06
+  classDef app fill:#e3edff,stroke:#2d5fb8,color:#0f2350
+  classDef data fill:#e4f5ec,stroke:#1f7a4d,color:#0b3320
+  classDef int fill:#f1e8ff,stroke:#6a3fa3,color:#2b1450
+  classDef topic fill:#ffe9e4,stroke:#b14a32,color:#4a1408
+  classDef infra fill:#eceff2,stroke:#56606b,color:#1d242b
+  class Citizen,Employee,Admin,Complaint,ComplaintType,Status,Assignment,Escalation,SLA,Department,Jurisdiction,Notification,Rating,Workspace biz
+  class DigitUI,Configurator,Chatbot,MCP,PGR,ReqCtl,PGRSvc,WfSvc,EscSvc,NotifSvc,PGRRepo,Onboard,Analytics,NovuBridge,ConfigSvc,PrefSvc,BFF,Turbopass app
+  class PG,TSvc,TAddr,TDoc,TProj,TOnb,MVs,TNb,TPref,TCfg,ES,MDMSData,Redis data
+  class Kong,Keycloak,Persister,Indexer,Workflow,User,MDMS,HRMS,Boundary,IdGen,Enc,AccessCtl,Novu,Providers int
+  class TSave,TUpd,TDomain,TInbox,TEsc,THrms topic
+  class Compose,Ansible,Helm,CI,BuildCfg infra

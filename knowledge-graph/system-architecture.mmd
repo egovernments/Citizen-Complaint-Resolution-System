@@ -1,0 +1,151 @@
+%% CCRS / CMS v2.20 — system architecture and request path (Docker Compose tier)
+%% Snapshot: master @ 64d5abe92. Solid = CONFIRMED, dotted = INFERRED.
+%% Kubernetes differs at the edge: ingress-nginx + DIGIT Spring "gateway" chart instead of Kong
+%% (devops/deploy-as-code/charts/core-services/gateway; parity guarded by gateway-whitelist-parity.yml).
+flowchart LR
+
+  subgraph ACTORS["Actors"]
+    Citizen(["Citizen"])
+    Employee(["Employee"])
+    Admin(["Workspace admin"])
+    Operator(["Operator / AI agent"])
+    WA(["WhatsApp user"])
+  end
+
+  subgraph EDGE["Edge (host nginx · ansible/templates/nginx-site.conf.j2)"]
+    Nginx["nginx vhost<br/>/digit-ui/ · /configurator/ · /turbopass/<br/>/mcp · /novu/ · / → Kong"]
+  end
+
+  subgraph FRONT["Front ends (static SPAs)"]
+    DigitUI["digit-ui-esbuild<br/>egovio/digit-ui-esbuild:v2.20"]
+    Configurator["configurator<br/>egovio/configurator:v2.20"]
+  end
+
+  subgraph GW["API gateway + identity"]
+    Kong["Kong 3.6 (DB-less)<br/>local-setup/kong/kong.yml<br/>pre-function: authToken → /user/_details,<br/>RBAC → /access/v1/actions/_authorize"]
+    BFF["identity-bff :3000<br/>sessions in Redis"]
+    Keycloak["Keycloak :8180<br/>realm + organizations"]
+  end
+
+  subgraph CMS["CMS services (built in this repo)"]
+    PGR["pgr-services :8080<br/>/pgr-services"]
+    NovuBridge["novu-bridge<br/>/novu-bridge"]
+    Pref["digit-user-preferences-service<br/>/user-preference"]
+    Config["digit-config-service<br/>/config-service"]
+    Chatbot["xstate-chatbot<br/>/xstate-chatbot"]
+    MCP["digit-mcp"]
+    Turbopass["turbopass search-api"]
+  end
+
+  subgraph CORE["DIGIT core (pre-built images)"]
+    User["egov-user (+ user-proxy)"]
+    Workflow["egov-workflow-v2 (+ proxy)"]
+    MDMS["mdms-v2 (+ nginx proxy)"]
+    Boundary["boundary-service"]
+    HRMS["egov-hrms"]
+    IdGen["egov-idgen"]
+    Loc["egov-localization"]
+    Enc["egov-enc-service"]
+    ACL["egov-accesscontrol"]
+    FS["egov-filestore"]
+    URL["egov-url-shortening"]
+    Persister["egov-persister"]
+    Indexer["egov-indexer (profile: search)"]
+    Inbox["inbox (profile: search)"]
+    OTP["egov-otp / user-otp (profile: otp)"]
+  end
+
+  subgraph DATA["Data + messaging"]
+    PgB["PgBouncer (alias 'postgres',<br/>transaction pooling)"]
+    PG[("postgres-db 16<br/>single shared DB")]
+    RP{{"Redpanda v24.1.1<br/>(alias 'kafka', 1 broker)"}}
+    Redis[("Redis 7.2.4")]
+    MinIO[("MinIO")]
+    ES[("Elasticsearch 8.10.3")]
+  end
+
+  subgraph EXT["External / notification"]
+    Novu["Novu api/worker/ws 2.3.0<br/>+ MongoDB"]
+    Prov["Twilio · SMSCountry · Jasmin ·<br/>Ozeki · SMTP"]
+    WAProv["Twilio / Kaleyra / ValueFirst<br/>(WhatsApp)"]
+    Geo["Overture · geoBoundaries ·<br/>Geoapify"]
+    IdP["Google / GitHub OAuth"]
+  end
+
+  Citizen --> Nginx
+  Employee --> Nginx
+  Admin --> Nginx
+  Operator --> Nginx
+  WA --> WAProv
+  WAProv -->|"webhook /message"| Chatbot
+  Nginx --> DigitUI
+  Nginx --> Configurator
+  Nginx -->|"/"| Kong
+  Nginx -->|"/turbopass/"| Turbopass
+  Nginx -->|"/mcp, /v1/"| MCP
+  Nginx -->|"/novu/ dashboard"| Novu
+  DigitUI -.->|"same-origin API calls"| Kong
+  Configurator -.->|"same-origin API calls"| Kong
+
+  Kong -->|"/pgr-services"| PGR
+  Kong -->|"/identity/v1"| BFF
+  Kong -->|"/novu-bridge (subset)"| NovuBridge
+  Kong -->|"/user-preference"| Pref
+  Kong -->|"/xstate-chatbot"| Chatbot
+  Kong -->|"/auth"| Keycloak
+  Kong -->|"/user, /egov-workflow-v2, /mdms-v2,<br/>/boundary-service, /egov-hrms, /localization,<br/>/filestore, /egov-idgen, /access, /inbox"| CORE
+  Kong -->|"token check"| User
+  Kong -->|"RBAC"| ACL
+  Config -.->|"no Kong route; only gated UserProfile.js call"| DigitUI
+
+  BFF --> Keycloak
+  Keycloak --> IdP
+  BFF -->|"via Kong /user"| User
+  BFF -->|"/otp/v1/_create"| OTP
+  BFF -->|"/messages/_dispatch"| NovuBridge
+  BFF --> Redis
+
+  PGR -->|"sync HTTP"| Workflow
+  PGR --> MDMS
+  PGR --> User
+  PGR --> Boundary
+  PGR --> HRMS
+  PGR --> IdGen
+  PGR --> Enc
+  PGR --> ACL
+  PGR --> URL
+  PGR -->|"/internal/identity/v1/*"| BFF
+  PGR -->|"/tenants/_provision"| NovuBridge
+  PGR -->|"save/update-pgr-request,<br/>inbox-pgr-events, complaints.domain.events"| RP
+  RP -->|"save/update-pgr-request"| Persister
+  RP --> Indexer
+  RP -->|"complaints.domain.events,<br/>egov.core.notification.sms"| NovuBridge
+  RP -->|"update-pgr-request"| Chatbot
+  Persister --> PgB
+  Indexer --> ES
+  Inbox --> ES
+  PGR -->|"reads"| PgB
+  PgB --> PG
+  FS --> MinIO
+  Chatbot -->|"via Kong: pgr _create, user,<br/>mdms, localization, filestore"| Kong
+  MCP -->|"DIGIT APIs"| Kong
+
+  NovuBridge --> Pref
+  NovuBridge --> MDMS
+  NovuBridge --> Loc
+  NovuBridge -->|"trigger / org admin"| Novu
+  Novu --> Prov
+  Turbopass --> Geo
+
+  classDef actor fill:#fff4dd,stroke:#a8741a,color:#3d2a06
+  classDef app fill:#e3edff,stroke:#2d5fb8,color:#0f2350
+  classDef gw fill:#f1e8ff,stroke:#6a3fa3,color:#2b1450
+  classDef core fill:#e6f2f7,stroke:#2b6a86,color:#0d2a36
+  classDef data fill:#e4f5ec,stroke:#1f7a4d,color:#0b3320
+  classDef ext fill:#ffe9e4,stroke:#b14a32,color:#4a1408
+  class Citizen,Employee,Admin,Operator,WA actor
+  class DigitUI,Configurator,PGR,NovuBridge,Pref,Config,Chatbot,MCP,Turbopass app
+  class Nginx,Kong,BFF,Keycloak gw
+  class User,Workflow,MDMS,Boundary,HRMS,IdGen,Loc,Enc,ACL,FS,URL,Persister,Indexer,Inbox,OTP core
+  class PgB,PG,RP,Redis,MinIO,ES data
+  class Novu,Prov,WAProv,Geo,IdP ext

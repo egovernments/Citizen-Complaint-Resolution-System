@@ -1,0 +1,107 @@
+%% Layer 5 · Infrastructure — how each deployable is built, configured, routed and deployed.
+%% Snapshot master @ 64d5abe92. Small grey text = impact-graph node id. Solid = confirmed, dotted = inferred.
+flowchart LR
+
+  subgraph BUILD["Build + CI"]
+    direction TB
+    BC["build/build-config.yml (17 images)"]
+    BI["build-images.yml · release-build.yml ·<br/>nightly-build-develop.yml"]
+    PAR["Parity checks: gateway-whitelist-parity,<br/>k8s-seed-dump-sync, flyway-dump-alignment,<br/>analytics-seed-parity, gatus-coverage"]
+    LCI["local-setup-ci.yaml<br/>(runs docker-compose.yml, not the Ansible stack)"]
+    NOJ["No PR workflow runs mvn test"]
+  end
+
+  subgraph COMPOSE["Docker Compose + Ansible"]
+    direction TB
+    DC["docker-compose.egov-digit.yaml (55 services)<br/><small>infra:compose:pgr-services …</small>"]
+    DM["docker-compose.migrations.yml (Flyway -db)"]
+    DO["monitoring · matomo · opensre · fast-path ·<br/>per-tenant overlays"]
+    AN["ansible deploy.sh → playbook-deploy.yml<br/>host_vars/&lt;tenant&gt;.yml"]
+  end
+
+  subgraph K8S["Helm (devops/deploy-as-code)"]
+    direction TB
+    HF["digit-helmfile.yaml → backbone · core · common ·<br/>identity · urban · analytics · auxiliary · monitoring"]
+    HC["charts/common library chart"]
+    HCM["configmaps: egov-config, egov-service-host<br/><small>infra:configmap:egov-service-host</small>"]
+    HE["environments/env.yaml · cms-saas.yaml"]
+    HG["DIGIT Spring gateway chart (K8s edge)<br/><small>service:gateway</small>"]
+  end
+
+  subgraph EDGE["Edge routing (Compose)"]
+    direction TB
+    KG["Kong kong.yml: 50 routes + Lua pre-function<br/><small>infra:kong-route:/pgr-services …</small>"]
+    NG["nginx vhost + mdms / user / workflow proxies<br/><small>infra:nginx-route:…</small>"]
+  end
+
+  subgraph CFG["Runtime config files"]
+    direction TB
+    PCF["configs/egov-persister/*.yml (Helm, git-synced from develop)"]
+    PCL["local-setup/configs/egov-persister/*.yml (Compose)"]
+    ICF["configs/egov-indexer/* (Compose loads 2 of 4)"]
+  end
+
+  subgraph DEPLOYABLES["Deployables"]
+    direction TB
+    D1["pgr-services · novu-bridge · identity-bff ·<br/>keycloak · user-preferences · config-service ·<br/>xstate-chatbot · digit-mcp · digit-ui · configurator · turbopass"]
+    D2["DIGIT core: egov-user · workflow-v2 · mdms-v2 · hrms ·<br/>boundary · idgen · enc · accesscontrol · localization ·<br/>filestore · persister · indexer · inbox · otp"]
+    D3["Backbone: Postgres + PgBouncer · Redpanda (1 broker, no volume) ·<br/>Redis · Elasticsearch · MinIO · Novu"]
+  end
+
+  BC --> BI
+  BI -->|egovio/*:v2.20| D1
+  AN -->|renders + runs| DC
+  DC --> DM
+  DC --> DO
+  DC -->|deploys| D1
+  DC -->|deploys| D2
+  DC -->|deploys| D3
+  HF --> HC
+  HF -->|deploys| D1
+  HF -->|deploys| D2
+  HE --> HF
+  HCM -->|service hosts| D2
+  KG -->|routes-to| D1
+  KG -->|routes-to| D2
+  NG -->|"/"| KG
+  HG -.->|K8s equivalent of| KG
+  PAR -->|compares| KG
+  PAR -->|compares| HE
+  PCF -.->|identical today, no CI sync check| PCL
+  DC -->|loads| PCL
+  DC -->|loads| ICF
+  HE -->|git-sync| PCF
+
+  subgraph DRIFT["Known drift between deploy paths"]
+    direction TB
+    X1["6 core image tags differ Helm vs Compose<br/>(egov-user, mdms-v2, accesscontrol, hrms, bndry-mgmnt, user-otp)"]
+    X2["audit topic: Helm persist-audit-records vs persister audit-create"]
+    X3["NOTIFICATION_ALLOWED_ON_STATUS set but read by no code"]
+  end
+  HE -.- X1
+  HE -.- X2
+  DC -.- X3
+
+  subgraph LINKS["Connections to other layers"]
+    direction TB
+    L2["2 · Application: 113 exposes · 43 uses-config<br/><small>2-application.mmd</small>"]
+    L4["4 · Integration: 47 topic / host config keys · 11 maps<br/><small>4-integration.mmd</small>"]
+    L3["3 · Data: persister / indexer YAML: 17 field and table mappings<br/><small>3-data.mmd</small>"]
+  end
+  DEPLOYABLES -.-> L2
+  CFG -.-> L3
+  COMPOSE -.-> L4
+
+  classDef ci fill:#e3edff,stroke:#2d5fb8,color:#0f2350
+  classDef dep fill:#eceff2,stroke:#56606b,color:#1d242b
+  classDef edge fill:#f1e8ff,stroke:#6a3fa3,color:#2b1450
+  classDef cfg fill:#e4f5ec,stroke:#1f7a4d,color:#0b3320
+  classDef warn fill:#ffe9e4,stroke:#d4002a,color:#4a1408
+  classDef link fill:#ffffff,stroke:#9aa0a6,color:#3c4043,stroke-dasharray:4 3
+  class BC,BI,PAR,LCI ci
+  class NOJ warn
+  class DC,DM,DO,AN,HF,HC,HCM,HE,HG,D1,D2,D3 dep
+  class KG,NG edge
+  class PCF,PCL,ICF cfg
+  class X1,X2,X3 warn
+  class L2,L3,L4 link

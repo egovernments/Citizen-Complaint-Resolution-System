@@ -1,0 +1,61 @@
+Impact of changing: service:egov-workflow-v2  (depth ≤ 2)
+
+Screens (5)
+  ·· screen:configurator/ComplaintShow  ←invokes— coreapi:/egov-workflow-v2/egov-wf/process/_search   configurator/src/resources/complaints/ComplaintShow.tsx:9
+  ·· screen:configurator/WorkflowProcessList  ←invokes— coreapi:/egov-workflow-v2/egov-wf/process/_search   configurator/packages/data-provider/src/client/DigitApiClient.ts:715
+  ·· screen:configurator/WorkflowServiceList  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   configurator/packages/data-provider/src/client/DigitApiClient.ts:692
+  ·· screen:digit-ui/ComplaintDetailsPage  ←invokes— coreapi:/egov-workflow-v2/egov-wf/process/_search   digit-ui-esbuild/products/pgr/src/pages/citizen/ComplaintDetails.js:50
+  ·· screen:digit-ui/PGRDetails  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   digit-ui-esbuild/products/pgr/src/pages/employee/PGRDetails.js:413
+
+Java classes (5)
+  ·· class:EscalationService  ←invokes— coreapi:/egov-workflow-v2/egov-wf/process/_search   backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java:258
+  ·· class:MigrationUtils  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   backend/pgr-services/src/main/java/org/egov/pgr/util/MigrationUtils.java:92
+  ·· class:NotificationService  ←invokes— coreapi:/egov-workflow-v2/egov-wf/process/_search   backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java:340
+  ·· class:OnboardingSteps  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java:240
+  ·· class:WorkflowService  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   backend/pgr-services/src/main/java/org/egov/pgr/service/WorkflowService.java:97
+
+Code / config modules (10)
+  ·· code:configurator/packages/data-provider/src/client/DigitApiClient.ts  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   configurator/packages/data-provider/src/client/DigitApiClient.ts:692
+  ·· code:configurator/packages/data-provider/src/client/endpoints.ts  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   configurator/packages/data-provider/src/client/endpoints.ts:33
+  ·· code:configurator/src/admin/WorkflowActionSelect.tsx  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   configurator/src/admin/WorkflowActionSelect.tsx:110
+  ·· code:digit-mcp/packages/data-provider/src/client/endpoints.ts  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   digit-mcp/packages/data-provider/src/client/endpoints.ts:36
+  ·· code:digit-mcp/src/services/digit-api.ts  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   digit-mcp/src/services/digit-api.ts:908
+  ·· code:digit-ui-esbuild/packages/libraries/src/services/elements/WorkFlow.js  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   digit-ui-esbuild/packages/libraries/src/services/elements/WorkFlow.js:93
+  ·· code:digit-ui-esbuild/products/pgr/src/hooks/pgr/useBusinessServiceStates.js  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   digit-ui-esbuild/products/pgr/src/hooks/pgr/useBusinessServiceStates.js:27
+  ·· code:digit-ui-esbuild/products/pgr/src/hooks/pgr/usePGRInboxSearch.js  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   digit-ui-esbuild/products/pgr/src/hooks/pgr/usePGRInboxSearch.js:63
+  ·· code:digit-ui-esbuild/products/pgr/src/utils/urls.js  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   digit-ui-esbuild/products/pgr/src/utils/urls.js:20
+  ·· code:local-setup/scripts/generate_event_catalogue.py  ←invokes— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   local-setup/scripts/generate_event_catalogue.py:225
+
+Deploy / CI artefacts (13)
+  · infra:compose:egov-workflow-proxy  ←deploys— service:egov-workflow-v2   local-setup/docker-compose.egov-digit.yaml:1101
+  · infra:compose:egov-workflow-v2  ←deploys— service:egov-workflow-v2   local-setup/docker-compose.egov-digit.yaml:1032
+  · infra:compose:egov-workflow-v2-migration  ←deploys— service:egov-workflow-v2   local-setup/docker-compose.migrations.yml:414
+  · infra:compose:inbox  ←uses-config— service:egov-workflow-v2   local-setup/docker-compose.egov-digit.yaml:646
+  · infra:compose:pgr-services  ←uses-config— service:egov-workflow-v2   local-setup/docker-compose.egov-digit.yaml:1788
+  · infra:configmap:egov-service-host  ←uses-config— service:egov-workflow-v2   devops/deploy-as-code/charts/environments/env.yaml:107
+  · infra:devops/deploy-as-code/charts/urban/pgr-services/values.yaml  ←uses-config— service:egov-workflow-v2   devops/deploy-as-code/charts/urban/pgr-services/values.yaml:174
+  · infra:helmfile:devops/deploy-as-code/charts/core-services/coreservices-helmfile.yaml  ←deploys— service:egov-workflow-v2   devops/deploy-as-code/charts/core-services/coreservices-helmfile.yaml:94
+  · infra:kong-route:/egov-workflow-v2  ←routes-to— service:egov-workflow-v2   local-setup/kong/kong.yml:700
+  · infra:kong-route:/health/workflow  ←routes-to— service:egov-workflow-v2   local-setup/kong/kong.yml:852
+  · infra:nginx-route:egov-workflow-proxy:8109/  ←routes-to— service:egov-workflow-v2   local-setup/nginx/workflow-proxy.conf:9
+  ·· infra:configs/egov-indexer/pgr-services.yml  ←invokes— coreapi:/egov-workflow-v2/egov-wf/process/_search   configs/egov-indexer/pgr-services.yml:26
+  ·· infra:devops/deploy-as-code/digit-helmfile.yaml  ←uses-config— infra:helmfile:devops/deploy-as-code/charts/core-services/coreservices-helmfile.yaml   devops/deploy-as-code/digit-helmfile.yaml:21
+
+Tests (6)
+  ·· test:tests/integration-tests/tests/admin/complaints.spec.ts  ←tests— coreapi:/egov-workflow-v2/egov-wf/process/_search   tests/integration-tests/tests/admin/complaints.spec.ts:1274
+  ·· test:tests/integration-tests/tests/api/pgr-escalation.spec.ts  ←tests— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   tests/integration-tests/tests/api/pgr-escalation.spec.ts:109
+  ·· test:tests/integration-tests/tests/citizen/reopen-window-1252.spec.ts  ←tests— coreapi:/egov-workflow-v2/egov-wf/process/_search   tests/integration-tests/tests/citizen/reopen-window-1252.spec.ts:128
+  ·· test:tests/integration-tests/tests/employee/escalate-action-521.spec.ts  ←tests— coreapi:/egov-workflow-v2/egov-wf/process/_search   tests/integration-tests/tests/employee/escalate-action-521.spec.ts:86
+  ·· test:tests/integration-tests/tests/employee/reopen-limit-925.spec.ts  ←tests— coreapi:/egov-workflow-v2/egov-wf/process/_search   tests/integration-tests/tests/employee/reopen-limit-925.spec.ts:116
+  ·· test:tests/integration-tests/tests/lifecycle/pgr-sla-auto-escalate.spec.ts  ←tests— coreapi:/egov-workflow-v2/egov-wf/businessservice/_search   tests/integration-tests/tests/lifecycle/pgr-sla-auto-escalate.spec.ts:64
+
+DIGIT core APIs (6)
+  · coreapi:/egov-workflow-v2/egov-wf/businessservice/_create  ←part-of— service:egov-workflow-v2 [derived]   (context path → deployable)
+  · coreapi:/egov-workflow-v2/egov-wf/businessservice/_search  ←part-of— service:egov-workflow-v2 [derived]   (context path → deployable)
+  · coreapi:/egov-workflow-v2/egov-wf/process/_count  ←part-of— service:egov-workflow-v2 [derived]   (context path → deployable)
+  · coreapi:/egov-workflow-v2/egov-wf/process/_search  ←part-of— service:egov-workflow-v2 [derived]   (context path → deployable)
+  · coreapi:/egov-workflow-v2/egov-wf/process/_statuscount  ←part-of— service:egov-workflow-v2 [derived]   (context path → deployable)
+  · coreapi:/egov-workflow-v2/egov-wf/process/_transition  ←part-of— service:egov-workflow-v2 [derived]   (context path → deployable)
+
+Total affected: 45 nodes via 64 edges.
+Mermaid written to 3-core-api-workflow.mmd
