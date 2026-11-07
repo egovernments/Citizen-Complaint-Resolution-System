@@ -16,12 +16,12 @@ initContainers:
     schemaTable: "accesscontrol_schema_version"
     image:
       repository: "egov-accesscontrol-db"
-      tag: v2.9.2-4a60f20
+      tag: "maven-jdk21-9f83afb"
 
 # Container Configs
 image:
   repository: "egov-accesscontrol"
-  tag: "maven-jdk21-9f83afb"
+  tag: "abac-changes-cb6a372"
 replicas: "1"
 healthChecks:
   enabled: true

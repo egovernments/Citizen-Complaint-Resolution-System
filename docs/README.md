@@ -47,6 +47,7 @@ One folder per feature; design docs sit next to the feature they describe.
   [2.11 upgrade](releases/2.11/migration-v2.10-to-v2.11.md)
 - [2.20 notifications](releases/2.20/notifications/README.md): setup, migration from 2.12, providers, developer guide and the published contract (unreleased; lands with the notifications PR #2097)
 - [2.12 → 2.20 upgrade: identity and Keycloak](releases/2.20/migration-guide-v2.12-to-v2.20.md)
+- [2.20 image tags](releases/2.20/images-v2.20.md): PGR and core service images shipped in v2.20
 - [Rapid release approach](releases/rapid-release-approach.md)
 
 ## reference/
