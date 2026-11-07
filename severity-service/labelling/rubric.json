@@ -112,8 +112,7 @@
     }
   ],
   "open_items": [
-    "Check with eGov (Rahul Jose) whether severity rules are already defined; if so, align this rubric to them.",
-    "Review by someone who handles real complaints. The decision rules for dogs, potholes and garbage are judgement calls and the source labels disagree with each other on these themes.",
-    "The source labels were not produced from this rubric. Expect disagreement with them, mainly on dogs, potholes, street lights, trees and garbage; review those cases, do not assume either side is right."
-  ]
+    "Check with eGov whether severity rules are already defined; if so, align this rubric to them.",
+    "Review by someone who handles real complaints. The decision rules for dogs, potholes and garbage are judgement calls and the source labels disagree with each other on these themes."
+   ]
 }
