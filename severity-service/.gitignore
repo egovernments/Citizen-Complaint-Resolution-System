@@ -1,2 +1,4 @@
 __pycache__/
 .pytest_cache/
+# Local source workbook: it contains complaint identifiers and must never be shared.
+data/GCC_PGR_FY2024-25_labelled_1.xlsx
