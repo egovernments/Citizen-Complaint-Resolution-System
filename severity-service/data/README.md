@@ -9,8 +9,9 @@ description-only severity-model training run. It contains only:
 - `label` — the existing severity label.
 
 It deliberately excludes source complaint numbers, dates, complaint type,
-category, addresses and all other workbook fields. The source workbook remains
-local and must not be shared.
+category and all other workbook fields. Location-only text is retained in the
+description; where a person's name occurs together with an address, both are
+redacted. The source workbook remains local and must not be shared.
 
 ## Reproduce / refresh
 
@@ -20,8 +21,9 @@ From `severity-service` run:
 python scripts/prepare_description_only_data.py
 ```
 
-The script reads `data/GCC_PGR_FY2024-25_labelled_1.xlsx`, removes direct PII,
-removes duplicate descriptions, drops conflicting duplicate labels, and selects
+The script reads `data/GCC_PGR_FY2024-25_labelled_1.xlsx`, removes direct PII
+(including person-plus-address combinations), uses location-insensitive matching
+to remove near-duplicate descriptions, drops conflicting duplicate labels, and selects
 at most 20,000 unique records per label by a stable content hash. This limits
 the Medium/High majority classes without discarding scarce Critical examples.
 It writes the CSV and `complaints_description_only_cleaned.manifest.json`.
