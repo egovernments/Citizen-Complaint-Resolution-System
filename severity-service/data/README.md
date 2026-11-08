@@ -36,3 +36,12 @@ Use the checked-in CSV directly; do not reopen or copy the source workbook.
 Train with `description` only and `label` as the target. The field names differ
 from the old notebook intentionally: complaint type is outside the first model's
 scope. Verify the output hash against the manifest before starting a run.
+
+## Verifying the data (known mismatch)
+
+Rebuilding with the script reproduces `output_sha256` in the manifest exactly, so the manifest describes the script's own output.
+The committed CSV is not byte-identical to that output: git stores it with LF line endings (the script writes CRLF), and one row
+(`clean-001223`) still contains a personal name in the script's output but is redacted in the committed CSV. The committed CSV is
+what the labelling and the model were built on. The two should be reconciled by whoever owns the cleaning step (check the
+personal-data rules against that row); until then a hash check of the committed file against the manifest will not pass.
+The source workbook was committed once by mistake; it is untracked and git-ignored now, but remains in earlier history.
