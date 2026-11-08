@@ -17,8 +17,8 @@ uvicorn app.main:app --port 8000        # Swagger UI: http://localhost:8000/docs
 pytest tests                            # first run downloads the encoder
 ```
 
-Docker (encoder is baked into the image): `docker compose -f local-setup/docker-compose.yml up --build severity-service`
-→ Swagger at http://localhost:18150/docs.
+Docker (encoder is baked into the image), run from inside this folder: `docker build -t severity-older . && docker run -p 8000:8000 severity-older`
+→ Swagger at http://localhost:8000/docs. (The shared compose file in `local-setup/` has no entry for this service; the build and run commands above were not tested after the folder move.)
 
 ## Free Hugging Face deploy (no Docker, no server)
 
