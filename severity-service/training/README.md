@@ -9,7 +9,7 @@ Trains on `labelling/output/llm_labels.csv` (complaint description -> Low / Medi
 using the same `paraphrase-multilingual-MiniLM-L12-v2` embeddings and a CatBoost classifier. The earlier model is kept under
 `../older_severity_model/`.
 
-- **`severity_train_catboost.ipynb`**: run it live on Google Colab (Runtime -> T4 GPU). It loads the CSV from GitHub (or asks you to
+- **`severity_train_catboost.ipynb`**: run it live on Colab (Runtime -> T4 GPU). It loads the CSV from GitHub (or asks you to
   upload it), embeds the text, runs **5-fold stratified cross-validation** (every complaint is scored once by a model that never trained on it;
   mean and spread across folds, plus out-of-fold confusion matrix), trains the final model on all rows with the tree count taken from
   the CV, and saves `severity_model/` (`severity_catboost.cbm`, `severity_catboost.pkl`, `label_map.json`, `severity_predictor.py`, `metrics.json`)
@@ -23,3 +23,5 @@ Parameters (4 classes, Critical about 10% of the data): MultiClass loss, `auto_c
 L2 5, up to 2,000 trees with early stopping on 10% of each fold's training part. (`train_description_only.py` uses a single
 stratified 80/10/10 split instead of cross-validation.)
 The labels were written by an LLM, so the scores measure how well the model reproduces those labels, not true severity.
+
+After every retraining, compare the cross-validation results with the previous round and record them in `../ITERATIONS.md`; the steps are in "Improving it iteratively" in `../README.md`.
