@@ -5,7 +5,8 @@ Each round changes one thing and is judged on the same yardstick (see "Improving
 
 | # | What changed (one thing) | Rubric | Label run / promoted from | Model | Cross-validation mean (macro F1 / Critical recall / within one level) | Independent human test set | Decision and notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | Baseline: first rubric (v0.3) applied by an LLM to all 58,640 complaints; model trained on those labels | v0.3 | `run-001-initial` | `catboost_desc_only-2026-11-08` (CPU, 300 trees, single 80/10/10 split) | not run (single split: macro F1 0.734 / Critical recall 0.616 / within one 0.940 on a 10% test) | not built yet | Starting point. LLM labels agree with the original labels 60.5% exact; no human-checked labels yet. |
+| 0 | Baseline: first rubric (v0.3) applied by an LLM to all 58,640 complaints; model trained on those labels | v0.3 | `run-001-initial` | `catboost_desc_only-2026-11-08` (CPU, 300 trees, single 80/10/10 split) | not run (single split: macro F1 0.734 / Critical recall 0.616 / within one 0.940 on a 10% test) | not built yet | Starting point. LLM labels agree with the original labels 60.5% exact; no human-checked labels yet. Replaced by round 1. |
+| 1 | Retrain on the same labels with 5-fold stratified cross-validation on a GPU (up to 2,000 trees), final model on all rows (2,181 trees) | v0.3 | `run-001-initial` | `catboost_desc_only-cv5-2026-11-08` | macro F1 0.761 (±0.002) / Critical recall 0.626 (±0.013) / within one 0.949 (accuracy 0.781) | not built yet | Kept: first properly measured model; now in `model/`. Not directly comparable with round 0, which used a single split. Folds stopped near the 2,000-tree limit. |
 
 ## How to add a row
 
@@ -18,6 +19,7 @@ Each round changes one thing and is judged on the same yardstick (see "Improving
 
 - Build the independent, human-labelled test set (about 2,000 random complaints, two labellers and a tie-breaker).
 - Have people review the complaints where the LLM and the original labels disagree, starting with High versus Medium and Critical versus High.
-- Rerun training on a GPU with cross-validation and more trees (the packaged model stopped at its 300-tree cap).
+- Save the cross-validation out-of-fold probabilities in the notebook, so the Critical safety net can be measured honestly on the current model.
+- Try more than 2,000 trees (the folds stopped at 1,945 to 1,998).
 - Tune `review_threshold` from out-of-fold probabilities.
 - Compare a larger multilingual encoder.

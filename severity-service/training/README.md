@@ -25,3 +25,5 @@ stratified 80/10/10 split instead of cross-validation.)
 The labels were written by an LLM, so the scores measure how well the model reproduces those labels, not true severity.
 
 After every retraining, compare the cross-validation results with the previous round and record them in `../ITERATIONS.md`; the steps are in "Improving it iteratively" in `../README.md`.
+
+The model currently in `../model/` is the output of this notebook's 5-fold GPU run (final model: 2,181 trees on all 58,640 rows).

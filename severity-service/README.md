@@ -39,6 +39,61 @@ This folder contains everything around that model: the data preparation, the sev
 | `ITERATIONS.md` | The log of improvement rounds: what changed, which label run and rubric version, the metrics and the decision. Add a row every round |
 | `older_severity_model/` | The previous model (it also used a complaint-type field) with its own service, tests, container files and browser version. Kept for reference; it runs from inside that folder |
 
+## What was asked and what is done
+
+| # | What was asked | Status | What was done and where |
+| --- | --- | --- | --- |
+| 1 | Remove the complaint type from the scoring and the CatBoost training | Done | The model learns from the description only. The training data has no complaint-type column, the model has 384 embedding features and no category feature, and the API accepts but ignores a complaint type. The earlier model that used it is kept apart in `older_severity_model/`. See `training/`, `model/` and `app/`. |
+| 2 | Structure the work so it can be done iteratively, and make it part of a pull request | Mostly done | `labelling/pipeline.py` keeps every labelling pass as a recorded run, compares runs, redoes only selected rows, supports human review and promotes the final labels. "Improving it iteratively" below and `ITERATIONS.md` describe how to run a round. The work is committed on its branch; **the pull request itself has not been opened yet.** |
+| 3 | Store the labelling rules as prompts | Done | `labelling/rubric.json` is the single source of truth; `labelling/build_prompt.py` generates `labelling/prompts/system.md` from it, and `--check` catches a stale prompt. |
+| 4 | Remove personal data (PII) | Done | `scripts/prepare_description_only_data.py` removes emails, phone numbers, links, identity numbers, complaint references and name-plus-address combinations; the manifest records the rules. |
+| 5 | Remove duplicates | Done | Same script: near-duplicate descriptions are removed with location-insensitive matching, and texts with conflicting labels are dropped. |
+| 6 | Pick a certain subset of the data | Done | Same script: at most 20,000 rows per label, chosen by a stable content hash, so the large classes do not drown the rare Critical ones. |
+| 7 | Store the cleaned copy so a rerun picks it up directly | Done | `data/complaints_description_only_cleaned.csv` and its manifest (hashes, counts, rules) are committed; the raw workbook never is. Use the committed file instead of reopening the source. |
+| 8 | A rubric for labelling complaints by humans, after checking whether rules are already defined elsewhere | Partly done | The rubric (v0.3) is written with decision rules and examples, and the same file drives the LLM prompt. The check against any existing rules is still open and listed as an open item in `labelling/rubric.json`. |
+
+### Also done beyond the checklist
+
+**1. LLM labelling of all 58,640 complaints** (`labelling/`). The original labels were inconsistent on several themes, so the rubric was applied by LLM APIs on free tiers.
+
+| Piece of work | Amount |
+| --- | --- |
+| Complaints labelled | **58,640** (every row of the cleaned dataset), each with a label, an "unclear" flag and a short reason |
+| Pilot on a random 500 | about 7 requests; 61.6% exact agreement with the original labels |
+| Random 2,000 sample (the fairest check) | 2,000 complaints, 25 requests of 80; 62.2% exact, 93.7% within one level, Cohen's kappa 0.46 (weighted 0.63) |
+| Second provider tried | 90-row test (54.5% agreement) and about 350 rows of the 2,000; far slower because of its token-per-minute limit, so only a few hundred rows of the final file came from it |
+| First full pass, in file order | about 19.7k complaints before the free daily quota stopped it; that sample was skewed (the file is sorted by label), so it was not used as a measurement |
+| Final full pass | the remaining ~39k complaints, 100 per request, split into row ranges and run in parallel on five separate keys; one missed row was labelled separately |
+| Total API requests | roughly 700 (an estimate; per-request counts were not logged) |
+| Cleanup | 2,100 duplicate rows from accidental concurrent runs removed; every one of the 58,640 ids checked to appear exactly once with a valid label |
+| Models used | two small, fast "flash-lite" models of one family for almost all rows (the first ~19k by one version, most of the rest by the next), plus a few hundred rows from a second provider's model; the model per row was not recorded |
+| Result | Low 12,967, Medium 22,593, High 16,938, Critical 6,142; 60.5% exact and 92.6% within one level against the original labels; the LLM calls about 44% more complaints Critical than the original labels do |
+
+Supporting work: a labelling engine (batching, resume, retries, quota handling, row-range splitting, several keys, a list of ids to redo), a labelling notebook, a review of how the original labels relate to complaint themes, and three rubric versions (v0.1, v0.2, v0.3).
+
+**2. Training and retraining** (`training/`, `model/`). The model was retrained on the LLM labels instead of the original ones, description only.
+
+| Item | Detail |
+| --- | --- |
+| Data | the 58,640 LLM-labelled complaints; **5-fold stratified cross-validation** (every complaint is scored once by a model that did not train on it), then a final model trained on all rows. The first version used a single stratified 80/10/10 split (46,912 / 5,864 / 5,864) |
+| Features | text cleaned the same way at training and serving, then a 384-number sentence embedding from `paraphrase-multilingual-MiniLM-L12-v2` (handles English and Tamil); no complaint type |
+| Classifier | CatBoost multiclass, depth 6, learning rate 0.1, L2 5, `SqrtBalanced` class weights (Critical is ~10% of rows) |
+| Packaged model | the final model: 2,181 trees on a GPU, trained on all 58,640 rows (tree count = the folds' mean best iteration, 1,982, plus 10%); saved as `.cbm` and pickle with a label map, metrics and a standalone predictor class |
+| Its cross-validation result against the LLM labels (mean of 5 folds, ± spread) | accuracy 78.1% (±0.2), macro F1 76.1% (±0.2), quadratic kappa 0.758, within one level 94.9%, Critical recall 62.6% (±1.3); per-class F1: Low 80.3%, Medium 80.2%, High 77.6%, Critical 66.4% |
+| Earlier version it replaced | single split, CPU, 300 trees: accuracy 75.4%, macro F1 73.4%, Critical recall 61.6% on one 10% test (not directly comparable, since it used a single split) |
+| Retraining tools | a Colab notebook with **5-fold stratified cross-validation** (then a final model on all rows, with the tree count taken from the folds) and a local script; both stop or warn if there is no GPU. The packaged model is the output of the 5-fold GPU run. |
+
+**3. Serving and checking**
+- **API with Swagger** (`app/`): single and batch scoring, health, optional API key, `needs_review` flag; 7 API tests.
+- **Older model kept** (`older_severity_model/`): moved with history intact; its service and 7 tests still pass.
+- **Critical-miss measurement**: found that the model misses 38.4% of Critical complaints (236 of 614 on the test set) and measured how many a probability threshold and a keyword rule list would catch at what alarm rate (`training/critical_recall_analysis.py`, `model/critical_rules.json`).
+
+**4. Making it repeatable**
+- **Iterative pipeline** (`labelling/pipeline.py`): runs with records, comparison, targeted reruns, human review, promotion; 7 tests; the first full pass registered as `run-001-initial`.
+- **Docs**: this README (including the step-by-step improvement guide), `ITERATIONS.md`, and the labelling and training READMEs.
+
+**Still open:** a small independently human-labelled test set, a Tamil-speaker review of the danger-phrase rules, and wiring the Critical safety net into the API.
+
 ## Quick start: run the API
 
 Requires Python 3.11 or newer.
@@ -59,7 +114,7 @@ curl -X POST http://localhost:8000/severity -H "Content-Type: application/json" 
 ```json
 {"complaint_id":"C-1","severity":"Critical","severity_id":3,"confidence":0.9555,
  "probabilities":{"Low":0.0035,"Medium":0.0127,"High":0.0283,"Critical":0.9555},
- "needs_review":false,"model_version":"catboost_desc_only-2026-11-08"}
+ "needs_review":false,"model_version":"catboost_desc_only-cv5-2026-11-08"}
 ```
 
 | Endpoint | Purpose |
@@ -184,17 +239,19 @@ Work in small rounds. Each round changes **one thing**, measures it against the 
 
 | What | Value |
 | --- | --- |
-| Model on a held-out 10% (5,864 complaints), against the LLM labels | accuracy 75.4%, macro F1 73.4%, quadratic kappa 0.725, within one level 94.0%, Critical recall 61.6% |
+| Model, 5-fold cross-validation over all 58,640 complaints, against the LLM labels | accuracy 78.1%, macro F1 76.1%, quadratic kappa 0.758, within one level 94.9%, Critical recall 62.6% (fold-to-fold spread of Critical recall: ±1.3 points) |
 | LLM labels against the original labels (all 58,640 rows) | 60.5% exact, 92.6% within one level; the LLM labels more complaints Critical (6,142 against 4,275) |
 | LLM labels against the original labels (random 2,000) | 62.2% exact, Cohen's kappa 0.46 (weighted 0.63) |
 
 - The model's scores measure how well it **reproduces the LLM labels**, not true severity. Neither the LLM labels nor the original labels have been checked by people, and they agree only about 60% of the time, so treat this as a first model.
-- The packaged model was trained on CPU and reached its 300-tree cap, so more trees would probably help; the notebook's GPU run with cross-validation is the intended way to retrain.
+- The packaged model is the final model of the 5-fold GPU run. The folds stopped at 1,945 to 1,998 trees, close to the 2,000-tree limit, so more trees could add a little. Cross-validation measures how well it reproduces the LLM labels on complaints it did not train on; the final model itself saw every row, so it has no separate held-out test set.
 - For an honest measurement, build a small test set labelled independently by people (two labellers plus a tie-breaker, using only the rubric) and never use model-written labels as the test set; the process is in `labelling/README.md`.
 
 ### When the model misses a Critical complaint
 
-Missing a Critical complaint is the costliest mistake, so this was measured on the packaged model's held-out test set (5,864 complaints, 614 of them Critical; "Critical" here means labelled Critical in `labelling/output/llm_labels.csv`).
+Missing a Critical complaint is the costliest mistake, so this was measured on the **earlier single-split model's** held-out test set (5,864 complaints, 614 of them Critical; "Critical" here means labelled Critical in `labelling/output/llm_labels.csv`).
+
+**For the current model**, cross-validation gives Critical recall of 62.6%, so about 37% of Critical complaints are still missed, almost the same as below. The table below was measured on the earlier single-split model, because the current model saw every row in training and has no held-out set.
 
 **What happens today.** Nothing special: the API returns the model's own answer, so a missed Critical complaint is handled like any other complaint of the severity it was given.
 
@@ -225,7 +282,7 @@ Catching nearly every Critical complaint means raising an alert on far more comp
 **Status: measured, not built into the API.** The API currently returns the model's answer unchanged and raises no Critical alert. What exists:
 
 - `model/critical_rules.json`: the editable keyword rules (case-insensitive regular expressions, each tagged `confirmed` or `possible`).
-- `training/critical_recall_analysis.py`: reproduces the test split, scores it with the packaged model and prints the table above (`python training/critical_recall_analysis.py`). Rerun it after retraining or editing the rules.
+- `training/critical_recall_analysis.py`: reproduces the earlier model's test split, scores the packaged model and prints the table above (**the current model trained on those rows, so rerunning it now would flatter the result (it shows about 95% Critical recall on rows the model trained on, against 62.6% in cross-validation, so do not quote it); to re-measure honestly, save the cross-validation out-of-fold probabilities in the notebook and use those**) (`python training/critical_recall_analysis.py`). Rerun it after retraining or editing the rules.
 
 Limits of these numbers: "Critical" is the LLM label, not a human-verified emergency; the rules were refined after reading this test set's misses, so their measured recall is optimistic; and the Tamil rules use basic common words that a Tamil speaker should check and extend. Re-measure on a human-labelled set when one exists.
 
