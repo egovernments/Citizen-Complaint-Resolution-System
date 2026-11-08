@@ -8,7 +8,7 @@ This folder contains everything around that model: the data preparation, the sev
 ## How it fits together
 
 ```
- raw labelled workbook (kept local, never committed)
+ raw labelled workbook (kept local; it must not be committed, see Known issues)
         |  scripts/prepare_description_only_data.py   remove personal data, drop duplicates, cap class sizes
         v
  data/complaints_description_only_cleaned.csv          complaint_id, description, label   (58,640 rows)
@@ -193,7 +193,9 @@ The labelling engine needs an API key for a supported free-tier LLM provider (`-
 3. Train the final model on all rows, with the number of trees taken from the folds.
 4. Save `severity_catboost.cbm`, a pickle, `label_map.json`, `metrics.json` and `severity_predictor.py`, and zip them.
 
-Parameters: multiclass loss, `auto_class_weights="SqrtBalanced"` (Critical is only about 10% of the rows), depth 6, learning rate 0.1, L2 regularisation 5, up to 2,000 trees with early stopping on 10% of each fold's training part. `training/train_description_only.py` is the same idea as a local script with a single stratified split. To use a newly trained model, copy its files into `model/` and restart the API.
+Install the training requirements first with `pip install -r requirements-training.txt` (the API requirements plus pandas, scikit-learn and matplotlib; Colab already has them).
+
+Parameters: multiclass loss, `auto_class_weights="SqrtBalanced"` (Critical is only about 10% of the rows), depth 6, learning rate 0.1, L2 regularisation 5, up to 2,000 trees with early stopping on 10% of each fold's training part. `training/train_description_only.py` is the same idea as a local script with a single stratified split. To use a newly trained model, copy its files into `model/` and restart the API (both the notebook's bundle and the local script's output folder use the file names the API loads).
 
 ## Improving it iteratively: what to do
 
@@ -285,6 +287,12 @@ Catching nearly every Critical complaint means raising an alert on far more comp
 - `training/critical_recall_analysis.py`: reproduces the earlier model's test split, scores the packaged model and prints the table above (**the current model trained on those rows, so rerunning it now would flatter the result (it shows about 95% Critical recall on rows the model trained on, against 62.6% in cross-validation, so do not quote it); to re-measure honestly, save the cross-validation out-of-fold probabilities in the notebook and use those**) (`python training/critical_recall_analysis.py`). Rerun it after retraining or editing the rules.
 
 Limits of these numbers: "Critical" is the LLM label, not a human-verified emergency; the rules were refined after reading this test set's misses, so their measured recall is optimistic; and the Tamil rules use basic common words that a Tamil speaker should check and extend. Re-measure on a human-labelled set when one exists.
+
+## Known issues
+
+- **The raw source workbook is in git history.** The raw labelled `.xlsx` workbook that used to sit in `data/` was committed once, before this was noticed. It is untracked and git-ignored now and stays on disk locally, but it remains in the history of branches that already contain it until the history is rewritten, so treat its contents as exposed. Anyone who pulls the commit that untracks it may see their local copy deleted by git; copy it elsewhere first, or restore it from history.
+- **The data manifest does not match the committed CSV byte for byte.** Rebuilding with `scripts/prepare_description_only_data.py` reproduces the manifest's `output_sha256` exactly, so the manifest describes the script's output. The committed CSV differs from that output in two ways: line endings (the script writes Windows-style endings; git stores them as LF) and **one row** (`clean-001223`), where the script's output still contains a personal name that the committed CSV has redacted. The committed CSV is what all labelling and training used. The script's personal-data rules should be checked against that row and the two reconciled by whoever owns the data step; until then, the hash check in `data/README.md` cannot pass on the committed file.
+- **The model's Critical safety net is measured, not built into the API** (see "When the model misses a Critical complaint").
 
 ## Troubleshooting
 
