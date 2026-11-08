@@ -1,0 +1,18 @@
+{
+  "promoted": "2026-11-08T05:09:17Z",
+  "file": "llm_labels.csv",
+  "rows": 58640,
+  "base_run": "run-001-initial",
+  "overlays": [],
+  "review_files": [],
+  "rows_from_reviews": 0,
+  "rubric_version": "0.3",
+  "prompt_sha256": "754a5097b54bc07c0c34320caf6ec0a0cf62106dacdfa5e8c1c542911af9aca8",
+  "label_counts": {
+    "Low": 12967,
+    "Medium": 22593,
+    "High": 16938,
+    "Critical": 6142
+  },
+  "rows_missing": 0
+}

@@ -1,0 +1,54 @@
+{
+  "run_id": "run-001-initial",
+  "rows": 58640,
+  "label_counts": {
+    "Low": 12967,
+    "Medium": 22593,
+    "High": 16938,
+    "Critical": 6142
+  },
+  "label_share": {
+    "Low": 0.2211,
+    "Medium": 0.3853,
+    "High": 0.2888,
+    "Critical": 0.1047
+  },
+  "unclear_share": 0.0286,
+  "against_source_labels": {
+    "rows_compared": 58640,
+    "exact_agreement": 0.6049113233287858,
+    "within_one_level": 0.9259038199181446,
+    "per_source_level_exact": {
+      "Low": 0.6167768882701009,
+      "Medium": 0.62735,
+      "High": 0.57745,
+      "Critical": 0.5885380116959065
+    },
+    "confusion_source_rows_vs_run_columns": {
+      "Low": {
+        "Low": 8860,
+        "Medium": 4418,
+        "High": 870,
+        "Critical": 217
+      },
+      "Medium": {
+        "Low": 2639,
+        "Medium": 12547,
+        "High": 3582,
+        "Critical": 1232
+      },
+      "High": {
+        "Low": 1204,
+        "Medium": 5070,
+        "High": 11549,
+        "Critical": 2177
+      },
+      "Critical": {
+        "Low": 264,
+        "Medium": 558,
+        "High": 937,
+        "Critical": 2516
+      }
+    }
+  }
+}
