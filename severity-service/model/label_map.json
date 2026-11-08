@@ -8,5 +8,5 @@
  "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
  "max_seq_length": 128,
  "features": "e0..e383 normalised sentence embeddings of the cleaned description (no other inputs)",
- "trained_on": "llm_labels.csv (LLM severity labels, rubric v0.3)"
+ "trained_on": "llm_labels.csv (LLM severity labels, rubric v0.3); final model trained on all rows after 5-fold CV"
 }
