@@ -1,13 +1,18 @@
 """How many Critical complaints can a safety net catch, and at what cost in false alarms?
 
-Reproduces the held-out 10% test split used when the packaged model was trained (same seed and
-procedure), scores it with the packaged model, and measures:
+Reproduces the held-out 10% test split of the EARLIER single-split model (same seed and procedure),
+scores the model in model/ on it, and measures:
   * Critical recall / alarm rate when escalating on P(Critical) >= t, for a range of t
   * the same for a keyword rule layer (model/critical_rules.json)
   * the two combined (either one escalates)
 
     python training/critical_recall_analysis.py                  # prints the tables
     python training/critical_recall_analysis.py --write          # also writes model/critical_guard.json
+
+IMPORTANT: the current packaged model comes from the 5-fold run and was trained on ALL rows, including this
+test split, so its numbers here are in-sample and flatter the model (the script prints a warning). To measure
+honestly, score the earlier single-split model (take model/ from git history) or save the 5-fold out-of-fold
+probabilities in the notebook and analyse those.
 
 Honest limit: "Critical" here is the label in llm_labels.csv. Catching 100% of those still does not prove
 every real emergency is caught; verify against a human-labelled set when one exists.
@@ -53,6 +58,10 @@ def main() -> None:
     is_crit = (y[te] == 3)
     print(f"test rows {len(te)}, Critical {is_crit.sum()} ({is_crit.mean():.1%})")
 
+    metrics_file = ROOT / "model" / "metrics.json"
+    if metrics_file.exists() and "cross_validation" in json.loads(metrics_file.read_text("utf-8")):
+        print("WARNING: this model was trained on all rows (5-fold run + final fit), so the test rows below were in its")
+        print("training data and the results are optimistic. Use an earlier single-split model or out-of-fold probabilities.\n")
     model = SeverityModel(str(ROOT / "model"))
     p = model.predict_proba(test["text"].tolist())
     pc = p[:, 3]
