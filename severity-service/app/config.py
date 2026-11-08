@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # Folder with severity_catboost.cbm, label_map.json and severity_predictor.py
     model_dir: Path = BASE_DIR / "model"
-    model_version: str = "catboost_desc_only-2026-11-08"
+    model_version: str = "catboost_desc_only-cv5-2026-11-08"
 
     # needs_review is set when the returned severity's probability is below this.
     review_threshold: float = 0.6

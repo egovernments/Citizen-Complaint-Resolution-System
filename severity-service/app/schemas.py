@@ -30,7 +30,7 @@ class SeverityResponse(BaseModel):
                 "confidence": 0.96,
                 "probabilities": {"Low": 0.01, "Medium": 0.01, "High": 0.02, "Critical": 0.96},
                 "needs_review": False,
-                "model_version": "catboost_desc_only-2026-11-08",
+                "model_version": "catboost_desc_only-cv5-2026-11-08",
             }
         }
     )
