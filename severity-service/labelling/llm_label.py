@@ -180,6 +180,7 @@ def main() -> int:
     ap.add_argument("--start", type=int, default=0, help="first row position to process (0-based)")
     ap.add_argument("--end", type=int, default=0, help="stop before this row position (0 = to the end)")
     ap.add_argument("--key-env", default="", help="name of the env var holding the API key (e.g. GEMINI_API_KEY_2)")
+    ap.add_argument("--ids-file", default="", help="only label complaint ids listed in this file (one per line, or a CSV with a complaint_id column)")
     ap.add_argument("--also-done", nargs="*", default=[], help="other label files whose ids are treated as already done")
     ap.add_argument("--list-models", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
@@ -214,6 +215,13 @@ def main() -> int:
         rows = rows[: a.limit]
     if a.start or a.end:
         rows = rows[a.start : (a.end or None)]
+    if a.ids_file:
+        text = Path(a.ids_file).read_text("utf-8")
+        if text.lstrip().startswith("complaint_id"):
+            wanted = {r["complaint_id"] for r in csv.DictReader(text.splitlines())}
+        else:
+            wanted = {ln.strip() for ln in text.splitlines() if ln.strip()}
+        rows = [r for r in rows if r["complaint_id"] in wanted]
     out = Path(a.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     done = set()
