@@ -28,3 +28,7 @@ The labels were written by an LLM, so the scores measure how well the model repr
 After every retraining, compare the cross-validation results with the previous round and record them in `../ITERATIONS.md`; the steps are in "Improving it iteratively" in `../README.md`.
 
 The model currently in `../model/` is the output of this notebook's 5-fold GPU run (final model: 2,181 trees on all 58,640 rows).
+
+Two tools close the loop after training:
+- `python training/ship_model.py <bundle> --note "what changed"` checks a bundle, compares it with `model/`, refuses a regression and (with `--apply`) ships it and updates the version and `ITERATIONS.md`.
+- `python training/score_human_set.py --labels <human csv>` scores a bundle on the independently human-labelled set once people have made it.

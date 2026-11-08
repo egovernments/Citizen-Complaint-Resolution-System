@@ -31,11 +31,13 @@ This folder contains everything around that model: the data preparation, the sev
 | --- | --- |
 | `data/` | The cleaned, personal-data-free complaint dataset, its manifest (hashes, counts, cleaning rules) and `data/README.md` |
 | `scripts/prepare_description_only_data.py` | Builds the cleaned dataset from the raw workbook |
+| `scripts/check_round.py` | The pre-PR gate: raw workbook and keys not tracked, notebooks clean, prompt matches the rubric, promoted labels not stale, model version logged, README matches the model's metrics, tests pass |
 | `labelling/` | The severity rubric (`rubric.json`), the generated prompt, the LLM labelling engine (`llm_label.py`), the iterative pipeline (`pipeline.py`), run records, review files, results and a detailed write-up (`labelling/README.md`) |
 | `training/` | Training for the model: a notebook with 5-fold cross-validation, a local training script, the standalone predictor class, and a script that measures how many Critical complaints a safety net would catch (`training/README.md`) |
 | `model/` | The trained model bundle: `severity_catboost.cbm`, a pickle copy, `label_map.json`, `metrics.json`, `severity_predictor.py`, and the keyword rules `critical_rules.json` (not used by the API yet) |
 | `app/` | The FastAPI service that serves the model |
-| `tests/` | Tests for the API and for the labelling pipeline |
+| `tests/` | Tests for the API, the labelling pipeline and the model-shipping tools |
+| `PULL_REQUEST_TEMPLATE.md` | Template for the pull request of an improvement round (copy it into the PR description) |
 | `ITERATIONS.md` | The log of improvement rounds: what changed, which label run and rubric version, the metrics and the decision. Add a row every round |
 | `older_severity_model/` | The previous model (it also used a complaint-type field) with its own service, tests, container files and browser version. Kept for reference; it runs from inside that folder |
 
@@ -44,7 +46,7 @@ This folder contains everything around that model: the data preparation, the sev
 | # | What was asked | Status | What was done and where |
 | --- | --- | --- | --- |
 | 1 | Remove the complaint type from the scoring and the CatBoost training | Done | The model learns from the description only. The training data has no complaint-type column, the model has 384 embedding features and no category feature, and the API accepts but ignores a complaint type. The earlier model that used it is kept apart in `older_severity_model/`. See `training/`, `model/` and `app/`. |
-| 2 | Structure the work so it can be done iteratively, and make it part of a pull request | Mostly done | `labelling/pipeline.py` keeps every labelling pass as a recorded run, compares runs, redoes only selected rows, supports human review and promotes the final labels. "Improving it iteratively" below and `ITERATIONS.md` describe how to run a round. The work is committed on its branch; **the pull request itself has not been opened yet.** |
+| 2 | Structure the work so it can be done iteratively, and make it part of a pull request | Done, except opening the PR | The labelling pipeline (`labelling/pipeline.py`) keeps every pass as a recorded run, compares runs, redoes only selected rows, supports human review and promotes the final labels; `training/ship_model.py` checks a retrained model against the current one, refuses a regression and ships it with the version and log updated; `scripts/check_round.py` is the pre-PR gate and `PULL_REQUEST_TEMPLATE.md` the PR description. "Improving it iteratively" below is the routine and `ITERATIONS.md` the log. The work is committed on its branch; **the pull request itself has not been opened** (see Known issues: the raw workbook must first be removed from the branch history). |
 | 3 | Store the labelling rules as prompts | Done | `labelling/rubric.json` is the single source of truth; `labelling/build_prompt.py` generates `labelling/prompts/system.md` from it, and `--check` catches a stale prompt. |
 | 4 | Remove personal data (PII) | Done | `scripts/prepare_description_only_data.py` removes emails, phone numbers, links, identity numbers, complaint references and name-plus-address combinations; the manifest records the rules. |
 | 5 | Remove duplicates | Done | Same script: near-duplicate descriptions are removed with location-insensitive matching, and texts with conflicting labels are dropped. |
@@ -134,7 +136,7 @@ curl -X POST http://localhost:8000/severity -H "Content-Type: application/json" 
 | `SEVERITY_MAX_BATCH_SIZE` | `256` | Largest accepted batch |
 | `SEVERITY_API_KEY` | unset | When set, `/severity*` requires an `X-API-Key` header (use "Authorize" in Swagger); `/health` stays open |
 
-Run the tests with `pytest tests` (14 tests: the API and the labelling pipeline).
+Run the tests with `pytest tests` (23 tests: the API, the labelling pipeline and the model-shipping tools).
 
 ## Use the model without the API
 
@@ -211,7 +213,7 @@ Work in small rounds. Each round changes **one thing**, measures it against the 
 
 ### One round, step by step
 
-1. **Set up and check the baseline.** Install the requirements, run `pytest tests`, and run `python labelling/pipeline.py status`. Note the current model metrics in `model/metrics.json` and the last row of `ITERATIONS.md`.
+1. **Set up and check the baseline.** Install the requirements, run `pytest tests`, and run `python labelling/pipeline.py status` and `python scripts/check_round.py --fast`. Note the current model metrics in `model/metrics.json` and the last row of `ITERATIONS.md`.
 2. **Find where it is wrong.** Open the confusion matrix in the training notebook's output (or `metrics.json`), then read real mistakes: `python labelling/pipeline.py review-export --run <run> --select disagree-source --limit 200` writes a CSV of complaints where the labels disagree. Group them into themes (for example "dog complaints without a bite", "potholes where nobody was hurt"). Pick **one** theme or one weak class to fix this round.
 3. **Make the change for that lever.**
    - *Rubric:* edit `labelling/rubric.json` (add or tighten a decision rule or an example), bump `version`, run `python labelling/build_prompt.py`, then `python labelling/pipeline.py status` shows every old run as stale.
@@ -222,11 +224,11 @@ Work in small rounds. Each round changes **one thing**, measures it against the 
 4. **Retrain.** Run `training/severity_train_catboost.ipynb` on a GPU runtime (5-fold cross-validation, then a final model on all rows). Keep the whole `severity_model/` bundle it produces.
 5. **Judge the result with the same yardstick.**
    - Compare the cross-validation **mean macro F1**, **Critical recall** and **within-one-level** with the previous row of `ITERATIONS.md`; the per-fold spread tells you whether a gain is real or noise.
-   - **Do not compare scores across different label versions as if they were the same test**: changing the labels changes what is being predicted. Keep a small test set labelled independently by people (two labellers and a tie-breaker, rubric only; see `labelling/README.md`) and score every candidate model on it. That set is the only fair yardstick across iterations.
+   - **Do not compare scores across different label versions as if they were the same test**: changing the labels changes what is being predicted. Keep a small test set labelled independently by people (two labellers and a tie-breaker, rubric only; see `labelling/README.md`) and score every candidate model on it with `python training/score_human_set.py --labels <human csv> --bundle <new bundle>`. That set is the only fair yardstick across iterations.
    - Look at `needs_review`: tune `review_threshold` from the out-of-fold probabilities (accuracy against the share of answers flagged).
 6. **Keep it only if it is better.** Better means the target metric moved by more than the fold-to-fold spread and nothing important got worse (especially Critical recall). Otherwise discard the round and write down why in `ITERATIONS.md`; a failed experiment is still a result.
-7. **Ship it.** Copy the bundle into `model/`, update the default `model_version` in `app/config.py`, run `pytest tests`, start the API and check `/health` shows the new version and a few known complaints behave sensibly.
-8. **Record and review.** Add a row to `ITERATIONS.md` (what changed, run ids, rubric version, metrics, decision) and open a change that includes: the rubric diff (if any), the new run manifests and reports, review files, promoted labels and manifest, the new model bundle, and the updated log.
+7. **Ship it with one command.** `python training/ship_model.py <bundle.zip or folder> --note "the one thing that changed"` checks the bundle (files, model loads, 384 features, four classes, a test prediction), compares it with the model in `model/` and **refuses a regression** (on the human set with `--human-set <csv>`, otherwise on the cross-validation means against the current fold-to-fold spread; `--labels-changed` skips the metric gate when the labels changed). Add `--apply` to copy the files into `model/`, set the new model version in `app/config.py`, `app/schemas.py` and the README example, and add the row to `ITERATIONS.md`. Then run `pytest tests`, start the API and check `/health` shows the new version.
+8. **Check and open the pull request.** Run `python scripts/check_round.py` (everything must pass), then open the PR using `PULL_REQUEST_TEMPLATE.md`. The PR should contain: the rubric diff (if any), the new run manifests and reports, review files, the promoted labels and manifest, the new model bundle, and the updated log.
 
 ### Rules that keep rounds comparable
 
@@ -287,6 +289,16 @@ Catching nearly every Critical complaint means raising an alert on far more comp
 - `training/critical_recall_analysis.py`: reproduces the earlier model's test split, scores the packaged model and prints the table above (**the current model trained on those rows, so rerunning it now would flatter the result (it shows about 95% Critical recall on rows the model trained on, against 62.6% in cross-validation, so do not quote it); to re-measure honestly, save the cross-validation out-of-fold probabilities in the notebook and use those**) (`python training/critical_recall_analysis.py`). Rerun it after retraining or editing the rules.
 
 Limits of these numbers: "Critical" is the LLM label, not a human-verified emergency; the rules were refined after reading this test set's misses, so their measured recall is optimistic; and the Tamil rules use basic common words that a Tamil speaker should check and extend. Re-measure on a human-labelled set when one exists.
+
+## Handoff: what the human reviewers provide
+
+The one input this repository cannot create itself is an **independently human-labelled test set**, which is the fair yardstick for every improvement round. It is left to the people who will use and judge the system:
+
+- About 2,000 complaints drawn **at random** from `data/complaints_description_only_cleaned.csv` (never the first rows; the file is sorted by label).
+- Two people label each one independently using only `labelling/rubric.json`, without seeing the model or the other label; a third person settles disagreements.
+- Save it as a CSV with `complaint_id`, `description`, `label_a`, `label_b`, `final_label`, `notes` (the format in `labelling/README.md`) and keep it out of training.
+- Score any model on it with `python training/score_human_set.py --labels <csv>`, and let `training/ship_model.py --human-set <csv>` use it to refuse a regression.
+- Review files from `pipeline.py review-export` are filled in the same way, and `promote --reviews` applies those decisions over the model's labels.
 
 ## Known issues
 
