@@ -1,6 +1,6 @@
 {
   "version": "0.3",
-  "status": "draft: built from a review of the 58,640-row cleaned dataset (Chennai civic complaints, ~96% English, ~4% Tamil)",
+  "status": "draft: built from a review of the 58,640-row cleaned dataset (civic complaints, about 96% English and 4% Tamil)",
   "principles": [
     "Judge from what the complaint text says, not from who complained or how angry the tone is.",
     "Location and neighbourhood context (schools, hospitals, flood-prone areas, repeat reports) belong to the geo layer and must not change the label.",
@@ -112,7 +112,7 @@
     }
   ],
   "open_items": [
-    "Check with eGov whether severity rules are already defined; if so, align this rubric to them.",
+    "Check whether severity rules are already defined elsewhere; if so, align this rubric to them.",
     "Review by someone who handles real complaints. The decision rules for dogs, potholes and garbage are judgement calls and the source labels disagree with each other on these themes."
    ]
 }
