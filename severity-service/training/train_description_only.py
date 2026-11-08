@@ -7,12 +7,14 @@ complaint description (no complaint type) and predicts Low / Medium / High / Cri
     python training/train_description_only.py --limit 3000 --iterations 60   # quick smoke test
 
 Outputs go to model/description_only/ (the earlier model lives in older_severity_model/ and is not touched):
-    catboost_desc_only.cbm, label_map.json, metrics.json, confusion_matrix.csv, test_predictions.csv
+    severity_catboost.cbm, label_map.json, severity_predictor.py, metrics.json, confusion_matrix.csv, test_predictions.csv
+The folder can be copied into model/ as it is (same file names the API and predictor load).
 Embeddings are cached in training/cache/ so re-training does not re-encode.
 """
 import argparse
 import hashlib
 import json
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -128,9 +130,10 @@ def main() -> None:
 
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    model.save_model(str(out / "catboost_desc_only.cbm"))
+    model.save_model(str(out / "severity_catboost.cbm"))
+    shutil.copy(Path(__file__).resolve().parent / "severity_predictor.py", out / "severity_predictor.py")
     (out / "label_map.json").write_text(json.dumps(
-        {"labels": LABELS, "embedding_model": ENCODER, "features": "e0..e383 (description only, no complaint type)"},
+        {"labels": LABELS, "embedding_model": ENCODER, "max_seq_length": a.max_seq_length, "features": "e0..e383 (description only, no complaint type)"},
         indent=1), "utf-8")
     (out / "metrics.json").write_text(json.dumps(metrics, indent=1), "utf-8")
     pd.DataFrame(confusion_matrix(yt, pred, labels=range(4)), index=[f"true_{l}" for l in LABELS],

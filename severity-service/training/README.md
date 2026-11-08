@@ -16,6 +16,7 @@ using the same `paraphrase-multilingual-MiniLM-L12-v2` embeddings and a CatBoost
   and a zip of it.
 - **`severity_predictor.py`**: standalone class for other systems: `SeverityModel("severity_model").predict([text, ...])`
   returns severity, confidence and class probabilities. Needs only `catboost` and `sentence-transformers`.
+- **Requirements:** `pip install -r requirements-training.txt` (from `severity-service/`).
 - **`train_description_only.py`**: the same training as a plain script for a local run (`python training/train_description_only.py`);
   writes to `model/description_only/` and also reports agreement with the original source labels.
 
