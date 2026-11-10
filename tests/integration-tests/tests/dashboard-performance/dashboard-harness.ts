@@ -2,7 +2,8 @@ import { expect, type BrowserContext, type CDPSession, type Page, type Request, 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getDigitToken } from '../utils/auth';
-import { ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { tenantSlug } from '../utils/identity-bff';
+import { ADMIN_USER, ADMIN_PASS, TENANT, ROOT_TENANT } from '../utils/env';
 
 export type Principal = 'full' | 'department' | 'public';
 
@@ -71,9 +72,13 @@ const ANALYTICS_QUERY = /\/(?:api|pgr-services\/v2|pgr-analytics)(?:\/v2)?\/anal
 const DASHBOARD_API = /\/(?:api|pgr-services\/v2|pgr-analytics)(?:\/v2)?\/analytics|\/boundary-service\/|\/egov-mdms-service\/|\/mdms-v2\//;
 
 export function dashboardUrl(baseURL: string, principal: Principal): string {
-  const employeePath = process.env.DASHBOARD_EMPLOYEE_PATH || '/digit-ui/employee/dashboard';
-  const publicPath = process.env.DASHBOARD_PUBLIC_PATH || '/digit-ui/public-dashboard';
-  return new URL(principal === 'public' ? publicPath : employeePath, baseURL).toString();
+  // Canonical routes carry the workspace slug: nginx answers a tenantless
+  // /digit-ui/<route> with a 302 to the deployment's default slug (or a 404),
+  // and the public dashboard shows the workspace its URL names (#2732).
+  const explicit = principal === 'public' ? process.env.DASHBOARD_PUBLIC_PATH : process.env.DASHBOARD_EMPLOYEE_PATH;
+  const path = explicit
+    || `/${tenantSlug()}/digit-ui/${principal === 'public' ? 'public-dashboard' : 'employee/dashboard'}`;
+  return new URL(path, baseURL).toString();
 }
 
 export async function installSession(context: BrowserContext, principal: Principal): Promise<void> {
@@ -88,13 +93,15 @@ export async function installSession(context: BrowserContext, principal: Princip
   }
 
   const baseURL = required('BASE_URL');
-  const tenant = required('DIGIT_TENANT');
+  // The workspace under test comes from env.ts (slug -> profile); DIGIT_TENANT stays an override.
+  const tenant = process.env.DIGIT_TENANT || TENANT;
+  if (!tenant) throw new Error('no tenant: set IDENTITY_TEST_TENANT_SLUG (or DIGIT_TENANT) and let profile-setup resolve it');
   // Fall back to env.ts defaults only for the 'full' principal (ADMIN-capable).
   // Department benchmarks need a real employee account — silently logging in as
   // ADMIN and labelling results "department" corrupts benchmark data.
   const username = process.env.DIGIT_USERNAME ?? (principal === 'full' ? ADMIN_USER : required('DIGIT_USERNAME'));
   const password = process.env.DIGIT_PASSWORD ?? (principal === 'full' ? ADMIN_PASS : required('DIGIT_PASSWORD'));
-  const authTenant = process.env.DASHBOARD_AUTH_TENANT || rootTenant(tenant);
+  const authTenant = process.env.DASHBOARD_AUTH_TENANT || (process.env.DIGIT_TENANT ? rootTenant(tenant) : ROOT_TENANT);
   const token = await getDigitToken({
     baseURL,
     tenant: authTenant,

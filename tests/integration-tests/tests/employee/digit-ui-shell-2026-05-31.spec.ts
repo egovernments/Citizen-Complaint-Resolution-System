@@ -19,7 +19,8 @@
  *   #622       Post-login shell mounts (no 503/something-went-wrong)
  */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, EMPLOYEE_USER, EMPLOYEE_PASS, TENANT } from '../utils/env';
+import { BASE_URL, EMPLOYEE_USER, EMPLOYEE_PASS, ROOT_TENANT, TENANT } from '../utils/env';
+import { fetchMdms } from '../utils/probes';
 import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 import { loginViaApi } from '../utils/auth';
 import { authorizeUrl, surfacePath, tenantSlug } from '../utils/identity-bff';
@@ -92,22 +93,31 @@ test.describe('employee digit-ui shell bundle', () => {
      * element; naturalWidth guards against a decoded-but-empty box too. The
      * stylesheet pins height 56px; 20px is the collapse floor, not a size pin.
      */
-    const logo = page.locator('.dg-banner-header__logo').first();
-    await expect(logo, '#505 sub-3 — the sign-in header logo must render').toBeVisible();
-    // The CSS gives the <img> its box before the request lands: wait for the decode.
-    await expect
-      .poll(() => logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0), {
-        message: '#505 sub-3 — logo image must actually load',
-        timeout: 15_000,
-      })
-      .toBe(true);
-    const logoBox = await logo.evaluate((img: HTMLImageElement) => ({
-      w: img.offsetWidth, h: img.offsetHeight, natW: img.naturalWidth, natH: img.naturalHeight,
-    }));
-    expect(logoBox.natW, '#505 sub-3 — logo image must actually load').toBeGreaterThan(0);
-    expect(logoBox.natH, '#505 sub-3 — logo image must actually load').toBeGreaterThan(0);
-    expect(logoBox.w, '#505 sub-3 logo laid-out width').toBeGreaterThanOrEqual(20);
-    expect(logoBox.h, '#505 sub-3 logo laid-out height').toBeGreaterThanOrEqual(20);
+    // The logo comes from StateInfo.logoUrl; self-serve onboarding seeds it blank
+    // until the workspace is branded, and then SafeImage correctly renders nothing.
+    const stateInfo = (await fetchMdms(ROOT_TENANT, 'common-masters.StateInfo').catch(() => []))[0]?.data as
+      | { logoUrl?: string }
+      | undefined;
+    if (!stateInfo?.logoUrl) {
+      await expect(page.locator('.dg-banner-header__logo'), '#505 sub-3 — no logo configured, so none (and no broken image) renders').toHaveCount(0);
+    } else {
+      const logo = page.locator('.dg-banner-header__logo').first();
+      await expect(logo, '#505 sub-3 — the sign-in header logo must render').toBeVisible();
+      // The CSS gives the <img> its box before the request lands: wait for the decode.
+      await expect
+        .poll(() => logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0), {
+          message: '#505 sub-3 — logo image must actually load',
+          timeout: 15_000,
+        })
+        .toBe(true);
+      const logoBox = await logo.evaluate((img: HTMLImageElement) => ({
+        w: img.offsetWidth, h: img.offsetHeight, natW: img.naturalWidth, natH: img.naturalHeight,
+      }));
+      expect(logoBox.natW, '#505 sub-3 — logo image must actually load').toBeGreaterThan(0);
+      expect(logoBox.natH, '#505 sub-3 — logo image must actually load').toBeGreaterThan(0);
+      expect(logoBox.w, '#505 sub-3 logo laid-out width').toBeGreaterThanOrEqual(20);
+      expect(logoBox.h, '#505 sub-3 logo laid-out height').toBeGreaterThanOrEqual(20);
+    }
 
     // ============ #622 — sign-in completes and the shell mounts ============
     // The persona signs in without the page (loginViaApi), so its password is

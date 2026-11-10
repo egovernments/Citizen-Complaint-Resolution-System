@@ -27,7 +27,7 @@ import { tenantSlug } from '../utils/identity-bff';
  */
 import { test, expect, type Page } from '@playwright/test';
 import { requires, isPresent } from '../utils/capabilities';
-import { getPersona, resolveSeedPlan } from '../utils/personas';
+import { getPersona, serviceCodesFor } from '../utils/personas';
 import { seedComplaintAsCitizen, driveToPendingAtLme } from '../utils/seed';
 import { loginEmployeeBrowser, getPrincipal, apiStatus, type Principal } from '../utils/employee-ui';
 import { BASE_URL, TENANT } from '../utils/env';
@@ -113,39 +113,57 @@ test.beforeAll(async () => {
     // employee token 400s "INVALID ROLE" on any employee that isn't also a
     // citizen. (It survives on stock deployments only because bootstrap hands
     // ADMIN the whole role bundle, CITIZEN included — a real onboarded
-    // employee has no such luck.) driveToPendingAtLme reuses the same
-    // (serviceCode, actor, assignee) triple the create used, so the ASSIGN
-    // that follows lines up on the department check instead of guessing.
-    const plan = await resolveSeedPlan();
-    if ('error' in plan) {
-      seedSkipReason = `could not resolve an escalation seed plan: ${plan.error}`;
+    // employee has no such luck.)
+    //
+    // The complaint is assigned to the SAME PGR_LME the UI step signs in as:
+    // PGRDetails offers Escalate only to the complaint's current holder, and
+    // only while that holder has a reportingTo (canEscalate, #2129). The
+    // seed plan's assignee is a different, often password-less employee, so
+    // assigning to it hid the option from whoever logged in. The complaint
+    // type comes from the LME's own department, because pgr-services rejects
+    // an ASSIGN whose assignee is outside the complaint's department.
+    const lme = await getPersona('lme').catch((err: Error) => {
+      seedSkipReason = `no credentialed PGR_LME persona to hold the complaint: ${err.message.slice(0, 200)}`;
+      return null;
+    });
+    if (!lme) return;
+    const serviceCode = serviceCodesFor(lme)[0];
+    if (!serviceCode) {
+      seedSkipReason =
+        `LME persona ${lme.username} (departments [${lme.departments.join(', ') || 'none'}]) has no department ` +
+        'owning a complaint type, so no complaint can be assigned to them';
       return;
     }
     const employeeResp = await fetch(
       `${BASE_URL}/egov-hrms/employees/_search?tenantId=${encodeURIComponent(TENANT)}` +
-        `&uuids=${encodeURIComponent(plan.assigneeUuid)}`,
+        `&uuids=${encodeURIComponent(lme.uuid)}`,
       {
         method: 'POST',
-        headers: { Authorization: `Bearer ${plan.actor.token}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${lme.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          RequestInfo: { apiId: 'Rainmaker', authToken: plan.actor.token, userInfo: plan.actor.userInfo },
+          RequestInfo: { apiId: 'Rainmaker', authToken: lme.token, userInfo: lme.userInfo },
         }),
       },
     );
     if (!employeeResp.ok) {
-      seedSkipReason = `could not inspect reportingTo for ${plan.assigneeCode}: HTTP ${employeeResp.status}`;
+      seedSkipReason = `could not inspect reportingTo for LME ${lme.username}: HTTP ${employeeResp.status}`;
       return;
     }
     const employeeBody: any = await employeeResp.json();
     const currentAssignment = (employeeBody?.Employees?.[0]?.assignments || [])
       .find((assignment: any) => assignment.isCurrentAssignment);
     if (!currentAssignment?.reportingTo) {
-      seedSkipReason = `seed assignee ${plan.assigneeCode} has no current HRMS reportingTo; ESCALATE must reject it`;
+      seedSkipReason =
+        `LME persona ${lme.username} has no current HRMS reportingTo, so there is no rung to escalate to ` +
+        'and the details page rightly hides Escalate';
       return;
     }
 
-    const { srid } = await seedComplaintAsCitizen({ description: `#521 escalate seed — ${new Date().toISOString()}` });
-    await driveToPendingAtLme(srid, plan.assigneeUuid);
+    const { srid } = await seedComplaintAsCitizen({
+      serviceCode,
+      description: `#521 escalate seed — ${new Date().toISOString()}`,
+    });
+    await driveToPendingAtLme(srid, lme.uuid);
     COMPLAINT_ID = srid;
     console.log(`[escalate-521] seeded ${COMPLAINT_ID} at PENDINGATLME`);
   } catch (err: any) {
@@ -162,15 +180,14 @@ test.describe('employee — manual Escalate action #521', () => {
     test.skip(!!seedSkipReason, seedSkipReason);
     test.skip(!COMPLAINT_ID, 'no complaint at PENDINGATLME available (seed produced no id)');
 
-    // Whoever logs in here just needs the PGR_LME role, not to literally be
-    // the complaint's assignee: egov-workflow-v2's nextActions is computed
-    // from the CALLER's own roles against the businessService state config
-    // (the same fact seed.ts's driveToResolved leans on — "RESOLVE is
-    // role-gated, not assignee-gated"). That sidesteps the EMPLOYEE_USER
-    // env var entirely, which on bomet defaults to ADMIN and does not carry
-    // PGR_LME (see personas.ts's persona-triple comment: HS_GRO has GRO but
-    // not PGR_LME; DEMO_WATER has PGR_LME but no login is known for it).
-    // getPersona('lme') discovers a credentialed PGR_LME holder instead.
+    // The one who logs in must be the complaint's current holder, not just any
+    // PGR_LME: the workflow role-gates ESCALATE, but PGRDetails additionally
+    // offers it only to the current assignee with a reportingTo (canEscalate,
+    // #2129). beforeAll assigned the seeded complaint to this same persona.
+    // getPersona('lme') discovers a credentialed PGR_LME holder rather than
+    // trusting EMPLOYEE_USER, which on bomet defaults to ADMIN (no PGR_LME).
+    // With ASSIGNED_COMPLAINT_ID the operator must supply a complaint this
+    // persona holds.
     const lme = await getPersona('lme');
     const reader: Principal | null = await getPrincipal(lme.username, lme.password);
     expect(reader, `could not acquire a token for the LME persona ${lme.username}`).not.toBeNull();

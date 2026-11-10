@@ -11,10 +11,8 @@
  * One idgen call per `npx playwright test` invocation; the resulting
  * prefix is cached on disk via citizen-fixture.json (see citizen-provision).
  */
-import { BASE_URL, ROOT_TENANT, TENANT } from './env';
+import { BASE_URL, ROOT_TENANT, TENANT, ADMIN_USER, ADMIN_PASS } from './env';
 import { getDigitToken } from './auth';
-
-const DEFAULT_FALLBACK = 'NCCG';
 
 /**
  * A service-request ID, `<PREFIX>-PGR-<YYYY>-<MM>-<DD>-<seq>`; group 1 is the
@@ -25,9 +23,10 @@ export const SRID_RE = /([A-Z0-9]+(?:-[A-Z0-9]+)*)-PGR-\d{4}-\d{2}-\d{2}-\d+/;
 /**
  * Resolve the PGR ID prefix for this deployment by asking egov-idgen
  * for one `pgr.servicerequestid`. Returns the segment before `-PGR-`
- * (e.g. "NCCG", "PG"). Falls back to "NCCG" only if both the city- and
- * root-scoped idgen calls fail — at which point the caller's regex
- * assertion will fail informatively rather than the helper crashing.
+ * (e.g. "NCCG", "PG"). THROWS when the admin login or both the city- and
+ * root-scoped idgen calls fail: a guessed prefix used to be recorded in the
+ * profile as if discovered, and then every SRID regex failed for a reason
+ * nobody could see. profile.ts's attempt() now logs it as a probe failure.
  */
 export async function getPgrIdPrefix(opts?: { tenant?: string }): Promise<string> {
   const cityTenant = opts?.tenant ?? TENANT;
@@ -38,11 +37,11 @@ export async function getPgrIdPrefix(opts?: { tenant?: string }): Promise<string
     auth = await getDigitToken({
       baseURL: BASE_URL,
       tenant: ROOT_TENANT,
-      username: process.env.ADMIN_USER || 'ADMIN',
-      password: process.env.ADMIN_PASS || process.env.ADMIN_PASSWORD || 'eGov@123',
+      username: ADMIN_USER,
+      password: ADMIN_PASS,
     });
-  } catch {
-    return DEFAULT_FALLBACK;
+  } catch (e) {
+    throw new Error(`idgen PGR prefix: admin login failed: ${(e as Error).message}`);
   }
 
   for (const tenant of tenantsToTry) {
@@ -67,5 +66,5 @@ export async function getPgrIdPrefix(opts?: { tenant?: string }): Promise<string
       // try next tenant
     }
   }
-  return DEFAULT_FALLBACK;
+  throw new Error(`egov-idgen issued no pgr.servicerequestid for ${tenantsToTry.join(', ')}`);
 }

@@ -19,12 +19,13 @@ import { continueFiling, fileComplaintUrl, fillDetailsStep, fillLocationStep, pr
 import { getPersona } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
-  ADMIN_USER, ADMIN_PASS, FIXED_OTP,
-  DEFAULT_PASSWORD, PGR_ID_PREFIX,
+  ADMIN_USER, ADMIN_PASS,
   generateCitizenPhone,
 } from '../utils/env';
 import { SERVICE_CODE, LOCALITY_CODE } from '../utils/env';
 import { fetchMdms } from '../utils/probes';
+import { tryGetProfile } from '../utils/profile';
+import { SRID_RE } from '../utils/pgr-idgen';
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -54,7 +55,11 @@ const CITIZEN_NAME = 'E2E UI Citizen';
  * record). getPersona('gro-with-department') finds HS_GRO on bomet and EMP001 on
  * mz.maputo without either deployment declaring anything.
  *
- * CITY_ADMIN_USER still wins when set, so an operator can pin a specific actor.
+ * CITY_ADMIN_USER is deliberately NOT consulted. It used to win when set, but
+ * personas.ts treats it as a CSR candidate and both deploy files pin it to the
+ * workspace admin (itlocal-admin, ke-admin), which holds no GRO/PGR_VIEWER: v2.20
+ * offers ASSIGN only to [GRO, PGR_VIEWER] in the complaint's department and
+ * jurisdiction, so that admin never sees Take Action.
  *
  * `authTenant` is part of the answer, not an afterthought. personas.ts probes
  * each credential at the city tenant and at the root, and reports the one it
@@ -64,17 +69,8 @@ const CITIZEN_NAME = 'E2E UI Citizen';
  * anyway); a GRO that authenticates only at the root would fail both the inbox
  * and the Assign login for a reason no locator error would explain. Step 5
  * already threads `resolver.tenant` through — this is the same fact.
- *
- * Undefined for the CITY_ADMIN_USER branch: nobody proved anything about a
- * pinned credential, so the caller keeps its existing default.
  */
 async function cityAdmin(): Promise<{ username: string; password: string; authTenant?: string }> {
-  if (process.env.CITY_ADMIN_USER) {
-    return {
-      username: process.env.CITY_ADMIN_USER,
-      password: process.env.CITY_ADMIN_PASS || DEFAULT_PASSWORD,
-    };
-  }
   const p = await getPersona('gro-with-department');
   return { username: p.username, password: p.password, authTenant: p.tenant };
 }
@@ -176,6 +172,10 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
     test.skip(!citizenLoggedIn, 'citizen not logged in');
+    test.skip(
+      !SERVICE_CODE || !LOCALITY_CODE,
+      `no seed plan (service/locality): ${tryGetProfile()?.personas.unresolvedDiagnostics['pgr.seedPlan'] ?? 'no deployment profile'}`,
+    );
     test.setTimeout(180_000);
 
     // Login again (fresh page context)
@@ -205,7 +205,7 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     // tests 4-5 act as only see complaints in their department and ward, so
     // the walker's default first category (another department) would leave
     // them "No Results Found". The category path, root first, from MDMS.
-    const admin = await getDigitToken({ tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
+    const admin = await getDigitToken({ tenant: ROOT_TENANT, username: ADMIN_USER, password: ADMIN_PASS });
     const rows = (await fetchMdms(TENANT, 'RAINMAKER-PGR.ComplaintHierarchy', admin.access_token))
       .map((r: any) => r?.data).filter((d: any) => d?.code);
     const path: Array<{ code: string; name?: string }> = [];
@@ -222,7 +222,15 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     await continueFiling(page);
 
     console.log('Step 2: location — boundary cascade, no pin...');
-    await fillLocationStep(page, { boundaries: [LOCALITY_CODE] });
+    // The cascade prefers these at EACH level, so give it the whole path when the
+    // profile knows it (leafPath ends at leafCode); a lone leaf code only helps at
+    // the last level. Codes match only unlocalized labels — see the report on
+    // boundary-name discovery.
+    const profileBoundary = tryGetProfile()?.boundary;
+    const boundaryPrefs = profileBoundary?.leafCode === LOCALITY_CODE && profileBoundary.leafPath.length
+      ? profileBoundary.leafPath.map((n) => n.code)
+      : [LOCALITY_CODE];
+    await fillLocationStep(page, { boundaries: boundaryPrefs });
     await snap(page, '02b-address');
     await continueFiling(page);
 
@@ -240,10 +248,9 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
       serviceRequestId = capturedId;
     } else {
       const bodyText = await page.locator('body').innerText();
-      // Build the SRID regex from the deployment's own idgen prefix (PG on
-      // maputo, NCCG on nairobi, …) — a hardcoded `PG-PGR` matched nothing on
-      // any other deployment, leaving serviceRequestId undefined.
-      const match = bodyText.match(new RegExp(`${PGR_ID_PREFIX}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d{6}`));
+      // Any deployment's SRID shape (prefix may hold hyphens, e.g. KE-QA; the
+      // sequence is not always 6 digits) — never another deployment's prefix.
+      const match = bodyText.match(SRID_RE);
       if (match) serviceRequestId = match[0];
     }
 
@@ -262,7 +269,7 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
 
 Steps:
 1. test.skip if !complaintCreated.
-2. loginViaApi as CITY_ADMIN_USER on tenant = TENANT env.
+2. loginViaApi as the gro-with-department persona (cityAdmin()).
 3. Navigate to /digit-ui/employee/pgr/inbox and wait 15s for hydration.
 4. Snap screenshot 03-pgr-inbox.
 5. Assert the "Inbox" breadcrumb is visible (page rendered).

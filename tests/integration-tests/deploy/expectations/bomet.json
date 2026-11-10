@@ -17,7 +17,8 @@
     "personas.csr": "required",
     "personas.ward-scoped-csr": "required",
     "locales.multi": "optional",
-    "tenant.citySubTenant": "absent"
+    "tenant.citySubTenant": "absent",
+    "pgr.autoEscalation": "required"
   },
   "_rationale": {
     "workflow.pgr.actions.ESCALATE": "ke's PGR businessService DOES define ESCALATE (2 transition rows), so #521 must actually run here — it is the deployment the feature was built for.",
@@ -26,6 +27,7 @@
     "personas.csr": "Required: the ward CSR that personas.ward-scoped-csr needs holds CSR, which is all this persona asks for, so #2640 must run here.",
     "personas.ward-scoped-csr": "BOMET_CSR_CHESOEN_* exists here, so the boundary-jurisdiction #496 regression is meaningful and must not silently skip.",
     "locales.multi": "hi_IN, en_IN, fr_FR and pt_PT all carry substantial message counts, but the suite's completeness assertions are only calibrated for en_IN — optional until they are.",
-    "tenant.citySubTenant": "Flat `ke` deployment: there is no city sub-tenant, so the configurator city-search test is genuinely N/A."
+    "tenant.citySubTenant": "Flat `ke` deployment: there is no city sub-tenant, so the configurator city-search test is genuinely N/A.",
+    "pgr.autoEscalation": "Required: ke's HRMS carries reportingTo links (the SLA reportingTo check passes there) and auto-escalation is a feature this deployment ships, so a broken chain must fail, not skip."
   }
 }

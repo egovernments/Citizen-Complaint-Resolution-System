@@ -17,12 +17,13 @@ import { getPrincipal } from '../utils/employee-ui';
 import { resolvePersona, resolveSeedPlan } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
-  ADMIN_USER, ADMIN_PASS, FIXED_OTP,
+  ADMIN_USER, ADMIN_PASS,
   DEFAULT_PASSWORD,
   GRO_USER, GRO_PASS, EMPLOYEE_USER, EMPLOYEE_PASS,
   SERVICE_CODE, LOCALITY_CODE,
   generateCitizenPhone,
 } from '../utils/env';
+import { tryGetProfile } from '../utils/profile';
 
 const CITIZEN_PHONE = generateCitizenPhone();
 const CITIZEN_NAME = 'E2E API Citizen';
@@ -51,6 +52,11 @@ async function registerCitizen(phone: string): Promise<{ token: string; userInfo
 }
 
 test.describe.serial('PGR lifecycle — API only', () => {
+  // The whole chain files one complaint; with no seed plan there is nothing valid to file.
+  test.skip(
+    !SERVICE_CODE || !LOCALITY_CODE,
+    `no seed plan (service/locality): ${tryGetProfile()?.personas.unresolvedDiagnostics['pgr.seedPlan'] ?? 'no deployment profile'}`,
+  );
   let adminToken: string;
   let adminUserInfo: Record<string, unknown>;
   // PGR workflow gates actions by role: ASSIGN needs GRO, RESOLVE needs PGR_LME.

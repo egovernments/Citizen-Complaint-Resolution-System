@@ -332,6 +332,11 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
 
   test('locality filter → only rows in the chosen leaf boundary @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!seedSkip, seedSkip);
+    // At 1280x720 the leaf boundary combobox sits below the fold (y≈770) and the
+    // Select's fixed-position popover opens off-screen, so the option can never be
+    // clicked. A taller viewport plus scrolling each trigger to centre keeps the
+    // popover on screen.
+    await page.setViewportSize({ width: 1280, height: 1000 });
     await openInbox(page);
 
     // Drill the boundary cascade: pick the first option at each level until no
@@ -351,6 +356,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
       const n = await combos.count();
       if (n === 0) break;
       const before = n;
+      await combos.nth(n - 1).evaluate((el) => el.scrollIntoView({ block: 'center' }));
       await combos.nth(n - 1).click();
       await page.waitForTimeout(700);
       const opt = page.getByRole('option').first();

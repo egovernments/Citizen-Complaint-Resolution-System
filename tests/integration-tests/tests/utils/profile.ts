@@ -40,7 +40,7 @@ import { deriveMobileLengths } from './mdms-mobile';
 import { getPgrIdPrefix } from './pgr-idgen';
 import { getDigitToken } from './auth';
 import { KeycloakSignInError } from './identity-bff';
-import { resolvePersonasForProfile, resolveSeedPlan } from './personas';
+import { forgetResolvedPersonas, resolvePersonasForProfile, resolveSeedPlan } from './personas';
 
 // ── shape ────────────────────────────────────────────────────────────────────
 
@@ -72,6 +72,8 @@ export interface DeploymentProfile {
   generatedAt: string;
   baseUrl: string;
   tenant: {
+    /** Workspace slug the identity routes use (/{slug}/digit-ui/...). */
+    slug: string | null;
     city: string;
     root: string;
     /** true when the deployment has no city sub-tenant (bomet's flat `ke`). */
@@ -91,7 +93,7 @@ export interface DeploymentProfile {
     countryCode: string | null;
     pattern: string | null;
     length: { min: number; max: number } | null;
-    source: 'globalConfigs' | 'env' | 'none';
+    source: 'mdms' | 'globalConfigs' | 'env' | 'none';
   };
   postal: {
     pattern: string | null;
@@ -470,6 +472,12 @@ function pathTo(root: BoundaryNode, code: string, acc: BoundaryNode[] = []): Bou
   return null;
 }
 
+function allLeafPaths(root: BoundaryNode, acc: BoundaryNode[] = []): BoundaryNode[][] {
+  const here = [...acc, root];
+  if (!root.children?.length) return [here];
+  return root.children.flatMap((child) => allLeafPaths(child, here));
+}
+
 function firstBranch(root: BoundaryNode): BoundaryNode[] {
   const path: BoundaryNode[] = [];
   for (let n: BoundaryNode | undefined = root; n; n = n.children?.[0]) path.push(n);
@@ -562,6 +570,18 @@ async function discoverLocales(
   return counted.filter((c) => c.count >= richest * 0.25).map((c) => c.locale).sort();
 }
 
+interface TenantRoute { tenantId: string; rootTenantId: string | null; urlSlug: string }
+/** GET /identity/v1/tenant-contexts/{slug}: the BFF's public slug -> tenant route. */
+async function fetchTenantRoute(baseUrl: string, slug: string): Promise<TenantRoute | null> {
+  const response = await fetch(`${baseUrl}/identity/v1/tenant-contexts/${encodeURIComponent(slug)}`);
+  // 404 = no such workspace (or no BFF): an answer, not a blip, so don't retry it.
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`tenant route for '${slug}': HTTP ${response.status}`);
+  const tenant = (await response.json())?.tenant;
+  if (!tenant?.tenantId) throw new Error(`tenant route for '${slug}': no tenant in the response`);
+  return { tenantId: tenant.tenantId, rootTenantId: tenant.rootTenantId ?? null, urlSlug: tenant.urlSlug };
+}
+
 export async function discoverProfile(opts?: { baseUrl?: string }): Promise<DeploymentProfile> {
   const baseUrl = normalizeBaseUrl(opts?.baseUrl ?? currentTarget().baseUrl);
   // Every probe below MUST be handed this baseUrl. A probe that falls back to
@@ -573,18 +593,33 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
   const probeFailures: Record<string, string> = {};
   const attempt = makeAttempt(probeFailures);
 
-  // globalConfigs must be read BEFORE anything else: it is the deployment's own
-  // boot config, so it — not an env var — is what tells us which tenant we are
-  // even looking at. Falling back to the legacy 'ke.nairobi' literal here makes
-  // discovery a no-op on every other deployment: with DIGIT_TENANT unset the
-  // whole probe chain aims at a tenant that doesn't exist, every read comes back
-  // empty, and profile.setup's non-emptiness gate fails with "boundary hierarchy
-  // is empty" — pointing at the tenant rather than at this line. Keep the literal
-  // last, as a floor for a deployment that serves no globalConfigs at all.
+  // globalConfigs is the stack's own boot config (hierarchy, postal and mobile
+  // fallbacks). It is stack-wide, so it never decides which workspace is under
+  // test; the slug below does. There is deliberately no literal tenant floor: a
+  // run that cannot name its tenant stops here with a message, rather than
+  // probing another deployment's tenant and reporting "boundary hierarchy is empty".
   const gc = await attempt('globalConfigs', () => fetchGlobalConfigs(baseUrl), {});
 
-  const city = envOr('DIGIT_TENANT') ?? gc.stateTenantId ?? 'ke.nairobi';
-  const root = envOr('ROOT_TENANT') ?? (city.includes('.') ? city.split('.')[0] : city);
+  // v2.20: the workspace under test is named by its slug, and the Identity BFF's
+  // public tenant route says which tenant it is. globalConfigs' stateTenantId is
+  // stack-wide (one value for every workspace the stack hosts), so it is only a
+  // fallback for stacks without the BFF. A tenant id given without a slug is
+  // tried as a slug too: legacy tenants (ke, mz, pg) use their id as their slug.
+  const slugInput = envOr('IDENTITY_TEST_TENANT_SLUG') ?? envOr('DIGIT_TENANT');
+  const route = slugInput
+    ? await attempt('tenant route from slug', () => fetchTenantRoute(baseUrl, slugInput), null as TenantRoute | null)
+    : null;
+  const slug = route ? slugInput! : envOr('IDENTITY_TEST_TENANT_SLUG') ?? null;
+  // Later probes in this process (sign-ins go through the slug's routes) need the slug too.
+  if (slug && !process.env.IDENTITY_TEST_TENANT_SLUG) process.env.IDENTITY_TEST_TENANT_SLUG = slug;
+  const city = envOr('DIGIT_TENANT') ?? route?.tenantId ?? gc.stateTenantId ?? null;
+  if (!city) {
+    throw new Error(
+      `No tenant to test at ${baseUrl}: set IDENTITY_TEST_TENANT_SLUG to the workspace under test ` +
+        `(the BFF tenant route${slugInput ? ` for '${slugInput}' failed` : ' needs it'}, and globalConfigs has no stateTenantId).`,
+    );
+  }
+  const root = envOr('ROOT_TENANT') ?? route?.rootTenantId ?? (city.includes('.') ? city.split('.')[0] : city);
   const tenants = city === root ? [root] : [city, root];
 
   const adminUser = envOr('DIGIT_USERNAME') ?? envOr('ADMIN_USER') ?? 'ADMIN';
@@ -616,12 +651,31 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
       : 'derived-fallback';
 
   // ── mobile / postal ───────────────────────────────────────────────────────
-  const mobilePattern = gc.coreMobileConfigs?.mobileNumberRegex ?? null;
+  // Since v2.20 the SPA (IdentityLogin/useMobileValidationConfig, pgr
+  // useMobileValidation) and the Identity BFF's citizen OTP both validate
+  // against the tenant's `common-masters.MobileNumberValidation` row (the
+  // `default` one), city tenant first, then root. A self-serve workspace gets
+  // that row from the country chosen at signup, so globalConfigs'
+  // coreMobileConfigs (stack-wide) is only the fallback.
+  const mdmsMobile = await attempt(
+    'MobileNumberValidation',
+    async () => {
+      for (const tenantId of tenants) {
+        const rows = (await fetchMdms(tenantId, 'common-masters.MobileNumberValidation', authToken, { baseUrl }))
+          .filter((r) => r?.isActive !== false && r?.data?.mobileNumberRegex);
+        const row = rows.find((r) => r.data.default === true) ?? rows[0];
+        if (row) return { countryCode: (row.data.countryCode as string | undefined) ?? null, pattern: row.data.mobileNumberRegex as string };
+      }
+      return null;
+    },
+    null as { countryCode: string | null; pattern: string } | null,
+  );
+  const mobilePattern = mdmsMobile?.pattern ?? gc.coreMobileConfigs?.mobileNumberRegex ?? null;
   const mobile: DeploymentProfile['mobile'] = {
-    countryCode: gc.coreMobileConfigs?.countryCode ?? null,
+    countryCode: mdmsMobile ? mdmsMobile.countryCode : gc.coreMobileConfigs?.countryCode ?? null,
     pattern: mobilePattern,
     length: mobilePattern ? deriveMobileLengths(mobilePattern) : null,
-    source: mobilePattern ? 'globalConfigs' : 'none',
+    source: mdmsMobile ? 'mdms' : mobilePattern ? 'globalConfigs' : 'none',
   };
 
   // Resolution order MUST mirror the SPA's (utils/postalCode.js): an MDMS
@@ -658,7 +712,26 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
   };
 
   // ── boundary ──────────────────────────────────────────────────────────────
-  const hierarchyType = gc.hierarchyType ?? null;
+  // Resolution order MUST mirror the SPA's (products/pgr/src/services/tenantHierarchy.js):
+  // the tenant's CMS-BOUNDARY.HierarchySchema row with moduleName "CMS" and a
+  // `hierarchy` wins; globalConfigs HIERARCHY_TYPE is only the legacy fallback.
+  // A self-serve workspace's Geography step writes its own hierarchy type there,
+  // so reading globalConfigs alone walks a tree the UI never shows. City tenant
+  // first, then root — the same city-to-state resolution mdms gives the SPA.
+  const schemaHierarchy = await attempt(
+    'boundary HierarchySchema row',
+    async () => {
+      for (const tenantId of tenants) {
+        const row = (await fetchMdms(tenantId, 'CMS-BOUNDARY.HierarchySchema', authToken, { baseUrl })).find(
+          (r) => r?.isActive !== false && r?.data?.moduleName === 'CMS' && typeof r?.data?.hierarchy === 'string' && r.data.hierarchy,
+        );
+        if (row) return row.data.hierarchy as string;
+      }
+      return null;
+    },
+    null as string | null,
+  );
+  const hierarchyType = schemaHierarchy ?? gc.hierarchyType ?? null;
   const tree = hierarchyType
     ? await attempt('boundary tree', () => fetchBoundaryTree(city, hierarchyType, { authToken, baseUrl }), null)
     : null;
@@ -733,7 +806,7 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
     schemaVersion: PROFILE_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     baseUrl,
-    tenant: { city, root, flat: city === root, label, labelSource },
+    tenant: { slug, city, root, flat: city === root, label, labelSource },
     globalConfigs: {
       stateTenantId: gc.stateTenantId ?? null,
       hierarchyType: gc.hierarchyType ?? null,
@@ -761,9 +834,36 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
   draft.personas.resolved = personas.resolved;
   draft.personas.unresolvedDiagnostics = personas.unresolvedDiagnostics;
 
-  const plan = await attempt('seed plan', () => resolveSeedPlan({ profile: draft }), {
+  let plan = await attempt('seed plan', () => resolveSeedPlan({ profile: draft }), {
     error: 'seed plan resolution threw twice — see the [seed] log lines above',
   } as Awaited<ReturnType<typeof resolveSeedPlan>>);
+
+  // The seed locality starts as the tree's first leaf, which says nothing about who
+  // can see it: PGR matches jurisdiction EXACTLY, so a complaint filed in a ward the
+  // plan's GRO (and assignee) don't cover never reaches their inbox. Once the plan
+  // names them, move the seed to a leaf every one of them covers (any ancestor in
+  // their HRMS jurisdictions counts) and resolve once more against it. An explicit
+  // LOCALITY_CODE that the tree proved real is left alone.
+  if (!('error' in plan) && tree && !locatedPath) {
+    const first = plan;
+    const assignee = Object.values(draft.personas.resolved).find((p) => p?.uuid === first.assigneeUuid);
+    const lists = [first.actor.jurisdictions, assignee?.jurisdictions].filter((j): j is string[] => !!j && j.length > 0);
+    const covered = lists.length ? allLeafPaths(tree).find((path) => lists.every((j) => path.some((n) => j.includes(n.code)))) : undefined;
+    const coveredLeaf = covered?.[covered.length - 1].code;
+    if (covered && coveredLeaf !== draft.pgr.seedLocalityCode) {
+      console.log(`[profile] seed locality ${draft.pgr.seedLocalityCode} -> ${coveredLeaf}: covered by the plan's GRO${assignee ? ' and assignee' : ''}`);
+      draft.boundary.leafPath = covered.map((n) => ({ code: n.code, boundaryType: n.boundaryType }));
+      draft.boundary.leafCode = coveredLeaf!;
+      draft.pgr.seedLocalityCode = coveredLeaf!;
+      forgetResolvedPersonas();
+      const again = await attempt('personas (seed locality moved)', () => resolvePersonasForProfile(draft), null);
+      if (again) {
+        draft.personas.resolved = again.resolved;
+        draft.personas.unresolvedDiagnostics = again.unresolvedDiagnostics;
+      }
+      plan = await attempt('seed plan (seed locality moved)', () => resolveSeedPlan({ profile: draft }), plan);
+    }
+  }
   if ('error' in plan) {
     draft.personas.unresolvedDiagnostics['pgr.seedPlan'] = plan.error;
   } else {

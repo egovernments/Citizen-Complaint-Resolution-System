@@ -76,7 +76,8 @@ The suite is deployment-agnostic. All tenant-specific values come from env. Comm
 | `ROOT_TENANT` | `ke` | State-level root tenant |
 | `ADMIN_USER` / `ADMIN_PASS` | `ADMIN` / `eGov@123` | Admin credentials |
 | `TENANT_CODE` | `ke` | Tenant code shown on configurator login page |
-| `FIXED_OTP` | `123456` | Deployment's mock OTP |
+| `IDENTITY_TEST_TENANT_SLUG` | (none, required) | Workspace slug citizens sign in to (`/<slug>/digit-ui/citizen`) |
+| `IDENTITY_TEST_OTP_CODE` | (none, required) | The six-digit code the Identity BFF accepts for citizen phone sign-in. Only a deployment with `identity_dev_fixed_otp: true` and `identity_citizen_signin_methods: [phone_otp]` has one; never set it for a real OTP channel |
 | `TENANT_LABEL` | `Bomet County` | Tenant display name for the city picker |
 
 Full list in `tests/utils/env.ts`.
@@ -114,7 +115,7 @@ Only pass an explicit phone to `citizenOtpLogin(page, phone)` when the test genu
 
 ### 3. Use MDMS-derived values, not env constants, where possible
 
-If the test constructs a PGR complaint, use `resolveServiceCode()` and `resolveLocalityCode()` from `../utils/launch-fixes/api` — they query MDMS at runtime and pick a code valid for the current deployment. Don't hardcode `SERVICE_CODE` or `LOCALITY_CODE` unless the test is specifically asserting on a known value.
+If the test constructs a PGR complaint, take `SERVICE_CODE` / `LOCALITY_CODE` from `../utils/env` — they come from the deployment profile's seed plan (`pgr.seedServiceCode` / `pgr.seedLocalityCode`), a complaint type a real employee's department owns and a leaf proven to exist in the live boundary tree. Both are `''` when discovery found no plan: `test.skip` with the profile's `personas.unresolvedDiagnostics['pgr.seedPlan']` as the reason rather than filing anyway. `resolveServiceCode()` in `../utils/launch-fixes/api` remains for picking any active, fileable type; for a locality use the profile (`boundary.leafCode`, `boundary.leafPath`). Never hardcode a code from another deployment.
 
 For the complaint-ID prefix (e.g. `NCCG-PGR-…` vs `PG-PGR-…`), read it from `readProvisionedCitizen()?.pgrIdPrefix` — set by `citizen-setup` via egov-idgen.
 

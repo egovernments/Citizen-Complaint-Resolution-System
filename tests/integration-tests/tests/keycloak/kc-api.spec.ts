@@ -57,9 +57,13 @@ test.describe('Keycloak through identity-bff — API contract', () => {
     expect(destination.searchParams.get('redirect_uri')).toBe(`${BASE_URL}/identity/v1/callback`);
   });
 
-  // /readyz is the BFF container's own endpoint; deployed nginx does not route it.
+  // /readyz is the BFF container's own endpoint (identity-bff operations/routes.ts);
+  // neither nginx nor Kong routes it in v2.20, so BASE_URL/readyz is a 404. The
+  // probe needs the container's address: IDENTITY_BFF_URL (local: its loopback port).
   test('BFF readiness reports Redis and all identity dependencies', { tag: ['@local-only', '@area:keycloak', '@persona:system'] }, async ({ request }) => {
-    const body = await identityJson<{ status: string; checks: Record<string, unknown> }>(await request.get(`${BASE_URL}/readyz`));
+    const bffUrl = process.env.IDENTITY_BFF_URL?.replace(/\/$/, '');
+    test.skip(!bffUrl, 'IDENTITY_BFF_URL unset: /readyz is served only on the identity-bff container, not through the gateway');
+    const body = await identityJson<{ status: string; checks: Record<string, unknown> }>(await request.get(`${bffUrl}/readyz`));
     expect(body.status).toBe('ready');
     expect(body.checks.redis).toBe('ok');
     expect(body.checks.jwks).toBe('ok');

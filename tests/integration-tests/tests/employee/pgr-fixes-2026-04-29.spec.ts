@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { loginEmployee, hrmsSearch, workflowBusinessService } from '../utils/launch-fixes/api.js';
 import { TENANT, BASE_URL } from '../utils/env';
+import { tryGetProfile } from '../utils/profile';
 
 test.describe('02-pgr-employee: assign + workflow guards (#479 + follow-ups)', () => {
   test('PGR business service: PENDINGFORASSIGNMENT.ASSIGN forward-state is PENDINGATLME, not a self-loop', {
@@ -45,9 +46,13 @@ Pairs with the workflow nextState test — together they ensure both halves of t
     // PR #68 narrows the assignee filter to next-state forward-action
     // roles. For ASSIGN→PENDINGATLME, that's [PGR_LME, PGR_VIEWER].
     // Sanity check: PGR_LME alone returns more than zero employees.
+    // The roles that can hold a complaint after ASSIGN, read from this
+    // deployment's PGR workflow (PGR_LME/PGR_VIEWER on stock) — not pinned.
+    const assigneeRoles = tryGetProfile()?.workflow.pgr.assign?.assigneeRoles ?? [];
+    test.skip(!assigneeRoles.length, 'PGR workflow ASSIGN target roles not discovered (no profile, or no ASSIGN action)');
     const auth = await loginEmployee();
-    const r = await hrmsSearch(auth, TENANT, ['PGR_LME']);
-    expect(r.Employees?.length).toBeGreaterThan(0);
+    const r = await hrmsSearch(auth, TENANT, assigneeRoles);
+    expect(r.Employees?.length, `employees holding ${assigneeRoles.join('|')} on ${TENANT}`).toBeGreaterThan(0);
   });
 
   test('REJECTED state advertises a non-empty rejection-reason mdms list', {

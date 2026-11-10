@@ -172,8 +172,8 @@ First link in a serial chain — every later step is gated on prerequisitesMet, 
       description: `Read-only audit of the deployed PGR workflow against the one-flow escalation contract.
 
 Steps:
-1. Assert ESCALATE is a self-loop on PENDINGATLME and PENDINGFORASSIGNMENT.
-2. Assert SYSTEM is authorized for both self-loops.
+1. Assert ESCALATE is a self-loop on PENDINGATLME (since 93fb577bb the scheduler escalates only PENDINGATLME — pgr.escalation.eligible.statuses — and the onboarding baseline workflow defines no ESCALATE on PENDINGFORASSIGNMENT).
+2. Assert SYSTEM is authorized for that self-loop.
 3. Assert FORWARD and ASSIGNEDBYAUTOESCALATION actions are absent.
 4. Assert PENDINGATSUPERVISOR and RESOLVEDBYSUPERVISOR are absent.
 5. Fail on drift. Workflow migration is a deployment operation and this test never mutates live configuration.`,
@@ -194,11 +194,8 @@ Steps:
     const vAtLme = pendingAtLme;
     const vForAssign = pendingForAssign;
     const vEscAtLme = (vAtLme.actions || []).find((a: any) => a.action === 'ESCALATE');
-    const vEscAtPfa = (vForAssign.actions || []).find((a: any) => a.action === 'ESCALATE');
     expect(vEscAtLme?.nextState).toBe(vAtLme.uuid);
-    expect(vEscAtPfa?.nextState).toBe(vForAssign.uuid);
     expect(vEscAtLme?.roles).toContain('SYSTEM');
-    expect(vEscAtPfa?.roles).toContain('SYSTEM');
     expect((vAtLme.actions || []).some((a: any) => a.action === 'FORWARD')).toBe(false);
     expect((vForAssign.actions || []).some((a: any) => a.action === 'ASSIGNEDBYAUTOESCALATION')).toBe(false);
     expect(vFind('PENDINGATSUPERVISOR')).toBeFalsy();
@@ -242,7 +239,7 @@ If this fails due to insufficient same-department employees, downstream escalati
     // re-validates the department on every assignee change (ASSIGN AND each
     // ESCALATE self-loop), not only the first ASSIGN.
     const deptCandidates = allEmployees.filter(
-      (e: any) => e.user?.userName !== 'ADMIN' && (e.assignments || []).some((a: any) => a.department === department),
+      (e: any) => e.user?.userName !== ADMIN_USER && (e.assignments || []).some((a: any) => a.department === department),
     );
     // Keep suite-created scratch employees OUT of the hierarchy. They match on
     // department just like real staff, but other specs deactivate them mid-run
