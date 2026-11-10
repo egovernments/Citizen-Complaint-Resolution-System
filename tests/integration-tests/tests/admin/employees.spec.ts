@@ -23,6 +23,8 @@ import ExcelJS from 'exceljs';
 import { loadAuth, employeeSearch, type AuthInfo } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
 import { TENANT, ROOT_TENANT } from '../utils/env';
+import { tryGetProfile } from '../utils/profile';
+import { loginConfigurator } from '../utils/configurator-auth';
 import {
   getMobileValidationRule,
   generateInvalidMobile,
@@ -48,11 +50,14 @@ const LIST_PATH = '/configurator/manage/employees';
 // tenant's real boundary / department / designation masters, so they must be
 // live codes. We derive them from an EXISTING employee on the deployment
 // (resolveSeedFks, called in beforeAll) so the API-seed tests are portable to
-// any tenant. An explicit env override still wins; the final fallback is the
-// Kenya seed, used only when neither a live employee nor an override exists.
-let SEED_BOUNDARY = process.env.SEED_BOUNDARY || 'NAIROBI_CITY';
-let SEED_DEPT = process.env.SEED_DEPT || 'DEPT_7';
-let SEED_DESIG = process.env.SEED_DESIG || 'DESIG_58';
+// any tenant. An explicit env override still wins; with no live employee the
+// deployment profile fills boundary/hierarchy/type/department (never the
+// designation — nothing discovers one). Whatever is still blank skips the
+// API-seed tests with a reason; there is no other deployment's literal to
+// fall back to.
+let SEED_BOUNDARY = process.env.SEED_BOUNDARY || '';
+let SEED_DEPT = process.env.SEED_DEPT || '';
+let SEED_DESIG = process.env.SEED_DESIG || '';
 // SEED_BOUNDARY's own hierarchy + boundaryType. These used to be hardcoded
 // 'ADMIN' / 'County' alongside a live-derived SEED_BOUNDARY code — silently
 // wrong the moment the boundary itself was discovered on a non-Kenya
@@ -62,15 +67,22 @@ let SEED_DESIG = process.env.SEED_DESIG || 'DESIG_58';
 // A mismatched hierarchy/boundaryType paired with a real SEED_BOUNDARY code
 // is a jurisdiction HRMS would be right to reject, or worse, silently store
 // as an unscoped/unusable row.
-let SEED_HIERARCHY = process.env.SEED_HIERARCHY || 'ADMIN';
-let SEED_BOUNDARY_TYPE = process.env.SEED_BOUNDARY_TYPE || 'County';
+let SEED_HIERARCHY = process.env.SEED_HIERARCHY || '';
+let SEED_BOUNDARY_TYPE = process.env.SEED_BOUNDARY_TYPE || '';
 
-// Tracks whether resolveSeedFks() found a live employee to derive FKs from.
-// Tests that API-seed employees (4a/5) need a real boundary/dept/designation
-// combo; without live resolution AND without an explicit env override they'd
-// silently fall back to the Kenya literals above, which fail (or worse,
-// silently mis-seed) on any non-Kenya tenant. See B6 in ADMIN-SUITE-PLAN.md.
-let seedFksResolved = false;
+/**
+ * Why the API-seed tests (4a/5) cannot run, or '' when every FK is known.
+ * They need a real boundary/hierarchy/type/dept/designation combo; a partial
+ * one is a jurisdiction or assignment HRMS would reject or mis-store.
+ */
+function missingSeedFks(): string {
+  const missing = Object.entries({ SEED_BOUNDARY, SEED_HIERARCHY, SEED_BOUNDARY_TYPE, SEED_DEPT, SEED_DESIG })
+    .filter(([, v]) => !v)
+    .map(([k]) => k);
+  return missing.length
+    ? `no live employee to derive HRMS FKs from and no value for ${missing.join(', ')} — set those SEED_* env vars`
+    : '';
+}
 
 /**
  * Derive boundary / department / designation FKs from a real employee on the
@@ -95,13 +107,24 @@ async function resolveSeedFks(): Promise<void> {
         if (!process.env.SEED_BOUNDARY_TYPE) SEED_BOUNDARY_TYPE = boundaryType;
         if (!process.env.SEED_DEPT) SEED_DEPT = dept;
         if (!process.env.SEED_DESIG) SEED_DESIG = desig;
-        seedFksResolved = true;
         return;
       }
     }
   } catch {
-    // Fall back to env / Kenya defaults if the lookup fails.
+    // Fall through to the profile below.
   }
+  // No live employee: the profile's discovered leaf + a department that owns a
+  // complaint type. Read here (beforeAll), not at module scope, so a profile
+  // written by profile-setup in this run is the one used.
+  const p = tryGetProfile();
+  const leaf = p?.boundary.leafPath[p.boundary.leafPath.length - 1];
+  if (leaf && p?.boundary.hierarchyType) {
+    if (!process.env.SEED_BOUNDARY) SEED_BOUNDARY = leaf.code;
+    if (!process.env.SEED_BOUNDARY_TYPE) SEED_BOUNDARY_TYPE = leaf.boundaryType;
+    if (!process.env.SEED_HIERARCHY) SEED_HIERARCHY = p.boundary.hierarchyType;
+  }
+  const dept = p?.complaintTypes.services.find((s) => s.department)?.department;
+  if (dept && !process.env.SEED_DEPT) SEED_DEPT = dept;
 }
 
 // HRMS endpoints — the configurator's DigitApiClient hits these verbatim.
@@ -342,18 +365,18 @@ Mutation-tested: deleting the \`search.fill(needle)\` line turns step 4 red
     ).toBe(baselineTotal);
   });
 
-  test('2. single create — happy path derives code + username, employee lands', {
+  test('2. single create — code entered, employee lands', {
     annotation: {
       type: 'description',
       description: `End-to-end UI walk for the single-create flow with multiple regression guards baked in: Email required (invite model, #1999; DOB has been optional since CCRS#1949), CCRS#416 (Tenant picker present + defaults to session tenant), CCRS#436 (success toast). Confirms HRMS persists the employee with employeeStatus=EMPLOYED.
 
 Steps:
-1. Generate a unique code + Kenya-valid mobile (07-prefix, 10 digits); track for cleanup.
+1. Sign in to the Configurator afresh (creating an employee needs a live identity session, #2456), then generate a unique code + tenant-valid mobile; track for cleanup.
 2. Navigate to /employees/create.
 3. Pre-assertion: Email carries the required marker (an employee is invited by email).
 4. Pre-assertion CCRS#416: Tenant field is visible; if input/select assert value contains TENANT_CODE, otherwise assert text contains it.
 5. Fill Name; force Employee Code to the PW value (DigitFormCodeInput auto-derives but we need determinism for cleanup).
-6. Fill Mobile, leave Username blank (exercises auto-derive), fill Email, Date of Birth (1990-05-14), Date of Appointment (2026-01-15).
+6. Fill Mobile, Email, Date of Birth (1990-05-14), Date of Appointment (2026-01-15). There is no Username field: HRMS makes the username the employee code.
 7. Click Create; wait for navigation back to LIST_PATH within 45s.
 8. CCRS#436: assert a role=status toast matching /created/i is visible within 5s.
 9. API sanity: POST /egov-hrms/employees/_search with codes=<code>; assert exactly 1 result with employeeStatus='EMPLOYED', isActive !== false, mobileNumber matches.
@@ -363,6 +386,10 @@ Cleanup uses the inline softDeleteEmployee helper because HRMS has no DELETE end
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:happy-path', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
+    // Creating an employee refuses when the identity session has ended (#2456,
+    // memberActions.createAndLink), and auth.json's BFF cookie is as old as the
+    // run: Keycloak idles it out after 30 minutes. Sign in afresh.
+    await loginConfigurator(page);
     const code = testCode(testInfo, 'EMP_CREATE');
     const uniq = code.split('_').pop() || '00000';
     // Mobile valid for THIS tenant's live MDMS rule (Kenya starts 7/1,
@@ -408,8 +435,6 @@ Cleanup uses the inline softDeleteEmployee helper because HRMS has no DELETE end
     await codeInput.fill(code);
 
     await page.getByLabel(/^Mobile Number/i).fill(mobile);
-    // Username is optional — if blank, transform() auto-derives. We leave blank
-    // to exercise the derive path.
     await page.getByLabel(/^Email/i).fill(`${code.toLowerCase()}@example.com`);
     await page.getByLabel(/^Date of Birth/i).fill('1990-05-14');
     await page.getByLabel(/^Date of Appointment/i).fill('2026-01-15');
@@ -530,7 +555,9 @@ Code and Username are write-once because HRMS doesn't allow mutating either afte
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
-    // Create one via UI then re-enter Edit.
+    // Create one via UI then re-enter Edit. The create needs a live identity
+    // session, as in test 2.
+    await loginConfigurator(page);
     const code = testCode(testInfo, 'EMP_EDIT');
     const uniq = code.split('_').pop() || '11111';
     const mobile = generateValidMobile(mobileRule);
@@ -626,10 +653,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
     tag: ['@area:configurator-manage', '@area:hrms', '@ccrs:439', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
-    test.skip(
-      !seedFksResolved && !process.env.SEED_DEPT,
-      'no existing employee to derive live HRMS FKs from — set SEED_* env vars',
-    );
+    test.skip(!!missingSeedFks(), missingSeedFks());
     // Create a fresh employee via API so we own it + know it has only EMPLOYEE
     // role (no GRO yet). This keeps the test hermetic instead of relying
     // on fishing a suitable victim out of the shared tenant.
@@ -735,10 +759,7 @@ The MDMS reason source is asserted indirectly — if the dropdown has no options
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
-    test.skip(
-      !seedFksResolved && !process.env.SEED_DEPT,
-      'no existing employee to derive live HRMS FKs from — set SEED_* env vars',
-    );
+    test.skip(!!missingSeedFks(), missingSeedFks());
     const code = testCode(testInfo, 'EMP_DEACT');
     const uniq = code.split('_').pop() || '22222';
     const mobile = generateValidMobile(mobileRule);
@@ -819,7 +840,7 @@ The MDMS reason source is asserted indirectly — if the dropdown has no options
       description: `Bulk-import end-to-end with mixed validity: 3 well-formed rows + 2 deliberately broken rows (short mobile; unknown department + unknown role). Confirms the preview marks 2 errors, the Create button shows "3" (not 5), and HRMS lands all 3 valid employees. Also exercises the invitations CSV download.
 
 Steps:
-1. Generate 3 valid + 2 invalid codes; track only valid for cleanup.
+1. Sign in to the Configurator afresh (bulk creates need a live identity session, #2456); generate 3 valid + 2 invalid codes; track only valid for cleanup.
 2. Navigate to /employees/bulk.
 3. Wait for the Departments label (means reference-counts loaded — closed vocabularies ready).
 4. Build xlsx via buildEmployeeXlsx with 5 rows (3 valid, 2 invalid by design).
@@ -853,6 +874,9 @@ the test is actually asserting.`,
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
+    // Each row is created through createAndLink, which refuses once the identity
+    // session has ended; auth.json's cookie is as old as the run (see test 2).
+    await loginConfigurator(page);
     const validCodes = [1, 2, 3].map((i) => testCodeIndexed(testInfo, 'EMP_BULK_OK', i));
     const invalidCodes = [1, 2].map((i) => testCodeIndexed(testInfo, 'EMP_BULK_BAD', i));
     validCodes.forEach((c) => createdCodes.add(c));
@@ -873,7 +897,6 @@ the test is actually asserting.`,
       ...validCodes.map((c, i) => ({
         employeeCode: c,
         name: `PW Bulk ${i + 1}`,
-        userName: '',
         // Valid for THIS tenant's MDMS mobile rule — no hardcoded '07…'.
         mobileNumber: generateValidMobile(mobileRule),
         emailId: `${c.toLowerCase()}@example.com`,
@@ -892,7 +915,6 @@ the test is actually asserting.`,
       {
         employeeCode: invalidCodes[0],
         name: 'PW Bulk Bad1',
-        userName: '',
         mobileNumber: '99999',
         emailId: `${invalidCodes[0].toLowerCase()}@example.com`,
         gender: 'MALE',
@@ -907,7 +929,6 @@ the test is actually asserting.`,
       {
         employeeCode: invalidCodes[1],
         name: 'PW Bulk Bad2',
-        userName: '',
         // Valid mobile + email so the ONLY validation errors are the unknown dept/role.
         mobileNumber: generateValidMobile(mobileRule),
         emailId: `${invalidCodes[1].toLowerCase()}@example.com`,
@@ -1051,7 +1072,6 @@ async function pickUniqueEmployeeCode(): Promise<string | null> {
 interface BulkRow {
   employeeCode: string;
   name: string;
-  userName: string;
   mobileNumber: string;
   emailId: string;
   gender: string;
@@ -1068,8 +1088,10 @@ async function buildEmployeeXlsx(rows: BulkRow[]): Promise<Buffer> {
   // Sheet name MUST be one of: Employee / Employees / EmployeeMaster / HRMS /
   // employee (parseEmployeeExcel in excelParser.ts falls through those).
   const sheet = wb.addWorksheet('Employee');
+  // The columns of the configurator's own template (templateBuilder.ts
+  // EMPLOYEE_TEMPLATE_COLUMNS): no userName, HRMS makes it the employee code.
   const headers = [
-    'employeeCode', 'name', 'userName', 'mobileNumber', 'emailId', 'gender',
+    'employeeCode', 'name', 'mobileNumber', 'emailId', 'gender',
     'dob', 'department', 'designation', 'roles', 'jurisdictions', 'dateOfAppointment',
   ];
   sheet.addRow(headers);

@@ -104,8 +104,8 @@ export interface SeedPlan {
  *
  * Capped and disable-able because a wrong guess is not free: user-service locks
  * an account after repeated failures, and a locked persona breaks the very
- * deployment the suite is meant to test. Set PERSONA_PASSWORD_GUESSES='' to turn
- * discovery-by-guessing off entirely and rely on env pairs alone.
+ * deployment the suite is meant to test. Off by default (see passwordGuesses);
+ * set PERSONA_PASSWORD_GUESSES=<pw>[,<pw>...] to turn discovery-by-guessing on.
  *
  * The cap is only real if a guess costs exactly ONE failed login. It used not
  * to: login() probed [TENANT, ROOT_TENANT], so on a deployment with a city
@@ -118,10 +118,15 @@ export interface SeedPlan {
  */
 const MAX_PASSWORD_GUESSES = 3;
 
+/**
+ * Off unless PERSONA_PASSWORD_GUESSES names passwords: staff sign in to
+ * Keycloak by email (#2646), so an HRMS code is never a login and every guess
+ * would only be a failed Keycloak sign-in.
+ */
 function passwordGuesses(): string[] {
   const raw = process.env.PERSONA_PASSWORD_GUESSES;
-  if (raw !== undefined && !raw.trim()) return [];
-  return (raw ?? DEFAULT_PASSWORD)
+  if (!raw?.trim()) return [];
+  return raw
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
@@ -454,6 +459,16 @@ function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[], profile?: Depl
 
 const resolvedCache = new Map<PersonaKey, ResolvedPersona | null>();
 const diagnostics = new Map<PersonaKey, string>();
+
+/**
+ * Forget which persona satisfied each key (not the logins behind them). Profile
+ * discovery calls it after moving the seed locality: inbox-viewer's verdict
+ * depends on that locality, so a cached "none" from the first pass would stick.
+ */
+export function forgetResolvedPersonas(): void {
+  resolvedCache.clear();
+  diagnostics.clear();
+}
 
 export async function resolvePersona(key: PersonaKey, opts?: { profile?: DeploymentProfile }): Promise<ResolvedPersona | null> {
   if (resolvedCache.has(key)) return resolvedCache.get(key)!;

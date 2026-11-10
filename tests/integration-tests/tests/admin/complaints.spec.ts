@@ -24,6 +24,7 @@ import {
 import { cleanupPgrComplaints } from '../utils/manage/teardown';
 import { SRID_RE } from '../utils/pgr-idgen';
 import { seedComplaintAsCitizen } from '../utils/seed';
+import { tryGetProfile } from '../utils/profile';
 import { BASE_URL, generateCitizenPhone, ROOT_TENANT, TENANT, LOCALITY_CODE, SERVICE_CODE } from '../utils/env';
 
 // Tenant identifiers come from env so the suite runs on any deployment.
@@ -153,6 +154,23 @@ test.afterAll(async () => {
   }
 });
 
+/**
+ * Skip when the configurator session cannot perform ASSIGN. Since v2.20 a
+ * workspace founder holds configurator roles only (#2599), and the roles
+ * allowed to ASSIGN come from the deployment's PGR workflow (discovered).
+ */
+function skipUnlessSessionCanAssign(auth: ReturnType<typeof loadAuth>): void {
+  const allowed = tryGetProfile()?.workflow.pgr.actionRoles?.ASSIGN ?? ['GRO'];
+  const held = ((auth.user?.roles as unknown[] | undefined) ?? []).map((r) =>
+    typeof r === 'string' ? r : String((r as { code?: string })?.code ?? ''),
+  );
+  test.skip(
+    !held.some((r) => allowed.includes(r)),
+    `configurator session holds none of the ASSIGN roles [${allowed.join(', ')}] (it has ${held.join(', ') || 'none'}); ` +
+      'since v2.20 workspace founders get configurator roles only (#2599)',
+  );
+}
+
 test.describe('manage/complaints', () => {
   test('1. file complaint — citizen, locality, required landmark', {
     annotation: {
@@ -260,6 +278,7 @@ Catches a regression where description doesn't ride along with the workflow tran
     // Use the complaint from test 1 if available; otherwise pick the most
     // recent PENDINGFORASSIGNMENT one.
     const auth = loadAuth();
+    skipUnlessSessionCanAssign(auth);
     const target = await pickWorkableComplaint(auth);
     if (!target) test.skip(true, 'No workable complaint to assign');
 
@@ -970,6 +989,7 @@ Both client-side (single XHR count) and server-side (persistence) checks — tog
     // fetched service + workflow. After the fix, they should be merged
     // into the PUT body and persisted.
     const auth = loadAuth();
+    skipUnlessSessionCanAssign(auth);
     const target = await pickWorkableComplaint(auth);
     if (!target) test.skip(true, 'No workable complaint to edit');
 
@@ -1289,7 +1309,7 @@ async function pickWorkableComplaint(auth: AuthInfo): Promise<string | null> {
     }
   };
 
-  for (const w of wrappers) {
+  for (const w of SERVICE_CODE ? wrappers : []) {
     if ((w.service as Record<string, unknown>)?.serviceCode !== SERVICE_CODE) continue;
     const id = idOf(w);
     if (!id || consumedComplaints.has(id)) continue;
@@ -1307,7 +1327,9 @@ async function pickWorkableComplaint(auth: AuthInfo): Promise<string | null> {
   // pgr-services, which reads as a workflow bug and is really just bad test data.
   // Seeding gives every caller a complaint of the SEED serviceCode, whose
   // department the resolved PGR_LME assignee actually holds.
-  try {
+  // Only with a seed plan: an empty service/locality (no plan discovered) would
+  // just 400 here. Without one, fall through to scavenging.
+  if (SERVICE_CODE && LOCALITY_CODE) try {
     const seeded = await seedComplaintAsCitizen({
       serviceCode: SERVICE_CODE,
       localityCode: LOCALITY_CODE,

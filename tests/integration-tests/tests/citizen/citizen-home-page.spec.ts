@@ -12,7 +12,7 @@ import { tenantSlug } from '../utils/identity-bff';
  */
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { BASE_URL, generateCitizenPhone } from '../utils/env';
+import { BASE_URL, LOCALES, generateCitizenPhone } from '../utils/env';
 
 test.describe('Citizen home + landing', () => {
   test('/citizen/ redirects to /citizen/all-services', {
@@ -170,6 +170,10 @@ Steps:
 Tightly scoped — bigger localization assertions live in dedicated specs (e.g. complaint-type-labels.spec.ts).`,
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
+    test.skip(
+      !LOCALES.some((l) => l.startsWith('en_')),
+      `the pill is asserted by its "English" label, but no English locale is seeded here (${LOCALES.join(', ')})`,
+    );
     test.setTimeout(60_000);
     const phone = generateCitizenPhone();
     await citizenOtpLogin(page, phone);

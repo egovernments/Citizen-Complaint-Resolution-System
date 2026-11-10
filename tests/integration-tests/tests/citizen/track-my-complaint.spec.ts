@@ -9,7 +9,7 @@ import { tenantSlug } from '../utils/identity-bff';
  * hits the UI later for browse-only, matching the pattern every other
  * citizen spec now uses (complaint-detail-page, rate-resolved-complaint,
  * reopen-closed-complaint) rather than each spec re-implementing
- * register+resolveServiceCode/resolveLocalityCode+pgrCreate.
+ * register+resolveServiceCode+pgrCreate.
  *
  * Asserts the route divergence flagged in the catalogue Routes table:
  * the detail URL is `/citizen/pgr/complaints/:id` (PLURAL), NOT
@@ -147,7 +147,8 @@ If the SPA ever redirects plural → singular (or 404s), this test catches the c
     // Deployment-specific complaint-ID prefix is discovered live by
     // citizen.setup.ts (egov-idgen) and persisted on the provisioned citizen;
     // PGR_ID_PREFIX (env) is the fallback.
-    const pgrIdPrefix = readProvisionedCitizen()?.pgrIdPrefix ?? PGR_ID_PREFIX;
+    // No discovered prefix: accept any idgen prefix rather than another deployment's.
+    const pgrIdPrefix = readProvisionedCitizen()?.pgrIdPrefix || PGR_ID_PREFIX || '[A-Z0-9]+(?:-[A-Z0-9]+)*';
     const detailUrlRe = new RegExp(
       `/digit-ui/citizen/pgr/complaints/${pgrIdPrefix}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+`,
     );

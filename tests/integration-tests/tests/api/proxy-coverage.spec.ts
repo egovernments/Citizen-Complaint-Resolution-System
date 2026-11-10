@@ -244,11 +244,15 @@ test.describe('API Proxy Coverage', () => {
         url: `${BASE_URL}/pgr-services/v2/request/_search?tenantId=${TENANT}`,
         body: { RequestInfo: requestInfo },
       },
-      {
-        name: 'Boundary search',
-        url: `${BASE_URL}/boundary-service/boundary-relationships/_search?tenantId=${TENANT}&hierarchyType=${tryGetProfile()?.boundary.hierarchyType || 'ADMIN'}`,
-        body: { RequestInfo: requestInfo },
-      },
+      // Only when the profile names the PGR hierarchy: guessing one ('ADMIN')
+      // probes a tree this deployment may not have.
+      ...(tryGetProfile()?.boundary.hierarchyType
+        ? [{
+            name: 'Boundary search',
+            url: `${BASE_URL}/boundary-service/boundary-relationships/_search?tenantId=${TENANT}&hierarchyType=${tryGetProfile()!.boundary.hierarchyType}`,
+            body: { RequestInfo: requestInfo },
+          }]
+        : (console.log('[proxy-coverage] Boundary search row skipped: profile has no boundary.hierarchyType'), [])),
       {
         // tenantId is a QUERY param here too — in `criteria` it never arrives.
         name: 'HRMS employee count',

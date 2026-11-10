@@ -55,7 +55,7 @@ let admin: Principal | null = null;
 let seedSkip = '';
 
 /** Distinct LEAF boundary codes (the level PGR files complaints against) for the
- *  tenant — NOT the single "preferred" code resolveLocalityCode returns, since
+ *  tenant — NOT the single seed-plan LOCALITY_CODE, since
  *  this spec needs at least two genuinely different codes to seed complaints into
  *  and prove the sort actually reorders.
  *
@@ -66,20 +66,36 @@ let seedSkip = '';
  *  PGR localities or never surface in the employee's inbox, collapsing the inbox
  *  to a single distinct locality and failing the sort assertion. Walks the
  *  boundary-relationships tree and keeps only the leaves. */
-async function fetchWardCodes(token: string): Promise<string[]> {
+async function fetchWardCodes(token: string): Promise<{ codes: string[]; scope: string }> {
   const hierarchyType = getProfile().boundary.hierarchyType;
-  if (!hierarchyType) return [];
+  if (!hierarchyType) return { codes: [], scope: 'no PGR hierarchy in the profile' };
   const root = await fetchBoundaryTree(TENANT, hierarchyType, { authToken: token });
-  if (!root) return [];
+  if (!root) return { codes: [], scope: `no ${hierarchyType} boundary tree` };
+  // The inbox viewer (EMPLOYEE_USER) only sees complaints inside its HRMS
+  // jurisdiction (exact match on the boundary or an ancestor), so a leaf outside
+  // it seeds a complaint the inbox can never show — e.g. a viewer scoped to
+  // E2E_WARD_A on a 2-ward workspace sees one locality however the sort works.
+  // Keep only leaves the viewer covers. When the profile has no jurisdiction for
+  // the viewer, or none of its codes is in this tree (a tenant-wide jurisdiction),
+  // nothing can be narrowed, so every leaf stays.
+  const viewer = Object.values(getProfile().personas.resolved).find((p) => p?.username === EMPLOYEE_USER);
+  const allCodes = new Set<string>();
+  const collect = (n: BoundaryNode): void => { allCodes.add(n.code); n.children?.forEach(collect); };
+  collect(root);
+  const scoped = (viewer?.jurisdictions ?? []).filter((j) => allCodes.has(j));
   const leaves: string[] = [];
-  const walk = (n: BoundaryNode): void => {
+  const walk = (n: BoundaryNode, covered: boolean): void => {
+    const inScope = covered || scoped.length === 0 || scoped.includes(n.code);
     if (!n.children || n.children.length === 0) {
-      if (n.code && !n.code.startsWith('ZZ_') && n.code !== 'WARD_ORD') leaves.push(n.code);
+      if (inScope && n.code && !n.code.startsWith('ZZ_') && n.code !== 'WARD_ORD') leaves.push(n.code);
       return;
     }
-    n.children.forEach(walk);
+    n.children.forEach((c) => walk(c, inScope));
   };
-  walk(root);
+  walk(root, false);
+  const scope = scoped.length
+    ? `leaves inside ${EMPLOYEE_USER}'s jurisdiction (${scoped.join(', ')})`
+    : 'leaves of the whole tree';
   // Sorted ascending so the caller seeds into the lexicographically SMALLEST
   // leaves. That matters: an established tenant's inbox is dominated by one
   // heavily-used locality (161 of 200 complaints at alto_mae_a_q1 here), which
@@ -87,7 +103,7 @@ async function fetchWardCodes(token: string): Promise<string[]> {
   // single locality — failing the "≥2 distinct localities visible" guard even
   // though the sort worked. Seeding into codes that sort BEFORE that block
   // guarantees the seeded localities appear on the first ASC page.
-  return [...new Set(leaves)].sort();
+  return { codes: [...new Set(leaves)].sort(), scope };
 }
 
 test.beforeAll(async () => {
@@ -95,9 +111,14 @@ test.beforeAll(async () => {
   if (!admin) { seedSkip = `ADMIN (${ADMIN_USER}) login failed — cannot seed complaints`; return; }
   try {
     const serviceCode = await resolveServiceCode(BASE_URL, admin.token, TENANT, SERVICE_CODE);
-    const wards = await fetchWardCodes(admin.token);
+    if (!serviceCode) {
+      seedSkip = `no active, fileable complaint type on ${TENANT} (and no seed plan service code)`;
+      return;
+    }
+    const { codes: wards, scope } = await fetchWardCodes(admin.token);
     if (wards.length < 2) {
-      seedSkip = 'deployment has fewer than 2 ward-level boundaries — nothing to sort between';
+      seedSkip = `the inbox viewer can see fewer than 2 leaf boundaries (${scope}: ${wards.join(', ') || 'none'}) — `
+        + 'nothing to sort between; give the viewer a jurisdiction spanning ≥2 leaves';
       return;
     }
     const [localityA, localityB] = wards;

@@ -13,7 +13,8 @@
     "personas.csr": "required",
     "personas.ward-scoped-csr": "required",
     "locales.multi": "required",
-    "tenant.citySubTenant": "absent"
+    "tenant.citySubTenant": "absent",
+    "pgr.autoEscalation": "required"
   },
   "_rationale": {
     "workflow.pgr.actions.ESCALATE": "Required: the shipped PgrWorkflowConfig wires ESCALATE, so #521 must actually run here rather than self-skip. This PR closes the gap \u2014 full-dump.sql now seeds the ESCALATE actions on the pg businessService, so the capability is present and the test runs for real.",
@@ -22,6 +23,7 @@
     "personas.csr": "Required: PGWCSR4 (personas.ward-scoped-csr) holds CSR, which is all this persona asks for.",
     "personas.ward-scoped-csr": "Required as of the PGWCSR4 seed: the dump ships a fourth employee carrying the CSR role AND a jurisdiction BELOW the hierarchy root (ADMIN/Locality/SUN01_LOCALITY), which is what isWardScopedCsr() checks. It was 'absent' only because PGGRO1/PGLME2/PGLME3 all sit at PG_STATE (the root level) and the sole sub-root employee was a suite leftover with no CSR role. Scoped to a LOCALITY rather than the Zone it first used: pg's ADMIN tree is State > City > Zone > Block > Locality with exactly ONE Zone (PG_CITYA_Z1), so a zone-scoped CSR has no sibling at its own level and boundary-jurisdiction-496 failed its own precondition ('nothing to exercise the jurisdiction filter against') before reaching the assertion it exists for. SUN01_LOCALITY has two seeded siblings (SUN02/SUN03) under the same Block, so the forbidden set is non-empty; it is also the deepest level, which is what 'ward-scoped' is meant to say. Preferred over seeding a second Zone, which would need new boundary + relationship + localization rows AND a Block/Locality subtree under it — a childless Zone dead-ends the City > Zone > Block > Locality cascade in the citizen file-complaint wizard and configurator complaint-create. Kept 'required' deliberately so the capability cannot silently regress to a skip if that seed row is ever dropped.",
     "locales.multi": "Required: the dump seeds pg with en_IN plus the onboarding fr_FR and pt_BR packs (280 rainmaker-common rows each, about a third of en_IN, above discoverLocales' 25% floor) and lists all three in StateInfo, along with fr/pt labels for pg's two complaint categories. Kept 'required' so a dump that drops the packs goes red instead of quietly turning the multi-locale specs into skips.",
-    "tenant.citySubTenant": "Absent: pg is targeted flat \u2014 the pg.* city rows carry no PGR config."
+    "tenant.citySubTenant": "Absent: pg is targeted flat \u2014 the pg.* city rows carry no PGR config.",
+    "pgr.autoEscalation": "Required: full-dump.sql seeds a DEPT_3 reportingTo chain at pg (eg_hrms_assignment.reportingto), so a dump that drops it must go red."
   }
 }

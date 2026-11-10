@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type APIResponse, type Page, type Request, type Response } from '@playwright/test';
+import { TENANT_SLUG } from './env';
 
 export type Surface = 'configurator' | 'employee' | 'citizen';
 export interface DigitContext {
@@ -28,7 +29,8 @@ export async function identityJson<T>(response: Pick<APIResponse, 'status' | 'js
 }
 
 export function tenantSlug(): string {
-  const slug = process.env.IDENTITY_TEST_TENANT_SLUG;
+  // Set by the operator, or recorded by profile discovery from DIGIT_TENANT.
+  const slug = process.env.IDENTITY_TEST_TENANT_SLUG || TENANT_SLUG;
   if (!slug || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
     throw new Error('Set IDENTITY_TEST_TENANT_SLUG to a seeded ACTIVE workspace slug');
   }

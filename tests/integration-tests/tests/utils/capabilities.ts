@@ -33,6 +33,7 @@ export const CAPABILITY_KEYS = [
   'personas.ward-scoped-csr',
   'locales.multi',
   'tenant.citySubTenant',
+  'pgr.autoEscalation',
 ] as const;
 
 export type CapabilityKey = (typeof CAPABILITY_KEYS)[number];
@@ -168,6 +169,11 @@ export function isPresent(key: CapabilityKey, profile?: DeploymentProfile): bool
       return p.locales.length > 1;
     case 'tenant.citySubTenant':
       return !p.tenant.flat;
+    case 'pgr.autoEscalation':
+      // Declaration-only, like attachmentDetailRender: whether the scheduler runs
+      // (PGR_ESCALATION_ENABLED) and HRMS carries reportingTo links is not in the
+      // profile, so the deployment file's word is the only signal.
+      return declared(key) !== 'absent';
   }
 }
 
@@ -205,6 +211,8 @@ function evidence(key: CapabilityKey, p: DeploymentProfile): string {
       return `seeded locales: ${p.locales.join(', ') || 'none'}`;
     case 'tenant.citySubTenant':
       return p.tenant.flat ? `flat tenant — city and root are both '${p.tenant.root}'` : `city ${p.tenant.city} under root ${p.tenant.root}`;
+    case 'pgr.autoEscalation':
+      return 'not probed — the escalation scheduler flag and HRMS reportingTo links follow the declaration in the expectations file';
   }
 }
 
