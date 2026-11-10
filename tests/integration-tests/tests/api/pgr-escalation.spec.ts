@@ -825,11 +825,11 @@ This is the final guard against workflow/source drift.`,
     const atLme = biz.states.find((s: any) => s.applicationStatus === 'PENDINGATLME');
     const forAssignment = biz.states.find((s: any) => s.applicationStatus === 'PENDINGFORASSIGNMENT');
     const escAtLme = (atLme?.actions || []).find((a: any) => a.action === 'ESCALATE');
-    const escAtPfa = (forAssignment?.actions || []).find((a: any) => a.action === 'ESCALATE');
     const escTarget = biz.states.find((s: any) => s.uuid === escAtLme?.nextState);
-    const pfaTarget = biz.states.find((s: any) => s.uuid === escAtPfa?.nextState);
+    // Since 93fb577bb automatic escalation is PENDINGATLME only (eligible.statuses,
+    // EscalationConfig, platform baseline), so the shipped seed no longer carries
+    // an ESCALATE on PENDINGFORASSIGNMENT; only the LME self-loop is audited.
     expect(escTarget?.applicationStatus).toBe('PENDINGATLME');
-    expect(pfaTarget?.applicationStatus).toBe('PENDINGFORASSIGNMENT');
     expect(biz.states.some((s: any) => s.applicationStatus === 'PENDINGATSUPERVISOR')).toBe(false);
     expect(biz.states.some((s: any) => s.applicationStatus === 'RESOLVEDBYSUPERVISOR')).toBe(false);
     expect((atLme.actions || []).some((a: any) => a.action === 'FORWARD')).toBe(false);

@@ -28,6 +28,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  fetchBoundaryLabels,
   fetchBoundaryTree,
   fetchGlobalConfigs,
   fetchLocalizationCount,
@@ -59,6 +60,8 @@ export interface PersonaSummary {
 export interface BoundaryPathNode {
   code: string;
   boundaryType: string;
+  /** Display name the PGR UI shows (rainmaker-boundary-<hierarchy>), when localized. */
+  name?: string;
 }
 
 export interface ProfileService {
@@ -863,6 +866,15 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
       }
       plan = await attempt('seed plan (seed locality moved)', () => resolveSeedPlan({ profile: draft }), plan);
     }
+  }
+  // Names for the final leaf path: the UI's boundary dropdowns show these, not codes.
+  if (draft.boundary.hierarchyType && draft.boundary.leafPath.length) {
+    const labels = await attempt(
+      'boundary labels',
+      () => fetchBoundaryLabels(root, draft.boundary.hierarchyType!, { locale: locales[0] ?? 'en_IN', authToken, baseUrl }),
+      {} as Record<string, string>,
+    );
+    draft.boundary.leafPath = draft.boundary.leafPath.map((n) => (labels[n.code] ? { ...n, name: labels[n.code] } : n));
   }
   if ('error' in plan) {
     draft.personas.unresolvedDiagnostics['pgr.seedPlan'] = plan.error;
