@@ -12,7 +12,7 @@ import { tenantSlug } from '../utils/identity-bff';
  */
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { BASE_URL, LOCALES, generateCitizenPhone } from '../utils/env';
+import { BASE_URL, LOCALES } from '../utils/env';
 
 test.describe('Citizen home + landing', () => {
   test('/citizen/ redirects to /citizen/all-services', {
@@ -21,7 +21,7 @@ test.describe('Citizen home + landing', () => {
       description: `Routes-table contract from docs/personas/citizen-flows.md: bare /citizen/ must redirect a logged-in citizen to /citizen/all-services. Catches a regression where the index route changes silently and citizens land on a 404 or a different home.
 
 Steps:
-1. setTimeout 60s; OTP-login as a fresh citizen.
+1. setTimeout 60s; sign in as the suite-wide citizen (citizen-setup's BFF session; no new OTP).
 2. Navigate to /digit-ui/citizen.
 3. Wait (up to 15 s) for the SPA router to settle on /citizen/all-services.
 4. Assert page.url() contains '/citizen/all-services'.
@@ -32,8 +32,9 @@ a round-trip to MDMS before picking the home route.`,
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(60_000);
-    const phone = generateCitizenPhone();
-    await citizenOtpLogin(page, phone);
+    // The suite-wide citizen's session (citizen-setup): nothing here needs a new
+    // account, and each new one costs a BFF OTP send (20/IP/hour).
+    await citizenOtpLogin(page);
 
     await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen`, {
       waitUntil: 'domcontentloaded',
@@ -53,7 +54,7 @@ a round-trip to MDMS before picking the home route.`,
       description: `Inventory check on the citizen home landing — every label a citizen needs to file/track complaints + the four sidebar items must render. Catches both shrinkage (a tile or sidebar entry disappearing) and crash regressions (the page fully erroring).
 
 Steps:
-1. setTimeout 60s; OTP-login as a fresh citizen.
+1. setTimeout 60s; sign in as the suite-wide citizen (citizen-setup's BFF session; no new OTP).
 2. Navigate to /digit-ui/citizen/all-services, wait 3s for hydration.
 3. Assert body does NOT contain "Something went wrong".
 4. Assert body contains "Complaint Management System", "File a Complaint", and "My Complaints".
@@ -67,8 +68,9 @@ Catalog test — if a label gets renamed legitimately, update this spec and Stor
     page,
   }) => {
     test.setTimeout(60_000);
-    const phone = generateCitizenPhone();
-    await citizenOtpLogin(page, phone);
+    // The suite-wide citizen's session (citizen-setup): nothing here needs a new
+    // account, and each new one costs a BFF OTP send (20/IP/hour).
+    await citizenOtpLogin(page);
 
     await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/all-services`, {
       waitUntil: 'domcontentloaded',
@@ -125,7 +127,7 @@ Catalog test — if a label gets renamed legitimately, update this spec and Stor
       description: `Catalog test for the PGR-branded home (/citizen/pgr-home). Asserts the actionable content + PGR badge renders. Brand assets ("Nai Pepea", hero text) are CSS-content and intentionally NOT asserted on — only DOM text is tested.
 
 Steps:
-1. setTimeout 60s; OTP-login as a fresh citizen.
+1. setTimeout 60s; sign in as the suite-wide citizen (citizen-setup's BFF session; no new OTP).
 2. Navigate to /digit-ui/citizen/pgr-home, wait 3s.
 3. Assert body does NOT contain "Something went wrong".
 4. Assert body contains "PGR", "Complaint Management System", "My Complaints", and "File a Complaint".
@@ -163,7 +165,7 @@ If the brand assets ever land as real DOM text, extend this spec — leaving the
       description: `Smoke check that the header language pill renders with the current locale ("English" by default). Doesn't assert the dropdown options because clicking the pill opens a native OS-level select with no [role="listbox"] in the DOM — only confirms the pill exists.
 
 Steps:
-1. setTimeout 60s; OTP-login as a fresh citizen.
+1. setTimeout 60s; sign in as the suite-wide citizen (citizen-setup's BFF session; no new OTP).
 2. Wait 2s for header to render.
 3. Locate label:has-text("English"); assert it is visible (within 5s).
 
@@ -175,8 +177,9 @@ Tightly scoped — bigger localization assertions live in dedicated specs (e.g. 
       `the pill is asserted by its "English" label, but no English locale is seeded here (${LOCALES.join(', ')})`,
     );
     test.setTimeout(60_000);
-    const phone = generateCitizenPhone();
-    await citizenOtpLogin(page, phone);
+    // The suite-wide citizen's session (citizen-setup): nothing here needs a new
+    // account, and each new one costs a BFF OTP send (20/IP/hour).
+    await citizenOtpLogin(page);
     await page.waitForTimeout(2000);
 
     // Language pill is a <label> with the current locale name. Clicking

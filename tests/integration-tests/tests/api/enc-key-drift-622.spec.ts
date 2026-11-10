@@ -47,7 +47,8 @@ import { getDigitToken } from '../utils/auth';
  */
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
-import { resolvePersona } from '../utils/personas';
+import { resolvePersona, type PersonaKey } from '../utils/personas';
+import { getProfile } from '../utils/profile';
 
 /** egov-enc-service ciphertext shape: `<numeric key id>|<base64 payload>`. */
 const CIPHERTEXT_RE = /^\d+\|/;
@@ -81,10 +82,18 @@ Steps:
 Runs unconditionally: no flag, no redeploy, no destructive flip.`,
     },
     tag: ['@persona:system'] }, async ({ request }) => {
-    // resolvePersona (not getPersona) so a deployment with no non-ADMIN employee
-    // self-skips with the resolver's own diagnostic instead of throwing.
-    const employee = await resolvePersona('gro-with-department');
-    test.skip(!employee, 'deployment has no non-ADMIN employee persona to check enc-key drift against');
+    // ANY seeded employee other than ADMIN evidences drift — the role does not
+    // matter, only that bootstrap did not re-provision the row. This used to ask
+    // for 'gro-with-department' alone, so a deployment with seeded employees but
+    // no GRO login (bomet: HS_LME and the ward CSR log in, no GRO does) skipped
+    // with "no non-ADMIN employee persona", which was false. Keys are taken from
+    // what profile-setup already resolved, so no persona sweep runs here.
+    // resolvePersona (not getPersona) so a deployment with none self-skips.
+    const order: PersonaKey[] = ['gro-with-department', 'gro', 'lme', 'csr', 'ward-scoped-csr', 'inbox-viewer', 'employee'];
+    const resolved = getProfile().personas.resolved;
+    const key = order.find((k) => resolved[k] && resolved[k]!.username !== ADMIN_USER);
+    const employee = key ? await resolvePersona(key) : null;
+    test.skip(!employee, `deployment has no non-ADMIN employee persona (any of ${order.join(', ')}) to check enc-key drift against`);
     test.skip(
       employee!.username === ADMIN_USER,
       `the only resolvable employee IS ${ADMIN_USER} — bootstrap re-provisions that account, so it cannot evidence drift`,

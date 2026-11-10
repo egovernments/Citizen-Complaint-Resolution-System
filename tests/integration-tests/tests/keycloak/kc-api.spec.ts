@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test';
 import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS, KC_BASE, KC_REALM } from '../utils/env';
 import { staffContext } from '../utils/auth';
-import { authorizeUrl, identityJson } from '../utils/identity-bff';
+import { authorizeUrl, identityJson, type Surface } from '../utils/identity-bff';
 
 const issuer = `${KC_BASE}/realms/${encodeURIComponent(KC_REALM)}`;
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -44,10 +44,18 @@ test.describe('Keycloak through identity-bff — API contract', () => {
   });
 
   test('BFF authorize owns PKCE and the configured Google IdP hint', { tag: ['@area:keycloak', '@persona:system'] }, async ({ request }) => {
-    const offered = await identityJson<{ methods?: Array<{ id?: string }> }>(
-      await request.get(`${BASE_URL}/identity/v1/auth-methods?surface=citizen&intent=signin`));
-    test.skip(!offered.methods?.some(m => m.id === 'google'), 'this deployment offers citizens no Google sign-in (/identity/v1/auth-methods)');
-    const response = await request.get(authorizeUrl(BASE_URL, 'citizen', 'google'), { maxRedirects: 0 });
+    // The PKCE + kc_idp_hint contract is the BFF's own, the same on every surface
+    // (identity-bff authentication/routes.ts /authorize -> oidc.ts authorizationUrl).
+    // Each surface reads its methods from its own Keycloak client, so exercise
+    // the first one that offers Google, citizens first.
+    let surface: Surface | undefined;
+    for (const candidate of ['citizen', 'employee', 'configurator'] as const) {
+      const offered = await identityJson<{ methods?: Array<{ id?: string }> }>(
+        await request.get(`${BASE_URL}/identity/v1/auth-methods?surface=${candidate}&intent=signin`));
+      if (offered.methods?.some(m => m.id === 'google')) { surface = candidate; break; }
+    }
+    test.skip(!surface, 'this deployment offers Google sign-in on no surface (/identity/v1/auth-methods)');
+    const response = await request.get(authorizeUrl(BASE_URL, surface!, 'google'), { maxRedirects: 0 });
     expect(response.status()).toBe(302);
     const destination = new URL(response.headers().location);
     expect(destination.pathname).toBe(`/auth/realms/${KC_REALM}/protocol/openid-connect/auth`);

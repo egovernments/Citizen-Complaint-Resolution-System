@@ -52,6 +52,13 @@ const identityInboxUrl = () => `${BASE_URL}/${tenantSlug()}/digit-ui/employee/pg
 const SEARCH_RE = /pgr-services\/v2\/request\/_search/;
 
 let admin: Principal | null = null;
+// The inbox VIEWER's own principal, used to re-read each visible row via the
+// PGR API. Not ADMIN: since the PGR ABAC scope policy (pgr-services
+// policy/PolicyDrivenScopeResolver, fail-closed) an employee with no PGR role
+// gets an EMPTY _search, so a workspace admin without GRO/PGR_LME/CSR (bomet's
+// ke-admin) cannot read back the rows the LME's inbox shows. The viewer can, by
+// definition — the rows came from its own _search.
+let viewer: Principal | null = null;
 let seedSkip = '';
 
 /** Distinct LEAF boundary codes (the level PGR files complaints against) for the
@@ -109,6 +116,8 @@ async function fetchWardCodes(token: string): Promise<{ codes: string[]; scope: 
 test.beforeAll(async () => {
   admin = await getPrincipal(ADMIN_USER, ADMIN_PASS);
   if (!admin) { seedSkip = `ADMIN (${ADMIN_USER}) login failed — cannot seed complaints`; return; }
+  viewer = await getPrincipal(EMPLOYEE_USER, EMPLOYEE_PASS);
+  if (!viewer) { seedSkip = `inbox viewer (${EMPLOYEE_USER}) API login failed — cannot re-read row order`; return; }
   try {
     const serviceCode = await resolveServiceCode(BASE_URL, admin.token, TENANT, SERVICE_CODE);
     if (!serviceCode) {
@@ -200,7 +209,7 @@ test.describe('employee inbox-v2 — column header sort (issue #922)', () => {
     expect(url).toContain('sortBy=locality');
     expect(url).toContain('sortOrder=ASC');
 
-    const codes = await localityCodesInOrder(page, admin!);
+    const codes = await localityCodesInOrder(page, viewer!);
     expect(codes.length, 'inbox has rows to check').toBeGreaterThan(0);
     expect(new Set(codes).size, 'at least two distinct localities are visible (otherwise this proves nothing)').toBeGreaterThan(1);
     expect(isNonDecreasing(codes), `locality codes are ASC-sorted: ${codes.join(', ')}`).toBeTruthy();
@@ -221,7 +230,7 @@ test.describe('employee inbox-v2 — column header sort (issue #922)', () => {
     expect(url).toContain('sortBy=locality');
     expect(url).toContain('sortOrder=DESC');
 
-    const codes = await localityCodesInOrder(page, admin!);
+    const codes = await localityCodesInOrder(page, viewer!);
     expect(isNonIncreasing(codes), `locality codes are DESC-sorted after the second click: ${codes.join(', ')}`).toBeTruthy();
     expect(errors, 'no page errors after two sort clicks').toEqual([]);
   });

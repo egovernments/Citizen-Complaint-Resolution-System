@@ -184,11 +184,11 @@ Steps:
 4. Fill Description with >10 chars.
 5. pickLocality(page, liveBoundaryCode) — drives Hierarchy → Boundary type → Locality cascade.
 6. Fill Mobile number with a unique phone from generateCitizenPhone() (valid for the deployment's MDMS mobile rule — 9 digits starting with 7/1).
-7. Set up createReqPromise on /pgr-services/v2/request/_create.
+7. Set up a response wait on /pgr-services/v2/request/_create.
 8. Click Create.
-9. Parse the captured request body; assert service.citizen.tenantId and address.tenantId both === TENANT_CODE (root: the suite targets root tenants only, #2398 decision 2, so resolveComplaintAddressTenant has no city to pick) and address.locality.code is non-empty.
-10. Wait for URL matching /PG-PGR-/ within 30s.
-11. Capture the SR id from the URL into createdComplaints for cleanup.
+9. Parse the captured request body; assert service.citizen.tenantId === TENANT_CODE and address.locality.code is non-empty. address.tenantId must equal service.tenantId and be the root, or (resolveComplaintAddressTenant, e848840b1) an ACTIVE city under the root whose own boundary space holds the picked locality — a migrated root can carry cities (bomet ke → ke.bomet).
+10. Assert the _create response is 200 and carries a <PREFIX>-PGR id; record it for cleanup.
+11. Assert the redirect lands on that id's Show page (redirect="show") and the page shows the id.
 
 Citizen tenant must be ROOT — assigning to city would break login flows. Cleanup is API-only via cleanupPgrComplaints in afterAll.`,
     },
@@ -221,32 +221,69 @@ Citizen tenant must be ROOT — assigning to city would break login flows. Clean
     // Leave name blank intentionally — server should fall back to mobile.
 
     // Capture the create XHR so we can grab the SR id and the payload.
-    const createReqPromise = page.waitForRequest((req) =>
-      req.url().includes('/pgr-services/v2/request/_create') &&
-      req.method() === 'POST',
+    const createResp$ = page.waitForResponse((r) =>
+      r.url().includes('/pgr-services/v2/request/_create') &&
+      r.request().method() === 'POST',
     );
 
     await page.getByRole('button', { name: /^Create$/ }).click();
 
-    const createReq = await createReqPromise;
+    const createReq = (await createResp$).request();
     const reqBody = JSON.parse(createReq.postData() || '{}');
     const service = reqBody.service as Record<string, unknown>;
 
     // Citizen tenant must be the STATE tenant, not the city.
     expect((service.citizen as Record<string, unknown>)?.tenantId).toBe(TENANT_CODE);
     const address = service.address as Record<string, unknown>;
-    // Root tenants only: a foreign tenant (pg, a stale city id) or an empty one
-    // here would misroute the complaint.
-    expect(address?.tenantId, 'address.tenantId').toBe(TENANT_CODE);
-    expect(((address?.locality as Record<string, unknown>)?.code) ?? '').toBeTruthy();
+    const localityCode = String((address?.locality as Record<string, unknown>)?.code ?? '');
+    expect(localityCode, 'address.locality.code').toBeTruthy();
+    // address.tenantId follows the configurator's resolveComplaintAddressTenant
+    // (dataProvider.ts, e848840b1 / PR #1143): the root, unless an ACTIVE city
+    // under the root holds the picked locality in its own boundary space — then
+    // that city. A fresh v2.20 workspace has no cities, so this is the root; a
+    // migrated root can carry cities (bomet `ke` has `ke.bomet` with the same
+    // Bomet tree). Either way it must never be a foreign tenant (pg, a stale or
+    // inactive city) or empty, and pgr-services validates the locality against
+    // service.tenantId, so the two must agree.
+    const addressTenant = String(address?.tenantId ?? '');
+    expect(service.tenantId, 'service.tenantId must equal address.tenantId').toBe(addressTenant);
+    if (addressTenant !== TENANT_CODE) {
+      expect(addressTenant, 'address.tenantId must be the root or a city under it')
+        .toMatch(new RegExp(`^${escapeRegex(TENANT_CODE)}\\.[^.]+$`));
+      const auth = loadAuth();
+      const activeCities = (
+        await mdmsSearch(auth, TENANT_CODE, 'tenant.tenants', { limit: 500, isActive: true })
+      ).map((r) => String((r.data as Record<string, unknown>)?.code ?? ''));
+      expect(activeCities, `address.tenantId ${addressTenant} must be an ACTIVE tenant under ${TENANT_CODE}`)
+        .toContain(addressTenant);
+      expect(
+        await boundaryExists(auth, addressTenant, localityCode),
+        `city ${addressTenant} must hold locality ${localityCode} in its own boundary space`,
+      ).toBe(true);
+    }
 
-    // Wait for the redirect to the Show page with a fresh <PREFIX>-PGR-* id
-    // (Maputo: PG-PGR-…, Kenya: NCCG-PGR-…) — keep the SRID match prefix-agnostic.
-    await page.waitForURL(SRID_RE, { timeout: 30_000 });
-    const url = page.url();
-    const match = url.match(SRID_RE);
-    expect(match, `expected <PREFIX>-PGR id in url ${url}`).not.toBeNull();
-    if (match) createdComplaints.add(match[0]);
+    // The _create RESPONSE is the source of truth for the new id: record it for
+    // cleanup before anything else can fail.
+    const createResp = await createResp$;
+    expect(createResp.status(), 'PGR _create should succeed').toBe(200);
+    const srid = String(
+      ((await createResp.json()).ServiceWrappers?.[0]?.service as Record<string, unknown> | undefined)
+        ?.serviceRequestId ?? '',
+    );
+    expect(srid, 'the _create response must carry a <PREFIX>-PGR id').toMatch(SRID_RE);
+    createdComplaints.add(srid);
+
+    // ComplaintCreate.tsx redirects to the Show page of the new complaint
+    // (redirect="show"). Show re-reads it through /request/_search; if the
+    // session cannot read what it just filed, react-admin bounces back to the
+    // list instead — the operator never sees their complaint.
+    await expect(
+      page,
+      `after Create the configurator must open the Show page of ${srid}. If it lands on the list ` +
+        'instead, the session could not read the complaint back through /pgr-services/v2/request/_search ' +
+        '(check that /request/_search\'s resource.complaint.scope grants this session\'s roles a scope).',
+    ).toHaveURL(new RegExp(`${escapeRegex(srid)}/show`), { timeout: 30_000 });
+    await expect(page.getByText(srid).first()).toBeVisible({ timeout: 15_000 });
   });
 
   test('2. edit merges description + workflow ASSIGN in one round-trip', {
@@ -365,11 +402,15 @@ If ANY option label is a UUID, the dropdown is unusable for an admin who isn't m
     const target = await pickWorkableComplaint(loadAuth());
     if (!target) test.skip(true, 'No workable complaint to inspect');
 
-    await page.goto(`${LIST_PATH}/${target}/edit`);
+    await openComplaintEdit(page, target!);
 
-    const actionSelect = page.getByLabel(/^Action$/i).or(page.getByLabel(/^Workflow/i)).first();
-    await actionSelect.click();
+    // WorkflowActionSelect.tsx labels its trigger "Workflow Action" (<Label htmlFor>).
+    const actionSelect = page.getByLabel(/^Workflow Action$/i);
+    await actionSelect.click({ timeout: 20_000 });
     const options = page.getByRole('option');
+    await expect(options.first(), 'the Workflow Action select must open with options').toBeVisible({
+      timeout: 10_000,
+    });
     const count = await options.count();
     expect(count).toBeGreaterThan(0);
 
@@ -401,12 +442,15 @@ Sorted exact comparison is strict — adding any new value (e.g. SMS) would fail
     const target = await pickWorkableComplaint(loadAuth());
     if (!target) test.skip(true, 'No workable complaint to inspect');
 
-    await page.goto(`${LIST_PATH}/${target}/edit`);
+    await openComplaintEdit(page, target!);
 
     const sourceSelect = page.getByLabel(/^Source$/i);
-    await sourceSelect.click();
+    await sourceSelect.click({ timeout: 20_000 });
 
     const allowed = ['Web', 'Mobile', 'WhatsApp'];
+    await expect(page.getByRole('option').first(), 'the Source select must open with options').toBeVisible({
+      timeout: 10_000,
+    });
     const options = await page.getByRole('option').allTextContents();
     const trimmed = options.map((o) => o.trim()).filter(Boolean);
     expect(trimmed.sort()).toEqual([...allowed].sort());
@@ -443,9 +487,14 @@ Catches the bug class where pagination renders fine but the count number is wron
     // Live count via the API.
     const auth = loadAuth();
     const apiCount = await pgrCount(auth, TENANT);
+    // An empty grid renders "No records found" and no footer, so there is no
+    // count to compare. The configurator's admin session must see the tenant's
+    // complaints (#2599 founder grant, eaacdf7f5) — 0 here is the failure.
+    expect(apiCount, sessionSeesNoComplaintsMessage()).toBeGreaterThan(0);
 
     // Look for the footer count display ("of N", "Showing 1-10 of N", etc.).
     const footer = page.locator('body').getByText(/of\s+\d+/i).first();
+    await expect(footer, 'the complaints list must render an "of N" footer').toBeVisible({ timeout: 30_000 });
     const footerText = (await footer.textContent()) || '';
     const match = footerText.match(/of\s+(\d+)/i);
     expect(match, `expected list footer to show "of N", got "${footerText}"`).not.toBeNull();
@@ -476,7 +525,7 @@ Catches a regression where the status filter renders but only updates local stat
     },
     tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
-    await expect(page.getByRole('row').nth(1)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('row').nth(1), sessionSeesNoComplaintsMessage()).toBeVisible({ timeout: 30_000 });
 
     const seen: string[] = [];
     page.on('request', (req: Request) => {
@@ -535,7 +584,7 @@ Split out of test 6 deliberately: the status half passes and the date half does 
     },
     tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
-    await expect(page.getByRole('row').nth(1)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('row').nth(1), sessionSeesNoComplaintsMessage()).toBeVisible({ timeout: 30_000 });
 
     // fromDate is not alwaysOn — surface it through the Add-filter popover.
     const addFilter = page.getByRole('button', { name: /^Add filter$/i }).first();
@@ -606,7 +655,7 @@ The assertion is an exact array equality against a pre-filter measurement — it
     tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
     const rows = page.getByRole('row');
-    await expect(rows.nth(1)).toBeVisible({ timeout: 30_000 });
+    await expect(rows.nth(1), sessionSeesNoComplaintsMessage()).toBeVisible({ timeout: 30_000 });
 
     const headers = (await rows.nth(0).getByRole('columnheader').allTextContents()).map((h) =>
       h.trim(),
@@ -840,7 +889,9 @@ Test data: ke.nairobi has 55 complaints (probed 2026-04-23). The 26 minimum keep
     // Need at least 26 complaints (2 pages at perPage=25) for this test to
     // be meaningful. Probed 2026-04-23: ke.nairobi has 55.
     const total = await pgrCount(auth, TENANT);
-    if (total < 26) test.skip(true, `tenant has ${total} complaints, not enough to paginate`);
+    if (total < 26) {
+      test.skip(true, `the configurator session sees ${total} complaints on ${TENANT}, not enough to paginate`);
+    }
 
     await page.goto(LIST_PATH);
     await page.waitForLoadState('networkidle').catch(() => {});
@@ -1087,8 +1138,7 @@ Mutation-proven: flipping the status to a nonsense state drops 'queue' to 0 and 
     const total = await pgrCount(auth, TENANT);
     const queue = await pgrCount(auth, TENANT, { status: QUEUE_STATUS });
 
-    expect(total, `tenant ${TENANT} must hold complaints to measure a queue against`)
-      .toBeGreaterThan(0);
+    expect(total, sessionSeesNoComplaintsMessage()).toBeGreaterThan(0);
     expect(
       queue,
       `the ${QUEUE_STATUS} queue must be non-empty — lifecycle.setup.ts seeds one every run, ` +
@@ -1189,6 +1239,49 @@ async function pickComplaintType(
     }
     await opt.click();
   }
+}
+
+/** True when `code` is a boundary in `tenantId`'s own boundary space. */
+async function boundaryExists(auth: AuthInfo, tenantId: string, code: string): Promise<boolean> {
+  const params = new URLSearchParams({ tenantId, limit: '10', offset: '0' });
+  params.append('codes', code);
+  const r = await fetch(`${auth.baseUrl}/boundary-service/boundary/_search?${params}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
+    body: JSON.stringify({ RequestInfo: buildRequestInfo(auth) }),
+  });
+  expect(r.ok, `boundary _search on ${tenantId} must answer (HTTP ${r.status})`).toBe(true);
+  const j = (await r.json()) as { Boundary?: Array<{ code?: string }> };
+  return (j.Boundary ?? []).some((b) => b.code === code);
+}
+
+/**
+ * Why an admin session that sees zero complaints is a failure, not "no data".
+ * pgr-services row-scopes /request/_search by role (PolicyDrivenScopeResolver +
+ * the action's resource.complaint.scope). The v2.20 baseline grants SUPERUSER
+ * and ACCOUNT_ADMIN department ALL + jurisdiction ALL (eaacdf7f5, "grant the
+ * founder every call the management console makes"), so the console's list is
+ * tenant-wide. A tenant whose /request/_search action predates that grant
+ * resolves an admin with no HRMS department/jurisdiction to __scope_denied__
+ * and every list, show and edit screen comes back empty.
+ */
+function sessionSeesNoComplaintsMessage(): string {
+  return (
+    `the configurator session sees 0 complaints on ${TENANT}. Either the tenant is empty, or ` +
+    "/pgr-services/v2/request/_search's resource.complaint.scope grants none of this session's roles a " +
+    'scope (v2.20 seeds SUPERUSER/ACCOUNT_ADMIN = ALL/ALL, eaacdf7f5; a tenant migrated from 2.12 keeps ' +
+    'its old action row, so the admin is denied every row)'
+  );
+}
+
+/** Open a complaint's Edit page and wait until the record has loaded. */
+async function openComplaintEdit(page: import('@playwright/test').Page, srid: string): Promise<void> {
+  await page.goto(`${LIST_PATH}/${srid}/edit`);
+  await expect(
+    page.getByLabel(/^Request ID$/i),
+    `the Edit page must load ${srid}. If it bounces to the list, the session cannot read the ` +
+      'complaint through /pgr-services/v2/request/_search — ' + sessionSeesNoComplaintsMessage(),
+  ).toHaveValue(srid, { timeout: 30_000 });
 }
 
 /** Escape regex metacharacters so a live boundary code can be used verbatim

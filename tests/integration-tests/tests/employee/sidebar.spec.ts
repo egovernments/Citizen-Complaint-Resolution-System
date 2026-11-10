@@ -30,7 +30,16 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 
-import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS, LOCALES } from '../utils/env';
+import {
+  BASE_URL,
+  TENANT,
+  ROOT_TENANT,
+  ADMIN_USER,
+  ADMIN_PASS,
+  EMPLOYEE_USER,
+  EMPLOYEE_PASS,
+  LOCALES,
+} from '../utils/env';
 import { loginViaApi } from '../utils/auth';
 import { surfacePath } from '../utils/identity-bff';
 
@@ -50,6 +59,17 @@ const employeeHome = () => surfacePath('employee');
 const SIDEBAR = '.digit-employeeSidebar .digit-sidebar';
 const SIDEBAR_ITEM_LABEL = '.digit-employeeSidebar .digit-sidebar-item .item-label';
 const MODULE_CARD = '.digit-landing-page-card';
+
+/*
+ * Since #2038 the PGR home card is role-gated: products/pgr/src/components/
+ * PGRCard.js returns null unless getPGREmployeeLinks() finds one of
+ * PGR_EMPLOYEE_ROLES (products/pgr/src/utils/employeeLinks.js) on the user. A
+ * workspace admin with no PGR role (bomet's ke-admin: SUPERUSER, MDMS_ADMIN,
+ * ... but no GRO/PGR_LME/CSR) therefore gets NO PGR card, by design. Mirrored
+ * here so the spec asserts the gate both ways instead of assuming every admin
+ * holds a PGR role.
+ */
+const PGR_EMPLOYEE_ROLES = ['GRO', 'PGR_LME', 'CSR'];
 
 /**
  * Resolve a UI label from the deployment's OWN localization store, so no
@@ -88,13 +108,18 @@ async function localizedLabel(code: string, module: string): Promise<string> {
  * enables, which is what makes the "HRMS is absent" assertion meaningful rather
  * than a permissions artefact).
  */
-async function openEmployeeShell(page: Page): Promise<void> {
-  await loginViaApi(page, { tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
+async function openEmployeeShell(
+  page: Page,
+  persona: { username: string; password: string } = { username: ADMIN_USER, password: ADMIN_PASS },
+): Promise<string[]> {
+  const session = await loginViaApi(page, { tenant: TENANT, username: persona.username, password: persona.password });
   await page.goto(`${BASE_URL}${employeeHome()}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   // Module cards + sidebar render client-side after a tenant/ACL fetch.
   await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {});
   const bodyText = await page.locator('body').innerText();
   expect(bodyText, 'employee shell must mount').not.toMatch(/Something went wrong/i);
+  const roles = ((session as any)?.UserRequest?.roles ?? []) as { code?: string }[];
+  return roles.map((r) => String(r?.code ?? '')).filter(Boolean);
 }
 
 /**
@@ -129,14 +154,14 @@ test.describe('employee shell chrome', () => {
 
 Steps:
 1. Inject an ADMIN employee session (SUPERUSER — sees every enabled module) and open /{slug}/digit-ui/employee.
-2. Positive control: at least one module card renders, and the PGR card is among them (matched on the deployment's own localized ES_PGR_HEADER_COMPLAINT, not an English literal). Without this the negatives below could pass on a blank page.
+2. Positive control: at least one module card renders. The PGR card is role-gated since #2038 (PGRCard.js / employeeLinks.js: GRO, PGR_LME or CSR): if the admin holds one it must render; if not it must be absent for the admin AND render for EMPLOYEE_USER (a PGR role holder) in a second context. Matched on the deployment's own localized label, not an English literal. Without this the negatives below could pass on a blank page.
 3. Expand the collapsible sidebar (SideNav only mounts entry labels while hovered) and assert it lists at least one entry.
 4. Negative: nothing anywhere in the mounted shell — cards or drawer — matches /HRMS/i or /workbench/i.
 
 Honest limitation: this fails if HRMS is re-exposed at the data layer (the ACL actions flipped back to enabled:true) or if an HRMS module/card is re-registered in the shell. It does NOT independently fail if only the App.js enabledModules line is reverted while the HRMS actions stay disabled, because nothing would render in that case either.`,
     },
-    tag: ['@ccrs:561', '@ccrs:560', '@kind:regression', '@layer:ui', '@persona:employee'] }, async ({ page }) => {
-    await openEmployeeShell(page);
+    tag: ['@ccrs:561', '@ccrs:560', '@kind:regression', '@layer:ui', '@persona:employee'] }, async ({ page, browser }) => {
+    const adminRoles = await openEmployeeShell(page);
 
     // ---- positive control: the shell really did render its module grid ----
     // Without this, "HRMS is absent" would also be true of a blank page.
@@ -145,17 +170,49 @@ Honest limitation: this fails if HRMS is re-exposed at the data layer (the ACL a
       'employee home must render its module cards',
     ).toBeVisible({ timeout: 20_000 });
 
-    // The PGR card specifically must survive. Scoped to the CARD element, not
-    // to body text: the card's own module name is "Citizen Complaint Resolution
-    // System" here, so a loose page-wide /complaint/i match would be satisfied
-    // by that heading even if no tile existed — the exact vacuous check this
-    // file used to carry. The label is resolved from the deployment's
-    // localization store so no English string is pinned.
-    const pgrCardLabel = await localizedLabel('ES_PGR_HEADER_COMPLAINT', 'rainmaker-pgr');
-    await expect(
-      page.locator(MODULE_CARD).filter({ hasText: pgrCardLabel }).first(),
-      `PGR module card ("${pgrCardLabel}") must still render on the employee home`,
-    ).toBeVisible({ timeout: 20_000 });
+    // The PGR card is role-gated since #2038 (see PGR_EMPLOYEE_ROLES). Scoped to
+    // the CARD element, not to body text, and its label is resolved from the
+    // deployment's localization store so no English string is pinned. PGRCard
+    // renders t("PGR"); ES_PGR_HEADER_COMPLAINT is kept as an alternative so a
+    // deployment that localizes only the older key still matches.
+    const cardLabels = [
+      await localizedLabel('PGR', 'rainmaker-common'),
+      await localizedLabel('ES_PGR_HEADER_COMPLAINT', 'rainmaker-pgr'),
+    ];
+    const pgrCard = (p: Page) =>
+      p.locator(MODULE_CARD).filter({
+        hasText: new RegExp(cardLabels.map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')),
+      });
+    const adminHoldsPgrRole = PGR_EMPLOYEE_ROLES.some((r) => adminRoles.includes(r));
+    if (adminHoldsPgrRole) {
+      await expect(
+        pgrCard(page).first(),
+        `PGR module card ("${cardLabels[0]}") must render for ${ADMIN_USER}, who holds a PGR role (${adminRoles.join('|')})`,
+      ).toBeVisible({ timeout: 20_000 });
+    } else {
+      // #2038 role gate, admin side: no PGR role → no PGR card.
+      await expect(
+        pgrCard(page),
+        `#2038 — ${ADMIN_USER} holds none of ${PGR_EMPLOYEE_ROLES.join('/')} (roles: ${adminRoles.join('|')}), so PGRCard must not render`,
+      ).toHaveCount(0);
+      // ...and the card is still alive for a PGR-role holder, so the shell did
+      // not simply lose the PGR module.
+      const ctx = await browser.newContext();
+      try {
+        const p2 = await ctx.newPage();
+        const lmeRoles = await openEmployeeShell(p2, { username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+        expect(
+          PGR_EMPLOYEE_ROLES.some((r) => lmeRoles.includes(r)),
+          `EMPLOYEE_USER ${EMPLOYEE_USER} must hold a PGR role to act as the PGR-card control; has ${lmeRoles.join('|')}`,
+        ).toBeTruthy();
+        await expect(
+          pgrCard(p2).first(),
+          `PGR module card ("${cardLabels[0]}") must still render on the employee home for a PGR role holder (${EMPLOYEE_USER})`,
+        ).toBeVisible({ timeout: 20_000 });
+      } finally {
+        await ctx.close();
+      }
+    }
 
     await openSidebarDrawer(page);
 

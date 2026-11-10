@@ -1,12 +1,14 @@
 /**
  * PGR Dashboard E2E
  *
- * Verifies the default-off route/navigation contract and, when the rollback
- * flag is baked on, the retained Chart.js dashboard surface.
+ * Verifies the legacy configurator dashboard's default-off route/navigation
+ * contract, and the employee-app dashboard that replaced it.
  */
 import { test, expect, type Page } from '@playwright/test';
 import { CONFIGURATOR_BASE } from '../utils/configurator-auth';
-import { hookOr } from '../utils/configurator-hooks';
+import { loginEmployeeBrowser } from '../utils/employee-ui';
+import { ADMIN_USER, ADMIN_PASS, BASE_URL } from '../utils/env';
+import { tenantSlug } from '../utils/identity-bff';
 
 type CcrsBuildFlags = {
   legacyPgrDashboardEnabled: boolean;
@@ -41,11 +43,6 @@ async function navigateToLegacyDashboard(page: Page): Promise<CcrsBuildFlags> {
   return readLegacyDashboardFlag(page);
 }
 
-async function openEnabledLegacyDashboard(page: Page): Promise<void> {
-  const flags = await navigateToLegacyDashboard(page);
-  test.skip(!flags.legacyPgrDashboardEnabled, 'Legacy PGR dashboard is disabled in this build');
-}
-
 // The chromium project's storageState (auth.setup) already holds the
 // Configurator session. A per-test loginConfigurator timed out: the Keycloak
 // SSO cookie skips the sign-in form it waits for.
@@ -69,214 +66,271 @@ test.describe('PGR Dashboard', () => {
     await expect(page.locator('h1', { hasText: 'PGR Dashboard' })).toHaveCount(0);
     await expect(page.locator('button', { hasText: 'PGR Dashboard' })).toHaveCount(0);
   });
+});
 
+/*
+ * The configurator's Chart.js "PGR Dashboard" (/manage/pgr-dashboard) is a
+ * rollback surface since #1386 (627954ea7): VITE_ENABLE_LEGACY_PGR_DASHBOARD
+ * defaults to false and no deployment bakes it on, so its seven UI checks only
+ * ever skipped. The dashboard v2.20 ships is the catalog-driven supervisor
+ * dashboard in the employee app (products/dashboard, ported in #1062 /
+ * 32d32e6aa) at /<slug>/digit-ui/employee/dashboard: its tiles, default layout
+ * and data all come from /pgr-services/v2/analytics (packs, catalog/_search,
+ * _query). The tests below check that dashboard's equivalent of each legacy
+ * check — heading, KPI tiles, chart widgets, widget titles, nav entry, KPI
+ * values, and the per-dimension breakdowns — against what the analytics API
+ * itself returned for the same page load, so nothing pins one tenant's pack.
+ */
+
+type Tile = { kpiId: string; titleKey?: string; viz?: { kind?: string; title?: string; titleKey?: string } };
+type Pack = { tiles: Tile[]; defaultLayout: { kpiId: string }[] };
+type QueryResult = { rowCount?: number; rows?: unknown[] };
+
+const CARD_KINDS = new Set(['number-tile-delta', 'number-tile', 'scalar', 'number-tile-sparkline', 'sparkline-card']);
+const MAP_KINDS = new Set(['map', 'choropleth-map']);
+const TABLE_KINDS = new Set(['data-table', 'table', 'sla-risk-table']);
+
+interface LoadedDashboard {
+  pack: Pack;
+  catalog: Tile[];
+  messages: Map<string, string>;
+  results: Map<string, QueryResult>;
+  errors: Map<string, unknown>;
+  layoutTiles: Tile[];
+  /** The title the page resolves for a tile: its seeded titleKey message, else the catalog's English. */
+  titleOf: (tile: Tile) => string;
+}
+
+async function openEmployeeDashboard(page: Page): Promise<LoadedDashboard> {
+  const loggedIn = await loginEmployeeBrowser(page, ADMIN_USER, ADMIN_PASS);
+  expect(loggedIn, 'ADMIN_USER must sign in to the employee app').not.toBeNull();
+
+  const messages = new Map<string, string>();
+  const results = new Map<string, QueryResult>();
+  const errors = new Map<string, unknown>();
+  let pack: Pack | undefined;
+  let catalog: Tile[] | undefined;
+  page.on('response', async (response) => {
+    const url = response.url();
+    if (!/\/(localization\/messages\/v1\/_search|pgr-services\/v2\/analytics\/)/.test(url)) return;
+    const body = await response.json().catch(() => null);
+    if (!body) return;
+    if (url.includes('/localization/')) {
+      for (const m of body.messages || []) messages.set(m.code, m.message);
+    } else if (/\/analytics\/packs/.test(url)) {
+      pack = body;
+    } else if (/\/analytics\/catalog\/_search/.test(url)) {
+      catalog = body.tiles;
+    } else if (/\/analytics\/_query/.test(url)) {
+      for (const [key, value] of Object.entries(body.results || {})) results.set(key, value as QueryResult);
+      for (const [key, value] of Object.entries(body.errors || {})) errors.set(key, value);
+    }
+  });
+
+  await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee/dashboard`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  // The route redirects to /employee when egov-accesscontrol denies the
+  // analytics capability (products/dashboard/roles.js), so staying here is the
+  // access check itself.
+  await expect(page.locator('h1')).toBeVisible({ timeout: 30_000 });
+  await expect(page).toHaveURL(/\/employee\/dashboard\/?$/);
+  await expect.poll(() => Boolean(pack && catalog), { message: 'analytics packs + catalog/_search answered', timeout: 30_000 }).toBe(true);
+  const layoutIds = pack!.defaultLayout.map((l) => l.kpiId).filter((id) => pack!.tiles.some((t) => t.kpiId === id));
+  expect(layoutIds.length, 'the analytics pack seeds a default layout').toBeGreaterThan(0);
+  // Every default tile is answered by the _query batch (as a result or an error).
+  await expect.poll(() => layoutIds.filter((id) => !results.has(id) && !errors.has(id)), {
+    message: 'every default tile answered by /analytics/_query',
+    timeout: 45_000,
+  }).toEqual([]);
+  await expect(page.locator('.dashboard-grid-layout .kpi-tile--loading')).toHaveCount(0, { timeout: 30_000 });
+
+  const titleOf = (tile: Tile) => {
+    const key = tile.viz?.titleKey || tile.titleKey;
+    return (key && messages.get(key)) || tile.viz?.title || tile.kpiId;
+  };
+  return {
+    pack: pack!,
+    catalog: catalog!,
+    messages,
+    results,
+    errors,
+    layoutTiles: layoutIds.map((id) => pack!.tiles.find((t) => t.kpiId === id)!),
+    titleOf,
+  };
+}
+
+/** A grid widget, found by the "Remove <title>" button every widget carries. */
+function widget(page: Page, dash: LoadedDashboard, tile: Tile) {
+  const removeLabel = `${dash.messages.get('DASHBOARD_COMMON_REMOVE') || 'Remove'} ${dash.titleOf(tile)}`;
+  return page.locator('.dashboard-grid-layout .react-grid-item').filter({
+    has: page.getByRole('button', { name: removeLabel, exact: true }),
+  });
+}
+
+const DASHBOARD_TAGS = ['@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'];
+
+test.describe('Employee dashboard (replaces the legacy PGR Dashboard)', () => {
   test('dashboard page loads with heading', {
     annotation: {
       type: 'description',
-      description: `Smoke check that /manage/pgr-dashboard renders with the expected H1 heading. If the route is misconfigured or the lazy-loaded chunk fails, the page wouldn't have an H1 at all — this catches that wide failure mode.
+      description: `Smoke check that the employee dashboard (/<slug>/digit-ui/employee/dashboard) renders its H1. Replaces the legacy configurator /manage/pgr-dashboard check, which only runs on a rollback build.
 
 Steps:
-1. Configurator session from the setup project's storageState.
-2. Navigate to /manage/pgr-dashboard, wait for networkidle.
-3. Locate h1; assert visible within 10s.
-4. Assert the heading contains "PGR Dashboard".
-
-First test in a series of seven that walk the dashboard's UI surface.`,
+1. Sign ADMIN_USER into the employee app (BFF session + _select).
+2. Open the dashboard; it must stay on the route (the access-control gate redirects callers without the analytics capability).
+3. The H1 is the seeded DASHBOARD_HEADER_TITLE message (rainmaker-dashboard) when the tenant seeds one, else the code default ending in "Operations" (DashboardHeader.jsx).`,
     },
-    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await openEnabledLegacyDashboard(page);
-
+    tag: DASHBOARD_TAGS,
+  }, async ({ page }) => {
+    const dash = await openEmployeeDashboard(page);
+    const seeded = dash.messages.get('DASHBOARD_HEADER_TITLE');
     const heading = page.locator('h1');
-    await expect(heading).toBeVisible({ timeout: 10_000 });
-    await expect(heading).toContainText('PGR Dashboard');
+    await expect(heading).toHaveCount(1);
+    if (seeded) await expect(heading).toHaveText(seeded);
+    else await expect(heading).toHaveText(/\S.*Operations$/);
   });
 
   test('overview card shows 3 KPI metrics', {
     annotation: {
       type: 'description',
-      description: `Asserts the dashboard overview card surfaces the three core PGR KPIs: Total Complaints, Closed Complaints, Completion Rate. Catches a regression where a metric gets dropped from the layout (or its label gets renamed without updating the test alongside).
-
-Steps:
-1. Configurator session from the setup project's storageState.
-2. Navigate to /manage/pgr-dashboard, wait for networkidle.
-3. For each KPI label in ['Total Complaints', 'Closed Complaints', 'Completion Rate'], assert text=label is visible within 5s.
-
-Pairs with the "KPI values show numbers" test below — together they confirm the labels AND values render.`,
+      description: `The legacy overview card had three fixed KPIs. The current dashboard's KPI row is the analytics pack's default layout, so this asserts every card-kind tile (number-tile*, scalar, sparkline-card) in /analytics/packs defaultLayout renders as a KPI widget under its title, and that there are at least three of them.`,
     },
-    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await openEnabledLegacyDashboard(page);
-
-    const expectedKpis = [
-      'Total Complaints',
-      'Closed Complaints',
-      'Completion Rate',
-    ];
-
-    for (const kpi of expectedKpis) {
-      await expect(page.locator(`text=${kpi}`).first()).toBeVisible({ timeout: 5_000 });
+    tag: DASHBOARD_TAGS,
+  }, async ({ page }) => {
+    const dash = await openEmployeeDashboard(page);
+    const cards = dash.layoutTiles.filter((t) => CARD_KINDS.has(t.viz?.kind || ''));
+    expect(cards.length, 'the default layout carries at least three KPI tiles').toBeGreaterThanOrEqual(3);
+    await expect(page.locator('.dashboard-grid-layout .dashboard-kpi-widget')).toHaveCount(cards.length);
+    for (const tile of cards) {
+      const w = widget(page, dash, tile);
+      await expect(w, `KPI tile ${tile.kpiId}`).toHaveCount(1);
+      // The grid item itself carries the KPI-widget chrome (AdminDashboard.jsx).
+      await expect(w, `${tile.kpiId} renders as a KPI card`).toHaveClass(/\bdashboard-kpi-widget\b/);
+      await expect(w.locator('.dashboard-kpi-title').first()).toHaveText(dash.titleOf(tile), { ignoreCase: true });
     }
   });
 
   test('all chart canvases render', {
     annotation: {
       type: 'description',
-      description: `Asserts Chart.js renders all 8 expected canvases on the dashboard: Cumulative Closed (line), By Source (line), Complaints Status (stacked bar), By Status (doughnut), By Channel (doughnut), By Department (doughnut), Citizens (line), Top Complaints (horizontal bar). Catches the case where a chart fails to render (data fetch error, Chart.js init throws, etc).
-
-Steps:
-1. Configurator session from the setup project's storageState.
-2. Navigate to /manage/pgr-dashboard, wait for networkidle.
-3. Wait for any 'canvas' element within 10s, then 1s for Chart.js animation to settle.
-4. Assert canvas locator has count === 8 within 10s.
-
-If the canvas count drifts, update both the dashboard layout and this test with the new expected count.`,
+      description: `Every non-KPI widget in the pack's default layout renders its body without an error tile, and the body agrees with the data /analytics/_query returned for it: a chart or table when the result has rows, the explicit "No data" placeholder only when it has none. Maps always mount their Leaflet container. Replaces the legacy Chart.js canvas count (the current charts are ApexCharts SVG, and an empty result renders a placeholder instead of an empty canvas).`,
     },
-    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await openEnabledLegacyDashboard(page);
-
-    // Wait for Chart.js to render canvases
-    await page.waitForSelector('canvas', { timeout: 10_000 });
-    await page.waitForTimeout(1_000); // Let animations complete
-
-    // Expect 8 charts:
-    // 1. Cumulative Closed (line)
-    // 2. By Source (line)
-    // 3. Complaints Status (stacked bar)
-    // 4. By Status (doughnut)
-    // 5. By Channel (doughnut)
-    // 6. By Department (doughnut)
-    // 7. Citizens (line)
-    // 8. Top Complaints (horizontal bar)
-    const canvases = page.locator('canvas');
-    await expect(canvases).toHaveCount(8, { timeout: 10_000 });
+    tag: DASHBOARD_TAGS,
+  }, async ({ page }) => {
+    const dash = await openEmployeeDashboard(page);
+    const charts = dash.layoutTiles.filter((t) => !CARD_KINDS.has(t.viz?.kind || ''));
+    expect(charts.length, 'the default layout carries chart widgets').toBeGreaterThan(0);
+    await expect(page.locator('.dashboard-grid-layout .kpi-tile--error')).toHaveCount(0);
+    for (const tile of charts) {
+      expect(dash.errors.get(tile.kpiId), `${tile.kpiId}: /analytics/_query error`).toBeUndefined();
+      const w = widget(page, dash, tile);
+      await expect(w, `chart widget ${tile.kpiId}`).toHaveCount(1);
+      const kind = tile.viz?.kind || '';
+      if (MAP_KINDS.has(kind)) {
+        await expect(w.locator('.leaflet-container'), `${tile.kpiId} map`).toBeVisible();
+        continue;
+      }
+      const rows = dash.results.get(tile.kpiId)?.rowCount ?? dash.results.get(tile.kpiId)?.rows?.length ?? 0;
+      const placeholder = w.locator('.kpi-tile__placeholder');
+      if (rows > 0) {
+        await expect(placeholder, `${tile.kpiId} has ${rows} rows but shows a placeholder`).toHaveCount(0);
+        const body = TABLE_KINDS.has(kind) ? w.locator('table') : w.locator('.apexcharts-canvas, svg:not(.dashboard-widget-remove-btn svg)');
+        await expect(body.first(), `${tile.kpiId} renders its ${kind}`).toBeVisible();
+      } else {
+        await expect(placeholder, `${tile.kpiId} returned no rows`).toHaveText(dash.messages.get('DASHBOARD_COMMON_NO_DATA') || 'No data');
+      }
+    }
   });
 
   test('chart section titles are visible', {
     annotation: {
       type: 'description',
-      description: `Companion to the canvas-count test: each of the 9 expected section titles (DSS Overview + 8 chart titles) must be visible. Catches a regression where a chart canvas renders but its surrounding section/heading gets dropped (or vice versa — title without canvas).
-
-Steps:
-1. Configurator session from the setup project's storageState.
-2. Navigate to /manage/pgr-dashboard, wait for networkidle.
-3. For each title in ['DSS Overview','Cumulative Closed Complaints','Complaints by Source','Complaints Status','By Status','By Channel','By Department','Citizens','Top Complaints'], assert text=title is visible within 5s.
-
-Note 9 titles vs 8 canvases — DSS Overview is a section header without its own chart.`,
+      description: `Every widget in the pack's default layout is on the grid exactly once and shows its title (the seeded titleKey message, else the catalog's English — textResolver.resolveTitle). Charts and tables carry an H2; maps carry their own header; KPI cards their title row. The grid holds nothing beyond the default layout in a fresh session.`,
     },
-    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await openEnabledLegacyDashboard(page);
-
-    const expectedTitles = [
-      'DSS Overview',
-      'Cumulative Closed Complaints',
-      'Complaints by Source',
-      'Complaints Status',
-      'By Status',
-      'By Channel',
-      'By Department',
-      'Citizens',
-      'Top Complaints',
-    ];
-
-    for (const title of expectedTitles) {
-      await expect(page.locator(`text=${title}`).first()).toBeVisible({ timeout: 5_000 });
+    tag: DASHBOARD_TAGS,
+  }, async ({ page }) => {
+    const dash = await openEmployeeDashboard(page);
+    await expect(page.locator('.dashboard-grid-layout .react-grid-item')).toHaveCount(dash.layoutTiles.length);
+    for (const tile of dash.layoutTiles) {
+      const w = widget(page, dash, tile);
+      await expect(w, `widget ${tile.kpiId}`).toHaveCount(1);
+      const kind = tile.viz?.kind || '';
+      if (MAP_KINDS.has(kind)) continue; // the map's own header names the zoom level, not the catalog title
+      const title = dash.titleOf(tile);
+      const shown = CARD_KINDS.has(kind) ? w.locator('.dashboard-kpi-title') : w.locator('h2');
+      await expect(shown.first(), `${tile.kpiId} title`).toHaveText(title, { ignoreCase: true });
     }
   });
 
   test('sidebar has PGR Dashboard nav link', {
     annotation: {
       type: 'description',
-      description: `Asserts the sidebar has a button labelled "PGR Dashboard" AND that it carries the active styling (the bg-primary class) when the user is on the dashboard route. Catches a regression where the route-active highlight stops firing — the link still renders but doesn't visually indicate the current page.
-
-Steps:
-1. Configurator session from the setup project's storageState.
-2. Navigate to /manage/pgr-dashboard, wait for networkidle.
-3. Locate button:hasText("PGR Dashboard"); assert visible within 5s.
-4. Assert the button has a class matching /bg-primary/ (active styling).
-
-Loose regex on the class lets the design system rename specific Tailwind variants without false-positives.`,
+      description: `The employee sidebar carries a Dashboard entry (from the access-control nav tree); clicking it from the employee home opens /employee/dashboard and marks the entry as the current page (aria-current="page").`,
     },
-    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await openEnabledLegacyDashboard(page);
-
-    // The sidebar should have a "PGR Dashboard" button with active styling
-    const navLink = page.locator('button', { hasText: 'PGR Dashboard' });
-    await expect(navLink).toBeVisible({ timeout: 5_000 });
-
-    // Should have active state (primary color class)
-    await expect(navLink).toHaveClass(/bg-primary/);
+    tag: DASHBOARD_TAGS,
+  }, async ({ page }) => {
+    const loggedIn = await loginEmployeeBrowser(page, ADMIN_USER, ADMIN_PASS);
+    expect(loggedIn).not.toBeNull();
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    const nav = page.locator('.digit-sidebar-item[aria-label]').filter({ hasText: /dashboard/i });
+    await expect(nav.first()).toBeVisible({ timeout: 30_000 });
+    await expect(nav.first()).not.toHaveAttribute('aria-current', 'page');
+    await nav.first().click();
+    await expect(page).toHaveURL(/\/employee\/dashboard\/?$/, { timeout: 30_000 });
+    await expect(page.locator('h1')).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.digit-sidebar-item[aria-current="page"]')).toHaveAttribute('aria-label', /dashboard/i);
   });
 
   test('KPI values show numbers', {
     annotation: {
       type: 'description',
-      description: `Asserts each of the three KPI value tiles renders a number-shaped value (digits, optionally with commas/decimals/percentage symbol). Catches regressions where the value placeholder is "N/A", "—", or empty because the underlying analytics endpoint failed silently.
-
-Steps:
-1. Configurator session from the setup project's storageState.
-2. Navigate to /manage/pgr-dashboard, wait for networkidle.
-3. Locate .text-3xl.font-bold elements (the KPI value tiles).
-4. Assert count >= 3.
-5. For each tile, read innerText and assert it matches /[\\d,.]+/ (contains at least one digit/comma/period).
-
-Loose regex tolerates "1,234", "0", "12.5%" — anything that's actually numeric.`,
+      description: `Each default-layout KPI tile shows a number-shaped value (digits, optionally with separators, % or /5), never an error tile or a "No data" card, and the analytics batch reported no error for it.`,
     },
-    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await openEnabledLegacyDashboard(page);
-
-    // Each KPI value should contain a number or percentage
-    const kpiValues = page.locator('.text-3xl.font-bold');
-    const count = await kpiValues.count();
-    expect(count).toBeGreaterThanOrEqual(3);
-
-    for (let i = 0; i < count; i++) {
-      const text = await kpiValues.nth(i).innerText();
-      expect(text).toMatch(/[\d,.]+/);
+    tag: DASHBOARD_TAGS,
+  }, async ({ page }) => {
+    const dash = await openEmployeeDashboard(page);
+    const cards = dash.layoutTiles.filter((t) => CARD_KINDS.has(t.viz?.kind || ''));
+    expect(cards.length).toBeGreaterThan(0);
+    await expect(page.locator('.dashboard-grid-layout .kpi-tile--error, .dashboard-grid-layout .kpi-tile--empty')).toHaveCount(0);
+    for (const tile of cards) {
+      expect(dash.errors.get(tile.kpiId), `${tile.kpiId}: /analytics/_query error`).toBeUndefined();
+      const value = widget(page, dash, tile).locator('.dashboard-kpi-value').first();
+      await expect(value, `${tile.kpiId} value`).toHaveText(/\d/);
     }
   });
 
   test('breakdown table with 4 tabs', {
     annotation: {
       type: 'description',
-      description: `Asserts the "Status by Tenant" breakdown panel renders with all four tab triggers (Boundary, Department, Complaint Category — "Complaint Type" before #2243 — and Channel), the Boundary tab is selected by default with a visible table, and switching to Department also renders a table inside the active tabpanel.
-
-Steps:
-1. Configurator session from the setup project's storageState.
-2. Navigate to /manage/pgr-dashboard, wait for networkidle.
-3. Assert "Status by Tenant" text is visible within 5s.
-4. For each tab (boundary, department, type, channel), assert its pgr-breakdown-tab-<value> hook is visible; builds without the hook fall back to a [role="tab"] with that label (Boundary, Department, Complaint Category|Type, Channel).
-5. Assert the first <table> element is visible (the Boundary tab is the default).
-6. Click the Department tab (same hook-or-label lookup).
-7. Assert a [role="tabpanel"] table is visible within 5s.
-
-Confirms tab-switching actually swaps the rendered table — not just the tab indicator.`,
+      description: `The legacy "Status by Tenant" panel switched one table between Boundary / Department / Complaint Category / Channel tabs. The current dashboard shows the boundary breakdown as the default map and offers the others as widgets in the Add KPI picker. This asserts the picker lists every catalog breakdown not already on the grid (category table, department and channel charts, by the kpiIds the catalog publishes), then adds the complaint-category table and checks it lands on the grid with a table when /analytics/_query returns rows, else the "No data" placeholder.`,
     },
-    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await openEnabledLegacyDashboard(page);
+    tag: DASHBOARD_TAGS,
+  }, async ({ page }) => {
+    const dash = await openEmployeeDashboard(page);
+    const onGrid = new Set(dash.layoutTiles.map((t) => t.kpiId));
+    const byId = (id: string) => dash.catalog.find((t) => t.kpiId === id);
+    const breakdowns = ['cl_table_complaint_type_details', 'cl_chart_departments_by_type', 'cl_chart_open_by_channel']
+      .map(byId)
+      .filter((t): t is Tile => Boolean(t) && !onGrid.has(t!.kpiId));
+    test.skip(breakdowns.length === 0, 'the catalog publishes none of the category/department/channel breakdowns off the default grid');
 
-    // Should show "Status by Tenant" section
-    await expect(page.locator('text=Status by Tenant').first()).toBeVisible({ timeout: 5_000 });
-
-    // 4 tab triggers should be present. Each is found by its
-    // pgr-breakdown-tab-<value> hook (#2352), keyed by the tab value; builds
-    // without it fall back to the label. #2243 renamed "Complaint Type" →
-    // "Complaint Category", so that fallback accepts both.
-    const tab = (value: string, label: RegExp) =>
-      hookOr(page, `pgr-breakdown-tab-${value}`, page.locator('[role="tab"]', { hasText: label }));
-    const tabs: Array<[string, RegExp]> = [
-      ['boundary', /Boundary/i],
-      ['department', /Department/i],
-      ['type', /Complaint (Type|Category)/i],
-      ['channel', /Channel/i],
-    ];
-    for (const [value, label] of tabs) {
-      await expect(tab(value, label)).toBeVisible({ timeout: 5_000 });
+    await page.locator('.dashboard-add-kpi-trigger').click();
+    const picker = page.getByRole('list', { name: dash.messages.get('DASHBOARD_HEADER_AVAILABLE_KPIS') || 'Available KPIs' });
+    await expect(picker).toBeVisible();
+    const addLabel = (tile: Tile) => `${dash.messages.get('DASHBOARD_HEADER_ADD') || 'Add'} ${dash.titleOf(tile)}`;
+    for (const tile of breakdowns) {
+      await expect(picker.getByRole('button', { name: addLabel(tile), exact: true }), `${tile.kpiId} in Add KPI`).toBeVisible();
     }
 
-    // Default tab (Boundary) should show a table
-    await expect(page.locator('table').first()).toBeVisible({ timeout: 5_000 });
-
-    // Click Department tab and verify table updates
-    await tab('department', /Department/i).click();
-    await expect(page.locator('[role="tabpanel"] table').first()).toBeVisible({ timeout: 5_000 });
+    const table = breakdowns.find((t) => TABLE_KINDS.has(t.viz?.kind || ''));
+    test.skip(!table, 'no category breakdown table in the catalog');
+    await picker.getByRole('button', { name: addLabel(table!), exact: true }).click();
+    const added = widget(page, dash, table!);
+    await expect(added).toHaveCount(1, { timeout: 15_000 });
+    await expect.poll(() => dash.results.has(table!.kpiId) || dash.errors.has(table!.kpiId), { timeout: 30_000 }).toBe(true);
+    expect(dash.errors.get(table!.kpiId), `${table!.kpiId}: /analytics/_query error`).toBeUndefined();
+    await expect(added.locator('h2')).toHaveText(dash.titleOf(table!));
+    const rows = dash.results.get(table!.kpiId)?.rowCount ?? 0;
+    if (rows > 0) await expect(added.locator('table tbody tr')).not.toHaveCount(0);
+    else await expect(added.getByText(dash.messages.get('DASHBOARD_COMMON_NO_DATA') || 'No data')).toBeVisible();
   });
 });
