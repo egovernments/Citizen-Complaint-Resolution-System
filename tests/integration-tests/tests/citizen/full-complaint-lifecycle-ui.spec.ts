@@ -224,11 +224,11 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     console.log('Step 2: location — boundary cascade, no pin...');
     // The cascade prefers these at EACH level, so give it the whole path when the
     // profile knows it (leafPath ends at leafCode); a lone leaf code only helps at
-    // the last level. Codes match only unlocalized labels — see the report on
-    // boundary-name discovery.
+    // the last level. The dropdowns show localized names (rainmaker-boundary-*),
+    // which the profile records per node; codes cover unlocalized boundaries.
     const profileBoundary = tryGetProfile()?.boundary;
     const boundaryPrefs = profileBoundary?.leafCode === LOCALITY_CODE && profileBoundary.leafPath.length
-      ? profileBoundary.leafPath.map((n) => n.code)
+      ? profileBoundary.leafPath.flatMap((n) => (n.name ? [n.name, n.code] : [n.code]))
       : [LOCALITY_CODE];
     await fillLocationStep(page, { boundaries: boundaryPrefs });
     await snap(page, '02b-address');
