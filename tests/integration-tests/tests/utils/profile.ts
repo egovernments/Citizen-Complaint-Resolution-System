@@ -41,7 +41,7 @@ import { deriveMobileLengths } from './mdms-mobile';
 import { getPgrIdPrefix } from './pgr-idgen';
 import { getDigitToken } from './auth';
 import { KeycloakSignInError } from './identity-bff';
-import { forgetResolvedPersonas, resolvePersonasForProfile, resolveSeedPlan } from './personas';
+import { forgetResolvedPersonas, resolveFilingTarget, resolvePersonasForProfile, resolveSeedPlan } from './personas';
 
 // ── shape ────────────────────────────────────────────────────────────────────
 
@@ -878,6 +878,13 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
   }
   if ('error' in plan) {
     draft.personas.unresolvedDiagnostics['pgr.seedPlan'] = plan.error;
+    // Filing a complaint needs no GRO: still record where a citizen can file, so
+    // create-only specs run and only the ASSIGN-dependent steps skip.
+    const target = await attempt('filing target', () => resolveFilingTarget({ profile: draft }), { error: 'filing target threw twice' } as Awaited<ReturnType<typeof resolveFilingTarget>>);
+    if (!('error' in target)) {
+      draft.pgr.seedServiceCode = target.serviceCode;
+      draft.pgr.seedLocalityCode = target.localityCode;
+    }
   } else {
     draft.pgr.seedServiceCode = plan.serviceCode;
     draft.pgr.seedLocalityCode = plan.localityCode;
