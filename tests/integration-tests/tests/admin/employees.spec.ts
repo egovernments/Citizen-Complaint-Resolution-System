@@ -24,6 +24,7 @@ import { loadAuth, employeeSearch, type AuthInfo } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
 import { TENANT, ROOT_TENANT } from '../utils/env';
 import { tryGetProfile } from '../utils/profile';
+import { fetchMdms } from '../utils/probes';
 import { loginConfigurator } from '../utils/configurator-auth';
 import {
   getMobileValidationRule,
@@ -125,6 +126,15 @@ async function resolveSeedFks(): Promise<void> {
   }
   const dept = p?.complaintTypes.services.find((s) => s.department)?.department;
   if (dept && !process.env.SEED_DEPT) SEED_DEPT = dept;
+  // Designation: any active one the tenant defines (HRMS only checks it exists).
+  if (!process.env.SEED_DESIG) {
+    const auth = (() => { try { return loadAuth(); } catch { return null; } })();
+    for (const tenantId of new Set([TENANT, ROOT_TENANT])) {
+      const rows = await fetchMdms(tenantId, 'common-masters.Designation', auth?.token).catch(() => []);
+      const desig = rows.find((r: any) => r?.isActive !== false && r?.data?.active !== false && r?.data?.code)?.data?.code;
+      if (desig) { SEED_DESIG = desig as string; break; }
+    }
+  }
 }
 
 // HRMS endpoints — the configurator's DigitApiClient hits these verbatim.
