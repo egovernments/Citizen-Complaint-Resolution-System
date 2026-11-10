@@ -370,10 +370,14 @@ async function matches(key: PersonaKey, p: ResolvedPersona, profile: DeploymentP
   switch (key) {
     case 'employee':
       return p.roles.includes('EMPLOYEE') || p.roles.includes('SUPERUSER');
+    // "GRO" here means: may perform ASSIGN on this deployment's PGR workflow.
+    // The roles come from the workflow itself (GRO on the shipped seed, plus
+    // e.g. PGR_VIEWER on bomet), so a deployment that grants ASSIGN to another
+    // role is not reported as having no assigner.
     case 'gro':
-      return p.roles.includes('GRO');
+      return assignRolesOf(profile).some((r) => p.roles.includes(r));
     case 'gro-with-department':
-      return p.roles.includes('GRO') && p.departments.length > 0;
+      return assignRolesOf(profile).some((r) => p.roles.includes(r)) && p.departments.length > 0;
     case 'lme':
       return p.roles.includes('PGR_LME');
     case 'csr':
@@ -411,12 +415,18 @@ async function matches(key: PersonaKey, p: ResolvedPersona, profile: DeploymentP
       const seesSeedLocality =
         p.roles.includes('SUPERVISOR') || (!!seedWard && jurBoundaries.includes(seedWard));
       return (
-        p.roles.includes('GRO') &&
+        assignRolesOf(profile).some((r) => p.roles.includes(r)) &&
         seesSeedLocality &&
         p.departments.some((d) => serviceDepts.has(d))
       );
     }
   }
+}
+
+/** Roles allowed to ASSIGN on the deployment's PGR workflow (GRO when unknown). */
+function assignRolesOf(profile: DeploymentProfile): string[] {
+  const roles = (profile.workflow?.pgr?.actionRoles?.ASSIGN ?? []).filter((r) => r !== 'CITIZEN');
+  return roles.length ? roles : ['GRO'];
 }
 
 function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[], profile?: DeploymentProfile): string {
@@ -705,9 +715,30 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
     };
   }
 
+  // Prefer an actor that also carries a department. The plan only requires GRO
+  // of the actor, but lifecycle.setup has hit DEPARTMENT_NOT_FOUND on
+  // department-less actors, and preferring one costs nothing.
+  const actor = (await resolvePersona('gro-with-department', { profile })) ?? (await resolvePersona('gro', { profile }));
+  if (!actor) {
+    return { error: personaDiagnostic('gro-with-department', profile) || whyUnresolved('gro', [], profile) };
+  }
+
+  // ABAC scopes the ACTOR's search by department as well as the assignee's
+  // validation, so prefer complaint types whose department the actor holds too;
+  // an actor that can't see the complaint can't ASSIGN it.
+  const actorDepts = new Set(actor.departments);
+  const byActor = [...services].sort((a, b) => Number(actorDepts.has(b.department)) - Number(actorDepts.has(a.department)));
   let picked: { service: (typeof services)[number]; assignee: DiscoveredEmployee } | null = null;
-  for (const service of services) {
-    const assignee = eligible.find((e) => e.departments.includes(service.department));
+  // Prefer an assignee the suite can sign in as (the actor itself when it may
+  // also hold the complaint, then any resolved persona): later steps RESOLVE as
+  // the 'lme' persona, which can only act on complaints assigned to it.
+  const signable = new Set(
+    [actor.uuid, ...Object.values(profile.personas?.resolved ?? {}).map((p) => p?.uuid)].filter(Boolean) as string[],
+  );
+  const rank = (e: DiscoveredEmployee) => (e.uuid === actor.uuid ? 0 : signable.has(e.uuid) ? 1 : 2);
+  const assignable = [...eligible].sort((a, b) => rank(a) - rank(b));
+  for (const service of byActor) {
+    const assignee = assignable.find((e) => e.departments.includes(service.department));
     if (assignee) {
       picked = { service, assignee };
       break;
@@ -726,14 +757,6 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
   const preferred = process.env.SERVICE_CODE?.trim();
   if (preferred && picked.service.serviceCode !== preferred) {
     console.log(`[seed] SERVICE_CODE=${preferred} has no employee holding its department — using ${picked.service.serviceCode} instead`);
-  }
-
-  // Prefer an actor that also carries a department. The plan only requires GRO
-  // of the actor, but lifecycle.setup has hit DEPARTMENT_NOT_FOUND on
-  // department-less actors, and preferring one costs nothing.
-  const actor = (await resolvePersona('gro-with-department', { profile })) ?? (await resolvePersona('gro', { profile }));
-  if (!actor) {
-    return { error: personaDiagnostic('gro-with-department', profile) || whyUnresolved('gro', [], profile) };
   }
 
   const localityCode = localityFor(profile);

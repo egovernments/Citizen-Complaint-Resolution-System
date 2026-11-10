@@ -24,6 +24,7 @@ import { fetchMdms } from '../utils/probes';
 import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 import { loginViaApi } from '../utils/auth';
 import { authorizeUrl, surfacePath, tenantSlug } from '../utils/identity-bff';
+import { resolvedViewers } from '../utils/employee-fixtures';
 
 const GLOBAL_CONFIGS_URL = '/digit-ui/globalConfigs.js';
 
@@ -44,6 +45,26 @@ const _fixtures = readLifecycleFixtures();
  */
 const ASSIGNED_COMPLAINT_ID =
   process.env.ASSIGNED_COMPLAINT_ID || _fixtures?.complaints?.assigned_to_employee || '';
+
+/**
+ * Who signs in: the employee the complaint is assigned TO. The fixture records
+ * that assignee (lifecycle-fixtures.json -> assignee.uuid, the seed plan's
+ * assignee), and it need not be EMPLOYEE_USER: PGR ABAC scopes the details
+ * page's _search by the viewer's HRMS department, so on bomet EMPLOYEE_USER
+ * (hs_lme, DEPT_1) opening a complaint assigned to the DEPT_2 ward CSR gets
+ * "No Results Found" — which is the scope working, not #344 regressing. Fall
+ * back to EMPLOYEE_USER only when the operator pinned ASSIGNED_COMPLAINT_ID
+ * (then they chose the complaint for that user) or no resolved persona is the
+ * recorded assignee.
+ */
+async function assignedViewer(): Promise<{ username: string; password: string; why: string }> {
+  const assigneeUuid = process.env.ASSIGNED_COMPLAINT_ID ? '' : _fixtures?.assignee?.uuid;
+  if (assigneeUuid) {
+    const match = (await resolvedViewers()).find((p) => p.uuid === assigneeUuid);
+    if (match) return { username: match.username, password: match.password, why: `fixture assignee ${_fixtures?.assignee?.code}` };
+  }
+  return { username: EMPLOYEE_USER, password: EMPLOYEE_PASS, why: 'EMPLOYEE_USER' };
+}
 
 test.describe('employee digit-ui shell bundle', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -122,7 +143,9 @@ test.describe('employee digit-ui shell bundle', () => {
     // ============ #622 — sign-in completes and the shell mounts ============
     // The persona signs in without the page (loginViaApi), so its password is
     // never typed into a traced browser; the hosted form above is only looked at.
-    await loginViaApi(page, { tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    const viewer = await assignedViewer();
+    test.info().annotations.push({ type: 'persona', description: `${viewer.username} (${viewer.why})` });
+    await loginViaApi(page, { tenant: TENANT, username: viewer.username, password: viewer.password });
     await page.waitForURL(/\/digit-ui\/employee(?!\/user\/login)/, { timeout: 30_000 });
     await page.waitForTimeout(3_000);
 
@@ -147,7 +170,7 @@ test.describe('employee digit-ui shell bundle', () => {
     const displayName = String((await userSearch.json()).user?.[0]?.name ?? '').trim();
     expect(
       displayName,
-      `#505 sub-2 — no display name in the session for ${EMPLOYEE_USER}; the header initial has no expectation to compare against`,
+      `#505 sub-2 — no display name in the session for ${viewer.username}; the header initial has no expectation to compare against`,
     ).not.toBe('');
     const expectedInitial = displayName.charAt(0).toUpperCase();
     const headerInitial = await page.evaluate((expected) => {

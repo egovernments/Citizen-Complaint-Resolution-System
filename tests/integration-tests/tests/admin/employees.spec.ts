@@ -143,7 +143,11 @@ const HRMS_UPDATE = '/egov-hrms/employees/_update';
 
 const createdCodes = new Set<string>();
 
-test.describe.configure({ mode: 'serial' });
+// Not 'serial': every test seeds and checks its own employee (no test reads
+// another's state), and the global `workers: 1` already runs them in order.
+// Serial mode turned one red test into skips for everything after it — test 5's
+// real deactivation bug (memberProvider.update) hid the independent bulk import.
+// A failure restarts the worker; afterAll still soft-deletes what that worker created.
 
 interface HrmsEmployee {
   id?: number;
@@ -210,7 +214,11 @@ async function softDeleteEmployee(auth: AuthInfo, code: string): Promise<void> {
   if (emp.isActive === false && emp.employeeStatus === 'INACTIVE') return;
   emp.employeeStatus = 'INACTIVE';
   emp.isActive = false;
+  // HRMS rejects an update that drops earlier deactivation rows
+  // (ERR_HRMS_UPDATE_DEACT_DETAILS_INCOSISTENT), e.g. ones the configurator's
+  // own deactivate added, so keep them and append the teardown row.
   emp.deactivationDetails = [
+    ...(Array.isArray(emp.deactivationDetails) ? emp.deactivationDetails : []),
     {
       reasonForDeactivation: 'OTHERS',
       effectiveFrom: Date.now(),
@@ -852,7 +860,7 @@ The MDMS reason source is asserted indirectly — if the dropdown has no options
 Steps:
 1. Sign in to the Configurator afresh (bulk creates need a live identity session, #2456); generate 3 valid + 2 invalid codes; track only valid for cleanup.
 2. Navigate to /employees/bulk.
-3. Wait for the Departments label (means reference-counts loaded — closed vocabularies ready).
+3. Wait for the Departments label, then for the Download template button to enable (the panel disables it until the department/designation/role/boundary references have loaded; the file input is not gated).
 4. Build xlsx via buildEmployeeXlsx with 5 rows (3 valid, 2 invalid by design).
 5. setInputFiles with the buffer.
 6. Assert preview shows /2.*error|error.*2/i (order-independent error count).
@@ -899,6 +907,12 @@ the test is actually asserting.`,
     await expect(
       page.getByText(/Departments/i).first(),
     ).toBeVisible({ timeout: 30_000 });
+    // The counts' labels render while the references are still loading, and
+    // the file input is NOT disabled meanwhile (BulkImportPanel.tsx): a file
+    // dropped too early is validated against empty lists, so every row reads
+    // "Department not found / Role not valid". The template button is the
+    // panel's own done-loading signal (disabled={referenceLoading}).
+    await expect(page.getByRole('button', { name: /Download template/i })).toBeEnabled({ timeout: 60_000 });
 
     const rows = [
       // Valid trio — PW_ codes, tenant-valid mobiles, real dept/desig. No

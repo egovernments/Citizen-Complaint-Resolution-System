@@ -28,15 +28,23 @@ export const SRID_RE = /([A-Z0-9]+(?:-[A-Z0-9]+)*)-PGR-\d{4}-\d{2}-\d{2}-\d+/;
  * profile as if discovered, and then every SRID regex failed for a reason
  * nobody could see. profile.ts's attempt() now logs it as a probe failure.
  */
-export async function getPgrIdPrefix(opts?: { tenant?: string }): Promise<string> {
+export async function getPgrIdPrefix(opts?: { tenant?: string; root?: string; baseUrl?: string }): Promise<string> {
+  const baseUrl = opts?.baseUrl ?? BASE_URL;
   const cityTenant = opts?.tenant ?? TENANT;
-  const tenantsToTry = cityTenant === ROOT_TENANT ? [ROOT_TENANT] : [cityTenant, ROOT_TENANT];
+  // env.ts reads ROOT_TENANT from the profile, which does not exist yet while
+  // profile-setup is discovering it (the first call), so ROOT_TENANT is '' then
+  // unless the env names one. An empty tenant reaches the BFF's _select as
+  // tenantId '' and is refused 400 INVALID_REQUEST. The caller's root wins, then
+  // env.ts's, then the city's own root segment.
+  const root = opts?.root || ROOT_TENANT || cityTenant.split('.')[0];
+  if (!cityTenant || !root) throw new Error('idgen PGR prefix: no tenant to ask (set DIGIT_TENANT or IDENTITY_TEST_TENANT_SLUG)');
+  const tenantsToTry = cityTenant === root ? [root] : [cityTenant, root];
 
   let auth;
   try {
     auth = await getDigitToken({
-      baseURL: BASE_URL,
-      tenant: ROOT_TENANT,
+      baseURL: baseUrl,
+      tenant: root,
       username: ADMIN_USER,
       password: ADMIN_PASS,
     });
@@ -46,7 +54,7 @@ export async function getPgrIdPrefix(opts?: { tenant?: string }): Promise<string
 
   for (const tenant of tenantsToTry) {
     try {
-      const resp = await fetch(`${BASE_URL}/egov-idgen/id/_generate`, {
+      const resp = await fetch(`${baseUrl}/egov-idgen/id/_generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

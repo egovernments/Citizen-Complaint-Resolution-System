@@ -798,12 +798,7 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
   const bootLocale = gc.localeDefault && gc.localeRegion ? `${gc.localeDefault}_${gc.localeRegion}` : null;
   const locales = await attempt('locales', () => discoverLocales(tenants, authToken, bootLocale, baseUrl), []);
 
-  // KNOWN GAP: getPgrIdPrefix (pgr-idgen.ts) takes no baseUrl and reads env.ts's
-  // BASE_URL, so a discoverProfile({ baseUrl }) that disagrees with the env reads
-  // the prefix off the wrong deployment. Harmless on every shipped entry point —
-  // both take baseUrl from BASE_URL, so they agree — but it is the one probe this
-  // function cannot aim. Give it a baseUrl option to close it.
-  const idPrefix = await attempt('idgen PGR prefix', () => getPgrIdPrefix({ tenant: city }), null as string | null);
+  const idPrefix = await attempt('idgen PGR prefix', () => getPgrIdPrefix({ tenant: city, root, baseUrl }), null as string | null);
 
   const draft: DeploymentProfile = {
     schemaVersion: PROFILE_SCHEMA_VERSION,
@@ -888,6 +883,15 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
   } else {
     draft.pgr.seedServiceCode = plan.serviceCode;
     draft.pgr.seedLocalityCode = plan.localityCode;
+    // The specs RESOLVE as the 'lme' persona; make it the plan's assignee when the
+    // suite can sign in as that person, so it can act on what was assigned to it.
+    const assignee = Object.values(draft.personas.resolved).find(
+      (p) => p?.uuid === plan.assigneeUuid && p.roles.includes('PGR_LME'),
+    );
+    if (assignee && draft.personas.resolved.lme?.uuid !== assignee.uuid) {
+      console.log(`[profile] lme persona -> ${assignee.username}: the seed plan's assignee`);
+      draft.personas.resolved.lme = assignee;
+    }
   }
 
   return draft;
