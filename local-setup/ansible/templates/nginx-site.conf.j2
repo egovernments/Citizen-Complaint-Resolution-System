@@ -88,10 +88,10 @@ server {
 {{ security_headers('  ') }}
 
 {% if nginx_features.brand_assets %}
-  # Brand assets (logos, footers) served from /var/www/brand/. Requires
+  # Brand assets (logos, footers) served from {{ brand_www_dir }}/. Requires
   # the host to have brand assets pre-seeded under that path.
   location /brand/ {
-    alias /var/www/brand/;
+    alias {{ brand_www_dir }}/;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
     {{ security_headers('    ') }}
     try_files $uri =404;
@@ -110,7 +110,7 @@ server {
   # Configurator SPA — host-built dist (build_configurator: true).
   # Long-cache the hashed assets/, no-cache index.
   location /configurator/assets/ {
-    alias /var/www/configurator/assets/;
+    alias {{ configurator_www_dir }}/assets/;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
     {{ security_headers('    ') }}
     try_files $uri =404;
@@ -126,12 +126,12 @@ server {
   # order. Without it the no-caching variant below sends NO Cache-Control at all
   # and browsers apply heuristic freshness off Last-Modified.
   location = /configurator/config.js {
-    alias /var/www/configurator/config.js;
+    alias {{ configurator_www_dir }}/config.js;
     add_header Cache-Control "no-store, must-revalidate" always;
   }
 
   location /configurator/ {
-    alias /var/www/configurator/;
+    alias {{ configurator_www_dir }}/;
     try_files $uri $uri/ /configurator/index.html;
     add_header Cache-Control "no-cache, must-revalidate" always;
     {{ security_headers('    ') }}
@@ -149,12 +149,12 @@ server {
   # order. Without it the no-caching variant below sends NO Cache-Control at all
   # and browsers apply heuristic freshness off Last-Modified.
   location = /configurator/config.js {
-    alias /var/www/configurator/config.js;
+    alias {{ configurator_www_dir }}/config.js;
     add_header Cache-Control "no-store, must-revalidate" always;
   }
 
   location /configurator/ {
-    alias /var/www/configurator/;
+    alias {{ configurator_www_dir }}/;
     try_files $uri $uri/ /configurator/index.html;
   }
 {% endif %}
@@ -178,7 +178,7 @@ server {
   # digit-integration-tests dashboards — vanilla catalog SPA at
   # /tests/ and the react-admin rebuild at /tests-v2/ (matches naipepea's
   # route convention). Built from the vendored tests/integration-tests/ source
-  # and synced to /var/www/integration-tests{,-v2}/ by the deploy. Behind
+  # and synced to {{ integration_tests_www_dir }}/ and {{ integration_tests_v2_www_dir }}/ by the deploy. Behind
   # basic-auth (/etc/nginx/.htpasswd-tests, created by the playbook).
   # catalog.json + runs/ are produced out-of-band by a test runner, not the deploy.
   #
@@ -192,7 +192,7 @@ server {
   location = /tests    { return 301 /tests/; }
   location = /tests-v2 { return 301 /tests-v2/; }
   location /tests/ {
-    alias /var/www/integration-tests/;
+    alias {{ integration_tests_www_dir }}/;
     auth_basic "DIGIT integration tests";
     auth_basic_user_file /etc/nginx/.htpasswd-tests;
     add_header Cache-Control "no-cache, must-revalidate" always;
@@ -204,7 +204,7 @@ server {
     try_files $uri $uri/ $uri/index.html =404;
   }
   location /tests-v2/ {
-    alias /var/www/integration-tests-v2/;
+    alias {{ integration_tests_v2_www_dir }}/;
     auth_basic "DIGIT integration tests";
     auth_basic_user_file /etc/nginx/.htpasswd-tests;
     add_header Cache-Control "no-cache, must-revalidate" always;
@@ -718,7 +718,7 @@ server {
 
 {% if digit_ui_mode == "static" %}
   # digit-ui in static mode: host nginx serves the build artifact from
-  # /opt/digit-ui-esbuild/build/ directly. Built by the playbook
+  # {{ digit_ui_src_dir }}/build/ directly. Built by the playbook
   # (`node esbuild.build.js`) — no inner Docker container, no esbuild
   # dev server. Faster, fewer moving parts, smaller blast radius.
   location = /digit-ui {
@@ -730,7 +730,7 @@ server {
   }
   location /digit-ui/ {
 {{ tenantless_digit_ui_guard('    ') }}
-    alias /opt/digit-ui-esbuild/build/;
+    alias {{ digit_ui_src_dir }}/build/;
     try_files $uri $uri/ /digit-ui/index.html;
     # A missing asset is a 404, not the SPA shell with a 200 (#2271 review 3).
     # Same extension list as tenantless_digit_ui_guard above.
@@ -877,7 +877,7 @@ server {
 {% else %}
   # digit-ui in HMR mode: esbuild dev server (tmux session) on :18080.
   # Serves both /digit-ui/* (the SPA) and proxies API calls to Kong.
-  # Live reloads on file save in /opt/digit-ui-esbuild.
+  # Live reloads on file save in {{ digit_ui_src_dir }}.
   location = /digit-ui {
 {% if digit_ui_default_tenant_slug | default('') | length > 0 %}
     return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/;

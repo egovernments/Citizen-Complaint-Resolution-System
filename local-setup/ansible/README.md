@@ -483,7 +483,8 @@ Per-tenant secrets live in OpenBao on each target (`kv/digit/<tenant>`).
 The first deploy seeds OpenBao with `bootstrap_secrets` from
 `host_vars/<tenant>.yml`. Subsequent edits go through `bao kv put` (UI or
 CLI) — re-deploys do **not** overwrite OpenBao with the YAML defaults
-(seed runs with `cas=0`).
+(the seed adds keys OpenBao lacks and never overwrites a stored value; a
+changed host_vars value is reported as a warning — rotate with `bao kv patch`).
 
 To rotate a secret:
 ```bash

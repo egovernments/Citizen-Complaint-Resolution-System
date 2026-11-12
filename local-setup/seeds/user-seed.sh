@@ -37,10 +37,30 @@ SEED_TENANTS="${SEED_TENANTS:-pg pg.citya pg.cityb pg.cietee}"
 SEED_ADMIN_USER="${SEED_ADMIN_USER:-ADMIN}"
 SEED_ADMIN_PASSWORD="${SEED_ADMIN_PASSWORD:-eGov@123}"
 
+# SEED_STOCK_USERS=false (host_vars `seed_stock_users: false`) skips the stock
+# ADMIN / GRO accounts with the published eGov@123 password. Only sensible on a
+# box that has its own bootstrap_user AND does not run the CI collections or
+# the notification seeder with their defaults (preflight.py checks that).
+# Users that already exist — including the ones db/full-dump.sql ships on the
+# pg* tenants — are never touched by this script either way.
+SEED_STOCK_USERS="${SEED_STOCK_USERS:-true}"
+
+# INTERNAL_USER is a SYSTEM account that services look up by role; nothing signs
+# in with its password, but it must still not be a published value on a box
+# that rotated everything else (host_vars `internal_user_password`).
+INTERNAL_USER_PASSWORD="${INTERNAL_USER_PASSWORD:-System@123}"
+
+# Every failed create is counted and the script exits 1 at the end: a one-shot
+# compose service that "succeeds" with the bootstrap user missing only moves the
+# failure to the playbook's auth validate 20 minutes later, with a message about
+# a password MISMATCH that is wrong for a fresh box (issue #2783).
+SEED_FAILED=0
+
 echo "=== DIGIT User Seed ==="
 echo "EGOV_USER_HOST:  $EGOV_USER_HOST"
 echo "SEED_TENANTS:    $SEED_TENANTS"
 echo "SEED_ADMIN_USER: $SEED_ADMIN_USER"
+echo "SEED_STOCK_USERS: $SEED_STOCK_USERS"
 
 # Escape a value for embedding inside a JSON double-quoted string.
 json_escape() {
@@ -57,6 +77,10 @@ for i in $(seq 1 $MAX_RETRIES); do
   echo "Attempt $i/$MAX_RETRIES - egov-user not ready, waiting ${RETRY_INTERVAL}s..."
   sleep $RETRY_INTERVAL
 done
+if ! curl -sf "$EGOV_USER_HOST/user/health" >/dev/null 2>&1; then
+  echo "ERROR: egov-user never became healthy at $EGOV_USER_HOST; nothing was seeded." >&2
+  exit 1
+fi
 
 # Function to create user on a specific tenant.
 create_user() {
@@ -94,6 +118,10 @@ create_user() {
     echo "    SKIPPED (already exists)"
   else
     echo "    ERROR — Response: $RESPONSE"
+    if echo "$RESPONSE" | grep -qE 'INVALID_PWD_LENGTH|INVALID_PASSWORD'; then
+      echo "    egov-user's password rule: 8-15 characters with a digit, a lower-case and an upper-case letter and one of @#\$%."
+    fi
+    SEED_FAILED=$((SEED_FAILED + 1))
   fi
 }
 
@@ -153,11 +181,19 @@ for TENANT in $SEED_TENANTS; do
   echo "── Seeding tenant: $TENANT ──"
   if [ "$SEED_ADMIN_USER" != "ADMIN" ]; then
     create_user "$SEED_ADMIN_USER" "Bootstrap Administrator" "9777777777" "bootstrap-admin@digit.org" "$TENANT" "$(roles_admin "$TENANT")" "$SEED_ADMIN_PASSWORD"
-    create_user "ADMIN" "System Administrator" "9999999999" "admin@digit.org" "$TENANT" "$(roles_admin "$TENANT")"
+    if [ "$SEED_STOCK_USERS" = "true" ]; then
+      create_user "ADMIN" "System Administrator" "9999999999" "admin@digit.org" "$TENANT" "$(roles_admin "$TENANT")"
+    else
+      echo "  Skipping stock ADMIN (SEED_STOCK_USERS=$SEED_STOCK_USERS)"
+    fi
   else
     create_user "ADMIN" "System Administrator" "9999999999" "admin@digit.org" "$TENANT" "$(roles_admin "$TENANT")" "$SEED_ADMIN_PASSWORD"
   fi
-  create_user "GRO"   "Grievance Officer"    "9888888888" "gro@digit.org"   "$TENANT" "$(roles_gro "$TENANT")"
+  if [ "$SEED_STOCK_USERS" = "true" ]; then
+    create_user "GRO"   "Grievance Officer"    "9888888888" "gro@digit.org"   "$TENANT" "$(roles_gro "$TENANT")"
+  else
+    echo "  Skipping stock GRO (SEED_STOCK_USERS=$SEED_STOCK_USERS)"
+  fi
 done
 
 # INTERNAL_USER is a state-level SYSTEM user (only on the root tenant).
@@ -176,7 +212,7 @@ INTERNAL_USER_RESPONSE=$(curl -s -X POST "$EGOV_USER_HOST/user/users/_createnova
       "active": true,
       "type": "SYSTEM",
       "tenantId": "pg",
-      "password": "System@123",
+      "password": "'"$(json_escape "$INTERNAL_USER_PASSWORD")"'",
       "roles": [{"code": "INTERNAL_MICROSERVICE_ROLE", "name": "Internal Microservice Role", "tenantId": "pg"}]
     }
   }')
@@ -187,13 +223,24 @@ elif echo "$INTERNAL_USER_RESPONSE" | grep -q 'DuplicateUserName'; then
   echo "  SKIPPED: Internal Microservice user already exists"
 else
   echo "  ERROR — Response: $INTERNAL_USER_RESPONSE"
+  SEED_FAILED=$((SEED_FAILED + 1))
 fi
 
 echo ""
+if [ "$SEED_FAILED" -gt 0 ]; then
+  echo "=== User seed FAILED: $SEED_FAILED create(s) were rejected (see ERROR lines above) ==="
+  exit 1
+fi
 echo "=== User seed completed ==="
 if [ "$SEED_ADMIN_USER" != "ADMIN" ]; then
   echo "Bootstrap admin: $SEED_ADMIN_USER (password from SEED_ADMIN_PASSWORD) on every tenant in SEED_TENANTS."
-  echo "Stock credentials: ADMIN / eGov@123 (and GRO / eGov@123) also seeded for CI/tests."
-else
+  if [ "$SEED_STOCK_USERS" = "true" ]; then
+    echo "Stock credentials: ADMIN / eGov@123 (and GRO / eGov@123) also seeded for CI/tests."
+  else
+    echo "Stock ADMIN / GRO were NOT seeded (SEED_STOCK_USERS=false)."
+  fi
+elif [ "$SEED_STOCK_USERS" = "true" ]; then
   echo "Default credentials: ADMIN (password from SEED_ADMIN_PASSWORD, default eGov@123) and GRO / eGov@123 on every tenant in SEED_TENANTS."
+else
+  echo "Default credentials: ADMIN (password from SEED_ADMIN_PASSWORD, default eGov@123); stock GRO was NOT seeded (SEED_STOCK_USERS=false)."
 fi

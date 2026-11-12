@@ -7,7 +7,7 @@
 # chosen that way cover the cases someone thought of, which is the same habit
 # that left the production path untested.
 #
-# Inputs: 7 probe verdicts x 2 effective mounts x 2 stack states x 2 override
+# Inputs: 9 probe verdicts x 3 effective mounts x 2 stack states x 2 override
 # states. Expected outcome is DERIVED from the rule below, not typed per row, so
 # adding a probe verdict or a refusal extends the matrix automatically.
 #
