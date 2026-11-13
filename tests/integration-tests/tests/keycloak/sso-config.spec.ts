@@ -20,8 +20,35 @@ const KC_CLIENT_ID = process.env.IDENTITY_TEST_CITIZEN_CLIENT_ID || 'digit-ui-ci
 
 // Operator credentials are supplied only by the isolated fixture.
 async function getAdminToken(): Promise<string> { return keycloakAdmin().token; }
+/** The admin fixture is an operator secret, not a deployment capability: absent means skip. */
+const hasAdminFixture = () =>
+  Boolean(process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_URL && process.env.IDENTITY_TEST_KEYCLOAK_ADMIN_TOKEN);
+const NO_ADMIN_FIXTURE = 'Keycloak admin fixture not supplied (IDENTITY_TEST_KEYCLOAK_ADMIN_URL/_TOKEN)';
+/** Status of Keycloak's authorize endpoint for this client + redirect_uri. Keycloak
+ *  validates redirect_uri against the client's Valid Redirect URIs before rendering
+ *  the login page: 200 when allowed, 400 "Invalid parameter: redirect_uri" when not. */
+async function authorizeStatus(redirectUri: string): Promise<number> {
+  // The client enforces PKCE S256: without a challenge Keycloak 302s an error back to
+  // the redirect_uri instead of rendering the login page. Any 43-char value will do.
+  const params = new URLSearchParams({ client_id: KC_CLIENT_ID, redirect_uri: redirectUri, response_type: 'code', scope: 'openid',
+    code_challenge: 'redirect-uri-probe-redirect-uri-probe-12345', code_challenge_method: 'S256' });
+  const resp = await fetch(`${KC_BASE}/realms/${KC_REALM}/protocol/openid-connect/auth?${params}`, { redirect: 'manual' });
+  return resp.status;
+}
+/**
+ * v2.20 citizens sign in by phone only; Google is a staff sign-in method, offered
+ * on the Configurator surface when the deploy lists it and Keycloak has a Google
+ * client. GET /identity/v1/auth-methods answers { methods: [{ id, type, ... }] }.
+ */
+async function skipUnlessGoogleOffered(request: APIRequestContext) {
+  const response = await request.get(`${BASE_URL}/identity/v1/auth-methods?surface=configurator&intent=signin`);
+  expect(response.status(), 'GET /identity/v1/auth-methods?surface=configurator').toBe(200);
+  const methods: Array<{ id?: string }> = (await response.json()).methods ?? [];
+  test.skip(!methods.some((m) => m.id === 'google'), 'Google is not a Configurator sign-in method on this deployment (/identity/v1/auth-methods)');
+}
 async function brokerRedirect(request: APIRequestContext) {
-  const bff = await request.get(authorizeUrl(BASE_URL, 'citizen', 'google'), { maxRedirects: 0 });
+  await skipUnlessGoogleOffered(request);
+  const bff = await request.get(authorizeUrl(BASE_URL, 'configurator', 'google'), { maxRedirects: 0 });
   expect(bff.status()).toBe(302);
   return request.get(bff.headers().location, { maxRedirects: 0 });
 }
@@ -53,6 +80,19 @@ test.describe('Google SSO Configuration', () => {
     tag: ['@local-only', '@area:keycloak', '@layer:api', '@persona:system'],
   }, async () => {
     const deploymentDomain = new URL(BASE_URL).origin;
+    if (!hasAdminFixture()) {
+      // Admin-free: ask Keycloak itself whether it accepts the callback, with a
+      // foreign redirect_uri as the control so a permissive realm cannot pass.
+      expect(
+        await authorizeStatus(`${deploymentDomain}/identity/v1/callback`),
+        `Keycloak rejects redirect_uri ${deploymentDomain}/identity/v1/callback for client "${KC_CLIENT_ID}"`,
+      ).toBe(200);
+      expect(
+        await authorizeStatus('https://redirect-uri-control.invalid/identity/v1/callback'),
+        `Keycloak accepts a foreign redirect_uri for client "${KC_CLIENT_ID}" (client missing, or wildcard redirect URIs)`,
+      ).toBe(400);
+      return;
+    }
     const adminToken = await getAdminToken();
 
     const resp = await fetch(
@@ -80,6 +120,9 @@ test.describe('Google SSO Configuration', () => {
   test('KC client has deployment domain in web origins (CORS)', {
     tag: ['@local-only', '@area:keycloak', '@layer:api', '@persona:system'],
   }, async () => {
+    // CORS answers at the gateway come from Kong's cors plugin, not the client's
+    // webOrigins, so there is no admin-free probe for this one.
+    test.skip(!hasAdminFixture(), NO_ADMIN_FIXTURE);
     const deploymentDomain = new URL(BASE_URL).origin;
     const adminToken = await getAdminToken();
 
@@ -108,7 +151,8 @@ test.describe('Google SSO Configuration', () => {
 
   test('Google IdP is enabled and configured', {
     tag: ['@local-only', '@area:keycloak', '@layer:api', '@persona:system'],
-  }, async () => {
+  }, async ({ request }) => {
+    await skipUnlessGoogleOffered(request);
     const adminToken = await getAdminToken();
 
     const resp = await fetch(
@@ -198,7 +242,8 @@ test.describe('Google SSO Configuration', () => {
 
   test('Google client secret is valid (KC can exchange auth code)', {
     tag: ['@local-only', '@area:keycloak', '@layer:api', '@persona:system'],
-  }, async () => {
+  }, async ({ request }) => {
+    await skipUnlessGoogleOffered(request);
     const adminToken = await getAdminToken();
 
     // Get the Google IdP config

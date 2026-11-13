@@ -15,7 +15,10 @@
  * UI.
  */
 import { getDigitToken } from './auth';
-import { BASE_URL, ROOT_TENANT } from './env';
+import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from './env';
+// Cycle-safe: profile.ts imports this module, so tryGetProfile is only ever
+// read at call time (inside functions), never at module scope.
+import { tryGetProfile } from './profile';
 
 export interface MobileRule {
   prefix?: string;
@@ -32,9 +35,6 @@ const FALLBACK: MobileRule = {
   maxLength: 10,
   errorMessage: 'Please enter a valid 10-digit mobile number',
 };
-
-const ADMIN_USER = process.env.ADMIN_USER || 'ADMIN';
-const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'eGov@123';
 
 /**
  * Root tenant, read at the USE SITE rather than module scope.
@@ -99,10 +99,42 @@ export function derivedStartingDigits(pattern: string): string[] | null {
 }
 
 /**
- * Fetch the live mobile-validation rule for `tenant` from MDMS. Falls
- * back to a 10-digit-numeric default if the schema search fails — this
- * is the same shape the configurator's UI uses for new tenants that
- * haven't seeded a rule yet.
+ * The rule the deployment profile discovered (profile.mobile), or null when the
+ * profile has none. Read at call time — see the import note above.
+ */
+export function ruleFromProfile(): MobileRule | null {
+  const m = tryGetProfile()?.mobile;
+  if (!m?.pattern) return null;
+  return {
+    prefix: m.countryCode ?? undefined,
+    pattern: m.pattern,
+    minLength: m.length?.min ?? 10,
+    maxLength: m.length?.max ?? 10,
+    errorMessage: `Please enter a valid mobile number matching ${m.pattern}`,
+    allowedStartingDigits: derivedStartingDigits(m.pattern) ?? undefined,
+  };
+}
+
+class MobileRuleUnavailable extends Error {}
+
+/** No rule could be READ (login/transport/HTTP failure): the profile's, else fail loudly. */
+function unreadable(reason: string): MobileRule {
+  const fromProfile = ruleFromProfile();
+  if (fromProfile) return fromProfile;
+  throw new MobileRuleUnavailable(
+    `mobile rule not discoverable: ${reason}; profile.mobile has no pattern ` +
+      `(source=${tryGetProfile()?.mobile.source ?? 'no profile'})`,
+  );
+}
+
+/**
+ * Fetch the live mobile-validation rule for `tenant` from MDMS.
+ *
+ * When MDMS ANSWERS with no rule, the generic 10-digit FALLBACK is returned
+ * only if the profile has none either — that is the shape the configurator's
+ * UI uses for tenants that haven't seeded one. When MDMS cannot be READ at all,
+ * this no longer invents the 10-digit rule (specs then tested a fabricated rule
+ * against e.g. Kenya's 9-digit one): it uses the profile's rule or throws.
  */
 export async function getMobileValidationRule(tenant: string): Promise<MobileRule> {
   try {
@@ -119,14 +151,14 @@ export async function getMobileValidationRule(tenant: string): Promise<MobileRul
         MdmsCriteria: { tenantId: tenant, schemaCode: 'common-masters.MobileNumberValidation' },
       }),
     });
-    if (!resp.ok) return FALLBACK;
+    if (!resp.ok) return unreadable(`MDMS search HTTP ${resp.status}`);
     const json = (await resp.json()) as {
       mdms?: Array<{ data?: { countryCode?: string; mobileNumberRegex?: string; default?: boolean } }>;
     };
     const records = json.mdms ?? [];
     const preferred = records.find((r) => r.data?.default === true) ?? records[0];
     const data = preferred?.data;
-    if (!data?.mobileNumberRegex) return FALLBACK;
+    if (!data?.mobileNumberRegex) return ruleFromProfile() ?? FALLBACK;
     const lengths = deriveMobileLengths(data.mobileNumberRegex);
     return {
       prefix: typeof data.countryCode === 'string' ? data.countryCode : undefined,
@@ -136,8 +168,9 @@ export async function getMobileValidationRule(tenant: string): Promise<MobileRul
       errorMessage: `Please enter a valid ${lengths.max}-digit mobile number`,
       allowedStartingDigits: derivedStartingDigits(data.mobileNumberRegex) ?? undefined,
     };
-  } catch {
-    return FALLBACK;
+  } catch (e) {
+    if (e instanceof MobileRuleUnavailable) throw e;
+    return unreadable((e as Error).message);
   }
 }
 

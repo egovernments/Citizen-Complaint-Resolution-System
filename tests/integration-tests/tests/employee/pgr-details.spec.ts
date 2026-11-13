@@ -24,8 +24,8 @@ import { tenantSlug } from '../utils/identity-bff';
 import { test, expect, type Page } from '@playwright/test';
 import { loginViaApi } from '../utils/auth';
 import { BASE_URL, TENANT } from '../utils/env';
-import { getPersona } from '../utils/personas';
-import { seedComplaintAsCitizen } from '../utils/seed';
+import { getPersona, type ResolvedPersona } from '../utils/personas';
+import { findExistingComplaint, seedComplaintVisibleTo } from '../utils/employee-fixtures';
 
 // getPersona('employee') asks the live deployment who actually holds
 // EMPLOYEE/SUPERUSER instead of assuming ADMIN — it tries FLOW5_EMPLOYEE_USER/
@@ -103,14 +103,55 @@ function fixtureSkip(srid: string, envVar: string): string {
 const TERMINAL_SKIP = fixtureSkip(TERMINAL_COMPLAINT_ID, 'TERMINAL_COMPLAINT_SRID');
 const NONTERMINAL_SKIP = fixtureSkip(NONTERMINAL_COMPLAINT_ID, 'NONTERMINAL_COMPLAINT_SRID');
 
-async function openDetails(page: Page, srid: string, skipReason: string): Promise<void> {
-  // Skip rather than navigate to a complaint we know isn't there. Without this
-  // the page renders "No Results Found" and the field-pair wait below times out
-  // after 30s, disguising a missing fixture as a UI regression. Gated on the
-  // ONE fixture this story asked for — see fixtureSkip().
-  test.skip(!srid, skipReason);
+/**
+ * Which complaint a story opens, and as whom.
+ *
+ * With a lifecycle fixture (or an env pin) that is the seeded SRID, opened as
+ * the 'inbox-viewer' persona the fixture was seeded for (needs nextActions —
+ * GRO + jurisdiction — for the 5.24b Take-Action gate).
+ *
+ * Without one (bomet: no ASSIGN-capable persona, so lifecycle.setup.ts writes a
+ * skip marker) the stories are still testable against an EXISTING complaint,
+ * read-only: findExistingComplaint() picks one that a resolved persona can see
+ * under PGR ABAC and whose current workflow state offers that persona no action
+ * ('terminal' stories — PGRDetails.js shouldShowActionButton() is false, and the
+ * timeline has APPLY + at least one transition) or a real one ('nonterminal').
+ * The state → roles mapping is the deployment's own PGR businessService, the
+ * same thing the details page reads. Only if nothing qualifies do we skip,
+ * naming both gaps.
+ */
+type DetailsFixture = { srid: string; persona: ResolvedPersona; source: string };
+const fixtureCache = new Map<'terminal' | 'nonterminal', Promise<DetailsFixture | { skip: string }>>();
+function detailsFixture(kind: 'terminal' | 'nonterminal'): Promise<DetailsFixture | { skip: string }> {
+  if (!fixtureCache.has(kind)) {
+    fixtureCache.set(kind, (async () => {
+      const pinned = kind === 'terminal' ? TERMINAL_COMPLAINT_ID : NONTERMINAL_COMPLAINT_ID;
+      if (pinned) {
+        return { srid: pinned, persona: await getPersona('inbox-viewer'), source: 'lifecycle fixture / env pin' };
+      }
+      const found = await findExistingComplaint(kind === 'terminal' ? 'no-action' : 'actionable');
+      if ('error' in found) {
+        return { skip: `${kind === 'terminal' ? TERMINAL_SKIP : NONTERMINAL_SKIP} No existing complaint qualifies either: ${found.error}` };
+      }
+      return { srid: found.srid, persona: found.persona, source: `existing complaint ${found.srid} — ${found.why}` };
+    })());
+  }
+  return fixtureCache.get(kind)!;
+}
 
-  const employee = await getPersona('inbox-viewer'); // needs nextActions (GRO+jurisdiction) for the 5.24b Take-Action gate
+/** Resolve the story's fixture, skip with the cause if there is none, open it. */
+async function openFixture(page: Page, kind: 'terminal' | 'nonterminal'): Promise<string> {
+  const f = await detailsFixture(kind);
+  if ('skip' in f) {
+    test.skip(true, f.skip);
+    return '';
+  }
+  test.info().annotations.push({ type: 'fixture', description: f.source });
+  await openDetails(page, f.srid, f.persona);
+  return f.srid;
+}
+
+async function openDetails(page: Page, srid: string, employee: ResolvedPersona): Promise<void> {
   await loginViaApi(page, {
     // `tenant` is what gets injected into Employee.* localStorage (the
     // complaint's own tenant, so pgr-services/workflow calls resolve
@@ -154,7 +195,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   // Each test gets its own page context — no shared state between stories.
 
   test('Story 5.1 — details page loads without error (terminal fixture) @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
+    await openFixture(page, 'terminal');
 
     const heading = page.getByText('Complaint Details', { exact: true }).first();
     await expect(heading).toBeVisible({ timeout: 10_000 });
@@ -165,14 +206,14 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.4 — Complaint No. label + value match the SRID @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
+    const srid = await openFixture(page, 'terminal');
 
     const value = await valueForLabel(page, 'Complaint No.');
-    expect(value).toBe(TERMINAL_COMPLAINT_ID);
+    expect(value).toBe(srid);
   });
 
   test('Story 5.5 — Current Status chip renders localized status text @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
+    await openFixture(page, 'terminal');
 
     const status = await valueForLabel(page, 'Current Status');
     // We deliberately do not lock to a specific localization or terminal
@@ -184,7 +225,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.6 — complaint classification rows render localized values @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
+    await openFixture(page, 'terminal');
 
     // PGRDetails.js renders the classification block between the
     // "Complaint No." and "Filed Date" rows. FLAT tenants render exactly
@@ -224,14 +265,14 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.9 — Filed Date renders in DD/MM/YYYY @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
+    await openFixture(page, 'terminal');
 
     const filed = await valueForLabel(page, 'Filed Date');
     expect(filed).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
   });
 
   test('Story 5.16 — Complaint Timeline section renders with checkpoint rows @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
+    await openFixture(page, 'terminal');
 
     // Accept the localized English label OR the raw i18n key / sw_KE rendering.
     const timelineHeader = page.getByText(/Complaint Timeline|CS_COMPLAINT_DETAILS_COMPLAINT_TIMELINE/i).first();
@@ -250,7 +291,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
     // returns just `person.name`), so this asserts the post-fix shape directly.
     // Previously masked with `test.fail(true)` pending a deploy; unmasked once
     // the bundle shipped.
-    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
+    await openFixture(page, 'terminal');
 
     // #524: actor names must not carry the appended role list. We don't
     // pin a specific actor name (varies by deployment/seed) — instead we
@@ -266,9 +307,12 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.24a — Take Action HIDDEN on terminal-state complaint @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
+    await openFixture(page, 'terminal');
 
-    // CLOSEDAFTERREJECTION has no nextActions for any role, so the
+    // The terminal fixture's current state offers the viewer no action
+    // (CLOSEDAFTERREJECTION when lifecycle.setup seeded it; otherwise an
+    // existing complaint picked for exactly that property — see
+    // detailsFixture()), so shouldShowActionButton() is false and the
     // button must not render. We do not just check count===0 — that
     // would pass if the entire page failed to load. Anchor on a known
     // section first.
@@ -281,7 +325,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.24b — Take Action VISIBLE on non-terminal complaint @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, NONTERMINAL_COMPLAINT_ID, NONTERMINAL_SKIP);
+    await openFixture(page, 'nonterminal');
 
     // The take-action control renders ONLY when the workflow returns
     // nextActions for the viewing employee (PGRDetails.js gates the
@@ -311,21 +355,28 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
 
     let missingId: string;
     let equatorId: string;
+    let viewer: ResolvedPersona;
     try {
-      const [missing, equator] = await Promise.all([
-        seedComplaintAsCitizen({
-          description: 'PW #1750 employee detail without geo-location',
-          geoLocation: {},
-        }),
-        seedComplaintAsCitizen({
-          description: 'PW #1750 employee detail equator geo-location',
-          geoLocation: { latitude: 0, longitude: 36.8 },
-        }),
-      ]);
+      // Filed for a viewer that can actually read them under PGR ABAC (complaint
+      // type from its own department, locality inside its jurisdiction) —
+      // the 'inbox-viewer' persona when the deployment has one.
+      const missing = await seedComplaintVisibleTo({
+        description: 'PW #1750 employee detail without geo-location',
+        geoLocation: {},
+      });
+      viewer = missing.persona;
+      const equator = await seedComplaintVisibleTo({
+        description: 'PW #1750 employee detail equator geo-location',
+        geoLocation: { latitude: 0, longitude: 36.8 },
+        viewer,
+      });
       missingId = missing.srid;
       equatorId = equator.srid;
     } catch (error) {
-      test.skip(true, `complaint create blocked on this deployment: ${(error as Error).message.slice(0, 200)}`);
+      // Filed but unreadable by the viewer the type/locality were chosen for is
+      // an ABAC regression, not a missing capability — fail on it.
+      if (/cannot read it back/.test((error as Error).message)) throw error;
+      test.skip(true, `complaint create blocked on this deployment: ${(error as Error).message.slice(0, 300)}`);
       return;
     }
 
@@ -340,14 +391,14 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
       page.getByText(/^(Complaint(?:'s)? Location|CS_COMPLAINT_LOCATION)$/i, { exact: true });
     const locationMarker = () => page.locator('.leaflet-container .leaflet-marker-icon');
 
-    await openDetails(page, missingId, 'fresh no-location fixture creation failed');
+    await openDetails(page, missingId, viewer);
     await expect(
       locationHeading(),
       'employee details must hide the complete location card when coordinates are absent',
     ).toHaveCount(0);
     await expect(locationMarker()).toHaveCount(0);
 
-    await openDetails(page, equatorId, 'fresh equator fixture creation failed');
+    await openDetails(page, equatorId, viewer);
     await expect(locationHeading(), 'employee details must accept latitude=0').toBeVisible();
     await expect(locationMarker()).toHaveCount(1);
   });

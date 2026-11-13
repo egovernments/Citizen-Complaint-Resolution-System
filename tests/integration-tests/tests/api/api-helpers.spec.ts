@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { loginEmployee, mdmsSearch, pgrSearch, hrmsSearch, workflowBusinessService } from '../utils/launch-fixes/api.js';
 import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 import { TENANT } from '../utils/env';
+import { tryGetProfile } from '../utils/profile';
 
 // SRID precedence: explicit env → lifecycle.setup fixtures. No literal
 // fallback: the old default ('NCCG-PGR-2026-04-28-011862') is a naipepea-only
@@ -100,9 +101,13 @@ Steps:
 A failure here predicts assignment flow failures throughout the rest of the suite.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@kind:smoke', '@layer:api', '@persona:cross'] }, async () => {
+    // The roles that can hold a complaint after ASSIGN, read from this
+    // deployment's PGR workflow (PGR_LME/PGR_VIEWER on stock) — not pinned.
+    const assigneeRoles = tryGetProfile()?.workflow.pgr.assign?.assigneeRoles ?? [];
+    test.skip(!assigneeRoles.length, 'PGR workflow ASSIGN target roles not discovered (no profile, or no ASSIGN action)');
     const auth = await loginEmployee();
-    const r = await hrmsSearch(auth, TENANT, ['PGR_LME']);
-    expect(r.Employees?.length).toBeGreaterThan(0);
+    const r = await hrmsSearch(auth, TENANT, assigneeRoles);
+    expect(r.Employees?.length, `employees holding ${assigneeRoles.join('|')} on ${TENANT}`).toBeGreaterThan(0);
   });
 
   test('PGR business service is present', {

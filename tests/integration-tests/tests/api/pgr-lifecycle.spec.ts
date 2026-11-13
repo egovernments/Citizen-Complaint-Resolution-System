@@ -17,12 +17,13 @@ import { getPrincipal } from '../utils/employee-ui';
 import { resolvePersona, resolveSeedPlan } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
-  ADMIN_USER, ADMIN_PASS, FIXED_OTP,
+  ADMIN_USER, ADMIN_PASS,
   DEFAULT_PASSWORD,
   GRO_USER, GRO_PASS, EMPLOYEE_USER, EMPLOYEE_PASS,
   SERVICE_CODE, LOCALITY_CODE,
   generateCitizenPhone,
 } from '../utils/env';
+import { tryGetProfile } from '../utils/profile';
 
 const CITIZEN_PHONE = generateCitizenPhone();
 const CITIZEN_NAME = 'E2E API Citizen';
@@ -38,7 +39,14 @@ async function fetchComplaint(token: string, userInfo: Record<string, unknown>, 
     },
   );
   const data: any = await resp.json();
-  return data.ServiceWrappers[0].service;
+  const service = data.ServiceWrappers?.[0]?.service;
+  if (!service) {
+    throw new Error(
+      `pgr _search for ${serviceRequestId} at ${TENANT} returned no complaint (HTTP ${resp.status}) for ` +
+        `${String(userInfo?.userName ?? 'this caller')}: ${JSON.stringify(data).slice(0, 300)}`,
+    );
+  }
+  return service;
 }
 
 /** Provision by BFF phone possession; never retry with a native password. */
@@ -51,6 +59,11 @@ async function registerCitizen(phone: string): Promise<{ token: string; userInfo
 }
 
 test.describe.serial('PGR lifecycle — API only', () => {
+  // The whole chain files one complaint; with no seed plan there is nothing valid to file.
+  test.skip(
+    !SERVICE_CODE || !LOCALITY_CODE,
+    `no seed plan (service/locality): ${tryGetProfile()?.personas.unresolvedDiagnostics['pgr.seedPlan'] ?? 'no deployment profile'}`,
+  );
   let adminToken: string;
   let adminUserInfo: Record<string, unknown>;
   // PGR workflow gates actions by role: ASSIGN needs GRO, RESOLVE needs PGR_LME.
@@ -222,8 +235,6 @@ Steps:
 Catches a regression where _update silently rejects payloads missing source/id (returns INVALID_SOURCE).`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
-    const fullService = await fetchComplaint(groToken, groUserInfo, serviceRequestId);
-
     // The assignee must belong to the COMPLAINT's department, not merely hold
     // one: pgr rejects a mismatch with 400 INVALID_ASSIGNMENT ("cannot be
     // assigned to employee of department [X]"). resolveSeedPlan() picks its
@@ -237,6 +248,11 @@ Catches a regression where _update silently rejects payloads missing source/id (
       // failure would point at authorization instead of the real cause.
       throw new Error(`resolveSeedPlan failed — cannot pick a department-matched assignee: ${plan.error}`);
     }
+    // Plan first, search second: since the profile records a filing target even
+    // without a GRO (steps 1-2 run on bomet), the GRO fallback here is ADMIN, whose
+    // search returns no complaint, and the step died on a TypeError instead of
+    // saying the ASSIGN plan has no GRO.
+    const fullService = await fetchComplaint(groToken, groUserInfo, serviceRequestId);
     const assigneeUuid = plan.assigneeUuid;
 
     const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {

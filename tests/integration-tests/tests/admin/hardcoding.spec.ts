@@ -32,7 +32,7 @@
  * 'pg' leaking into a 'ke' deployment AND 'ke' leaking into a 'pg' one.
  */
 import { test, expect, type Request } from '@playwright/test';
-import { ROOT_TENANT } from '../utils/env';
+import { ROOT_TENANT, STACK_ROOT_TENANT } from '../utils/env';
 
 /**
  * A tenantId belongs to this deployment if it is the root tenant itself or a
@@ -52,9 +52,19 @@ function tenantIdsIn(body: string): string[] {
   return [...out];
 }
 
-/** Foreign tenantIds in a body — empty means the payload is clean. */
+/**
+ * Foreign tenantIds in a body — empty means the payload is clean.
+ *
+ * One read is allowed to leave the workspace: the configurator looks up
+ * `common-masters.AnalyticsProvider` at the STACK's root tenant (lib/analytics.ts
+ * startMatomo -> getConfiguredRootTenant), by design, because analytics are
+ * configured per stack. Only that schema, and only at that tenant, is exempt.
+ */
 function foreignTenantIds(body: string): string[] {
-  return tenantIdsIn(body).filter((t) => !isOwnTenant(t));
+  const foreign = tenantIdsIn(body).filter((t) => !isOwnTenant(t));
+  const stackAnalyticsRead =
+    /"schemaCode"\s*:\s*"common-masters\.AnalyticsProvider"/.test(body) && foreign.every((t) => t === STACK_ROOT_TENANT);
+  return stackAnalyticsRead ? [] : foreign;
 }
 
 test.describe('hardcoding smoke', () => {

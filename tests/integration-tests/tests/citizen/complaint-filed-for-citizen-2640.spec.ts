@@ -12,15 +12,18 @@
  * BFF links the account pgr-services created (#2167). Both orders are covered
  * here, and neither depends on the account's userName.
  *
- * Each test signs in its own new number (one BFF OTP each) and files as the
- * `csr` persona, an employee holding a PGR APPLY role other than CITIZEN.
+ * Files as the `csr` persona, an employee holding a PGR APPLY role other than
+ * CITIZEN. "After" uses the suite-wide citizen: citizen-setup signed a new
+ * number in by BFF OTP this run, which is exactly the state #2640 needs, so it
+ * costs no OTP send. "Before" needs a number nobody has used, so it signs in
+ * one of its own (one send against the BFF's 20/IP/hour budget).
  */
 import { test, expect, type Page } from '@playwright/test';
 import { BASE_URL, TENANT } from '../utils/env';
 import { requires } from '../utils/capabilities';
 import { getPersona, resolveFilingTarget } from '../utils/personas';
 import { pgrCreate } from '../utils/launch-fixes/api';
-import { freshCitizenMobile, provisionFreshCitizen, type ProvisionedCitizen } from '../utils/citizen-provision';
+import { freshCitizenMobile, provisionFreshCitizen, readProvisionedCitizen, type ProvisionedCitizen } from '../utils/citizen-provision';
 import { citizenOtpLogin } from '../utils/citizen-login';
 import { tenantSlug } from '../utils/identity-bff';
 
@@ -82,11 +85,11 @@ test.describe('PGR — a complaint filed for a citizen reaches their My Complain
   test('filed after the citizen signed in by OTP', {
     annotation: {
       type: 'description',
-      description: `The #2640 order. A new citizen signs in by phone OTP through the identity BFF, which creates their DIGIT account (userName kcbffc-…, marker keycloak-bff:citizen:). Then an employee holding CSR files a complaint for that phone. No userName = mobile citizen exists, so pgr-services must attach the complaint to the one BFF-created citizen holding the number; before #2640 it created a second CITIZEN and the complaint never appeared.
+      description: `The #2640 order. A new citizen signs in by phone OTP through the identity BFF, which creates their DIGIT account (userName kcbffc-…, marker keycloak-bff:citizen:): the suite-wide citizen citizen-setup provisioned this run (a new number; nothing has filed for it as an employee). Then an employee holding CSR files a complaint for that phone. No userName = mobile citizen exists, so pgr-services must attach the complaint to the one BFF-created citizen holding the number; before #2640 it created a second CITIZEN and the complaint never appeared.
 
 Steps:
 1. requires personas.csr (an employee holding a PGR APPLY role other than CITIZEN).
-2. provisionFreshCitizen(): a new valid number signs in by BFF OTP (_send, _verify, citizen _select).
+2. readProvisionedCitizen(): the citizen citizen-setup signed in this run through provisionFreshCitizen() (BFF _send, _verify, citizen _select).
 3. As the csr persona, pgrCreate for that number (no accountId, citizen = {name, mobileNumber}).
 4. Assert the created complaint's accountId is the citizen's uuid.
 5. Poll the citizen's own PGR _search for the complaint id.
@@ -96,7 +99,8 @@ Steps:
     requires(test, 'personas.csr');
     test.setTimeout(180_000);
 
-    const citizen = await provisionFreshCitizen();
+    const citizen = readProvisionedCitizen();
+    if (!citizen?.sessionCookies?.length) throw new Error('citizen-fixture.json is missing or has no BFF session: run the citizen-setup project first');
 
     const { srid, accountId } = await fileAsCsr(citizen.mobile);
     expect(accountId, `${srid} must attach to the account the citizen signs in with, not a second CITIZEN (#2640)`)

@@ -3,7 +3,7 @@ import { tenantSlug } from '../utils/identity-bff';
  * PGR Lifecycle — UI-only
  *
  * Tests the complete PGR complaint lifecycle using only browser interactions:
- *   1. Citizen logs in via OTP (UI)
+ *   1. Citizen signs in (the suite-wide citizen's BFF session)
  *   2. Citizen creates complaint via wizard (UI)
  *   3. Admin sees complaint in inbox (UI)
  *   4. Admin assigns complaint (UI — Take Action modal)
@@ -19,12 +19,12 @@ import { continueFiling, fileComplaintUrl, fillDetailsStep, fillLocationStep, pr
 import { getPersona } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
-  ADMIN_USER, ADMIN_PASS, FIXED_OTP,
-  DEFAULT_PASSWORD, PGR_ID_PREFIX,
-  generateCitizenPhone,
+  ADMIN_USER, ADMIN_PASS,
 } from '../utils/env';
 import { SERVICE_CODE, LOCALITY_CODE } from '../utils/env';
 import { fetchMdms } from '../utils/probes';
+import { tryGetProfile } from '../utils/profile';
+import { SRID_RE } from '../utils/pgr-idgen';
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -38,8 +38,11 @@ async function snap(page: Page, name: string) {
   console.log(`Screenshot: ${filePath}`);
 }
 
-const CITIZEN_PHONE = generateCitizenPhone();
-const CITIZEN_NAME = 'E2E UI Citizen';
+// The citizen is the suite-wide one (citizen-setup signed a new number in by
+// BFF OTP); citizenOtpLogin(page) adopts its session. A citizen of this spec's
+// own bought nothing and cost an OTP send per run against the BFF's 20/IP/hour
+// budget; UI OTP sign-in has its own specs (citizen-otp-login,
+// citizen-registration, keycloak/kc-ui).
 
 /**
  * The employee who drives Take Action in steps 3-5. Resolved by CAPABILITY, not
@@ -54,7 +57,11 @@ const CITIZEN_NAME = 'E2E UI Citizen';
  * record). getPersona('gro-with-department') finds HS_GRO on bomet and EMP001 on
  * mz.maputo without either deployment declaring anything.
  *
- * CITY_ADMIN_USER still wins when set, so an operator can pin a specific actor.
+ * CITY_ADMIN_USER is deliberately NOT consulted. It used to win when set, but
+ * personas.ts treats it as a CSR candidate and both deploy files pin it to the
+ * workspace admin (itlocal-admin, ke-admin), which holds no GRO/PGR_VIEWER: v2.20
+ * offers ASSIGN only to [GRO, PGR_VIEWER] in the complaint's department and
+ * jurisdiction, so that admin never sees Take Action.
  *
  * `authTenant` is part of the answer, not an afterthought. personas.ts probes
  * each credential at the city tenant and at the root, and reports the one it
@@ -64,17 +71,8 @@ const CITIZEN_NAME = 'E2E UI Citizen';
  * anyway); a GRO that authenticates only at the root would fail both the inbox
  * and the Assign login for a reason no locator error would explain. Step 5
  * already threads `resolver.tenant` through — this is the same fact.
- *
- * Undefined for the CITY_ADMIN_USER branch: nobody proved anything about a
- * pinned credential, so the caller keeps its existing default.
  */
 async function cityAdmin(): Promise<{ username: string; password: string; authTenant?: string }> {
-  if (process.env.CITY_ADMIN_USER) {
-    return {
-      username: process.env.CITY_ADMIN_USER,
-      password: process.env.CITY_ADMIN_PASS || DEFAULT_PASSWORD,
-    };
-  }
   const p = await getPersona('gro-with-department');
   return { username: p.username, password: p.password, authTenant: p.tenant };
 }
@@ -129,29 +127,31 @@ test.describe.serial('PGR lifecycle — UI only', () => {
   let serviceRequestId: string;
   let citizenLoggedIn = false;
   let complaintCreated = false;
+  /** Why the filed complaint is not the seed plan's type, when it is not. */
+  let notSeedType: string | null = null;
 
-  // ─── 1. Citizen logs in via UI (OTP flow) ───────────────────────────
+  // ─── 1. Citizen signs in ────────────────────────────────────────────
 
-  test('1 — citizen logs in via UI with fixed OTP', {
+  test('1 — citizen signs in and lands on the citizen home', {
     annotation: {
       type: 'description',
-      description: `Drives the citizen OTP login flow through the actual login form (no API shortcut). Confirms the auto-register-on-first-login behavior works end-to-end: a brand-new phone number can sign in with the mock OTP "123456" and walk straight into the citizen home page with a Citizen.token in localStorage.
+      description: `Signs the suite-wide citizen into the browser and confirms the SPA lands on an authenticated citizen page with a Citizen.token in localStorage. The citizen is the one citizen-setup signed in by BFF phone OTP (a new number each run); this step adopts that BFF session and lets the SPA run its own session/context bootstrap, so no new OTP is sent. First-sign-in through the OTP form is covered by citizen-registration and citizen-otp-login.
 
 Steps:
-1. citizenOtpLogin(page, CITIZEN_PHONE) — UI helper that drives the phone form, OTP form, and language/city pickers.
+1. citizenOtpLogin(page) — adopts the fixture citizen's BFF session (citizen-login.ts), opens the citizen login route and waits for the SPA to store Citizen.token and leave /login.
 2. Read localStorage 'Citizen.token'; assert it's truthy.
 3. Set citizenLoggedIn flag, snap screenshot 01-citizen-logged-in.
 
 First link in a 6-step UI lifecycle. Marked test.slow() at the describe level — UI flow with multiple page hydrations.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
-    await citizenOtpLogin(page, CITIZEN_PHONE);
+    await citizenOtpLogin(page);
 
     const token = await page.evaluate(() => localStorage.getItem('Citizen.token'));
     expect(token).toBeTruthy();
     citizenLoggedIn = true;
     await snap(page, '01-citizen-logged-in');
-    console.log(`Citizen ${CITIZEN_PHONE} logged in via UI, URL: ${page.url()}`);
+    console.log(`Suite citizen signed in, URL: ${page.url()}`);
   });
 
   // ─── 2. Citizen creates complaint via UI wizard ─────────────────────
@@ -163,7 +163,7 @@ First link in a 6-step UI lifecycle. Marked test.slow() at the describe level �
 
 Steps:
 1. test.skip if citizen wasn't logged in.
-2. setTimeout 180s; re-login via UI.
+2. setTimeout 180s; sign the same citizen in again (fresh page context; the session is reused, no new OTP).
 3. Install a route handler on /pgr-services/v2/request/_create to capture the response body's serviceRequestId.
 4. Navigate to /{slug}/digit-ui/citizen/pgr/create-complaint/complaint-type.
 5. Step 1: fill the description with an ISO timestamp and pick every complaint-category level → Next.
@@ -176,19 +176,27 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
     test.skip(!citizenLoggedIn, 'citizen not logged in');
+    test.skip(
+      !SERVICE_CODE || !LOCALITY_CODE,
+      `no seed plan (service/locality): ${tryGetProfile()?.personas.unresolvedDiagnostics['pgr.seedPlan'] ?? 'no deployment profile'}`,
+    );
     test.setTimeout(180_000);
 
     // Login again (fresh page context)
-    await citizenOtpLogin(page, CITIZEN_PHONE);
+    await citizenOtpLogin(page);
     const token = await page.evaluate(() => localStorage.getItem('Citizen.token'));
     expect(token).toBeTruthy();
 
     // Intercept PGR _create to capture serviceRequestId
     let capturedId: string | null = null;
+    let capturedServiceCode: string | null = null;
     await page.route('**/pgr-services/v2/request/_create**', async (route) => {
       const response = await route.fetch();
       const body = await response.json();
-      try { capturedId = body?.ServiceWrappers?.[0]?.service?.serviceRequestId ?? null; } catch {}
+      try {
+        capturedId = body?.ServiceWrappers?.[0]?.service?.serviceRequestId ?? null;
+        capturedServiceCode = body?.ServiceWrappers?.[0]?.service?.serviceCode ?? null;
+      } catch {}
       await route.fulfill({ response });
     });
 
@@ -205,9 +213,20 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     // tests 4-5 act as only see complaints in their department and ward, so
     // the walker's default first category (another department) would leave
     // them "No Results Found". The category path, root first, from MDMS.
-    const admin = await getDigitToken({ tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
-    const rows = (await fetchMdms(TENANT, 'RAINMAKER-PGR.ComplaintHierarchy', admin.access_token))
+    const admin = await getDigitToken({ tenant: ROOT_TENANT, username: ADMIN_USER, password: ADMIN_PASS });
+    // limit: bomet's ComplaintHierarchy has 715 rows; the default 500 cut it short.
+    const allRows = (await fetchMdms(TENANT, 'RAINMAKER-PGR.ComplaintHierarchy', admin.access_token, { limit: 5000 }))
       .map((r: any) => r?.data).filter((d: any) => d?.code);
+    // The wizard walks ONE hierarchy: the first active ComplaintHierarchyDefinition
+    // that has rows, and only that hierarchyType's rows (CreatePGRFlowV2.tsx,
+    // the useCustomMDMS select). A code can exist in several hierarchyTypes
+    // (bomet: AnotherSectorExampleSubType3 is in PGR and in the inactive
+    // PGR_TEST), each with its own parents, so the path must come from the
+    // wizard's hierarchy or its labels are never offered.
+    const defs = (await fetchMdms(TENANT, 'RAINMAKER-PGR.ComplaintHierarchyDefinition', admin.access_token).catch(() => []))
+      .map((r: any) => r?.data).filter((d: any) => d && d.active !== false);
+    const def = defs.find((d: any) => allRows.some((n: any) => n.hierarchyType === d.hierarchyType)) ?? defs[0];
+    const rows = def ? allRows.filter((n: any) => n.hierarchyType === def.hierarchyType) : allRows;
     const path: Array<{ code: string; name?: string }> = [];
     for (let code: string | undefined = SERVICE_CODE; code && path.length < 8; ) {
       const row = rows.find((d: any) => d.code === code);
@@ -222,7 +241,15 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     await continueFiling(page);
 
     console.log('Step 2: location — boundary cascade, no pin...');
-    await fillLocationStep(page, { boundaries: [LOCALITY_CODE] });
+    // The cascade prefers these at EACH level, so give it the whole path when the
+    // profile knows it (leafPath ends at leafCode); a lone leaf code only helps at
+    // the last level. The dropdowns show localized names (rainmaker-boundary-*),
+    // which the profile records per node; codes cover unlocalized boundaries.
+    const profileBoundary = tryGetProfile()?.boundary;
+    const boundaryPrefs = profileBoundary?.leafCode === LOCALITY_CODE && profileBoundary.leafPath.length
+      ? profileBoundary.leafPath.flatMap((n) => (n.name ? [n.name, n.code] : [n.code]))
+      : [LOCALITY_CODE];
+    await fillLocationStep(page, { boundaries: boundaryPrefs });
     await snap(page, '02b-address');
     await continueFiling(page);
 
@@ -240,14 +267,25 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
       serviceRequestId = capturedId;
     } else {
       const bodyText = await page.locator('body').innerText();
-      // Build the SRID regex from the deployment's own idgen prefix (PG on
-      // maputo, NCCG on nairobi, …) — a hardcoded `PG-PGR` matched nothing on
-      // any other deployment, leaving serviceRequestId undefined.
-      const match = bodyText.match(new RegExp(`${PGR_ID_PREFIX}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d{6}`));
+      // Any deployment's SRID shape (prefix may hold hyphens, e.g. KE-QA; the
+      // sequence is not always 6 digits) — never another deployment's prefix.
+      const match = bodyText.match(SRID_RE);
       if (match) serviceRequestId = match[0];
     }
 
     expect(serviceRequestId).toBeTruthy();
+    // pickEveryLevel falls back to each level's first option when the wanted
+    // one is not offered; a complaint of another department would then be
+    // invisible to the GRO and LME of tests 3-5 ("No Results Found").
+    // Tests 4-5 need it to be the seed plan's type; this test only files.
+    const filedCode = capturedServiceCode as string | null;
+    if (filedCode && filedCode !== SERVICE_CODE) {
+      notSeedType = `the citizen wizard filed ${filedCode}, not the seed plan's ${SERVICE_CODE}: the wizard offers only ` +
+        `the leaves under a root ${def?.levels?.[0]?.levelCode ?? 'category'} of the active ${def?.hierarchyType ?? ''} hierarchy, and ` +
+        `${SERVICE_CODE} is not one of them here. The GRO and LME personas see only their own departments' complaints, so ` +
+        'ASSIGN/RESOLVE through the UI needs a seed type the wizard offers AND a GRO-capable persona in its department (deployment data, not the UI under test).';
+      console.log(notSeedType);
+    }
     complaintCreated = true;
     await snap(page, '02c-complaint-created');
     console.log(`Complaint created via UI: ${serviceRequestId}`);
@@ -262,7 +300,7 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
 
 Steps:
 1. test.skip if !complaintCreated.
-2. loginViaApi as CITY_ADMIN_USER on tenant = TENANT env.
+2. loginViaApi as the gro-with-department persona (cityAdmin()).
 3. Navigate to /digit-ui/employee/pgr/inbox and wait 15s for hydration.
 4. Snap screenshot 03-pgr-inbox.
 5. Assert the "Inbox" breadcrumb is visible (page rendered).
@@ -324,6 +362,7 @@ Status verification is API-only because there's no good DOM signal that the assi
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
     test.skip(!complaintCreated, 'complaint not created');
     test.setTimeout(120_000);
+    if (notSeedType) throw new Error(`Cannot assign through the UI: ${notSeedType}`);
 
     // Login as city-level admin (tenantId = TENANT env), authenticating at the
     // tenant personas.ts proved this credential works at — see cityAdmin().
@@ -493,7 +532,7 @@ API-only verification of status follows the same pattern as step 4 — UI flow i
 
 Steps:
 1. test.skip if !complaintCreated; setTimeout 60s.
-2. citizenOtpLogin(page, CITIZEN_PHONE).
+2. citizenOtpLogin(page) (the same suite-wide citizen; session reused).
 3. Navigate to /digit-ui/citizen/pgr/complaints.
 4. If body text doesn't contain serviceRequestId, click the first tab matching /resolved|closed|all/i and re-snap.
 5. Assert final body text contains serviceRequestId.
@@ -504,7 +543,7 @@ Closes the citizen → admin → citizen loop. If this fails, the citizen can't 
     test.skip(!complaintCreated, 'complaint not created');
     test.setTimeout(60_000);
 
-    await citizenOtpLogin(page, CITIZEN_PHONE);
+    await citizenOtpLogin(page);
 
     await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/complaints`, {
       waitUntil: 'domcontentloaded',

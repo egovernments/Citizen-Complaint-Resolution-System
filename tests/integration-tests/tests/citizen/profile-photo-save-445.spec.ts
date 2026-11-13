@@ -14,7 +14,6 @@ test.describe('citizen profile — photo save round-trip #445 (JPEG)', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('upload JPEG photo, _update returns 2xx, no hard reload', { tag: ['@persona:citizen'] }, async ({ page }) => {
-    const mobile = generateCitizenPhone();
 
     page.on('console', (msg) => console.log(`[CONSOLE] ${msg.type()}: ${msg.text()}`));
     page.on('pageerror', (err) => console.log(`[PAGE ERROR]: ${err.stack || err.message}`));
@@ -37,7 +36,15 @@ test.describe('citizen profile — photo save round-trip #445 (JPEG)', () => {
       }
     });
 
-    // ============ OTP login (BFF phone OTP, tenant from the slug) ============
+    // ============ OTP login: a citizen of this test's own ============
+    // NOT the suite-wide citizen, although that would save an OTP send: on
+    // v2.20 the profile save (UserProfile.js updateProfile spreads the session
+    // user into /user/profile/_update) clears the account's identificationMark,
+    // the keycloak-bff:citizen: marker the identity BFF finds its account by,
+    // so every later citizen _select for that person answers 403
+    // CITIZEN_CONTEXT_UNAVAILABLE. Saving the shared citizen's profile would
+    // lock every citizen spec after this one out.
+    const mobile = generateCitizenPhone();
     await citizenOtpLogin(page, mobile);
 
     // ============ Open Edit Profile ============

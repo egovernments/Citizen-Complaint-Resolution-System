@@ -104,8 +104,8 @@ export interface SeedPlan {
  *
  * Capped and disable-able because a wrong guess is not free: user-service locks
  * an account after repeated failures, and a locked persona breaks the very
- * deployment the suite is meant to test. Set PERSONA_PASSWORD_GUESSES='' to turn
- * discovery-by-guessing off entirely and rely on env pairs alone.
+ * deployment the suite is meant to test. Off by default (see passwordGuesses);
+ * set PERSONA_PASSWORD_GUESSES=<pw>[,<pw>...] to turn discovery-by-guessing on.
  *
  * The cap is only real if a guess costs exactly ONE failed login. It used not
  * to: login() probed [TENANT, ROOT_TENANT], so on a deployment with a city
@@ -118,10 +118,15 @@ export interface SeedPlan {
  */
 const MAX_PASSWORD_GUESSES = 3;
 
+/**
+ * Off unless PERSONA_PASSWORD_GUESSES names passwords: staff sign in to
+ * Keycloak by email (#2646), so an HRMS code is never a login and every guess
+ * would only be a failed Keycloak sign-in.
+ */
 function passwordGuesses(): string[] {
   const raw = process.env.PERSONA_PASSWORD_GUESSES;
-  if (raw !== undefined && !raw.trim()) return [];
-  return (raw ?? DEFAULT_PASSWORD)
+  if (!raw?.trim()) return [];
+  return raw
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
@@ -365,10 +370,14 @@ async function matches(key: PersonaKey, p: ResolvedPersona, profile: DeploymentP
   switch (key) {
     case 'employee':
       return p.roles.includes('EMPLOYEE') || p.roles.includes('SUPERUSER');
+    // "GRO" here means: may perform ASSIGN on this deployment's PGR workflow.
+    // The roles come from the workflow itself (GRO on the shipped seed, plus
+    // e.g. PGR_VIEWER on bomet), so a deployment that grants ASSIGN to another
+    // role is not reported as having no assigner.
     case 'gro':
-      return p.roles.includes('GRO');
+      return assignRolesOf(profile).some((r) => p.roles.includes(r));
     case 'gro-with-department':
-      return p.roles.includes('GRO') && p.departments.length > 0;
+      return assignRolesOf(profile).some((r) => p.roles.includes(r)) && p.departments.length > 0;
     case 'lme':
       return p.roles.includes('PGR_LME');
     case 'csr':
@@ -406,12 +415,18 @@ async function matches(key: PersonaKey, p: ResolvedPersona, profile: DeploymentP
       const seesSeedLocality =
         p.roles.includes('SUPERVISOR') || (!!seedWard && jurBoundaries.includes(seedWard));
       return (
-        p.roles.includes('GRO') &&
+        assignRolesOf(profile).some((r) => p.roles.includes(r)) &&
         seesSeedLocality &&
         p.departments.some((d) => serviceDepts.has(d))
       );
     }
   }
+}
+
+/** Roles allowed to ASSIGN on the deployment's PGR workflow (GRO when unknown). */
+function assignRolesOf(profile: DeploymentProfile): string[] {
+  const roles = (profile.workflow?.pgr?.actionRoles?.ASSIGN ?? []).filter((r) => r !== 'CITIZEN');
+  return roles.length ? roles : ['GRO'];
 }
 
 function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[], profile?: DeploymentProfile): string {
@@ -454,6 +469,16 @@ function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[], profile?: Depl
 
 const resolvedCache = new Map<PersonaKey, ResolvedPersona | null>();
 const diagnostics = new Map<PersonaKey, string>();
+
+/**
+ * Forget which persona satisfied each key (not the logins behind them). Profile
+ * discovery calls it after moving the seed locality: inbox-viewer's verdict
+ * depends on that locality, so a cached "none" from the first pass would stick.
+ */
+export function forgetResolvedPersonas(): void {
+  resolvedCache.clear();
+  diagnostics.clear();
+}
 
 export async function resolvePersona(key: PersonaKey, opts?: { profile?: DeploymentProfile }): Promise<ResolvedPersona | null> {
   if (resolvedCache.has(key)) return resolvedCache.get(key)!;
@@ -690,9 +715,30 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
     };
   }
 
+  // Prefer an actor that also carries a department. The plan only requires GRO
+  // of the actor, but lifecycle.setup has hit DEPARTMENT_NOT_FOUND on
+  // department-less actors, and preferring one costs nothing.
+  const actor = (await resolvePersona('gro-with-department', { profile })) ?? (await resolvePersona('gro', { profile }));
+  if (!actor) {
+    return { error: personaDiagnostic('gro-with-department', profile) || whyUnresolved('gro', [], profile) };
+  }
+
+  // ABAC scopes the ACTOR's search by department as well as the assignee's
+  // validation, so prefer complaint types whose department the actor holds too;
+  // an actor that can't see the complaint can't ASSIGN it.
+  const actorDepts = new Set(actor.departments);
+  const byActor = [...services].sort((a, b) => Number(actorDepts.has(b.department)) - Number(actorDepts.has(a.department)));
   let picked: { service: (typeof services)[number]; assignee: DiscoveredEmployee } | null = null;
-  for (const service of services) {
-    const assignee = eligible.find((e) => e.departments.includes(service.department));
+  // Prefer an assignee the suite can sign in as (the actor itself when it may
+  // also hold the complaint, then any resolved persona): later steps RESOLVE as
+  // the 'lme' persona, which can only act on complaints assigned to it.
+  const signable = new Set(
+    [actor.uuid, ...Object.values(profile.personas?.resolved ?? {}).map((p) => p?.uuid)].filter(Boolean) as string[],
+  );
+  const rank = (e: DiscoveredEmployee) => (e.uuid === actor.uuid ? 0 : signable.has(e.uuid) ? 1 : 2);
+  const assignable = [...eligible].sort((a, b) => rank(a) - rank(b));
+  for (const service of byActor) {
+    const assignee = assignable.find((e) => e.departments.includes(service.department));
     if (assignee) {
       picked = { service, assignee };
       break;
@@ -711,14 +757,6 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
   const preferred = process.env.SERVICE_CODE?.trim();
   if (preferred && picked.service.serviceCode !== preferred) {
     console.log(`[seed] SERVICE_CODE=${preferred} has no employee holding its department — using ${picked.service.serviceCode} instead`);
-  }
-
-  // Prefer an actor that also carries a department. The plan only requires GRO
-  // of the actor, but lifecycle.setup has hit DEPARTMENT_NOT_FOUND on
-  // department-less actors, and preferring one costs nothing.
-  const actor = (await resolvePersona('gro-with-department', { profile })) ?? (await resolvePersona('gro', { profile }));
-  if (!actor) {
-    return { error: personaDiagnostic('gro-with-department', profile) || whyUnresolved('gro', [], profile) };
   }
 
   const localityCode = localityFor(profile);

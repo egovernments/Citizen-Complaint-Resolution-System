@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type APIResponse, type Page, type Request, type Response } from '@playwright/test';
+import { TENANT_SLUG } from './env';
 
 export type Surface = 'configurator' | 'employee' | 'citizen';
 export interface DigitContext {
@@ -17,18 +18,45 @@ export class IdentityHttpError extends Error {
   }
 }
 
+/**
+ * The BFF would not send a citizen OTP: the send budget is spent. It allows
+ * IDENTITY_CITIZEN_OTP_IP_SEND_LIMIT (20) sends per client IP and
+ * IDENTITY_CITIZEN_OTP_PHONE_SEND_LIMIT (5) per phone in a fixed
+ * IDENTITY_CITIZEN_OTP_SEND_WINDOW_SECONDS (3600) window, and counts refused
+ * sends too (citizen-otp/otp-store.ts reserveSend); the SMS channel answering
+ * 429 maps to the same code. Back-to-back runs from one address share the IP
+ * window, so this says the suite ran out of codes, not that the feature under
+ * test broke. It stays a failure: the test did not get to check anything.
+ */
+export class OtpRateLimitedError extends IdentityHttpError {
+  constructor(readonly retryAfter?: number) {
+    super(429, 'OTP_RATE_LIMITED');
+    this.message = 'Identity request failed: HTTP 429 (OTP_RATE_LIMITED): OTP SEND RATE LIMIT, not an app failure of this test. ' +
+      'The identity BFF allows 20 citizen OTP sends per client IP and 5 per phone per hour by default ' +
+      '(IDENTITY_CITIZEN_OTP_IP_SEND_LIMIT / _PHONE_SEND_LIMIT / _SEND_WINDOW_SECONDS), and earlier runs from this address share the window' +
+      (retryAfter ? `; the window frees in ${retryAfter}s.` : '.');
+    try {
+      test.info().annotations.push({ type: 'otp-rate-limited', description: this.message });
+    } catch { /* outside a running test */ }
+  }
+}
+
 /** Never include a response body: successful and failed auth responses may hold secrets. */
 export async function identityJson<T>(response: Pick<APIResponse, 'status' | 'json'>, status = 200): Promise<T> {
   if (response.status() !== status) {
     const body = await response.json().catch(() => null);
     const code = typeof body?.code === 'string' && /^[A-Z_]+$/.test(body.code) ? body.code : 'UNEXPECTED_RESPONSE';
+    if (response.status() === 429 && code === 'OTP_RATE_LIMITED') {
+      throw new OtpRateLimitedError(Number.isFinite(body?.retryAfter) ? Number(body.retryAfter) : undefined);
+    }
     throw new IdentityHttpError(response.status(), code);
   }
   return response.json() as Promise<T>;
 }
 
 export function tenantSlug(): string {
-  const slug = process.env.IDENTITY_TEST_TENANT_SLUG;
+  // Set by the operator, or recorded by profile discovery from DIGIT_TENANT.
+  const slug = process.env.IDENTITY_TEST_TENANT_SLUG || TENANT_SLUG;
   if (!slug || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
     throw new Error('Set IDENTITY_TEST_TENANT_SLUG to a seeded ACTIVE workspace slug');
   }
