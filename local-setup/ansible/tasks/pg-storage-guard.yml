@@ -68,9 +68,20 @@
       # a container; the directory name is the fallback when there is not.
       proj=$(docker inspect docker-postgres \
         --format '{{ index .Config.Labels "com.docker.compose.project" }}' 2>/dev/null || true)
+      # The project THIS deploy runs as. The deploy never sets
+      # COMPOSE_PROJECT_NAME, and the playbook derives the network name the
+      # same way (`digit_dir | basename`), so a running container whose label
+      # names another project is another stack: a different digit_dir on this
+      # host, or this stack before digit_dir was changed (issue #2783 gap 6).
+      # container_name is fixed, so `up` from here would collide with it.
+      this_proj="${COMPOSE_PROJECT_NAME:-$(basename "${DIGIT_DIR:-$PWD}" \
+                 | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')}"
+      if [ -n "$proj" ] && [ "$proj" != "$this_proj" ]; then
+        echo "FOREIGN container-project:$proj (this deploy would be $this_proj)"
+        exit 0
+      fi
       if [ -z "$proj" ]; then
-        proj="${COMPOSE_PROJECT_NAME:-$(basename "${DIGIT_DIR:-$PWD}" \
-              | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')}"
+        proj="$this_proj"
       fi
       expected_volume="${proj}_postgres_data"
 
@@ -128,7 +139,20 @@
         exit 0
       fi
       if [ -n "$anon" ]; then
-        echo "ANON dangling-volume:$anon"
+        # An anonymous volume is only OUR stranded database when THIS digit_dir
+        # has carried a stack before. A brand-new digit_dir is a brand-new
+        # compose project, which cannot have created it — it belongs to an
+        # earlier stack elsewhere on the host, or a stray `docker run postgres`
+        # — and refusing on it forced pg_allow_data_loss on every fresh
+        # directory (issue #2783 gap 6). Same markers the "already carries a
+        # stack" stat below reads.
+        if [ -n "$DIGIT_DIR" ] \
+           && [ ! -e "$DIGIT_DIR/docker-compose.egov-digit.yaml" ] \
+           && [ ! -e "$DIGIT_DIR/.openbao/init.json" ]; then
+          echo "SAFE foreign-anon-volume:$anon"
+        else
+          echo "ANON dangling-volume:$anon"
+        fi
         exit 0
       fi
 
@@ -273,6 +297,37 @@
       If you have checked and this box's database is where it should be — or is
       disposable — set `pg_allow_data_loss: true` to proceed.
     success_msg: "postgres storage check is conclusive"
+
+# A `docker-postgres` container that belongs to a different compose project
+# (another digit_dir on this host, or the same stack before digit_dir was
+# changed). container_name is fixed in the compose files, so `up` would fail
+# on the name conflict — and with force_clean the teardown would not touch it
+# either, since it is not this project's. Refuse up front with the real reason.
+- name: "preflight — refuse while another compose project's postgres container holds the name docker-postgres"
+  ansible.builtin.assert:
+    that:
+      - not (_foreign and not _override)
+    fail_msg: |
+      The container `docker-postgres` on this box belongs to a DIFFERENT compose
+      project than the one this deploy would run as ({{ digit_dir | basename }}):
+
+        {{ pg_probe_verdict | trim }}
+
+      Container names are fixed in the compose files, so one host runs one
+      stack: `docker compose up` here would fail on the name conflict, and a
+      force_clean teardown would not remove that container either (it is not
+      this project's).
+
+      Nothing has been changed. Either deploy into the directory that stack
+      runs from (check `docker inspect docker-postgres --format '{% raw %}{{ index .Config.Labels "com.docker.compose.working_dir" }}{% endraw %}'`),
+      or stop and remove that stack first — its data stays in its named volume.
+
+      `pg_allow_data_loss: true` skips this check; the deploy will still hit the
+      name conflict unless that container is gone.
+    success_msg: "no other compose project holds docker-postgres"
+  vars:
+    _foreign: "{{ pg_probe_verdict is search('^FOREIGN') }}"
+    _override: "{{ pg_allow_data_loss | default(false) | bool }}"
 
 - name: "preflight — show what this deploy resolves to"
   ansible.builtin.debug:

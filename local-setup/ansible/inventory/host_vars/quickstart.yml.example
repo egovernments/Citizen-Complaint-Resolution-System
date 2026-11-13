@@ -190,6 +190,11 @@ db_fast_path_ack_data_wipe: false
 # Keycloak and the Identity BFF are always deployed: every employee and citizen
 # sign-in goes through them. They need the keycloak_* and
 # identity_digit_admin_password entries in bootstrap_secrets below.
+# The BFF signs in to DIGIT as this account, which the deploy creates on its
+# first run. Keep it separate from ADMIN: the demo database ships ADMIN with
+# eGov@123, and a BFF retrying a different password locks that account for
+# everyone (issue #2783).
+identity_digit_admin_username: IDENTITY_BFF
 
 # Off by default, and each one costs real memory:
 enable_search_stack: false     # Elasticsearch + indexer + employee inbox (~3 GB)
@@ -258,7 +263,7 @@ bootstrap_secrets:
   egov_hrms_default_password: "eGov@123"             # HRMS dev-mode default for employees created without a password; not Configurator/signup ones
   keycloak_admin_password: change-me-strong          # Keycloak master-realm admin
   keycloak_db_password: change-me-strong             # Keycloak's own Postgres
-  identity_digit_admin_password: change-me-strong    # the Identity BFF's DIGIT admin login
+  identity_digit_admin_password: Change-me@123       # the Identity BFF's DIGIT admin login: 8-15 chars, digit + lower + upper + one of @#$%
 
 # The ADMIN account the deploy creates in each tenant, and that you use to
 # log into the configurator. Uncomment to change them — the defaults are

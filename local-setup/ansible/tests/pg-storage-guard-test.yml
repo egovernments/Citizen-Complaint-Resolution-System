@@ -183,6 +183,20 @@
         db_fast_path: false
         probe: "ANON container-volume:9c2f1ab"
         expect: PROCEED
+      # ── a second stack on the host (issue #2783 gap 6) ───────────────────
+      - name: "fresh digit_dir, an older stack's anonymous volume elsewhere on the host"
+        base: base-fixed.yaml
+        overlay: overlay-with.yml
+        db_fast_path: true
+        probe: "SAFE foreign-anon-volume:9c2f1ab"
+        expect: PROCEED
+      - name: "docker-postgres belongs to another compose project"
+        reason: "another compose project"
+        base: base-fixed.yaml
+        overlay: overlay-with.yml
+        db_fast_path: false
+        probe: "FOREIGN container-project:otherstack (this deploy would be digit)"
+        expect: ABORT
   tasks:
     - name: "run every case"
       ansible.builtin.include_tasks: run-guard-case.yml

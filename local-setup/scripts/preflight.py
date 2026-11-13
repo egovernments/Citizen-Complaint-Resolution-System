@@ -86,7 +86,10 @@ def r_fastpath_master_password(cfg):
             yield (FAIL,
                    "db_fast_path: true requires bootstrap_secrets.elasticsearch_master_password "
                    "to equal the dump's master password (see _example.yml) — got "
-                   + ("(unset)" if got is None else "a different value") + ".")
+                   + ("(unset)" if got is None else "a different value") + ". That value is "
+                   "public, so the fast path is not production-grade for PII; a production "
+                   "box starts from its own database (db_fast_path: false) with a generated master "
+                   "password.")
 
 
 def as_bool(val):
@@ -257,6 +260,140 @@ def r_configurator(cfg):
                          "the existing /var/www/configurator on the target (if any) is served as-is.")
         elif not os.path.isdir(os.path.expanduser(str(build))):
             yield (WARN, f"configurator_build '{build}' does not exist on this controller — rsync will fail.")
+
+
+# egov-user's password rule, as identity-bff documents it (backend/identity-bff/docs/
+# identity-bff.md): 8-15 characters, at least one digit, one lower-case and one
+# upper-case letter, one of @#$%, no whitespace. The server replies
+# INVALID_PWD_LENGTH / INVALID_PASSWORD on `_createnovalidate` as well, so a
+# password outside the rule is never seeded.
+EGOV_USER_PASSWORD_RE = re.compile(r"^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])\S{8,15}$")
+EGOV_USER_PASSWORD_FIELDS = (
+    "bootstrap_password",
+    "bootstrap_secrets.egov_hrms_default_password",
+    "bootstrap_secrets.identity_digit_admin_password",
+    "internal_user_password",
+)
+# The stock ADMIN that db/full-dump.sql and user-seed ship on the pg tenants.
+DUMP_ADMIN_PASSWORD = "eGov@123"
+
+
+@rule(
+    "egov-user-password-policy",
+    "egov-user only accepts 8-15 character passwords with a digit, a lower- and "
+    "an upper-case letter and one of @#$%. A 16-character bootstrap_password "
+    "was rejected by user-seed with INVALID_PWD_LENGTH, the seed container "
+    "still exited 0, and the deploy only died 20 minutes later at 'validate — "
+    "auth probe returned an access_token' with a message about a password "
+    "MISMATCH on an existing user (issue #2783, gap 1).",
+)
+def r_egov_user_password_policy(cfg):
+    for path in EGOV_USER_PASSWORD_FIELDS:
+        val = get(cfg, path)
+        if val in (None, "", "CHANGE_ME"):
+            continue  # unset, or the placeholder the playbook's own assert refuses
+        val = str(val)
+        if "{{" in val:
+            continue  # an ansible-vault / Jinja reference: checkable only once rendered
+        if not EGOV_USER_PASSWORD_RE.match(val):
+            yield (FAIL,
+                   f"{path} ({len(val)} characters) does not satisfy egov-user's password rule: "
+                   "8-15 characters, at least one digit, one lower-case letter, one upper-case "
+                   "letter and one of @#$%, no whitespace. egov-user refuses to create the user, "
+                   "so the deploy cannot sign in as it.")
+        elif re.search(r"\$[A-Za-z_{]", val):
+            # BOOTSTRAP_PASSWORD, EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD and
+            # IDENTITY_DIGIT_ADMIN_PASSWORD are rendered into the compose .env, and
+            # compose interpolates `$name` / `${name}` there.
+            yield (WARN,
+                   f"{path} contains `$` followed by a letter — compose interpolates that in "
+                   ".env, so the running stack would see a different value. Use @, # or % "
+                   "as the special character instead.")
+
+
+@rule(
+    "identity-admin-password-conflict",
+    "The Identity BFF signs in to DIGIT as identity_digit_admin_username "
+    "(default: bootstrap_user) with identity_digit_admin_password, retrying "
+    "every 30s. When that resolves to the SAME DIGIT account the deploy seeds "
+    "with bootstrap_password, the two passwords must agree: the account is "
+    "created once, with one password, and five failed BFF logins lock it "
+    "(issue #2783, gap 2).",
+)
+def r_identity_admin_password_conflict(cfg):
+    bff_user = str(get(cfg, "identity_digit_admin_username") or get(cfg, "bootstrap_user") or "ADMIN")
+    boot_user = str(get(cfg, "bootstrap_user") or "ADMIN")
+    bff_pw = get(cfg, "bootstrap_secrets.identity_digit_admin_password")
+    # The playbook's own default when bootstrap_password is unset.
+    boot_pw = str(get(cfg, "bootstrap_password") or DUMP_ADMIN_PASSWORD)
+    if bff_pw in (None, "", "CHANGE_ME") or "{{" in str(bff_pw) or "{{" in boot_pw:
+        return
+    bff_tenant = str(get(cfg, "identity_digit_admin_tenant_id") or get(cfg, "state_tenant_id")
+                     or get(cfg, "tenant_id") or "pg")
+    # The stock ADMIN on pg* exists before anything the deploy seeds, with
+    # eGov@123, whenever the dump is loaded or user-seed seeds the stock users
+    # (its default). The deploy never rewrites an existing user's password.
+    stock_admin = (get(cfg, "db_fast_path") is True
+                   or get(cfg, "seed_stock_users") is not False)
+    if bff_user == "ADMIN" and bff_tenant.split(".")[0] == "pg" and stock_admin:
+        expected, owner = DUMP_ADMIN_PASSWORD, (
+            f"the stock ADMIN on {bff_tenant}, which db/full-dump.sql and user-seed ship "
+            f"with {DUMP_ADMIN_PASSWORD}")
+    elif bff_user == boot_user:
+        expected, owner = boot_pw, (
+            "bootstrap_password" if get(cfg, "bootstrap_password")
+            else f"bootstrap_password (unset, so the playbook's default {DUMP_ADMIN_PASSWORD})")
+    else:
+        return
+    if str(bff_pw) != expected:
+        yield (FAIL,
+               f"identity_digit_admin_username resolves to '{bff_user}' on {bff_tenant}, an account "
+               f"whose password is {owner}, but bootstrap_secrets.identity_digit_admin_password "
+               "differs. The deploy never rewrites an existing user's password, so the BFF would "
+               "retry the wrong one every 30s and lock the account. Make them equal, or give the "
+               "BFF its own account (identity_digit_admin_username: IDENTITY_BFF — the deploy "
+               "creates it with identity_digit_admin_password).")
+
+
+SECRETS_PATH_RE = re.compile(r"^kv/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
+
+
+@rule(
+    "secrets-path-format",
+    "The deploy enables a KV v2 mount only at kv/ and rewrites secrets_path "
+    "^kv/ -> kv/data/ for every OpenBao call, so a path outside kv/, with a "
+    "leading or trailing slash, or unset fails mid-deploy at the first OpenBao "
+    "call (unset: with an undefined-variable error).",
+)
+def r_secrets_path_format(cfg):
+    val = get(cfg, "secrets_path")
+    if val in (None, ""):
+        yield (FAIL, "secrets_path is not set; use kv/digit/<tenant>.")
+    elif "{{" in str(val):
+        return  # rendered by Ansible; cannot be checked here
+    elif not SECRETS_PATH_RE.match(str(val)):
+        yield (FAIL,
+               f"secrets_path '{val}' must be under kv/ with no leading or trailing slash, "
+               "e.g. kv/digit/<tenant>.")
+
+
+@rule(
+    "stock-users-needed-by-ci",
+    "seed_stock_users: false stops user-seed from creating the stock ADMIN/GRO "
+    "(eGov@123) accounts on a fresh box. run_ci_tests and the Postman "
+    "collections hardcode exactly those credentials, and notif_seed_user/"
+    "notif_seed_pass default to them.",
+)
+def r_stock_users_needed(cfg):
+    if "seed_stock_users" not in cfg or as_bool(cfg["seed_stock_users"]):
+        return
+    if get(cfg, "run_ci_tests") is True:
+        yield (FAIL, "seed_stock_users: false with run_ci_tests: true — the CI suite signs in as "
+                     "the stock ADMIN/eGov@123 that is no longer seeded.")
+    if get(cfg, "enable_novu") is True and not get(cfg, "notif_seed_user"):
+        yield (FAIL, "seed_stock_users: false with enable_novu: true needs notif_seed_user / "
+                     "notif_seed_pass set to an account that exists (they default to the stock "
+                     "ADMIN/eGov@123).")
 
 
 # ── Engine ──────────────────────────────────────────────────────────────────
@@ -485,6 +622,95 @@ SELF_TEST_CASES = [
     ("matomo fully wired is clean",
      {"enable_matomo": True, "nginx_features": {"matomo": True}},
      set()),
+    # ── egov-user password policy (issue #2783) ──
+    ("16-char bootstrap_password fires", {"bootstrap_password": "Abcdefghijklm1@x"},
+     {"egov-user-password-policy"}),
+    ("7-char bootstrap_password fires", {"bootstrap_password": "Ab1@cde"},
+     {"egov-user-password-policy"}),
+    ("password without a special character fires",
+     {"bootstrap_secrets": {"egov_hrms_default_password": "Abcdefgh1"}},
+     {"egov-user-password-policy"}),
+    ("password without an upper-case letter fires",
+     {"identity_digit_admin_username": "IDENTITY_BFF",
+      "bootstrap_secrets": {"identity_digit_admin_password": "abcdefgh1@"}},
+     {"egov-user-password-policy"}),
+    ("password with whitespace fires", {"bootstrap_password": "Abc def1@"},
+     {"egov-user-password-policy"}),
+    ("password with $ before a letter warns", {"bootstrap_password": "Abcdef1$x"},
+     {"egov-user-password-policy"}),
+    ("stock-shaped password is clean", {"bootstrap_password": "eGov@123"}, set()),
+    ("15-char password is clean", {"bootstrap_password": "Abcdefghijkl1@%"}, set()),
+    ("CHANGE_ME placeholder is left to the playbook's own assert",
+     {"bootstrap_secrets": {"identity_digit_admin_password": "CHANGE_ME",
+                            "egov_hrms_default_password": "CHANGE_ME"}},
+     set()),
+    # ── identity admin vs bootstrap account ──
+    ("BFF on the bootstrap account with a different password fires",
+     {"bootstrap_user": "OPS", "bootstrap_password": "Ops@12345",
+      "identity_digit_admin_username": "OPS",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Other@123"}},
+     {"identity-admin-password-conflict"}),
+    ("BFF defaulting to the bootstrap account with a different password fires",
+     {"bootstrap_password": "Ops@12345",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Other@123"}},
+     {"identity-admin-password-conflict"}),
+    ("BFF on the bootstrap account with the same password is clean",
+     {"bootstrap_user": "OPS", "bootstrap_password": "Ops@12345",
+      "identity_digit_admin_username": "OPS",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Ops@12345"}},
+     set()),
+    ("BFF on ADMIN with bootstrap_password unset and a rotated password fires (gap-2 repro)",
+     {"identity_digit_admin_username": "ADMIN",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Rotated@12"}},
+     {"identity-admin-password-conflict"}),
+    ("BFF on the stock ADMIN while bootstrap_user is someone else fires",
+     {"bootstrap_user": "OPS", "bootstrap_password": "Ops@12345",
+      "identity_digit_admin_username": "ADMIN",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Other@123"}},
+     {"identity-admin-password-conflict"}),
+    ("BFF on the stock ADMIN with its stock password is clean",
+     {"identity_digit_admin_username": "ADMIN",
+      "bootstrap_secrets": {"identity_digit_admin_password": "eGov@123"}},
+     set()),
+    ("BFF on ADMIN of a non-pg tenant is the deploy's own account, clean",
+     {"bootstrap_user": "OPS", "bootstrap_password": "Ops@12345",
+      "identity_digit_admin_username": "ADMIN", "identity_digit_admin_tenant_id": "ke",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Other@123"}},
+     set()),
+    ("BFF on ADMIN of pg without the dump or stock users follows bootstrap_password",
+     {"db_fast_path": False, "seed_stock_users": False, "bootstrap_password": "Ops@12345",
+      "identity_digit_admin_username": "ADMIN",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Ops@12345"}},
+     set()),
+    ("vault references are left to Ansible",
+     {"bootstrap_password": "{{ vault_boot }}",
+      "bootstrap_secrets": {"identity_digit_admin_password": "{{ vault_bff_pw }}"}},
+     set()),
+    ("internal_user_password is held to egov-user's rule",
+     {"internal_user_password": "system123"}, {"egov-user-password-policy"}),
+    # ── secrets_path ──
+    ("secrets_path outside kv/ fires", {"secrets_path": "secret/digit/ke"}, {"secrets-path-format"}),
+    ("secrets_path with a leading slash fires", {"secrets_path": "/kv/digit/ke"}, {"secrets-path-format"}),
+    ("secrets_path with a trailing slash fires", {"secrets_path": "kv/digit/ke/"}, {"secrets-path-format"}),
+    ("secrets_path unset fires", {"secrets_path": None}, {"secrets-path-format"}),
+    ("secrets_path under kv/ is clean", {"secrets_path": "kv/digit/pg.citya"}, set()),
+    ("BFF on its own account is clean",
+     {"bootstrap_user": "OPS", "bootstrap_password": "Ops@12345",
+      "identity_digit_admin_username": "IDENTITY_BFF",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Other@123"}},
+     set()),
+    # ── stock users opt-out ──
+    ("no stock users with run_ci_tests fires",
+     {"seed_stock_users": False, "run_ci_tests": True, "boot_tenant": "ke.x", "state_root": "ke"},
+     {"stock-users-needed-by-ci"}),
+    ("no stock users with novu and no notif_seed_user fires",
+     {"seed_stock_users": False, "enable_novu": True},
+     {"stock-users-needed-by-ci"}),
+    ("no stock users with novu and its own seed user is clean",
+     {"seed_stock_users": False, "enable_novu": True, "notif_seed_user": "OPS"},
+     set()),
+    ("stock users on (default) is clean", {"seed_stock_users": True, "run_ci_tests": True,
+      "boot_tenant": "ke.x", "state_root": "ke"}, set()),
     ("empty config is clean", {}, set()),
 ]
 
@@ -492,6 +718,9 @@ SELF_TEST_CASES = [
 def self_test():
     failures = 0
     for desc, cfg, expected in SELF_TEST_CASES:
+        if "secrets_path" not in cfg:
+            # Every tenant must set it; give the cases that are not about it a valid one.
+            cfg = {**cfg, "secrets_path": "kv/digit/selftest"}
         fired = {rule_id for _, rule_id, _, _ in run_rules(cfg)}
         if fired != expected:
             print(f"[self-test FAIL] {desc}: expected {sorted(expected)}, fired {sorted(fired)}")

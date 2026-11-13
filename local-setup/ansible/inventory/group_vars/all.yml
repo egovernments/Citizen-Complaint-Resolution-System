@@ -14,7 +14,34 @@ docker_compose_version_min: "2.20"
 # Where the configurator SPA dist is served from. /var/www/configurator on
 # Linux (host nginx). On macOS nginx runs as a container and /var/www needs
 # sudo, so default to a digit_dir-relative path that the container bind-mounts.
-configurator_www_dir: "{{ '/var/www/configurator' if (ansible_system | default('Linux')) != 'Darwin' else (digit_dir ~ '/configurator') }}"
+configurator_www_dir: "{{ (www_root ~ '/configurator') if (ansible_system | default('Linux')) != 'Darwin' else (digit_dir ~ '/configurator') }}"
+# The path nginx itself resolves the configurator alias to. On Linux nginx runs
+# on the host, so it is configurator_www_dir; on macOS nginx is a container that
+# bind-mounts configurator_www_dir at /var/www/configurator (review of #2788).
+configurator_nginx_root: "{{ configurator_www_dir if (ansible_system | default('Linux')) != 'Darwin' else '/var/www/configurator' }}"
+
+# Root of everything host nginx serves from disk (Linux). Each directory below
+# can also be overridden on its own; nginx-site.conf.j2 and the playbook read
+# ONLY these variables, never a literal /var/www path.
+www_root: /var/www
+brand_www_dir: "{{ www_root }}/brand"                              # nginx_features.brand_assets
+integration_tests_www_dir: "{{ www_root }}/integration-tests"      # enable_integration_tests
+integration_tests_v2_www_dir: "{{ www_root }}/integration-tests-v2"
+
+# Where the deploy keeps the digit-ui (esbuild) source tree and its build.
+digit_ui_src_dir: /opt/digit-ui-esbuild
+
+# Optional: bind named data volumes to host directories (e.g. a dedicated
+# /data disk) instead of Docker's data-root. Keys are volume names declared
+# in the compose files (postgres_data, minio_data, ...), values are absolute
+# host paths; the deploy creates the directories and layers a generated
+# docker-compose.hostpaths.yml. Only for a stack that has not created the
+# volume yet: Docker will not re-point an existing named volume, so moving a
+# live database is a migration (stop, copy, then set this). Example:
+#   data_volume_host_paths:
+#     postgres_data: /data/postgres
+#     minio_data: /data/minio
+data_volume_host_paths: {}
 
 # Host port the macOS nginx container publishes (maps to its :80). Linux is
 # unaffected (host nginx binds 80/443 directly).

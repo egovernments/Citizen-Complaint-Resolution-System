@@ -310,7 +310,7 @@ services:
     shm_size: 1gb
     environment:
       POSTGRES_USER: egov
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       POSTGRES_DB: egov
     # POSTGRES_EXTRA_ARGS (from host_vars postgres_stat_statements, docs/operations/monitoring/sherlog.md): -c shared_preload_libraries=
     # pg_stat_statements, which needs a Postgres restart; the deploy recreates the container when .env changes.
@@ -340,7 +340,7 @@ services:
       DB_HOST: postgres-db
       DB_PORT: 5432
       DB_USER: egov
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       DB_NAME: egov
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 500
@@ -521,7 +521,7 @@ services:
     # end with auth on. Set ELASTICSEARCH_PASSWORD, enable the profile on a
     # staging tenant, and confirm egov-indexer writes and inbox reads.
     - xpack.security.enabled=${ELASTICSEARCH_SECURITY_ENABLED:-true}
-    - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD:-changeme-elastic}
+    - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD:-}
     - ES_JAVA_OPTS=-Xms256m -Xmx384m
     volumes:
     - es_data:/usr/share/elasticsearch/data
@@ -567,7 +567,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       # Embedded Flyway off — egov-indexer-migration (docker-compose.migrations.yml) owns this schema (#1586)
@@ -583,7 +583,7 @@ services:
       # is used here because that is what the image bootstraps from
       # ELASTIC_PASSWORD; a dedicated least-privilege role is the follow-up.
       EGOV_INDEXER_ES_USERNAME: ${ELASTICSEARCH_USERNAME:-elastic}
-      EGOV_INDEXER_ES_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme-elastic}
+      EGOV_INDEXER_ES_PASSWORD: ${ELASTICSEARCH_PASSWORD:-}
       SECURITY_BASIC_ENABLED: 'false'
       MANAGEMENT_SECURITY_ENABLED: 'false'
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
@@ -633,7 +633,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
@@ -642,7 +642,7 @@ services:
       SERVICES_ESINDEXER_HOST: http://elasticsearch:9200/
       # ES auth is ON (xpack.security.enabled) — see egov-indexer above.
       SERVICES_ESINDEXER_USERNAME: ${ELASTICSEARCH_USERNAME:-elastic}
-      SERVICES_ESINDEXER_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme-elastic}
+      SERVICES_ESINDEXER_PASSWORD: ${ELASTICSEARCH_PASSWORD:-}
       WORKFLOW_HOST: http://egov-workflow-proxy:8109/
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       EGOV_USER_HOST: http://egov-user-proxy:8107/
@@ -699,12 +699,12 @@ services:
       JAVA_OPTS: "-Xms128m -Xmx384m"
       SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
       # Schema is owned by the external egov-enc-service-migration container
@@ -763,7 +763,7 @@ services:
       JAVA_OPTS: "-Xms256m -Xmx768m"
       SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "20"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "5"
       # Embedded Flyway off — mdms-backend-migration (docker-compose.migrations.yml) owns this schema (#1586)
@@ -839,7 +839,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       # Flyway disabled - migrations run by the per-service migrator in
@@ -896,7 +896,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       # Flyway disabled on the app — its migration init container owns the schema
       # (docker-compose.migrations.yml). Also set there, alongside the migrator.
       SPRING_FLYWAY_ENABLED: 'false'
@@ -954,7 +954,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       # Flyway disabled - migrations run by the per-service migrator in
@@ -1046,7 +1046,7 @@ services:
       JAVA_OPTS: "-Xms256m -Xmx768m"
       SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       # Embedded Flyway off — egov-workflow-v2-migration (docker-compose.migrations.yml) owns this schema (#1586)
@@ -1136,7 +1136,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       # Flyway disabled - migrations run by the per-service migrator in
@@ -1191,7 +1191,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       # Embedded Flyway off — boundary-service-migration (docker-compose.migrations.yml) owns this schema (#1586)
@@ -1259,7 +1259,7 @@ services:
       JAVA_OPTS: "-Xms128m -Xmx384m"
       SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       # Embedded Flyway off — egov-accesscontrol-migration (docker-compose.migrations.yml) owns this schema (#1586)
@@ -1309,7 +1309,7 @@ services:
       JAVA_OPTS: "-Xms256m -Xmx512m"
       SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "20"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "5"
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
@@ -1364,7 +1364,7 @@ services:
       JAVA_OPTS: "-Xms256m -Xmx1024m"
       SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       # Embedded Flyway must stay OFF: egov-filestore-migration in
@@ -1491,7 +1491,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       # Embedded Flyway off — egov-hrms-migration (docker-compose.migrations.yml) owns this schema (#1586)
@@ -1559,7 +1559,7 @@ services:
       DB_PORT: 5432
       DB_NAME: egov
       DB_USER: egov
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       # Try multiple Kafka env var names
       KAFKA_BROKER_HOST: redpanda:9092
       KAFKA_BROKERS: redpanda:9092
@@ -1616,7 +1616,12 @@ services:
       # move off the well-known ADMIN/eGov@123 defaults on a fresh box.
       # Standalone compose users get the stock defaults unchanged.
       SEED_ADMIN_USER: ${BOOTSTRAP_USER:-ADMIN}
-      SEED_ADMIN_PASSWORD: ${BOOTSTRAP_PASSWORD:-eGov@123}
+      SEED_ADMIN_PASSWORD: ${BOOTSTRAP_PASSWORD:?BOOTSTRAP_PASSWORD must be set in ./.env (the deploy renders it from host_vars bootstrap_password)}
+      # false = do not seed the stock ADMIN/GRO (eGov@123) next to the bootstrap
+      # admin (host_vars seed_stock_users). INTERNAL_USER's password is never
+      # used to sign in, but must not stay a published value on a rotated box.
+      SEED_STOCK_USERS: ${SEED_STOCK_USERS:-true}
+      INTERNAL_USER_PASSWORD: ${INTERNAL_USER_PASSWORD:-System@123}
     networks:
       - egov-network
     restart: "no"
@@ -1643,7 +1648,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       # Flyway disabled - migrations run by egov-otp-migration
@@ -1773,7 +1778,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
       # Embedded Flyway off — pgr-services-migration (docker-compose.migrations.yml) owns this schema (#1586)
@@ -1906,7 +1911,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/egov
       SCHEMA_TABLE: xstate_chatbot_schema
       FLYWAY_USER: ${POSTGRES_USER:-egov}
-      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       # /flyway/sql, NOT /flyway/sql/main: the db Dockerfile does
       # `COPY ./migration/main /flyway/sql`, so the migrations land at the root. Flyway's
       # failOnMissingLocations defaults to false, so a wrong path applies ZERO migrations
@@ -1962,7 +1967,7 @@ services:
       # The employee account the bot creates citizens and files complaints as. Defaults to
       # the bootstrap admin; use a dedicated, narrowly scoped account in production.
       USER_SERVICE_ACCOUNT_USERNAME: ${CHATBOT_SERVICE_ACCOUNT_USERNAME:-${BOOTSTRAP_USER:-ADMIN}}
-      USER_SERVICE_ACCOUNT_PASSWORD: ${CHATBOT_SERVICE_ACCOUNT_PASSWORD:-${BOOTSTRAP_PASSWORD:-eGov@123}}
+      USER_SERVICE_ACCOUNT_PASSWORD: ${CHATBOT_SERVICE_ACCOUNT_PASSWORD:-${BOOTSTRAP_PASSWORD:?BOOTSTRAP_PASSWORD must be set in ./.env (the deploy renders it from host_vars bootstrap_password)}}
       # Number rule used when the tenant has no MDMS MobileNumberValidation row or MDMS is
       # unreachable. Required at boot; defaults match the pg demo tenant (India).
       DEFAULT_COUNTRY_CODE: ${CHATBOT_DEFAULT_COUNTRY_CODE:-+91}
@@ -1995,7 +2000,7 @@ services:
       DB_PORT: '5432'
       DB_NAME: ${POSTGRES_DB:-egov}
       DB_USER: ${POSTGRES_USER:-egov}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       KAFKA_BOOTSTRAP_SERVER: redpanda:9092
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/xstate-chatbot/health >/dev/null 2>&1 || exit 1"]
@@ -2033,10 +2038,10 @@ services:
       # session-level advisory lock that transaction-mode pooling would break.
       SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       SPRING_FLYWAY_URL: jdbc:postgresql://postgres-db:5432/egov
       SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       JAVA_OPTS: '-Xmx96m -Xms96m'
     networks:
       - egov-network
@@ -2424,7 +2429,7 @@ services:
     environment:
       POSTGRES_DB: mcp_sessions
       POSTGRES_USER: mcp
-      POSTGRES_PASSWORD: ${MCP_DB_PASSWORD:-mcp123}
+      POSTGRES_PASSWORD: ${MCP_DB_PASSWORD:?MCP_DB_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
     volumes:
       - mcp_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -2475,14 +2480,17 @@ services:
       # in a deployment override and live state-root admin token verification.
       # Leave the flag unset here: ordinary bootstrap uses Kong by default.
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
-      CRS_USERNAME: ${MCP_USERNAME:-ADMIN}
-      CRS_PASSWORD: ${MCP_PASSWORD:-eGov@123}
+      # The deploy writes MCP_USERNAME/MCP_PASSWORD to .env from host_vars
+      # bootstrap_user/bootstrap_password (issue #2783 gap 4); a standalone
+      # compose user has to set them.
+      CRS_USERNAME: ${MCP_USERNAME:?MCP_USERNAME must be set in ./.env (the deploy renders it from bootstrap_user)}
+      CRS_PASSWORD: ${MCP_PASSWORD:?MCP_PASSWORD must be set in ./.env (the deploy renders it from bootstrap_password)}
       CRS_TENANT_ID: ${MCP_TENANT_ID:-pg}
       SESSION_DB_HOST: mcp-postgres
       SESSION_DB_PORT: "5432"
       SESSION_DB_NAME: mcp_sessions
       SESSION_DB_USER: mcp
-      SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:-mcp123}
+      SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:?MCP_DB_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       EGOV_REDIS_HOST: redis
       EGOV_REDIS_PORT: "6379"
       # DIGIT egov-db read-only pool for the dashboard endpoints
@@ -2495,7 +2503,7 @@ services:
       DIGIT_DB_PORT: "5432"
       DIGIT_DB_NAME: egov
       DIGIT_DB_USER: egov
-      DIGIT_DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      DIGIT_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
     ports:
       - "${PROXY_BIND_IP:-127.0.0.1}:13101:3000"
     healthcheck:
@@ -2540,21 +2548,24 @@ services:
       CRS_ENVIRONMENT: self-hosted
       CRS_ENV_NAME: ${MCP_ENV_NAME:-Self-hosted DIGIT}
       CRS_API_URL: http://kong:8000
-      CRS_USERNAME: ${MCP_USERNAME:-ADMIN}
-      CRS_PASSWORD: ${MCP_PASSWORD:-eGov@123}
+      # The deploy writes MCP_USERNAME/MCP_PASSWORD to .env from host_vars
+      # bootstrap_user/bootstrap_password (issue #2783 gap 4); a standalone
+      # compose user has to set them.
+      CRS_USERNAME: ${MCP_USERNAME:?MCP_USERNAME must be set in ./.env (the deploy renders it from bootstrap_user)}
+      CRS_PASSWORD: ${MCP_PASSWORD:?MCP_PASSWORD must be set in ./.env (the deploy renders it from bootstrap_password)}
       CRS_TENANT_ID: ${MCP_TENANT_ID:-pg}
       SESSION_DB_HOST: mcp-postgres
       SESSION_DB_PORT: "5432"
       SESSION_DB_NAME: mcp_sessions
       SESSION_DB_USER: mcp
-      SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:-mcp123}
+      SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:?MCP_DB_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       EGOV_REDIS_HOST: redis
       EGOV_REDIS_PORT: "6379"
       DIGIT_DB_HOST: postgres
       DIGIT_DB_PORT: "5432"
       DIGIT_DB_NAME: egov
       DIGIT_DB_USER: egov
-      DIGIT_DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      DIGIT_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
     ports:
       # 127.0.0.1 only: this is the public-facing read-only instance, and its
       # only auth is the nginx basic-auth in front. Binding all interfaces
@@ -2878,7 +2889,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       # application.properties keeps Flyway URL separate from datasource;
       # both env vars must be set or Flyway falls back to localhost.
       # Embedded Flyway off — digit-config-service-migration (docker-compose.migrations.yml) owns this schema (#1586)
@@ -2943,7 +2954,7 @@ services:
       # an operator's existing overrides keep working.
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       # Embedded Flyway off — digit-user-preferences-service-migration
       # (docker-compose.migrations.yml) owns this schema, as for every sibling.
       SPRING_FLYWAY_ENABLED: 'false'
@@ -2999,7 +3010,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
       # application.properties hardcodes spring.flyway.url to localhost
       # without an env placeholder — relaxed binding to SPRING_FLYWAY_*
       # is the only way to override.
@@ -3326,7 +3337,7 @@ services:
       DIGIT_USER_LOGOUT_URL: http://egov-user-proxy:8107/user/_logout
       DIGIT_MDMS_SEARCH_URL: http://kong:8000/mdms-v2/v1/_search
       DIGIT_ADMIN_USERNAME: ${IDENTITY_DIGIT_ADMIN_USERNAME:-ADMIN}
-      DIGIT_ADMIN_PASSWORD: ${IDENTITY_DIGIT_ADMIN_PASSWORD:-eGov@123}
+      DIGIT_ADMIN_PASSWORD: ${IDENTITY_DIGIT_ADMIN_PASSWORD:?IDENTITY_DIGIT_ADMIN_PASSWORD must be set in ./.env (the deploy renders it from OpenBao identity_digit_admin_password)}
       DIGIT_ADMIN_TENANT_ID: ${IDENTITY_DIGIT_ADMIN_TENANT_ID:-pg}
       # Roots tenant-routes/_backfill may give an Organization; empty = none. (identity-bff uses the
       # root of DIGIT_ADMIN_TENANT_ID only when the variable is unset, which it never is here.)

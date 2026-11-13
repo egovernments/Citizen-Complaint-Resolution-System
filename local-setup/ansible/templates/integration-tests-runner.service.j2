@@ -29,7 +29,7 @@ RestrictSUIDSGID=true
 # ProtectSystem=strict makes the whole filesystem read-only, so name the two
 # paths the runner legitimately writes: its checkout (clone/npm/test output)
 # and the webroot it publishes results into.
-ReadWritePaths=/var/www/integration-tests {{ integration_tests_dir }}
+ReadWritePaths={{ integration_tests_www_dir }} {{ integration_tests_dir }}
 
 WorkingDirectory={{ integration_tests_dir }}
 ExecStart=/usr/bin/env node {{ integration_tests_dir }}/runner/server.mjs
@@ -40,7 +40,7 @@ ExecStart=/usr/bin/env node {{ integration_tests_dir }}/runner/server.mjs
 Environment=PLAYWRIGHT_BROWSERS_PATH={{ integration_tests_runner_browsers_path | default('/opt/ms-playwright') }}
 Environment=RUNNER_PORT={{ integration_tests_runner_port | default(8181) }}
 Environment=RUNNER_REPO_DIR={{ integration_tests_dir }}
-Environment=RUNNER_WEBROOT=/var/www/integration-tests
+Environment=RUNNER_WEBROOT={{ integration_tests_www_dir }}
 Environment=RUNNER_RUN_LIMIT={{ integration_tests_runner_run_limit | default(5) }}
 Environment=RUNNER_BRANCH={{ integration_tests_runner_branch | default('deployed') }}
 {% if integration_tests_runner_tenant_env is defined %}

@@ -185,6 +185,10 @@ jobs:
           echo "=== Verifying telemetry sidecar is present in all compose files ==="
           FAIL=0
 
+          # docker-compose.deploy.yaml has no built-in credential defaults
+          # (issue #2783 gap 10): `config` needs values to parse, so give it
+          # placeholders. Nothing here starts a container.
+          export POSTGRES_PASSWORD=ci-placeholder MINIO_ROOT_USER=ci-placeholder MINIO_ROOT_PASSWORD=ci-placeholder
           for f in docker-compose.yml docker-compose.deploy.yaml; do
             echo -n "  $f ... "
             if docker compose -f "$f" config --services 2>/dev/null | grep -q '^telemetry$'; then

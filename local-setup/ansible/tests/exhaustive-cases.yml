@@ -11,7 +11,7 @@
 
 # Expected outcome and refusal are DERIVED from the rule, not typed per row.
 # The reason precedence follows the order the asserts appear in the task file:
-# guess -> strand -> force_clean -> move.
+# guess -> foreign -> strand -> force_clean -> move.
 - name: "build the case list"
   ansible.builtin.set_fact:
     generated: >-
@@ -31,6 +31,7 @@
                      'ABORT' if (
                        ((item.0.key in ['unknown', 'skip-daemon', 'probe-error']
                          or item.1.key == 'none') and has_stack)
+                       or item.0.key == 'foreign'
                        or (item.0.key == 'data-in-anon'
                            and (item.1.key == 'PGDATA' or item.3))
                        or (item.0.key == 'data-in-named' and item.1.key == 'other')
@@ -39,11 +40,13 @@
           'refuse to guess'
           if ((item.0.key in ['unknown', 'skip-daemon', 'probe-error']
                or item.1.key == 'none') and has_stack)
-          else ('strand a database'
-                if (item.0.key == 'data-in-anon' and item.1.key == 'PGDATA')
-                else ('force_clean while the database'
-                      if (item.0.key == 'data-in-anon' and item.3)
-                      else 'move a migrated box')))
+          else ('another compose project'
+                if item.0.key == 'foreign'
+                else ('strand a database'
+                      if (item.0.key == 'data-in-anon' and item.1.key == 'PGDATA')
+                      else ('force_clean while the database'
+                            if (item.0.key == 'data-in-anon' and item.3)
+                            else 'move a migrated box'))))
       }] }}
   loop: "{{ probes | product(mounts) | product(overrides) | product(force_cleans) | map('flatten') | list }}"
   vars:
@@ -51,6 +54,11 @@
       - {key: data-in-named, probe: "SAFE named-volume:digit_postgres_data", rc: 0}
       - {key: data-in-anon,  probe: "ANON container-volume:9c2f1ab", rc: 0}
       - {key: no-data,       probe: "SAFE no-cluster", rc: 0}
+      # an anonymous cluster on the host, but this digit_dir never held a
+      # stack, so it is not ours (issue #2783 gap 6): reads as no data
+      - {key: foreign-anon,  probe: "SAFE foreign-anon-volume:9c2f1ab", rc: 0}
+      # docker-postgres belongs to another compose project: always a refusal
+      - {key: foreign,       probe: "FOREIGN container-project:otherstack (this deploy would be digit)", rc: 0}
       - {key: unknown,       probe: "UNKNOWN mountpoints-not-readable", rc: 0}
       - {key: skip-daemon,   probe: "SKIP no-daemon", rc: 0}
       - {key: skip-docker,   probe: "SKIP no-docker", rc: 0}

@@ -933,7 +933,15 @@ pgr_onboarding_baseline_upgrade_enabled: true
 # A new workspace gets the notification defaults (schemas, access rows, templates,
 # routing) at signup only where the notification stack runs: unset = enable_novu.
 # pgr_onboarding_notification_defaults_enabled: false
-identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
+# The DIGIT account the Identity BFF signs in with (password:
+# bootstrap_secrets.identity_digit_admin_password). The deploy creates it on
+# that tenant with ACCOUNT_ADMIN (all its own DIGIT calls need) if it does not exist, and then
+# checks the login. It never rewrites an existing user's password — so do NOT
+# point this at the stock ADMIN on pg (the dump ships it with eGov@123) unless
+# identity_digit_admin_password IS that password: the BFF retries its login
+# every 30s and egov-user locks the account after a few failures, which also
+# takes down everything else using it (issue #2783). A dedicated name is safe.
+identity_digit_admin_username: "IDENTITY_BFF"
 identity_digit_admin_tenant_id: "pg"
 # Roles that may sign in to the Configurator (#2599). Unset = the founder's admin
 # roles (SUPERUSER, ACCOUNT_ADMIN, MDMS_ADMIN, LOC_ADMIN, HRMS_ADMIN, WORKFLOW_ADMIN);
@@ -1010,6 +1018,28 @@ db_fast_path_ack_data_wipe: false
 # is deliberately NOT db_fast_path_ack_data_wipe: that flag asserts the box has
 # no such data, so it cannot also mean "it does, proceed anyway".
 pg_allow_data_loss: false
+
+# ── Host paths ──
+# Everything host nginx serves from disk lives under www_root (default
+# /var/www); brand_www_dir, configurator_www_dir, integration_tests_www_dir
+# and integration_tests_v2_www_dir derive from it and can be set on their own.
+# The digit-ui source tree is digit_ui_src_dir (default /opt/digit-ui-esbuild).
+# On macOS nginx is a container; configurator_nginx_root is the path inside it.
+# www_root: /var/www
+# digit_ui_src_dir: /opt/digit-ui-esbuild
+#
+# Named data volumes normally live in Docker's data-root (docker_data_root
+# moves ALL of Docker, and only on a box where Docker has never run). To put
+# individual volumes on a dedicated disk instead, map volume name → absolute
+# host path; the deploy creates the directory and layers a compose overlay
+# that binds the volume to it. Only for volumes this stack has not created
+# yet — Docker does not re-point an existing named volume, so a live database
+# is a migration (stop, copy, then set this). Postgres and MinIO fix up
+# ownership themselves; a container that runs unprivileged (Elasticsearch,
+# Grafana, Loki, Prometheus, ...) needs its directory chowned to its uid first.
+# data_volume_host_paths:
+#   postgres_data: /data/postgres
+#   minio_data: /data/minio
 
 # Run the post-deploy CI suite (XLSX dataloader + Playwright). Requires
 # a sibling `digit-ui-fix/` clone next to this repo on the controller.
@@ -1122,9 +1152,33 @@ grafana_anonymous_enabled: false
 # boxes: seeding never rewrites passwords, so changing bootstrap_password
 # after the user exists fails the deploy's auth validate until you reset the
 # password via the user API (or revert the var).
+# egov-user's password rule applies to bootstrap_password (and to
+# egov_hrms_default_password and identity_digit_admin_password below): 8-15
+# characters with a digit, a lower-case and an upper-case letter and one of
+# @#$%, no whitespace. preflight.py refuses anything else; avoid `$` followed
+# by a letter, which compose interpolates in .env.
 # bootstrap_user: "ADMIN"
 # bootstrap_password: "eGov@123"
 # bootstrap_tenant: "pg"                # tenant those calls authenticate against
+# digit-mcp signs in with the bootstrap account too (MCP_USERNAME/MCP_PASSWORD
+# in .env follow bootstrap_user/bootstrap_password); override if MCP should
+# use a different DIGIT account:
+# mcp_username: "ADMIN"
+# mcp_password: "eGov@123"
+# mcp_tenant_id: "pg"
+# With a custom bootstrap_user the stock ADMIN and GRO (eGov@123) are still
+# seeded on a fresh box, because run_ci_tests, the Postman collections and
+# the notification seeder defaults use them. Set this to false to seed only
+# the bootstrap account (preflight.py refuses it together with run_ci_tests,
+# or with enable_novu unless notif_seed_user is set). Users that already
+# exist — including the ones db/full-dump.sql ships on pg* — are never
+# touched; lock or rotate those by hand after the deploy.
+# seed_stock_users: true
+# INTERNAL_USER (the SYSTEM account services look up by role) is seeded with
+# this password on pg and on state_root; nothing signs in with it, but it should
+# not stay a published value on a box that rotated everything else. Same rule
+# as bootstrap_password.
+# internal_user_password: "System@123"
 # notif_seed_user: "ADMIN"              # notification seeder, same defaults
 # notif_seed_pass: "eGov@123"
 # The BFF's DIGIT admin username/tenant are configured in the identity block
@@ -1457,12 +1511,23 @@ nginx_preserve_vhost: false
 secrets_path: kv/digit/mytenant
 
 # Seeded into OpenBao ONLY on the first deploy of this tenant. After
-# that, edit via the UI or `bao kv put`; subsequent edits to this file
-# are ignored (cas=0 on the seed).
+# that, edit via the UI or `bao kv patch`; a CHANGED value in this file is
+# reported by the deploy but never applied, while a NEW key is added.
 #
 # If db_fast_path: true, elasticsearch_master_password MUST equal
 # `asd@#$@$!132123` — the dump's eg_enc_*_keys decrypt only under that
 # value. Mismatch → AEADBadTagException in egov-enc-service on boot.
+# That value is PUBLIC (it is in this file and in the compose file), and it is
+# the master key egov-enc-service protects every PII encryption key with. So
+# the fast path is a demo/evaluation path, NOT production-grade for PII: a
+# production tenant starts from its own database (db_fast_path: false) with a
+# generated master password, and never loads db/full-dump.sql.
+#
+# After the first deploy OpenBao is the source of truth for every key below:
+# the deploy ADDS keys that OpenBao lacks and warns about keys whose value
+# differs, but never overwrites a stored value. Rotate with
+#   bao kv patch <secrets_path> <key>=<value>
+# and redeploy (then update this file to match, or drop the key here).
 bootstrap_secrets:
   # CHANGE_ME is enforced: scripts/check-committed-secrets.sh fails CI if a
   # tracked host_vars file ships a real value, because this repo is public and
@@ -1479,7 +1544,7 @@ bootstrap_secrets:
   # ES login for the opt-in search stack (enable_search_stack). DISTINCT from
   # the master password above — never reuse the PII-encryption master here.
   # elasticsearch_password: "CHANGE_ME"
-  egov_hrms_default_password: "CHANGE_ME"
+  egov_hrms_default_password: "CHANGE_ME"   # 8-15 chars, digit + lower + upper + one of @#$%
   # Grafana admin login (user `admin`). OPTIONAL — leave it out and the
   # playbook generates a 24-char password on first deploy and stores it here
   # in OpenBao. Read it back with:
@@ -1494,8 +1559,10 @@ bootstrap_secrets:
   keycloak_db_password: ""                  # Keycloak's Postgres connection
   keycloak_google_client_secret: ""         # only if keycloak_google_client_id is set
   keycloak_github_client_secret: ""         # only if keycloak_github_client_id is set
-  # BFF account-management credential. The legacy key remains a migration
-  # fallback; new environments should set identity_digit_admin_password.
+  # BFF account-management credential (see identity_digit_admin_username
+  # above). The legacy key remains a migration fallback; new environments
+  # should set identity_digit_admin_password. Same password rule as
+  # bootstrap_password: 8-15 chars, digit + lower + upper + one of @#$%.
   identity_digit_admin_password: "CHANGE_ME"
   # Empty = generated on first deploy (an existing identity_digit_provisioner_password
   # wins over generating). Set it only to adopt an existing provisioner account.
