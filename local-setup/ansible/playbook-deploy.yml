@@ -1544,6 +1544,27 @@
         state: directory
 
     # ==================== Compose File ====================
+    # The copy below resets STATE_LEVEL_TENANT_ID to `pg`, and the post-bootstrap
+    # rewrite puts state_root back only when this run's MCP bootstrap succeeded.
+    # A box an earlier deploy already switched must keep state_root even when the
+    # bootstrap re-run fails (its users and enc keys live under it), so note that
+    # from the file the previous deploy left behind (review of #2788).
+    - name: "Compose — note whether an earlier deploy already switched this stack onto state_root"
+      ansible.builtin.shell:
+        cmd: >-
+          grep -qE '^\s+STATE_LEVEL_TENANT_ID: {{ state_root | regex_escape }}$'
+          {{ (digit_dir ~ '/docker-compose.egov-digit.yaml') | quote }}
+          && echo SWITCHED || echo NOT_SWITCHED
+        executable: /bin/bash
+      register: _state_root_prior_switch
+      changed_when: false
+      failed_when: false
+      when: state_root != 'pg'
+
+    - name: "Compose — remember whether this stack already runs on state_root"
+      ansible.builtin.set_fact:
+        state_root_previously_switched: "{{ (_state_root_prior_switch.stdout | default('') | trim) == 'SWITCHED' }}"
+
     - name: Copy registry-prefixed Docker Compose file
       copy:
         src: ../docker-compose.egov-digit.yaml
@@ -3049,7 +3070,8 @@
         _bao_seed_missing: >-
           {%- set out = {} -%}
           {%- for k, v in (bootstrap_secrets | default({})).items() -%}
-            {%- if (_bao_seed_stored[k] | default('', true) | string) | length == 0 -%}
+            {%- if v is not none and (v | string) | length > 0 and (v | string) != 'CHANGE_ME'
+                   and (_bao_seed_stored[k] | default('', true) | string) | length == 0 -%}
               {%- set _ = out.update({k: v}) -%}
             {%- endif -%}
           {%- endfor -%}
@@ -3057,7 +3079,7 @@
         _bao_seed_drift: >-
           {%- set out = [] -%}
           {%- for k, v in (bootstrap_secrets | default({})).items() -%}
-            {%- if v is not none and (v | string) | length > 0
+            {%- if v is not none and (v | string) | length > 0 and (v | string) != 'CHANGE_ME'
                    and (_bao_seed_stored[k] | default('', true) | string) | length > 0
                    and (_bao_seed_stored[k] | string) != (v | string) -%}
               {%- set _ = out.append(k) -%}
@@ -3067,6 +3089,9 @@
       no_log: true
       when: bootstrap_secrets is defined and bootstrap_secrets | length > 0
 
+    # `CHANGE_ME` and empty values are placeholders, not secrets: writing them
+    # would shadow a legacy key the .env rendering still falls back to (e.g.
+    # token_exchange_system_password for the BFF) — review of #2788.
     - name: "OpenBao — add the bootstrap_secrets keys OpenBao lacks (never overwrites a stored value)"
       ansible.builtin.uri:
         url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
@@ -3162,8 +3187,33 @@
           - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: "secret" }
           - { feature: "Keycloak",                 enabled: true,                                      var: "keycloak_admin_password",    bad: "admin" }
           - { feature: "Identity BFF",             enabled: true,                                      var: "identity_digit_admin_password", bad: "CHANGE_ME" }
-          - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123" }
-          - { feature: "Search (enable_search_stack)", enabled: "{{ enable_search_stack | default(false) }}", var: "elasticsearch_password", bad: "changeme-elastic" }
+          - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123",            empty_fatal: true }
+          - { feature: "Search (enable_search_stack)", enabled: "{{ enable_search_stack | default(false) }}", var: "elasticsearch_password", bad: "changeme-elastic", empty_fatal: true }
+
+    # Since #2788 the compose file has no fallback for these: an empty
+    # MCP_DB_PASSWORD aborts `docker compose up` (`${VAR:?}`), and an empty
+    # ELASTICSEARCH_PASSWORD is sent to an Elasticsearch that still holds the
+    # password it was first started with, so egov-indexer and the inbox get
+    # 401 and indexing stops silently. That breaks existing boxes too, so it
+    # is fatal on every box; the published-default case below only warns there.
+    - name: "Opt-in stacks — refuse an EMPTY secret that the compose file no longer defaults (every box)"
+      ansible.builtin.assert:
+        that:
+          - (bao_secrets.json.data.data[item.var] | default('')) | length > 0
+        fail_msg: >-
+          {{ item.feature }} is enabled but `{{ item.var }}` is empty in OpenBao,
+          and docker-compose.egov-digit.yaml no longer falls back to a published
+          default for it. On an already-deployed box store the value the live
+          service was started with first — for Search that is the legacy
+          `changeme-elastic` — with `bao kv patch {{ secrets_path }} {{ item.var }}=<value>`,
+          then rotate the service and OpenBao together. On a fresh box choose a
+          value (or put it in bootstrap_secrets in host_vars/{{ inventory_hostname }}.yml).
+      when:
+        - item.enabled | bool
+        - item.empty_fatal | default(false) | bool
+      loop: "{{ _optin_secret_checks }}"
+      loop_control:
+        label: "{{ item.feature }} / {{ item.var }}"
 
     - name: "Opt-in stacks — refuse to deploy on a published dev secret (fresh boxes fail closed)"
       ansible.builtin.assert:
@@ -3172,9 +3222,8 @@
           - (bao_secrets.json.data.data[item.var] | default('')) != item.bad
         fail_msg: >-
           {{ item.feature }} is enabled but `{{ item.var }}` is unset or still
-          the published default in OpenBao — so .env gets an empty value and
-          compose falls back to the public default from
-          docker-compose.egov-digit.yaml. Set it with
+          the published default in OpenBao — the service would run on a
+          credential anyone can read in this repository. Set it with
           `bao kv patch {{ secrets_path }} {{ item.var }}=<value>` (or put it in
           bootstrap_secrets in host_vars/{{ inventory_hostname }}.yml on a tenant
           whose OpenBao has not been seeded yet). These values are in a public
@@ -3189,7 +3238,7 @@
     - name: "Opt-in stacks — WARN (do not abort) when an already-deployed box still runs on a published dev secret"
       ansible.builtin.debug:
         msg: >-
-          WARNING: {{ item.feature }} is enabled but `{{ item.var }}` is empty or
+          WARNING: {{ item.feature }} is enabled but `{{ item.var }}` is still
           the published default in OpenBao on this already-deployed box. The
           deploy is CONTINUING so an existing tenant is not bricked, but this
           credential is public and equivalent to no secret at all — rotate it:
@@ -3198,9 +3247,7 @@
       when:
         - item.enabled | bool
         - _existing_box | bool
-        - >-
-          ((bao_secrets.json.data.data[item.var] | default('')) | length == 0)
-          or ((bao_secrets.json.data.data[item.var] | default('')) == item.bad)
+        - (bao_secrets.json.data.data[item.var] | default('')) == item.bad
       loop: "{{ _optin_secret_checks }}"
       loop_control:
         label: "{{ item.feature }} / {{ item.var }}"
@@ -5454,7 +5501,7 @@
 
     - name: "integration-tests — point v2 dashboard at the shared catalog/runs (symlinks)"
       ansible.builtin.file:
-        src: "../integration-tests/{{ item }}"
+        src: "{{ integration_tests_www_dir }}/{{ item }}"
         dest: "{{ integration_tests_v2_www_dir }}/{{ item }}"
         state: link
         force: true
@@ -6536,23 +6583,48 @@
     # success=false in the body. Operators can override with
     # `tolerate_bootstrap_failures: true` if they intentionally want to
     # ship a partially-seeded tenant for further inspection.
-    - name: "mcp-bootstrap — fail if any seed step reported failures"
+    # What each bootstrap call actually did. `ignore_errors: true` on the calls
+    # means a 403/500/timeout leaves no `.json.success`, and an unreachable MCP
+    # skips them entirely; `success | default(true)` read both as success and
+    # the stack was switched onto a tenant nobody seeded (issue #2783 gap 9,
+    # review of #2788). Only a 200 whose body says success=true counts.
+    - name: "mcp-bootstrap — classify each bootstrap call (ran; answered 200 with success=true)"
+      ansible.builtin.set_fact:
+        _mcp_root_bootstrap_ran: "{{ mcp_root_bootstrap is defined and not (mcp_root_bootstrap.skipped | default(false) | bool) }}"
+        _mcp_city_bootstrap_ran: "{{ mcp_city_bootstrap is defined and not (mcp_city_bootstrap.skipped | default(false) | bool) }}"
+        _mcp_root_bootstrap_ok: >-
+          {{ mcp_root_bootstrap is defined
+             and not (mcp_root_bootstrap.skipped | default(false) | bool)
+             and (mcp_root_bootstrap.status | default(0) | int) == 200
+             and (mcp_root_bootstrap.json.success | default(false) | bool) }}
+        _mcp_city_bootstrap_ok: >-
+          {{ mcp_city_bootstrap is defined
+             and not (mcp_city_bootstrap.skipped | default(false) | bool)
+             and (mcp_city_bootstrap.status | default(0) | int) == 200
+             and (mcp_city_bootstrap.json.success | default(false) | bool) }}
+      when: state_root != 'pg'
+
+    - name: "mcp-bootstrap — fail unless both bootstrap calls answered 200 with success=true"
       ansible.builtin.fail:
         msg: >-
-          MCP bootstrap reported failures.
-          Root success={{ mcp_root_bootstrap.json.success | default('n/a') }},
-          city success={{ mcp_city_bootstrap.json.success | default('n/a') }}.
+          MCP bootstrap of {{ state_root }} did not succeed.
+          Root ({{ state_root }}): {{ ('HTTP ' ~ (mcp_root_bootstrap.status | default('no response')) ~ ', success=' ~ (mcp_root_bootstrap.json.success | default('n/a')))
+                                      if (_mcp_root_bootstrap_ran | bool) else 'skipped — MCP unreachable' }};
+          city ({{ tenant_id }}): {{ ('HTTP ' ~ (mcp_city_bootstrap.status | default('no response')) ~ ', success=' ~ (mcp_city_bootstrap.json.success | default('n/a')))
+                                      if (_mcp_city_bootstrap_ran | bool) else 'skipped — MCP unreachable' }}.
           See the detailed-failure-entries debug output above. Re-run with
-          `tolerate_bootstrap_failures: true` to continue past this.
+          `tolerate_bootstrap_failures: true` to continue past this; the stack
+          then stays on pg unless an earlier deploy already switched it.
       when:
         - state_root != 'pg'
         - not (tolerate_bootstrap_failures | default(false))
-        - >
-          (mcp_root_bootstrap is defined and
-            not (mcp_root_bootstrap.json.success | default(true)))
-          or
-          (mcp_city_bootstrap is defined and
-            not (mcp_city_bootstrap.json.success | default(true)))
+        - not ((_mcp_root_bootstrap_ok | bool) and (_mcp_city_bootstrap_ok | bool))
+        # A redeploy of an already-switched box while MCP is down ran nothing
+        # and changes nothing; every other miss is a hard stop.
+        - >-
+          not ((state_root_previously_switched | default(false) | bool)
+               and not (_mcp_root_bootstrap_ran | bool)
+               and not (_mcp_city_bootstrap_ran | bool))
 
     # Only switch the stack onto state_root when its bootstrap actually
     # succeeded (issue #2783 gap 9). With tolerate_bootstrap_failures the play
@@ -6566,15 +6638,18 @@
       ansible.builtin.set_fact:
         state_root_bootstrap_ok: >-
           {{ state_root == 'pg'
-             or ((mcp_root_bootstrap.json.success | default(true) | bool)
-                 and (mcp_city_bootstrap.json.success | default(true) | bool)) }}
+             or (state_root_previously_switched | default(false) | bool)
+             or ((_mcp_root_bootstrap_ok | default(false) | bool)
+                 and (_mcp_city_bootstrap_ok | default(false) | bool)) }}
 
     - name: "mcp-bootstrap — WARNING: the bootstrap of state_root failed, services stay on pg"
       ansible.builtin.debug:
         msg: >-
-          tolerate_bootstrap_failures is set and the MCP bootstrap of {{ state_root }} reported failures, so this
-          deploy does NOT rewrite STATE_LEVEL_TENANT_ID, recreate services against {{ state_root }}, or seed users
-          on it. The stack keeps running on pg. Fix the bootstrap (see the failure entries above) and redeploy.
+          tolerate_bootstrap_failures is set, the MCP bootstrap of {{ state_root }} did not succeed
+          (root ok: {{ _mcp_root_bootstrap_ok | default(false) }}, city ok: {{ _mcp_city_bootstrap_ok | default(false) }})
+          and no earlier deploy switched this stack onto {{ state_root }}, so this deploy does NOT rewrite
+          STATE_LEVEL_TENANT_ID, recreate services against {{ state_root }}, or seed users on it. The stack
+          keeps running on pg. Fix the bootstrap (see the failure entries above) and redeploy.
       when: not (state_root_bootstrap_ok | bool)
 
     # ────────────────────────────────────────────────────────────────
@@ -6740,7 +6815,7 @@
       # that here via egov-user-proxy on the docker network (egovio/curl:latest is already
       # pulled for this stack — see hrms-prereq-gate/user-seed-container in the compose files).
       ansible.builtin.shell: |
-        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"INTERNAL_USER","name":"Internal Microservice User","mobileNumber":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='9999999999') }}","gender":"MALE","active":true,"type":"SYSTEM","tenantId":"{{ state_root }}","password":"System@123","roles":[{"code":"INTERNAL_MICROSERVICE_ROLE","name":"Internal Microservice Role","tenantId":"{{ state_root }}"}]}}'
+        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"INTERNAL_USER","name":"Internal Microservice User","mobileNumber":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='9999999999') }}","gender":"MALE","active":true,"type":"SYSTEM","tenantId":"{{ state_root }}","password":"{{ internal_user_password | default('System@123') }}","roles":[{"code":"INTERNAL_MICROSERVICE_ROLE","name":"Internal Microservice Role","tenantId":"{{ state_root }}"}]}}'
         for i in $(seq 1 30); do
           # egov-user actually caches this under egov-user:mobile-val:<tenantId>:<countryCode|default>
           # (confirmed directly against a live box) — "validationRules" (the key this loop used to
@@ -6844,12 +6919,12 @@
             type: EMPLOYEE
             tenantId: "{{ _bff_admin_tenant }}"
             password: "{{ _bff_admin_password }}"
+            # Only what the BFF's own DIGIT calls need. identity-bff.md: production
+            # uses a dedicated employee holding ACCOUNT_ADMIN; the dump grants that
+            # role /user/_search, _createnovalidate and _updatenovalidate. SUPERUSER
+            # and the other *_ADMIN roles would only widen a leaked credential.
             roles:
-              - {code: SUPERUSER, name: Super User, tenantId: "{{ _bff_admin_tenant }}"}
               - {code: ACCOUNT_ADMIN, name: Account Admin, tenantId: "{{ _bff_admin_tenant }}"}
-              - {code: MDMS_ADMIN, name: MDMS Admin, tenantId: "{{ _bff_admin_tenant }}"}
-              - {code: LOC_ADMIN, name: Localisation Admin, tenantId: "{{ _bff_admin_tenant }}"}
-              - {code: HRMS_ADMIN, name: HRMS Admin, tenantId: "{{ _bff_admin_tenant }}"}
               - {code: EMPLOYEE, name: Employee, tenantId: "{{ _bff_admin_tenant }}"}
       ansible.builtin.shell: |
         for i in $(seq 1 6); do
@@ -7056,7 +7131,6 @@
       when:
         - state_root != 'pg'
         - state_root_bootstrap_ok | bool
-        - state_root_bootstrap_ok | bool
 
     # Without this wait a crash-looping HRMS (e.g. missing system user on
     # state_root) sails through and the deploy reports success — that is
@@ -7070,7 +7144,6 @@
       changed_when: false
       when:
         - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
         - state_root_bootstrap_ok | bool
 
     # `docker compose restart egov-user` above does NOT cascade to
@@ -7114,7 +7187,6 @@
       changed_when: false
       when:
         - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
         - state_root_bootstrap_ok | bool
 
     # digit-mcp is a long-lived Node process that has been up since well before this
@@ -7202,7 +7274,6 @@
       failed_when: mcp_rekey_root.rc != 0
       when:
         - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
         - state_root_bootstrap_ok | bool
       no_log: true
 

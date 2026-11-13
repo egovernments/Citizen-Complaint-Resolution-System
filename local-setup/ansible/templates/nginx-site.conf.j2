@@ -110,7 +110,7 @@ server {
   # Configurator SPA — host-built dist (build_configurator: true).
   # Long-cache the hashed assets/, no-cache index.
   location /configurator/assets/ {
-    alias {{ configurator_www_dir }}/assets/;
+    alias {{ configurator_nginx_root }}/assets/;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
     {{ security_headers('    ') }}
     try_files $uri =404;
@@ -126,12 +126,12 @@ server {
   # order. Without it the no-caching variant below sends NO Cache-Control at all
   # and browsers apply heuristic freshness off Last-Modified.
   location = /configurator/config.js {
-    alias {{ configurator_www_dir }}/config.js;
+    alias {{ configurator_nginx_root }}/config.js;
     add_header Cache-Control "no-store, must-revalidate" always;
   }
 
   location /configurator/ {
-    alias {{ configurator_www_dir }}/;
+    alias {{ configurator_nginx_root }}/;
     try_files $uri $uri/ /configurator/index.html;
     add_header Cache-Control "no-cache, must-revalidate" always;
     {{ security_headers('    ') }}
@@ -149,12 +149,12 @@ server {
   # order. Without it the no-caching variant below sends NO Cache-Control at all
   # and browsers apply heuristic freshness off Last-Modified.
   location = /configurator/config.js {
-    alias {{ configurator_www_dir }}/config.js;
+    alias {{ configurator_nginx_root }}/config.js;
     add_header Cache-Control "no-store, must-revalidate" always;
   }
 
   location /configurator/ {
-    alias {{ configurator_www_dir }}/;
+    alias {{ configurator_nginx_root }}/;
     try_files $uri $uri/ /configurator/index.html;
   }
 {% endif %}

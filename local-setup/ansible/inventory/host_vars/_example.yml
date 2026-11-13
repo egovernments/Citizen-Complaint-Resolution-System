@@ -935,7 +935,7 @@ pgr_onboarding_baseline_upgrade_enabled: true
 # pgr_onboarding_notification_defaults_enabled: false
 # The DIGIT account the Identity BFF signs in with (password:
 # bootstrap_secrets.identity_digit_admin_password). The deploy creates it on
-# that tenant with the founder admin roles if it does not exist, and then
+# that tenant with ACCOUNT_ADMIN (all its own DIGIT calls need) if it does not exist, and then
 # checks the login. It never rewrites an existing user's password — so do NOT
 # point this at the stock ADMIN on pg (the dump ships it with eGov@123) unless
 # identity_digit_admin_password IS that password: the BFF retries its login
@@ -1024,6 +1024,7 @@ pg_allow_data_loss: false
 # /var/www); brand_www_dir, configurator_www_dir, integration_tests_www_dir
 # and integration_tests_v2_www_dir derive from it and can be set on their own.
 # The digit-ui source tree is digit_ui_src_dir (default /opt/digit-ui-esbuild).
+# On macOS nginx is a container; configurator_nginx_root is the path inside it.
 # www_root: /var/www
 # digit_ui_src_dir: /opt/digit-ui-esbuild
 #
@@ -1174,8 +1175,9 @@ grafana_anonymous_enabled: false
 # touched; lock or rotate those by hand after the deploy.
 # seed_stock_users: true
 # INTERNAL_USER (the SYSTEM account services look up by role) is seeded with
-# this password; nothing signs in with it, but it should not stay a published
-# value on a box that rotated everything else.
+# this password on pg and on state_root; nothing signs in with it, but it should
+# not stay a published value on a box that rotated everything else. Same rule
+# as bootstrap_password.
 # internal_user_password: "System@123"
 # notif_seed_user: "ADMIN"              # notification seeder, same defaults
 # notif_seed_pass: "eGov@123"

@@ -15,6 +15,10 @@ docker_compose_version_min: "2.20"
 # Linux (host nginx). On macOS nginx runs as a container and /var/www needs
 # sudo, so default to a digit_dir-relative path that the container bind-mounts.
 configurator_www_dir: "{{ (www_root ~ '/configurator') if (ansible_system | default('Linux')) != 'Darwin' else (digit_dir ~ '/configurator') }}"
+# The path nginx itself resolves the configurator alias to. On Linux nginx runs
+# on the host, so it is configurator_www_dir; on macOS nginx is a container that
+# bind-mounts configurator_www_dir at /var/www/configurator (review of #2788).
+configurator_nginx_root: "{{ configurator_www_dir if (ansible_system | default('Linux')) != 'Darwin' else '/var/www/configurator' }}"
 
 # Root of everything host nginx serves from disk (Linux). Each directory below
 # can also be overridden on its own; nginx-site.conf.j2 and the playbook read
