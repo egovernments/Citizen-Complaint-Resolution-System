@@ -12,8 +12,8 @@ import { englishT, MessageError, type OnboardingT } from '../i18n';
 export const SIGNUP_ERRORS: Record<string, string> = {
   // The client's own code for a request that never got an answer.
   NETWORK_ERROR: 'Couldn’t reach the server. Check your connection and try again.',
-  // pgr-services onboarding.
-  ONBOARDING_IDENTIFIER_TAKEN: 'That account URL is already taken. Choose a different one.',
+  // pgr-services onboarding. ONBOARDING_IDENTIFIER_TAKEN isn't here: its message names which
+  // identifier is taken, and each one is answered under its own field (#2775).
   ONBOARDING_DRAFT_CONFLICT: 'Your details were changed in another tab or window. Reload the page to see the latest, then carry on.',
   ONBOARDING_DRAFT_LOCKED: 'Setup has already started, so these details can’t be changed now. Reload the page to see how it’s going.',
   ONBOARDING_PROVISIONED_FIELD_LOCKED: 'The account code and country can’t change after a setup attempt. Put them back as they were to carry on.',
@@ -42,7 +42,7 @@ export const SIGNUP_ERRORS: Record<string, string> = {
  */
 export const SIGNUP_FIELD_ERRORS: Record<string, string> = {
   accountName: 'Enter a name for your account.',
-  accountCode: 'The account code must be 2 to 32 characters, using A–Z, 0–9 and hyphens.',
+  // accountCode is answered by accountCodeRule, which the field itself shows too (#2802).
   urlSlug: 'The account URL must be 2 to 63 lowercase letters, digits and hyphens, with at least two letters.',
   countryCode: 'Choose your base country from the list.',
   languages: 'Choose at least one language.',
@@ -66,20 +66,74 @@ export const PROVISIONING_ERRORS: Record<string, string> = {
   ONBOARDING_IDENTIFIER_TAKEN: 'Another workspace took this account URL while yours was being set up.',
 };
 
+/** The sign-up fields a refusal can belong to. */
+export type SignupField = 'mobile' | 'accountName' | 'accountCode' | 'urlSlug';
+
 export interface SignupProblem {
   message: string;
   /** Set when the problem belongs under a field rather than in the page's banner. */
-  field?: 'mobile';
+  field?: SignupField;
+  /** An error code nothing here explains, kept for support and shown in small print, never as the message. */
+  reference?: string;
 }
 
 /** The country a mobile message names. */
 interface Context {
   countryName?: string;
+  /** The account name a "name taken" message names. */
+  accountName?: string;
   /** The email sign-up request, whose INVALID_REQUEST means the name or email. */
   magicLink?: boolean;
 }
 
 const FIELD_REFUSAL = /^Signup\.([\w.]+) is (required|invalid|not supported)$/;
+
+/**
+ * Which field a taken identifier is, from pgr-services' message: "<TYPE> is already in use" (the
+ * submit checks) or "<TYPE> is already reserved" / "Organization name is already reserved" (the
+ * reservation). TENANT_ID and ORGANIZATION_ALIAS are both made from the URL.
+ */
+export function takenField(message: string | undefined): Exclude<SignupField, 'mobile'> | undefined {
+  if (!message) return undefined;
+  if (/organization[_ ]name/i.test(message)) return 'accountName';
+  if (/ACCOUNT_CODE/.test(message)) return 'accountCode';
+  if (/URL_SLUG|ORGANIZATION_ALIAS|TENANT_ID/.test(message)) return 'urlSlug';
+  return undefined;
+}
+
+/** What an account code must be: the server's rule (ACCOUNT_CODE_PATTERN), in words. */
+export function accountCodeRule(t: OnboardingT = englishT): string {
+  return t('signup.account_code_rule', 'The account code must be 2 to 32 characters, using A–Z, 0–9 and hyphens, and must start with a letter or digit.');
+}
+
+/** Account names are unique across workspaces, ignoring case and spacing. */
+export function accountNameTaken(name: string, t: OnboardingT = englishT): string {
+  return name.trim()
+    ? t('signup.account_name_taken', 'A workspace called “%{name}” already exists. Choose a different name.', { name: name.trim() })
+    : t('signup.account_name_taken_any', 'A workspace with this name already exists. Choose a different name.');
+}
+
+/** Said under the code field itself, on the Account step. */
+export function accountCodeInUse(t: OnboardingT = englishT): string {
+  return t('signup.account_code_in_use', 'That account code is already taken. Choose a different one.');
+}
+
+/** Said on the steps that show the code but can't change it, Preferences and Review. */
+export function accountCodeTaken(t: OnboardingT = englishT): string {
+  return t('signup.account_code_taken', 'That account code is already taken. Go back and choose a different one.');
+}
+
+export function accountUrlTaken(t: OnboardingT = englishT): string {
+  // The key is the old catch-all's, whose words were always the URL's (#2775).
+  return t('signup_errors.ONBOARDING_IDENTIFIER_TAKEN', 'That account URL is already taken. Choose a different one.');
+}
+
+/** A problem as one line of text, its reference after it, for a page with no small print of its own. */
+export function problemText(problem: SignupProblem, t: OnboardingT = englishT): string {
+  return problem.reference
+    ? `${problem.message} ${t('signup.setup_reference', 'Reference: %{code}', { code: problem.reference })}`
+    : problem.message;
+}
 
 export function mobileInvalid(countryName: string | undefined, t: OnboardingT = englishT): string {
   return countryName
@@ -105,15 +159,29 @@ export function describeSignupError(err: unknown, t: OnboardingT = englishT, con
         message: problem === 'required' ? t('signup.mobile_required', 'Enter your mobile number.') : mobileInvalid(context.countryName, t),
       };
     }
+    if (field === 'accountCode') return { message: accountCodeRule(t) };
     if (field === 'countryCode' && problem === 'not supported') {
       return { message: t('signup.country_not_supported', 'Accounts can’t be set up in that country yet. Choose another one.') };
     }
     if (field && SIGNUP_FIELD_ERRORS[field]) return { message: t(signupFieldKey(field), SIGNUP_FIELD_ERRORS[field]) };
     return { message: t('signup.details_invalid', 'Some of your details aren’t valid. Check them and try again.') };
   }
-  // One code for every identifier; the message names which ("ACCOUNT_CODE is already in use").
-  if (code === 'ONBOARDING_IDENTIFIER_TAKEN' && /ACCOUNT_CODE/.test(message)) {
-    return { message: t('signup.account_code_taken', 'That account code is already taken. Go back and choose a different one.') };
+  // One code for every identifier; the message names which ("ACCOUNT_CODE is already in use"), and
+  // each goes under its own field. One it doesn't name is never blamed on the URL (#2775).
+  if (code === 'ONBOARDING_IDENTIFIER_TAKEN') {
+    switch (takenField(message)) {
+      case 'accountName':
+        return { field: 'accountName', message: accountNameTaken(context.accountName ?? '', t) };
+      case 'accountCode':
+        return { field: 'accountCode', message: accountCodeInUse(t) };
+      case 'urlSlug':
+        return { field: 'urlSlug', message: accountUrlTaken(t) };
+      default:
+        return {
+          message: t('signup.identifier_taken', 'One of your details (account name, account code or account URL) is already used by another workspace. Change it and try again.'),
+          reference: code,
+        };
+    }
   }
   if (code === 'INVALID_REQUEST' && context.magicLink) {
     return { message: t('signup.magic_link_invalid', 'Enter your first name, last name and a valid email address.') };
@@ -122,11 +190,9 @@ export function describeSignupError(err: unknown, t: OnboardingT = englishT, con
   if (status === 503 || /UNAVAILABLE|BUSY$/.test(code ?? '')) {
     return { message: t('signup.error_unavailable', 'A service sign-up needs isn’t responding right now. Try again in a minute.') };
   }
-  return {
-    message: code
-      ? t('signup.error_reference', 'Something went wrong on our side. Try again, and if it keeps happening, contact support with reference %{code}.', { code })
-      : t('signup.error_unknown', 'Something went wrong. Try again.'),
-  };
+  return code
+    ? { message: t('signup.error_generic', 'Something went wrong on our side. Try again, and if it keeps happening, contact support.'), reference: code }
+    : { message: t('signup.error_unknown', 'Something went wrong. Try again.') };
 }
 
 /**

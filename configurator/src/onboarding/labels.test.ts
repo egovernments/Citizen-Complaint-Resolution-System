@@ -67,6 +67,10 @@ function staticCalls(): Map<string, string> {
 const RETIRED: Record<string, string> = {
   'employees.signs_in_as': 'They sign in as %{username}.',
   'bulk_employees.got_account': 'User account (username: employee code)',
+  // #2775: the reference moved to small print under the message.
+  'signup.error_reference': 'Something went wrong on our side. Try again, and if it keeps happening, contact support with reference %{code}.',
+  // #2802: the rule now says the code must start with a letter or digit (signup.account_code_rule).
+  'signup_fields.account_code': 'The account code must be 2 to 32 characters, using A–Z, 0–9 and hyphens.',
 };
 
 /** The keys built at runtime, from the lists they come from. */
