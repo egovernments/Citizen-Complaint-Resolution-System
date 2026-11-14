@@ -217,7 +217,7 @@ const TopBar = ({
               cityDetails?.city?.ulbGrade ? (
                 <span className="digit-topbar-ulb-label">
                   {t(cityDetails?.i18nKey).toUpperCase()}{" "}
-                  {t(`ULBGRADE_${cityDetails?.city?.ulbGrade.toUpperCase().replace(" ", "_").replace(".", "_")}`).toUpperCase()}
+                  {t(`ULBGRADE_${cityDetails?.city?.ulbGrade.toUpperCase().replace(/ /g, "_").replace(/\./g, "_")}`).toUpperCase()}
                 </span>
               ) : null
             ) : mycityLabel ? (
