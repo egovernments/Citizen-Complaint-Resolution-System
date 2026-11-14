@@ -235,6 +235,45 @@ describe('Employee dob is optional (egovernments/CCRS#1949)', () => {
   });
 });
 
+describe('Employee rows the parser leaves out are returned, by sheet row (#2800)', () => {
+  const header = ['employeeCode', 'name', 'mobileNumber', 'emailId', 'department', 'designation', 'roles', 'jurisdictions'];
+  const sheet = (rows: string[][]) => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...rows]), 'Employee');
+    return parseEmployeeExcel(wb);
+  };
+  const good = (code: string) => [code, 'Jane Kamau', '712345678', `${code}@example.org`, 'ROADS', 'ENGINEER', 'EMPLOYEE', 'WARD_1'];
+
+  it('returns a row with no mobile and one with no department, with their row numbers, beside the kept rows', () => {
+    const noMobile = ['EMP_001', 'Jane Kamau', '', 'jane@example.org', 'ROADS', 'ENGINEER', 'EMPLOYEE', 'WARD_1'];
+    const noDepartment = ['EMP_002', 'Ali Hassan', '712345679', 'ali@example.org', '', 'ENGINEER', 'EMPLOYEE', 'WARD_1'];
+    const { data, rejected } = sheet([good('EMP_010'), noMobile, noDepartment, good('EMP_011')]);
+    expect(data.map((row) => [row.row, row.employeeCode])).toEqual([[2, 'EMP_010'], [5, 'EMP_011']]);
+    expect(rejected.map((row) => ({ row: row.row, code: row.employeeCode, name: row.name, problems: row.problems.map((p) => p.field) }))).toEqual([
+      { row: 3, code: 'EMP_001', name: 'Jane Kamau', problems: ['mobileNumber'] },
+      { row: 4, code: 'EMP_002', name: 'Ali Hassan', problems: ['department'] },
+    ]);
+  });
+
+  it('lists every problem a row has, not just the first', () => {
+    const { rejected, validation } = sheet([['EMP_003', '', '', 'x@example.org', '', '', '', '']]);
+    expect(rejected[0].problems.map((p) => p.field)).toEqual(['name', 'mobileNumber', 'department', 'designation']);
+    expect(validation.errors.map((e) => e.row)).toEqual([2, 2, 2, 2]);
+  });
+
+  it('counts rows as the spreadsheet does, past a blank row', () => {
+    const { data, rejected } = sheet([good('EMP_020'), [], ['EMP_021', 'Ali Hassan', '', 'ali@example.org', 'ROADS', 'ENGINEER', '', '']]);
+    expect(data.map((row) => row.row)).toEqual([2]);
+    expect(rejected.map((row) => row.row)).toEqual([4]);
+  });
+
+  it('keeps a row whose mobile only fails the 9-10 digit hint: the tenant rule decides', () => {
+    const { data, rejected } = sheet([['EMP_030', 'Jane Kamau', '25471234567', 'j@example.org', 'ROADS', 'ENGINEER', '', '']]);
+    expect(rejected).toEqual([]);
+    expect(data).toHaveLength(1);
+  });
+});
+
 describe('levelLabel', () => {
   it('prettifies level codes, keeping acronyms and splitting camelCase', () => {
     expect(levelLabel('AUTHORITY_TYPE')).toBe('Authority Type');

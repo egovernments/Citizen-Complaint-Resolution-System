@@ -102,7 +102,7 @@ export function EmployeeBulkImport() {
 
   const parseWorkbook = useCallback((wb: XLSX.WorkBook) => {
     const result = parseEmployeeExcel(wb);
-    return { data: withEmployeeCodes(result.data, existingEmployees) as EmployeeBulkRow[] };
+    return { data: withEmployeeCodes<EmployeeExcelRow>(result.data, existingEmployees) as EmployeeBulkRow[] };
   }, [existingEmployees]);
 
   const validateRow = useCallback(
@@ -120,7 +120,15 @@ export function EmployeeBulkImport() {
       const errors: string[] = [];
       if (!row.emailId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.emailId)) errors.push('A valid email is required to invite an employee.');
       const clash = codeProblem(row, rows, existingEmployees);
-      if (clash) errors.push('repeated' in clash ? `${row.employeeCode} is on more than one row` : `${row.employeeCode} is already used by ${clash.takenBy}`);
+      // An existing employee's code is refused even for the same person: an upload
+      // never changes an employee, so the row would do nothing (#2798).
+      if (clash) {
+        errors.push('repeated' in clash
+          ? `${row.employeeCode} is on more than one row`
+          : 'exists' in clash
+            ? `${row.employeeCode} already exists. Edit them in the employee list, or remove this row.`
+            : `${row.employeeCode} is already used by ${clash.takenBy}`);
+      }
       if (row.department && !deptCodes.has(row.department)) errors.push(`Department "${row.department}" not found`);
       if (row.designation && !desigCodes.has(row.designation)) errors.push(`Designation "${row.designation}" not found`);
       if (row.roles) {
