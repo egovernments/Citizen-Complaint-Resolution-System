@@ -19,6 +19,7 @@
  * react-i18next imports — the host instance is reached via window.i18next.
  */
 import { getTenantId } from "../config/dashboardConfig";
+import { getMdmsSearchUrl } from "../services/complaintHierarchyService";
 import { isPublicDashboardRuntime } from "../services/dashboardRuntime";
 
 const FALLBACK_LOCALE = "en_IN";
@@ -41,12 +42,45 @@ const globalConfig = (key) => {
 };
 
 /**
- * Same bundle set Module.js loads into the host i18next, derived the same way:
- * the boundary pack follows globalConfigs.HIERARCHY_TYPE (hardcoding `admin`
- * silently dropped ward names on every non-ADMIN tenant).
+ * The tenant's own boundary hierarchy for the standalone (public) page: the CMS row of
+ * CMS-BOUNDARY.HierarchySchema, as Module.js resolves it for the employee mount
+ * (services/boundaryService.js fetchTenantHierarchyType). A plain request, because the
+ * public page has no session; null when the tenant has no row (HIERARCHY_TYPE then).
+ * Cached per tenant for the page load.
  */
-export function standaloneModules() {
-  const hierarchyType = String(globalConfig("HIERARCHY_TYPE") || "ADMIN").toLowerCase();
+const tenantHierarchies = {};
+export function standaloneHierarchyType(tenantId = getTenantId()) {
+  if (!tenantHierarchies[tenantId]) {
+    tenantHierarchies[tenantId] = fetch(getMdmsSearchUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        RequestInfo: { apiId: "Rainmaker", ver: ".01" },
+        MdmsCriteria: {
+          tenantId,
+          moduleDetails: [{ moduleName: "CMS-BOUNDARY", masterDetails: [{ name: "HierarchySchema" }] }],
+        },
+      }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const rows = data?.MdmsRes?.["CMS-BOUNDARY"]?.HierarchySchema;
+        const row = Array.isArray(rows) ? rows.find((r) => r?.moduleName === "CMS" && r?.hierarchy) : null;
+        return row ? String(row.hierarchy) : null;
+      })
+      .catch(() => null);
+  }
+  return tenantHierarchies[tenantId];
+}
+
+/**
+ * Same bundle set Module.js loads into the host i18next, derived the same way:
+ * the boundary pack follows the tenant's hierarchy (standaloneHierarchyType), else
+ * globalConfigs.HIERARCHY_TYPE (hardcoding `admin` silently dropped ward names on
+ * every non-ADMIN tenant).
+ */
+export function standaloneModules(tenantHierarchy) {
+  const hierarchyType = String(tenantHierarchy || globalConfig("HIERARCHY_TYPE") || "ADMIN").toLowerCase();
   return [
     "rainmaker-dashboard",
     "rainmaker-pgr",
@@ -167,12 +201,11 @@ const notifyStandalone = () => standalone.listeners.forEach((cb) => cb());
 function loadStandaloneMessages(locale, authToken) {
   if (standalone.messages[locale]) return Promise.resolve();
   if (standalone.pending[locale]) return standalone.pending[locale];
-  const params = new URLSearchParams({
-    module: standaloneModules().join(","),
+  const request = standaloneHierarchyType().then((tenantHierarchy) => fetch(`/localization/messages/v1/_search?${new URLSearchParams({
+    module: standaloneModules(tenantHierarchy).join(","),
     locale,
     tenantId: getTenantId(),
-  });
-  const request = fetch(`/localization/messages/v1/_search?${params}`, {
+  })}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -182,7 +215,7 @@ function loadStandaloneMessages(locale, authToken) {
         ...(authToken && { authToken }),
       },
     }),
-  })
+  }))
     .then((res) => (res.ok ? res.json() : { messages: [] }))
     .then((data) => {
       const map = {};
