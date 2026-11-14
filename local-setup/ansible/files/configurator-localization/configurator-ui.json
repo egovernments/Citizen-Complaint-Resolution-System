@@ -8610,8 +8610,20 @@
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.common.list_and",
+    "message": "%{first} और %{last}",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.common.import_failed",
     "message": "L’importation a échoué. Réessayez.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.common.list_and",
+    "message": "%{first} et %{last}",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
@@ -8622,8 +8634,20 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.common.list_and",
+    "message": "%{first} e %{last}",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.common.name",
     "message": "नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.common.names_more",
+    "message": "%{names} और %{count} अन्य",
     "module": "configurator-ui",
     "locale": "hi_IN"
   },
@@ -8634,8 +8658,20 @@
     "locale": "fr_FR"
   },
   {
+    "code": "app.onboarding.common.names_more",
+    "message": "%{names} et %{count} autres",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.common.name",
     "message": "Nome",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.common.names_more",
+    "message": "%{names} e mais %{count}",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -9780,14 +9816,32 @@
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.complaints.open_departments",
+    "message": "विभाग पर जाएँ",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.complaints.no_subcategories",
     "message": "Aucune sous-catégorie : cette catégorie est signalée telle quelle.",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
   {
+    "code": "app.onboarding.complaints.open_departments",
+    "message": "Aller à Services",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.complaints.no_subcategories",
     "message": "Sem subcategorias: as pessoas registram esta categoria como ela é.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.open_departments",
+    "message": "Ir para Departamentos",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -9834,14 +9888,68 @@
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.complaints.removed_department",
+    "message": "सेटअप अभी पूरा नहीं हो सकता। हटाया गया एक विभाग (%{departments}) अभी भी %{uses} द्वारा इस्तेमाल हो रहा है।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.removed_department_fix",
+    "message": "इसे वापस लाने के लिए, विभाग में इसे उसी कोड के साथ फिर से जोड़ें। या उन्हें किसी दूसरे विभाग में ले जाएँ: शिकायत के प्रकार इसी पेज पर, कर्मचारी कर्मचारी में।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.removed_department_hint",
+    "message": "पूरा करने के लिए ऊपर हटाए गए विभाग को ठीक करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.complaints.ready_other",
     "message": "%{count} catégories de réclamation sont prêtes",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
   {
+    "code": "app.onboarding.complaints.removed_department",
+    "message": "La configuration ne peut pas encore être terminée. Un service qui a été supprimé (%{departments}) est encore utilisé par %{uses}.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.removed_department_fix",
+    "message": "Pour le rétablir, ajoutez-le à nouveau dans Services avec le même code. Ou déplacez-les vers un autre service : les catégories sur cette page, les employés dans Employés.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.removed_department_hint",
+    "message": "Corrigez le service supprimé ci-dessus pour terminer.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.complaints.ready_other",
     "message": "%{count} categorias de reclamação estão prontas",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.removed_department",
+    "message": "A configuração ainda não pode ser concluída. Um departamento que foi removido (%{departments}) ainda é usado por %{uses}.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.removed_department_fix",
+    "message": "Para trazê-lo de volta, adicione-o novamente em Departamentos com o mesmo código. Ou mova-os para outro departamento: as categorias nesta página, os funcionários em Funcionários.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.removed_department_hint",
+    "message": "Corrija o departamento removido acima para concluir.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -10878,14 +10986,50 @@
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.departments.in_use",
+    "message": "%{name} को हटाया नहीं जा सकता: इसे %{uses} इस्तेमाल कर रहे हैं। पहले उन्हें किसी दूसरे विभाग में ले जाएँ।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.in_use_check_failed",
+    "message": "यह जाँचा नहीं जा सका कि %{name} का इस्तेमाल कौन कर रहा है, इसलिए इसे हटाया नहीं गया। पुनः प्रयास करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.departments.import_nothing",
     "message": "Rien de nouveau à ajouter",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
   {
+    "code": "app.onboarding.departments.in_use",
+    "message": "Impossible de supprimer %{name} : il est utilisé par %{uses}. Déplacez-les d’abord vers un autre service.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.in_use_check_failed",
+    "message": "Impossible de vérifier ce qui utilise %{name}, il n’a donc pas été supprimé. Réessayez.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.departments.import_nothing",
     "message": "Nada novo para adicionar",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.in_use",
+    "message": "Não é possível remover %{name}: ele é usado por %{uses}. Mova-os para outro departamento primeiro.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.in_use_check_failed",
+    "message": "Não foi possível verificar o que usa %{name}, então ele não foi removido. Tente novamente.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -11058,14 +11202,122 @@
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.departments.uses_category_one",
+    "message": "%{count} शिकायत का प्रकार (%{names})",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.uses_category_other",
+    "message": "%{count} शिकायत के प्रकार (%{names})",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.uses_designation_one",
+    "message": "%{count} पदनाम (%{names})",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.uses_designation_other",
+    "message": "%{count} पदनाम (%{names})",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.uses_employee_one",
+    "message": "%{count} कर्मचारी (%{names})",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.uses_employee_other",
+    "message": "%{count} कर्मचारी (%{names})",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.departments.search_designations",
     "message": "Rechercher des fonctions",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
   {
+    "code": "app.onboarding.departments.uses_category_one",
+    "message": "%{count} catégorie de réclamation (%{names})",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.uses_category_other",
+    "message": "%{count} catégories de réclamation (%{names})",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.uses_designation_one",
+    "message": "%{count} fonction (%{names})",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.uses_designation_other",
+    "message": "%{count} fonctions (%{names})",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.uses_employee_one",
+    "message": "%{count} employé (%{names})",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.uses_employee_other",
+    "message": "%{count} employés (%{names})",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.departments.search_designations",
     "message": "Pesquisar cargos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.uses_category_one",
+    "message": "%{count} categoria de reclamação (%{names})",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.uses_category_other",
+    "message": "%{count} categorias de reclamação (%{names})",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.uses_designation_one",
+    "message": "%{count} cargo (%{names})",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.uses_designation_other",
+    "message": "%{count} cargos (%{names})",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.uses_employee_one",
+    "message": "%{count} funcionário (%{names})",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.uses_employee_other",
+    "message": "%{count} funcionários (%{names})",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -21756,8 +22008,20 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.common.list_and",
+    "message": "%{first} and %{last}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.common.name",
     "message": "Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.common.names_more",
+    "message": "%{names} and %{count} more",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -22146,6 +22410,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.complaints.open_departments",
+    "message": "Go to Departments",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.complaints.or",
     "message": "or",
     "module": "configurator-ui",
@@ -22160,6 +22430,24 @@
   {
     "code": "app.onboarding.complaints.ready_other",
     "message": "%{count} complaint categories are ready",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.removed_department",
+    "message": "Setup can’t finish yet. A department that was removed (%{departments}) is still used by %{uses}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.removed_department_fix",
+    "message": "To bring it back, add it again in Departments with the same code. Or move them to another department: categories on this page, employees in Employees.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.removed_department_hint",
+    "message": "Fix the removed department above to finish.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -22512,6 +22800,18 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.departments.in_use",
+    "message": "%{name} can’t be removed: it’s used by %{uses}. Move them to another department first.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.in_use_check_failed",
+    "message": "Couldn’t check what uses %{name}, so it wasn’t removed. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.departments.intro",
     "message": "The departments complaints get routed to, and the designations your employees hold.",
     "module": "configurator-ui",
@@ -22568,6 +22868,42 @@
   {
     "code": "app.onboarding.departments.search_designations",
     "message": "Search designations",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.uses_category_one",
+    "message": "%{count} complaint category (%{names})",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.uses_category_other",
+    "message": "%{count} complaint categories (%{names})",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.uses_designation_one",
+    "message": "%{count} designation (%{names})",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.uses_designation_other",
+    "message": "%{count} designations (%{names})",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.uses_employee_one",
+    "message": "%{count} employee (%{names})",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.uses_employee_other",
+    "message": "%{count} employees (%{names})",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

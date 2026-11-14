@@ -7,6 +7,7 @@ import type { Employee, MdmsRecord } from '@/api/types';
 import DepartmentsStep from './departments/DepartmentsStep';
 import EmployeesStep from './employees/EmployeesStep';
 import { listMasters, removeMaster } from './departments/mastersApi';
+import { checkRemovable } from './departments/departmentUsage';
 import { listEmployees, loadEmployeeOptions, removeEmployee, type EmployeeList, type EmployeeOptions } from './employees/employeesApi';
 import { loadMembers } from './employees/inviteStatus';
 
@@ -28,6 +29,11 @@ vi.mock('./departments/mastersApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./departments/mastersApi')>()),
   listMasters: vi.fn(),
   removeMaster: vi.fn(),
+}));
+// What uses a department is checked before it goes (#2797); here nothing does, unless a test says so.
+vi.mock('./departments/departmentUsage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./departments/departmentUsage')>()),
+  checkRemovable: vi.fn(async () => undefined),
 }));
 vi.mock('./employees/employeesApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./employees/employeesApi')>()),
@@ -138,6 +144,22 @@ describe('Departments', () => {
     await waitFor(() => expect(screen.queryByText('Water')).not.toBeInTheDocument());
     expect(screen.getByText('Roads')).toBeInTheDocument();
     expect(removeMaster).toHaveBeenCalledWith(expect.objectContaining({ uniqueIdentifier: 'WATER' }));
+  });
+
+  it('keeps a department in use, and says what uses it (#2797)', async () => {
+    stubMasters(async () => [record('ROADS', 'Roads'), record('WATER', 'Water')]);
+    renderStep(<DepartmentsStep />);
+    expect(await screen.findByText('Roads')).toBeInTheDocument();
+
+    const inUse = 'Roads can’t be removed: it’s used by 1 employee (E002) and 1 complaint category (Potholes). Move them to another department first.';
+    vi.mocked(checkRemovable).mockRejectedValueOnce(new Error(inUse));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Roads' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    expect(await within(dialog).findByText(inUse)).toBeInTheDocument();
+    expect(checkRemovable).toHaveBeenCalledWith('acme', 'ROADS', 'Roads', expect.any(Function));
+    expect(removeMaster).not.toHaveBeenCalled();
   });
 
   it('never shows another workspace’s departments', async () => {
