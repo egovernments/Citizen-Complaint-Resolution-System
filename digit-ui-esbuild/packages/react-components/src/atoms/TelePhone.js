@@ -1,18 +1,23 @@
 import React from "react";
 import PropTypes from "prop-types";
 import { Phone } from "./svgindex";
+import { phoneParts } from "./mobilePrefix"; // ours (#1929)
 
-const TelePhone = ({ mobile, text }) => (
+// ours (#1929): the tenant's country code, not a fixed "+91"
+const TelePhone = ({ mobile, text }) => {
+  const { prefix, number, dial } = phoneParts(mobile);
+  return (
   <React.Fragment>
     {text}
     <div className="telephone">
       <div className="call">
         <Phone fillcolor={"FFFFFF"} style={{marginLeft:"0px"}} />
-        <a href={`tel:${mobile}`}>{"+91"} {mobile}</a>
+        <a href={`tel:${dial}`}>{prefix}{prefix ? " " : ""}{number}</a>
       </div>
     </div>
   </React.Fragment>
-);
+  );
+};
 
 TelePhone.propTypes = {
   mobile: PropTypes.any,
