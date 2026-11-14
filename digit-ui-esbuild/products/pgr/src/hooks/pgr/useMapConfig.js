@@ -1,34 +1,13 @@
 import { useMemo } from "react";
+import { resolveBaseTiles } from "../../utils/mapView";
 
 // Default = the legacy hardcoded ward-highlight orange. Anything without
 // an MDMS MapConfig record keeps the exact original behaviour.
 export const DEFAULT_WARD_HIGHLIGHT_COLOR = "#FFA74F";
 
-// Named base-map presets. The complaint-location maps used to hardcode the
-// CARTO `dark_all` raster theme, which renders as a black background on
-// tenants that expect a light map (egovernments/CCRS#882). The base theme is
-// now resolved per tenant from MDMS so operators can switch it without a code
-// change; `voyager` (a light, labelled basemap) is the default.
-export const BASE_MAP_THEMES = {
-  voyager: {
-    tileUrl: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-    tileAttribution: '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
-  },
-  light: {
-    tileUrl: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    tileAttribution: '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
-  },
-  dark: {
-    tileUrl: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    tileAttribution: '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
-  },
-  osm: {
-    tileUrl: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    tileAttribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  },
-};
-
-export const DEFAULT_BASE_MAP_THEME = "voyager";
+// Base-map presets and the tile resolution rules live in utils/mapView so they
+// can be tested without React. Re-exported for existing importers.
+export { BASE_MAP_THEMES, DEFAULT_BASE_MAP_THEME } from "../../utils/mapView";
 
 // Zero Mile Stone, Nagpur — the geographical centre of India, and the legacy
 // last-resort centre from when this was an India-only product. Kept only so a
@@ -96,13 +75,16 @@ const asViewbox = (v) => {
 // need no migration.
 //
 // Supported MapConfig fields (all optional):
-//   baseMapTheme        one of BASE_MAP_THEMES keys. Defaults to "voyager" so
-//                       the map never falls back to the legacy black theme.
+//   baseMapTheme        one of BASE_MAP_THEMES keys. Defaults to "osm". The
+//                       CARTO presets (voyager, light, dark) carry no API key,
+//                       so they fall back to "osm" (see utils/mapView).
 //   tileUrl             raw Leaflet tile-URL template. Overrides baseMapTheme.
+//                       A CARTO URL without a key falls back to "osm" too.
 //   tileAttribution     HTML attribution paired with a raw tileUrl.
 //   wardHighlightColor  hex colour for the ward overlay.
 //   center              { lat, lng } the map opens at.
-//   defaultZoom         zoom the map opens at once a location is known.
+//   defaultZoom         zoom the map opens at (with center) and once a
+//                       location is known.
 //   minZoom / maxZoom   zoom bounds.
 //   boundaryTenantId    tenant whose boundary tree supplies the ward polygons.
 //   geocodeCountryCodes ISO codes the address search is restricted to.
@@ -150,22 +132,25 @@ const useMapConfig = () => {
         ? rawWard.trim()
         : DEFAULT_WARD_HIGHLIGHT_COLOR;
 
-    // Base tile theme. A raw tileUrl always wins; otherwise resolve the named
-    // preset, defaulting to voyager when the value is missing or unknown.
-    const themeKey =
-      typeof cfg?.baseMapTheme === "string" && BASE_MAP_THEMES[cfg.baseMapTheme.trim()]
-        ? cfg.baseMapTheme.trim()
-        : DEFAULT_BASE_MAP_THEME;
-    const preset = BASE_MAP_THEMES[themeKey];
+    // Base tiles: a raw tileUrl wins, then the named theme, defaulting to
+    // OpenStreetMap. CARTO without a key only serves watermarks, so it falls
+    // back to OpenStreetMap; say so in the console for whoever debugs the map.
+    const { tileUrl, tileAttribution, keylessCartoFallback } = resolveBaseTiles(cfg);
+    if (keylessCartoFallback) {
+      console.warn(
+        "MapConfig asks for CARTO tiles without an API key, and CARTO only serves \"API KEY REQUIRED\" tiles " +
+          "without one, so the map uses OpenStreetMap. To use CARTO, put a keyed URL in RAINMAKER-PGR.MapConfig tileUrl."
+      );
+    }
 
-    const rawUrl = typeof cfg?.tileUrl === "string" ? cfg.tileUrl.trim() : "";
-    const tileUrl = rawUrl || preset.tileUrl;
-    const rawAttr = typeof cfg?.tileAttribution === "string" ? cfg.tileAttribution.trim() : "";
-    // Pair a custom attribution with a raw URL; named presets carry their own.
-    const tileAttribution = rawUrl ? rawAttr || preset.tileAttribution : preset.tileAttribution;
-
-    const center = asLatLng(cfg?.center) || asLatLng(getGlobalConfig("MAP_CENTER")) || DEFAULT_CENTER;
-    const defaultZoom = asZoom(cfg?.defaultZoom) ?? DEFAULT_ZOOM;
+    // The tenant's own centre and zoom, kept apart from the fallbacks so the
+    // map can prefer the tenant's boundary outline over a deployment-wide
+    // MAP_CENTER (#2804).
+    const configuredCenter = asLatLng(cfg?.center);
+    const configuredZoom = asZoom(cfg?.defaultZoom);
+    const fallbackCenter = asLatLng(getGlobalConfig("MAP_CENTER")) || DEFAULT_CENTER;
+    const center = configuredCenter || fallbackCenter;
+    const defaultZoom = configuredZoom ?? DEFAULT_ZOOM;
     const minZoom = asZoom(cfg?.minZoom) ?? DEFAULT_MIN_ZOOM;
     const maxZoom = asZoom(cfg?.maxZoom) ?? DEFAULT_MAX_ZOOM;
 
@@ -185,6 +170,9 @@ const useMapConfig = () => {
       tileAttribution,
       wardHighlightColor,
       center,
+      configuredCenter,
+      configuredZoom,
+      fallbackCenter,
       defaultZoom,
       minZoom,
       maxZoom,

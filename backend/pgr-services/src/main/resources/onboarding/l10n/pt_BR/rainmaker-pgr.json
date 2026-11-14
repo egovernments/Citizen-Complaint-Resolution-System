@@ -183,6 +183,7 @@
 {"code": "CS_LOCATION_NOT_FOUND", "message": "Não foi possível encontrar esse local. Tente outra pesquisa.", "module": "rainmaker-pgr", "locale": "pt_BR"},
 {"code": "CS_MAP_CLICK_TO_SELECT_POINTS", "message": "Clique no mapa para selecionar pontos", "module": "rainmaker-pgr", "locale": "pt_BR"},
 {"code": "CS_MAP_SELECTED_LOCATIONS", "message": "Localizações selecionadas", "module": "rainmaker-pgr", "locale": "pt_BR"},
+{"code": "CS_MAP_TILES_FAILED", "message": "Não foi possível carregar o mapa. Você ainda pode indicar o local digitando o endereço ou a região.", "module": "rainmaker-pgr", "locale": "pt_BR"},
 {"code": "CS_MYCOMPLAINTS_NO_COMPLAINTS", "message": "Você ainda não registrou nenhuma reclamação. \nComece com uma e faça a diferença.", "module": "rainmaker-pgr", "locale": "pt_BR"},
 {"code": "CS_MYCOMPLAINTS_NO_COMPLAINTS_EMPLOYEE", "message": "Nenhum registro encontrado", "module": "rainmaker-pgr", "locale": "pt_BR"},
 {"code": "CS_MY_COMPLAINTS_CLEAR_SEARCH", "message": "Limpar pesquisa", "module": "rainmaker-pgr", "locale": "pt_BR"},

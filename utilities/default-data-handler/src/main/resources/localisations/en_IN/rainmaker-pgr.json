@@ -7350,6 +7350,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "CS_MAP_TILES_FAILED",
+        "message": "Map couldn't load. You can still pick the location by typing the address/area.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "CS_RATING_LABEL",
         "message": "Rating",
         "module": "rainmaker-pgr",

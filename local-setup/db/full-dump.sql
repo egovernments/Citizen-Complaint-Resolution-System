@@ -7041,6 +7041,7 @@ c2cf55ae-2d2c-50bf-afef-7b98f2cd1974	fr_FR	CS_LOCATE_ME	Utiliser ma position act
 7ce46cc0-8bda-52b8-a0f8-f871d846fcef	fr_FR	CS_LOCATION_NOT_FOUND	Lieu introuvable. Essayez une autre recherche.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 8972cbe1-5262-532f-81fe-0d9aa305b7c0	fr_FR	CS_MAP_CLICK_TO_SELECT_POINTS	Cliquez sur la carte pour sélectionner des points	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 242f8a08-9c40-55a7-8df0-8d3c220967ff	fr_FR	CS_MAP_SELECTED_LOCATIONS	Emplacements sélectionnés	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
+5bfaab98-971d-550a-a2de-96f112d1016f	fr_FR	CS_MAP_TILES_FAILED	La carte n'a pas pu se charger. Vous pouvez quand même indiquer le lieu en saisissant l'adresse ou le quartier.	pg	rainmaker-pgr	1	2026-11-14 00:00:00	\N	\N
 89673bde-2e6c-5029-a789-abeb10f7db80	fr_FR	CS_MYCOMPLAINTS_NO_COMPLAINTS	Vous n'avez encore déposé aucune réclamation. \nCommencez par une, faites la différence.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 7f9cee55-dd0c-5c82-918e-b2bcced34da0	fr_FR	CS_MYCOMPLAINTS_NO_COMPLAINTS_EMPLOYEE	Aucun enregistrement trouvé	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 c2c87b93-c90a-586a-af19-ac3e9d13f30c	fr_FR	CS_MY_COMPLAINTS_CLEAR_SEARCH	Effacer la recherche	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
@@ -7612,6 +7613,7 @@ b1e23fe1-8efd-52b1-8de7-e10b3b0fa28e	pt_BR	CS_HOME_MY_COMPLAINTS	Minhas reclama�
 50464edc-5346-567e-933e-72cc04867b24	pt_BR	CS_LOCATION_NOT_FOUND	Não foi possível encontrar esse local. Tente outra pesquisa.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 4947d856-37db-55fe-b136-947a0283c0c0	pt_BR	CS_MAP_CLICK_TO_SELECT_POINTS	Clique no mapa para selecionar pontos	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 dced6466-f5e1-5439-95d8-3d886fbdaa4d	pt_BR	CS_MAP_SELECTED_LOCATIONS	Localizações selecionadas	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
+287b4efb-5eae-5850-9e30-86ba3f2a2873	pt_BR	CS_MAP_TILES_FAILED	Não foi possível carregar o mapa. Você ainda pode indicar o local digitando o endereço ou a região.	pg	rainmaker-pgr	1	2026-11-14 00:00:00	\N	\N
 4168504c-339e-52df-9374-33f5b0137f62	pt_BR	CS_MYCOMPLAINTS_NO_COMPLAINTS	Você ainda não registrou nenhuma reclamação. \nComece com uma e faça a diferença.	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 3148e81d-e94f-52c2-9bb8-9e2edddfd963	pt_BR	CS_MYCOMPLAINTS_NO_COMPLAINTS_EMPLOYEE	Nenhum registro encontrado	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
 8b1b5729-db06-58a0-b152-0ffa98ea036d	pt_BR	CS_MY_COMPLAINTS_CLEAR_SEARCH	Limpar pesquisa	pg	rainmaker-pgr	1	2026-10-14 00:00:00	\N	\N
@@ -7978,6 +7980,7 @@ a6d9bcc9-806c-552f-a48b-b361f880f5a9	en_IN	CS_GEOLOCATION_NOT_SUPPORTED	This bro
 76f7547d-9d94-568d-832f-9c7beb575fe9	en_IN	CS_LOCATION_NOT_FOUND	Couldn't find that place. Try a different search.	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 8cf7c3d9-ce2c-5ba1-aca5-44c748cae6f8	en_IN	CS_MAP_CLICK_TO_SELECT_POINTS	Click on map to select points	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 34646297-28b7-5ce1-b28e-367ab971375c	en_IN	CS_MAP_SELECTED_LOCATIONS	Selected Locations	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
+787663a9-8c9c-59f8-9637-a23b3230d14b	en_IN	CS_MAP_TILES_FAILED	Map couldn't load. You can still pick the location by typing the address/area.	pg	rainmaker-pgr	1	2026-11-14 00:00:00	\N	\N
 3007c192-da42-5d8f-ac44-c33a9ee0ff18	en_IN	CS_MY_COMPLAINTS_CLEAR_SEARCH	Clear search	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 1f7daff8-9ac5-5307-91db-97f618c22172	en_IN	CS_MY_COMPLAINTS_COL_CONCERN	Concern	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N
 daa38a3a-a5d9-5bf0-aaae-e0dcc9a9b8d2	en_IN	CS_MY_COMPLAINTS_COL_FILED_ON	Filed on	pg	rainmaker-pgr	1	2026-10-16 00:00:00	\N	\N

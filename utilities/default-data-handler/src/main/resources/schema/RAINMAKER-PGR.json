@@ -547,7 +547,7 @@
             "dark",
             "osm"
           ],
-          "description": "Named base-tile preset. Ignored when tileUrl is set. Defaults to voyager."
+          "description": "Named base-tile preset. Ignored when tileUrl is set. Defaults to osm (OpenStreetMap). voyager, light and dark are CARTO styles, which need an API key: without a keyed tileUrl the map uses osm."
         },
         "tileUrl": {
           "type": "string",

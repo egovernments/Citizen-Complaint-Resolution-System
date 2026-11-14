@@ -23,7 +23,7 @@ field is optional — a partial record only overrides what it sets.
   "mapProvider": "leaflet",                  // leaflet (default) | google
   "googleMapsApiKey": "",                    // Maps JavaScript API key, used when mapProvider is google
   // Basemap
-  "baseMapTheme": "voyager",                 // voyager | light | dark | osm
+  "baseMapTheme": "osm",                     // osm (default) | voyager | light | dark
   "tileUrl": "",                             // raw Leaflet template; overrides baseMapTheme
   "tileAttribution": "",                     // paired with a raw tileUrl only
   "wardHighlightColor": "#FFA74F",           // hex; ward fill/outline
@@ -40,14 +40,31 @@ field is optional — a partial record only overrides what it sets.
 }
 ```
 
-`baseMapTheme` presets (tile URLs live in `useMapConfig.js` `BASE_MAP_THEMES`):
+`baseMapTheme` presets (tile URLs live in `utils/mapView.js` `BASE_MAP_THEMES`):
 
 | key | look |
 |---|---|
-| `voyager` | light, labelled (default) |
-| `light` | light |
-| `dark` | dark |
-| `osm` | OpenStreetMap |
+| `osm` | OpenStreetMap (default) |
+| `voyager` | CARTO, light, labelled |
+| `light` | CARTO, light |
+| `dark` | CARTO, dark |
+
+CARTO needs an API key: without one every CARTO tile is an "API KEY REQUIRED"
+watermark. The named CARTO presets carry no key, so the map shows
+OpenStreetMap instead (and logs a console warning). To use CARTO, put the keyed
+URL (`...{r}.png?key=<key>`) in `tileUrl`; a CARTO `tileUrl` without a key also
+falls back to OpenStreetMap.
+
+## Where the citizen map opens
+
+Before a location is picked (and after Clear), the complaint map opens at:
+
+1. `center` from MapConfig, at `defaultZoom` (or zoom 12 if unset);
+2. else the outline of the tenant's ward boundaries (`boundaryTenantId`), fitted to the view;
+3. else the deployment's `MAP_CENTER`, else the built-in default, at zoom 12.
+
+If the tiles fail to load, the map shows "Map couldn't load. You can still pick
+the location by typing the address/area." (`CS_MAP_TILES_FAILED`).
 
 The boundary **hierarchy** is deliberately *not* here — it is a boundary
 construct, not a map one, and stays on the `HIERARCHY_TYPE` globalConfigs key
@@ -61,10 +78,10 @@ existed:
 
 | Field | globalConfigs fallback | built-in default |
 |---|---|---|
-| `center` | `MAP_CENTER` | `{ 21.1498, 79.0806 }` (Nagpur) |
+| `center` | ward outline, then `MAP_CENTER` | `{ 21.1498, 79.0806 }` (Nagpur) |
 | `boundaryTenantId` | `MAP_TENANT` (else `REACT_APP_MAP_TENANT`) | — (no ward overlay) |
 | `defaultZoom` / `minZoom` / `maxZoom` | — | `13` / `0` / `19` |
-| `baseMapTheme` | — | `voyager` |
+| `baseMapTheme` | — | `osm` |
 | `wardHighlightColor` | — | `#FFA74F` |
 | `geocodeCountryCodes` / `searchViewbox` | — | unset (worldwide, no box) |
 | `mapProvider` / `googleMapsApiKey` | — | `leaflet`; `google` without a key also draws with leaflet |

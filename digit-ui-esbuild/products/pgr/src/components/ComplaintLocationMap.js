@@ -30,7 +30,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   const [fetchedAddress, setFetchedAddress] = useState(null);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
   // Map theming resolved per tenant from MDMS RAINMAKER-PGR.MapConfig:
-  // base tile theme (defaults to the light voyager basemap) + ward-highlight
+  // base tile theme (defaults to OpenStreetMap) + ward-highlight
   // colour (defaults to the legacy orange #FFA74F).
   const {
     tileUrl,

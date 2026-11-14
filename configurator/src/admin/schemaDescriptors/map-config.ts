@@ -50,7 +50,7 @@ export const mapConfigDescriptor: SchemaDescriptor = {
       help: 'A Google Maps JavaScript API key, used when the provider is Google Maps. It is sent to every browser that shows a map, so restrict it to this site (HTTP referrers) in Google Cloud Console. Currently drawn by the configurator\'s boundary maps; the citizen complaint maps still use the Basemap tiles.' },
 
     { path: 'baseMapTheme', widget: 'text', label: 'Base map theme',
-      help: 'Tile style the map is drawn in: voyager (light, labelled — the default), light, dark, or osm. Ignored if a custom tile URL is set below.' },
+      help: 'Tile style the map is drawn in: osm (OpenStreetMap, the default), or the CARTO styles voyager, light and dark. CARTO needs an API key: paste your tile URL with its key into Custom tile URL, otherwise citizens see OpenStreetMap. Ignored if a custom tile URL is set below.' },
     { path: 'tileUrl', widget: 'text', label: 'Custom tile URL',
       help: 'Advanced. Point the map at your own tile provider, e.g. https://{s}.tile.example.org/{z}/{x}/{y}.png. Overrides the theme above. Leave blank to use the theme.' },
     { path: 'tileAttribution', widget: 'text', label: 'Custom tile attribution',
@@ -59,7 +59,7 @@ export const mapConfigDescriptor: SchemaDescriptor = {
       help: 'Fill and outline colour of the ward the citizen has pinned. Defaults to orange (#FFA74F).' },
 
     { path: 'center.lat', widget: 'number', label: 'Start latitude', min: -90, max: 90, hidden: 'create',
-      help: 'Derived from your boundaries during Boundary Setup — the centre of the area you onboarded. Override only if the map should open somewhere other than the middle of your service area.' },
+      help: 'Derived from your boundaries during Boundary Setup — the centre of the area you onboarded. Override only if the map should open somewhere other than the middle of your service area. Fill in both latitude and longitude, or leave both blank to open on your boundary outline.' },
     { path: 'center.lng', widget: 'number', label: 'Start longitude', min: -180, max: 180, hidden: 'create',
       help: 'Longitude of the starting point. Derived alongside the latitude.' },
     { path: 'defaultZoom', widget: 'integer', label: 'Start zoom', min: 0, max: 22, hidden: 'create',
