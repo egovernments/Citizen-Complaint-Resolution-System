@@ -1,6 +1,7 @@
 import type { ReadOtp } from '../utils/identity-bff';
 
-export const dependencyKeys = ['IDENTITY_E2E_BASE_URL', 'KEYCLOAK_URL', 'DIGIT_USER_URL', 'EGOV_OTP_URL', 'IDENTITY_TEST_TENANT_SLUG', 'IDENTITY_E2E_TENANT_ID'] as const;
+export const dependencyKeys = ['IDENTITY_E2E_BASE_URL', 'KEYCLOAK_URL', 'DIGIT_USER_URL', 'EGOV_OTP_URL', 'IDENTITY_TEST_TENANT_SLUG'] as const;
+// The tenant id is resolved from the slug (identity-bff resolveTenant); IDENTITY_E2E_TENANT_ID is only an optional override.
 export const otpKeys = ['IDENTITY_E2E_PHONE', 'IDENTITY_E2E_PHONE_E164', 'IDENTITY_E2E_OTP_INBOX_URL'] as const;
 export function missingConfig(keys: readonly string[] = []) {
   return [...dependencyKeys, ...keys].filter(key => !process.env[key]);

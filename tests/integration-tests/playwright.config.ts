@@ -70,7 +70,10 @@ export default defineConfig({
       // specs that need a "pinned" SRID read from that file.
       name: 'lifecycle-setup',
       testMatch: /tests\/fixtures\/lifecycle\.setup\.ts$/,
-      dependencies: ['setup', 'profile-setup'],
+      // citizen-setup: seed.ts files as the suite citizen, or signs a new one in
+      // (one more OTP send) when citizen-fixture.json is not there yet; and the
+      // citizen specs search these complaints as their owner.
+      dependencies: ['setup', 'profile-setup', 'citizen-setup'],
     },
     {
       name: 'chromium',

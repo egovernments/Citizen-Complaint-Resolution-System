@@ -51,17 +51,22 @@ test.describe('lifecycle — boundary jurisdiction filter for ward CSR #496', ()
     const employees = await fetchEmployees(TENANT, admin.access_token);
     const hrms = employees.find((e) => e.uuid === csr.uuid);
     const rootLevel = profile.boundary.levels[0];
-    const ownJurisdiction = hrms?.jurisdictions.find(
-      (j) => j.hierarchy === profile.boundary.hierarchyType && j.boundaryType !== rootLevel,
-    );
+    const leafLevel = profile.boundary.levels[profile.boundary.levels.length - 1];
+    // EVERY jurisdiction row below the root, not just the first: a CSR can hold
+    // several, at different levels. bomet's ward CSR holds BOMET_BOMET_EAST (a
+    // SubCounty) plus the CHESOEN and MUTARAKWA wards under BOMET_BOMET_CENTRAL.
+    // Taking only the first row made the SubCounty the "own ward", so the other
+    // SubCounties were the forbidden set — including BOMET_BOMET_CENTRAL, the
+    // parent of two wards this CSR legitimately holds.
+    const ownJurisdictions = (hrms?.jurisdictions ?? [])
+      .filter((j) => j.hierarchy === profile.boundary.hierarchyType && j.boundaryType !== rootLevel)
+      .map((j) => j.boundary);
     expect(
-      ownJurisdiction,
+      ownJurisdictions.length,
       `persona 'ward-scoped-csr' (${csr.username}) resolved via isWardScopedCsr, but re-reading HRMS at ` +
         `${TENANT} found no jurisdiction matching hierarchy=${profile.boundary.hierarchyType} below root level ` +
         `'${rootLevel}' — HRMS may have changed between profile-setup and this spec running.`,
-    ).toBeTruthy();
-    const ownWard = ownJurisdiction!.boundary;
-    const wardBoundaryType = ownJurisdiction!.boundaryType;
+    ).toBeGreaterThan(0);
 
     // Ground truth for "every ward that exists" comes from an ADMIN read of the
     // full tree — the CSR's own response is exactly what's under test and can't
@@ -71,16 +76,23 @@ test.describe('lifecycle — boundary jurisdiction filter for ward CSR #496', ()
       tree,
       `boundary tree for ${profile.boundary.hierarchyType} at ${TENANT} must be readable to compute the forbidden ward set`,
     ).toBeTruthy();
+    // A leaf ward is inside the CSR's jurisdiction when it, or any ancestor, is
+    // one of the CSR's jurisdiction boundaries. Every other leaf ward is forbidden.
+    // Ancestors of a held boundary (the county, BOMET_BOMET_CENTRAL above
+    // CHESOEN) are never in the forbidden set: a tree response has to carry them.
+    const own = new Set(ownJurisdictions);
     const forbiddenWards: string[] = [];
-    const collectSiblings = (node: BoundaryNode): void => {
-      if (node.boundaryType === wardBoundaryType && node.code !== ownWard) forbiddenWards.push(node.code);
-      for (const child of node.children || []) collectSiblings(child);
+    const coveredWards: string[] = [];
+    const walk = (node: BoundaryNode, covered: boolean): void => {
+      const inside = covered || own.has(node.code);
+      if (node.boundaryType === leafLevel) (inside ? coveredWards : forbiddenWards).push(node.code);
+      for (const child of node.children || []) walk(child, inside);
     };
-    collectSiblings(tree!);
+    walk(tree!, false);
     expect(
       forbiddenWards.length,
-      `no '${wardBoundaryType}' boundaries besides ${ownWard} exist on ${TENANT} — nothing to exercise the ` +
-        'jurisdiction filter against (need at least one sibling ward seeded)',
+      `every '${leafLevel}' boundary on ${TENANT} is inside the CSR's jurisdiction (${ownJurisdictions.join(', ')}) — ` +
+        'nothing to exercise the jurisdiction filter against (need a ward outside it)',
     ).toBeGreaterThan(0);
 
     // ============ Hit boundary-relationships as the CSR ============
@@ -120,15 +132,17 @@ test.describe('lifecycle — boundary jurisdiction filter for ward CSR #496', ()
     // absent from it.
     expect(codes.size, 'response must include at least one boundary').toBeGreaterThan(0);
     expect(
-      codes.has(ownWard),
-      `CSR's own ward (${ownWard}) must be in the response`,
-    ).toBe(true);
+      ownJurisdictions.filter((c) => !codes.has(c)),
+      `the CSR's own jurisdiction boundaries (${ownJurisdictions.join(', ')}) must be in the response`,
+    ).toEqual([]);
 
     // Forbidden wards — every OTHER ward on this deployment — MUST NOT appear.
     const offenders = forbiddenWards.filter((c) => codes.has(c));
     expect(
       offenders,
-      `#496 — ward-scoped CSR jurisdiction filter not applied. CSR (${ownWard}) sees ${codes.size} boundaries including: ${JSON.stringify(offenders)}`,
+      `#496 — ward-scoped CSR jurisdiction filter not applied. CSR (jurisdictions ${ownJurisdictions.join(', ')}; ` +
+        `${coveredWards.length} ${leafLevel}s inside them) sees ${codes.size} boundaries, including ${offenders.length} ` +
+        `${leafLevel}s outside them: ${JSON.stringify(offenders.slice(0, 10))}`,
     ).toEqual([]);
 
     // Total code count must be bounded — a CSR scoped to one leaf ward
@@ -137,7 +151,7 @@ test.describe('lifecycle — boundary jurisdiction filter for ward CSR #496', ()
     // tree size instead of assuming bomet's ~8-ward county.
     expect(
       codes.size,
-      `#496 — a single-ward CSR must see fewer boundaries than the full ${profile.boundary.hierarchyType} tree ` +
+      `#496 — a ward-scoped CSR must see fewer boundaries than the full ${profile.boundary.hierarchyType} tree ` +
         `(${profile.boundary.nodeCount} nodes); got ${codes.size}: ${JSON.stringify([...codes].slice(0, 10))}`,
     ).toBeLessThan(profile.boundary.nodeCount);
   });

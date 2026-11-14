@@ -19,10 +19,12 @@
  *   #622       Post-login shell mounts (no 503/something-went-wrong)
  */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, EMPLOYEE_USER, EMPLOYEE_PASS, TENANT } from '../utils/env';
+import { BASE_URL, EMPLOYEE_USER, EMPLOYEE_PASS, ROOT_TENANT, TENANT } from '../utils/env';
+import { fetchMdms } from '../utils/probes';
 import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 import { loginViaApi } from '../utils/auth';
 import { authorizeUrl, surfacePath, tenantSlug } from '../utils/identity-bff';
+import { resolvedViewers } from '../utils/employee-fixtures';
 
 const GLOBAL_CONFIGS_URL = '/digit-ui/globalConfigs.js';
 
@@ -43,6 +45,26 @@ const _fixtures = readLifecycleFixtures();
  */
 const ASSIGNED_COMPLAINT_ID =
   process.env.ASSIGNED_COMPLAINT_ID || _fixtures?.complaints?.assigned_to_employee || '';
+
+/**
+ * Who signs in: the employee the complaint is assigned TO. The fixture records
+ * that assignee (lifecycle-fixtures.json -> assignee.uuid, the seed plan's
+ * assignee), and it need not be EMPLOYEE_USER: PGR ABAC scopes the details
+ * page's _search by the viewer's HRMS department, so on bomet EMPLOYEE_USER
+ * (hs_lme, DEPT_1) opening a complaint assigned to the DEPT_2 ward CSR gets
+ * "No Results Found" — which is the scope working, not #344 regressing. Fall
+ * back to EMPLOYEE_USER only when the operator pinned ASSIGNED_COMPLAINT_ID
+ * (then they chose the complaint for that user) or no resolved persona is the
+ * recorded assignee.
+ */
+async function assignedViewer(): Promise<{ username: string; password: string; why: string }> {
+  const assigneeUuid = process.env.ASSIGNED_COMPLAINT_ID ? '' : _fixtures?.assignee?.uuid;
+  if (assigneeUuid) {
+    const match = (await resolvedViewers()).find((p) => p.uuid === assigneeUuid);
+    if (match) return { username: match.username, password: match.password, why: `fixture assignee ${_fixtures?.assignee?.code}` };
+  }
+  return { username: EMPLOYEE_USER, password: EMPLOYEE_PASS, why: 'EMPLOYEE_USER' };
+}
 
 test.describe('employee digit-ui shell bundle', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -92,27 +114,38 @@ test.describe('employee digit-ui shell bundle', () => {
      * element; naturalWidth guards against a decoded-but-empty box too. The
      * stylesheet pins height 56px; 20px is the collapse floor, not a size pin.
      */
-    const logo = page.locator('.dg-banner-header__logo').first();
-    await expect(logo, '#505 sub-3 — the sign-in header logo must render').toBeVisible();
-    // The CSS gives the <img> its box before the request lands: wait for the decode.
-    await expect
-      .poll(() => logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0), {
-        message: '#505 sub-3 — logo image must actually load',
-        timeout: 15_000,
-      })
-      .toBe(true);
-    const logoBox = await logo.evaluate((img: HTMLImageElement) => ({
-      w: img.offsetWidth, h: img.offsetHeight, natW: img.naturalWidth, natH: img.naturalHeight,
-    }));
-    expect(logoBox.natW, '#505 sub-3 — logo image must actually load').toBeGreaterThan(0);
-    expect(logoBox.natH, '#505 sub-3 — logo image must actually load').toBeGreaterThan(0);
-    expect(logoBox.w, '#505 sub-3 logo laid-out width').toBeGreaterThanOrEqual(20);
-    expect(logoBox.h, '#505 sub-3 logo laid-out height').toBeGreaterThanOrEqual(20);
+    // The logo comes from StateInfo.logoUrl; self-serve onboarding seeds it blank
+    // until the workspace is branded, and then SafeImage correctly renders nothing.
+    const stateInfo = (await fetchMdms(ROOT_TENANT, 'common-masters.StateInfo').catch(() => []))[0]?.data as
+      | { logoUrl?: string }
+      | undefined;
+    if (!stateInfo?.logoUrl) {
+      await expect(page.locator('.dg-banner-header__logo'), '#505 sub-3 — no logo configured, so none (and no broken image) renders').toHaveCount(0);
+    } else {
+      const logo = page.locator('.dg-banner-header__logo').first();
+      await expect(logo, '#505 sub-3 — the sign-in header logo must render').toBeVisible();
+      // The CSS gives the <img> its box before the request lands: wait for the decode.
+      await expect
+        .poll(() => logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0), {
+          message: '#505 sub-3 — logo image must actually load',
+          timeout: 15_000,
+        })
+        .toBe(true);
+      const logoBox = await logo.evaluate((img: HTMLImageElement) => ({
+        w: img.offsetWidth, h: img.offsetHeight, natW: img.naturalWidth, natH: img.naturalHeight,
+      }));
+      expect(logoBox.natW, '#505 sub-3 — logo image must actually load').toBeGreaterThan(0);
+      expect(logoBox.natH, '#505 sub-3 — logo image must actually load').toBeGreaterThan(0);
+      expect(logoBox.w, '#505 sub-3 logo laid-out width').toBeGreaterThanOrEqual(20);
+      expect(logoBox.h, '#505 sub-3 logo laid-out height').toBeGreaterThanOrEqual(20);
+    }
 
     // ============ #622 — sign-in completes and the shell mounts ============
     // The persona signs in without the page (loginViaApi), so its password is
     // never typed into a traced browser; the hosted form above is only looked at.
-    await loginViaApi(page, { tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    const viewer = await assignedViewer();
+    test.info().annotations.push({ type: 'persona', description: `${viewer.username} (${viewer.why})` });
+    await loginViaApi(page, { tenant: TENANT, username: viewer.username, password: viewer.password });
     await page.waitForURL(/\/digit-ui\/employee(?!\/user\/login)/, { timeout: 30_000 });
     await page.waitForTimeout(3_000);
 
@@ -137,7 +170,7 @@ test.describe('employee digit-ui shell bundle', () => {
     const displayName = String((await userSearch.json()).user?.[0]?.name ?? '').trim();
     expect(
       displayName,
-      `#505 sub-2 — no display name in the session for ${EMPLOYEE_USER}; the header initial has no expectation to compare against`,
+      `#505 sub-2 — no display name in the session for ${viewer.username}; the header initial has no expectation to compare against`,
     ).not.toBe('');
     const expectedInitial = displayName.charAt(0).toUpperCase();
     const headerInitial = await page.evaluate((expected) => {

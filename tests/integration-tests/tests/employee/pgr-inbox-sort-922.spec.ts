@@ -52,10 +52,17 @@ const identityInboxUrl = () => `${BASE_URL}/${tenantSlug()}/digit-ui/employee/pg
 const SEARCH_RE = /pgr-services\/v2\/request\/_search/;
 
 let admin: Principal | null = null;
+// The inbox VIEWER's own principal, used to re-read each visible row via the
+// PGR API. Not ADMIN: since the PGR ABAC scope policy (pgr-services
+// policy/PolicyDrivenScopeResolver, fail-closed) an employee with no PGR role
+// gets an EMPTY _search, so a workspace admin without GRO/PGR_LME/CSR (bomet's
+// ke-admin) cannot read back the rows the LME's inbox shows. The viewer can, by
+// definition — the rows came from its own _search.
+let viewer: Principal | null = null;
 let seedSkip = '';
 
 /** Distinct LEAF boundary codes (the level PGR files complaints against) for the
- *  tenant — NOT the single "preferred" code resolveLocalityCode returns, since
+ *  tenant — NOT the single seed-plan LOCALITY_CODE, since
  *  this spec needs at least two genuinely different codes to seed complaints into
  *  and prove the sort actually reorders.
  *
@@ -66,20 +73,36 @@ let seedSkip = '';
  *  PGR localities or never surface in the employee's inbox, collapsing the inbox
  *  to a single distinct locality and failing the sort assertion. Walks the
  *  boundary-relationships tree and keeps only the leaves. */
-async function fetchWardCodes(token: string): Promise<string[]> {
+async function fetchWardCodes(token: string): Promise<{ codes: string[]; scope: string }> {
   const hierarchyType = getProfile().boundary.hierarchyType;
-  if (!hierarchyType) return [];
+  if (!hierarchyType) return { codes: [], scope: 'no PGR hierarchy in the profile' };
   const root = await fetchBoundaryTree(TENANT, hierarchyType, { authToken: token });
-  if (!root) return [];
+  if (!root) return { codes: [], scope: `no ${hierarchyType} boundary tree` };
+  // The inbox viewer (EMPLOYEE_USER) only sees complaints inside its HRMS
+  // jurisdiction (exact match on the boundary or an ancestor), so a leaf outside
+  // it seeds a complaint the inbox can never show — e.g. a viewer scoped to
+  // E2E_WARD_A on a 2-ward workspace sees one locality however the sort works.
+  // Keep only leaves the viewer covers. When the profile has no jurisdiction for
+  // the viewer, or none of its codes is in this tree (a tenant-wide jurisdiction),
+  // nothing can be narrowed, so every leaf stays.
+  const viewer = Object.values(getProfile().personas.resolved).find((p) => p?.username === EMPLOYEE_USER);
+  const allCodes = new Set<string>();
+  const collect = (n: BoundaryNode): void => { allCodes.add(n.code); n.children?.forEach(collect); };
+  collect(root);
+  const scoped = (viewer?.jurisdictions ?? []).filter((j) => allCodes.has(j));
   const leaves: string[] = [];
-  const walk = (n: BoundaryNode): void => {
+  const walk = (n: BoundaryNode, covered: boolean): void => {
+    const inScope = covered || scoped.length === 0 || scoped.includes(n.code);
     if (!n.children || n.children.length === 0) {
-      if (n.code && !n.code.startsWith('ZZ_') && n.code !== 'WARD_ORD') leaves.push(n.code);
+      if (inScope && n.code && !n.code.startsWith('ZZ_') && n.code !== 'WARD_ORD') leaves.push(n.code);
       return;
     }
-    n.children.forEach(walk);
+    n.children.forEach((c) => walk(c, inScope));
   };
-  walk(root);
+  walk(root, false);
+  const scope = scoped.length
+    ? `leaves inside ${EMPLOYEE_USER}'s jurisdiction (${scoped.join(', ')})`
+    : 'leaves of the whole tree';
   // Sorted ascending so the caller seeds into the lexicographically SMALLEST
   // leaves. That matters: an established tenant's inbox is dominated by one
   // heavily-used locality (161 of 200 complaints at alto_mae_a_q1 here), which
@@ -87,17 +110,24 @@ async function fetchWardCodes(token: string): Promise<string[]> {
   // single locality — failing the "≥2 distinct localities visible" guard even
   // though the sort worked. Seeding into codes that sort BEFORE that block
   // guarantees the seeded localities appear on the first ASC page.
-  return [...new Set(leaves)].sort();
+  return { codes: [...new Set(leaves)].sort(), scope };
 }
 
 test.beforeAll(async () => {
   admin = await getPrincipal(ADMIN_USER, ADMIN_PASS);
   if (!admin) { seedSkip = `ADMIN (${ADMIN_USER}) login failed — cannot seed complaints`; return; }
+  viewer = await getPrincipal(EMPLOYEE_USER, EMPLOYEE_PASS);
+  if (!viewer) { seedSkip = `inbox viewer (${EMPLOYEE_USER}) API login failed — cannot re-read row order`; return; }
   try {
     const serviceCode = await resolveServiceCode(BASE_URL, admin.token, TENANT, SERVICE_CODE);
-    const wards = await fetchWardCodes(admin.token);
+    if (!serviceCode) {
+      seedSkip = `no active, fileable complaint type on ${TENANT} (and no seed plan service code)`;
+      return;
+    }
+    const { codes: wards, scope } = await fetchWardCodes(admin.token);
     if (wards.length < 2) {
-      seedSkip = 'deployment has fewer than 2 ward-level boundaries — nothing to sort between';
+      seedSkip = `the inbox viewer can see fewer than 2 leaf boundaries (${scope}: ${wards.join(', ') || 'none'}) — `
+        + 'nothing to sort between; give the viewer a jurisdiction spanning ≥2 leaves';
       return;
     }
     const [localityA, localityB] = wards;
@@ -179,7 +209,7 @@ test.describe('employee inbox-v2 — column header sort (issue #922)', () => {
     expect(url).toContain('sortBy=locality');
     expect(url).toContain('sortOrder=ASC');
 
-    const codes = await localityCodesInOrder(page, admin!);
+    const codes = await localityCodesInOrder(page, viewer!);
     expect(codes.length, 'inbox has rows to check').toBeGreaterThan(0);
     expect(new Set(codes).size, 'at least two distinct localities are visible (otherwise this proves nothing)').toBeGreaterThan(1);
     expect(isNonDecreasing(codes), `locality codes are ASC-sorted: ${codes.join(', ')}`).toBeTruthy();
@@ -200,7 +230,7 @@ test.describe('employee inbox-v2 — column header sort (issue #922)', () => {
     expect(url).toContain('sortBy=locality');
     expect(url).toContain('sortOrder=DESC');
 
-    const codes = await localityCodesInOrder(page, admin!);
+    const codes = await localityCodesInOrder(page, viewer!);
     expect(isNonIncreasing(codes), `locality codes are DESC-sorted after the second click: ${codes.join(', ')}`).toBeTruthy();
     expect(errors, 'no page errors after two sort clicks').toEqual([]);
   });

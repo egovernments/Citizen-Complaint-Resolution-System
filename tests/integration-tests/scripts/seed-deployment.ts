@@ -180,7 +180,11 @@ async function seedComplaintHierarchySchemas(): Promise<void> {
 
 async function seedRejectionReasons(): Promise<void> {
   const sp = join(MDMS_DIR, 'schemas/RAINMAKER-PGR/RejectionReasons.json');
-  const dp = join(MDMS_DIR, 'data/ke/RAINMAKER-PGR/RejectionReasons.json');
+  // This tenant's own reasons when the seed repo has them; otherwise the shipped
+  // Kenya list (generic reason codes), and the log says so instead of hiding it.
+  const own = join(MDMS_DIR, `data/${ROOT_TENANT}/RAINMAKER-PGR/RejectionReasons.json`);
+  const dp = existsSync(own) ? own : join(MDMS_DIR, 'data/ke/RAINMAKER-PGR/RejectionReasons.json');
+  if (dp !== own) log(`  ~ RejectionReasons: no data/${ROOT_TENANT}/ seed — using the shipped data/ke/ list on ${ROOT_TENANT}`);
   if (existsSync(sp)) {
     const sd = JSON.parse(readFileSync(sp, 'utf8'));
     await ensureSchema(ROOT_TENANT, 'RAINMAKER-PGR.RejectionReasons', sd.definition ?? sd);

@@ -311,7 +311,8 @@ Test timeout is 180s — the steps plus DOM settles plus the final POST regularl
     // Deployment-specific complaint-ID prefix is discovered live by
     // citizen.setup.ts (egov-idgen pgr.servicerequestid) and persisted on the
     // provisioned citizen; PGR_ID_PREFIX (env) is the fallback.
-    const pgrIdPrefix = readProvisionedCitizen()?.pgrIdPrefix ?? PGR_ID_PREFIX;
+    // No discovered prefix: accept any idgen prefix rather than another deployment's.
+    const pgrIdPrefix = readProvisionedCitizen()?.pgrIdPrefix || PGR_ID_PREFIX || '[A-Z0-9]+(?:-[A-Z0-9]+)*';
     await expect(body).toContainText(new RegExp(`${pgrIdPrefix}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+`));
     await expect(body).toContainText(/Go back to home page/i);
 
