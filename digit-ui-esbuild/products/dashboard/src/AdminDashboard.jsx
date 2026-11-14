@@ -35,6 +35,9 @@ import { useCatalog } from "./hooks/useCatalog";
 import { useCatalogLayout, getDroppingItemForKpi, defaultSizeForKpi } from "./hooks/useCatalogLayout";
 import { runKpiBatch, runPublicKpiBatch, getTenantId } from "./services/analyticsService";
 import { errorForTile } from "./services/analyticsBatch";
+import { buildDashboardExport } from "./export/exportModel";
+import { downloadDashboardExport } from "./export/writeXlsx";
+import { getProductLabel } from "./config/dashboardConfig";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
 import * as dashboardMetrics from "./services/dashboardMetrics";
 import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM, DROPPING_ITEM_ID, reflowLayout } from "./constants/layoutConfig";
@@ -974,42 +977,44 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     return { options, value, info };
   };
 
-  // CSV export of the laid-out tiles (title + scalar value, or row count for
-  // charts/tables). Reads straight from the catalog result map — no dependence on
-  // the old kpiCardData/chartData shapes.
-  const handleExport = useCallback(() => {
-    const csvEscape = (v) => {
-      const s = String(v ?? "");
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const rows = layout.map((item) => {
-      const def = kpis[item.i];
-      const assembled = assembleResult(item.i, def, batch.results);
-      const value =
-        assembled?.value != null
-          ? assembled.value
-          : assembled?.rows
-          ? `${assembled.rows.length} ${t("DASHBOARD_EXPORT_ROWS", "rows")}`
-          : "";
-      return [resolveTitle(def) || item.i, item.i, value];
-    });
-    // Column headers go through t() like the tile titles (resolveTitle above);
-    // the filename stays ASCII-English on purpose — a stable machine-facing
-    // identifier, not display copy.
-    const header = [
-      t("DASHBOARD_EXPORT_COL_TITLE", "Title"),
-      t("DASHBOARD_EXPORT_COL_KPI", "KPI"),
-      t("DASHBOARD_EXPORT_COL_VALUE", "Value"),
-    ];
-    const csv = [header, ...rows].map((r) => r.map(csvEscape).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "dashboard-export.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [layout, kpis, batch.results, t]);
+  // Export what the screen shows (#1977): every tile in on-screen order, through
+  // the same display functions the tiles render with, as an .xlsx.
+  const exportingRef = useRef(false);
+  const [exportError, setExportError] = useState(null);
+  const handleExport = useCallback(async () => {
+    if (exportingRef.current) return;
+    exportingRef.current = true;
+    setExportError(null);
+    try {
+      const tiles = [...gridLayout].sort((a, b) => a.y - b.y || a.x - b.x).map((item) => item.i);
+      const model = buildDashboardExport({
+        tiles,
+        kpis,
+        results: batch.results,
+        assemble: (kpiId) => assembleResult(kpiId, kpis[kpiId], batch.results),
+        errorFor: (kpiId) => errorForTile(batch.errors, kpiId),
+        loading: batch.loading,
+        groupByFor: (kpiId) => groupByStateFor(kpiId).info,
+        asOf: batch.asOf,
+        filters,
+        filterOptions,
+        timeZone,
+        language,
+        tenantId,
+        productLabel: getProductLabel(),
+        publicMode,
+        now: Date.now(),
+      });
+      await downloadDashboardExport(model);
+    } catch (err) {
+      console.error("Dashboard export failed", err);
+      setExportError(t("DASHBOARD_EXPORT_FAILED", "Couldn't create the export file. Try again."));
+    } finally {
+      exportingRef.current = false;
+    }
+    // groupByStateFor is rebuilt every render from kpis/hierarchy/hierOverrides.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gridLayout, kpis, batch, filters, filterOptions, timeZone, language, tenantId, publicMode, hierarchy, hierOverrides, t]);
 
   const showPublicDisabled = publicMode && !catalogLoading && pack?.enabled === false;
   const showEmpty = !showPublicDisabled && !catalogLoading && pack && layout.length === 0;
@@ -1077,6 +1082,11 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
       {batch.errors && batch.errors.__batch && (
         <div className="tw-mb-4 tw-rounded-md tw-border tw-border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] tw-bg-status-breach-bg tw-px-4 tw-py-3 tw-text-sm tw-text-destructive">
           {batch.errors.__batch}
+        </div>
+      )}
+      {exportError && (
+        <div role="alert" className="tw-mb-4 tw-rounded-md tw-border tw-border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] tw-bg-status-breach-bg tw-px-4 tw-py-3 tw-text-sm tw-text-destructive">
+          {exportError}
         </div>
       )}
 

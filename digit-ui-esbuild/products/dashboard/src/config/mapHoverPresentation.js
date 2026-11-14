@@ -21,13 +21,13 @@ function metricRow(label, value) {
 
 // Numeric parts go through the tenant mask (formatNumber, null when
 // unconfigured -> the pre-#1213 expression); the % suffix stays here.
-function formatPct(value) {
+export function formatPct(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
   return `${formatNumber(n, { decimals: 0 }) ?? Math.round(n)}%`;
 }
 
-function formatCount(value) {
+export function formatCount(value) {
   return formatNumber(value, { decimals: 0 }) ?? value;
 }
 

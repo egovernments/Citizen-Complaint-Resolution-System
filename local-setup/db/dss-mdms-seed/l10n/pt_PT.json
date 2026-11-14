@@ -330,6 +330,71 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_EXPORT_COL_AGE",
+    "message": "Antiguidade",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_CHANGE",
+    "message": "Variação face ao período anterior",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_DATE",
+    "message": "Data",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_DESCRIPTION",
+    "message": "Descrição",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_ITEM",
+    "message": "Item",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_NOTE",
+    "message": "Nota",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_COL_SHARE",
+    "message": "Percentagem",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_EXPORTED_AT",
+    "message": "Exportado em",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_FAILED",
+    "message": "Não foi possível criar o ficheiro de exportação. Tente novamente.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_PERIOD",
+    "message": "Período",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_SHEET_SUMMARY",
+    "message": "Resumo",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_TIME_ZONE",
+    "message": "Fuso horário",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_EXPORT_WORKSPACE",
+    "message": "Espaço de trabalho",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_FILTERS_ALL_TYPES",
     "message": "Todos os tipos",
     "module": "rainmaker-dashboard"

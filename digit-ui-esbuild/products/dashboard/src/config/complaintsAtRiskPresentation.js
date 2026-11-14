@@ -88,3 +88,17 @@ export function normalizeWorkflowStatusKey(status) {
   }
   return "in_progress";
 }
+
+// Built at render (never a module constant) so headers track the language.
+// Shared by ComplaintsAtRiskTable and the export (#1977).
+export const buildAtRiskColumns = (t) => [
+  { id: "id", label: t("DASHBOARD_COL_ID", "ID"), align: "left", type: "text" },
+  { id: "typeLabel", label: t("DASHBOARD_COL_TYPE", "Category"), align: "left", type: "text" },
+  { id: "subtypeLabel", label: t("DASHBOARD_COL_SUBTYPE", "Subcategory"), align: "left", type: "text" },
+  { id: "locality", label: t("DASHBOARD_COL_LOCALITY", "Locality"), align: "left", type: "text" },
+  { id: "ownerName", label: t("DASHBOARD_COL_OWNER", "Owner"), align: "left", type: "text" },
+  { id: "ownerRole", label: t("DASHBOARD_COL_OWNER_ROLE", "Owner role"), align: "left", type: "text" },
+  { id: "statusLabel", label: t("DASHBOARD_COL_STATUS", "Status"), align: "left", type: "text" },
+  { id: "slaLabel", label: t("DASHBOARD_COL_SLA_STATUS", "SLA status"), align: "left", type: "text" },
+  { id: "breachDurationMs", label: t("DASHBOARD_COL_BREACH_DURATION", "Breach duration"), align: "left", type: "integer" },
+];
