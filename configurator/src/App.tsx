@@ -153,7 +153,8 @@ function ManagementAdminResources() {
       queryClient={queryClient}
       basename="/manage"
     >
-      <CoreAdminUI layout={DigitLayout} dashboard={DigitDashboard}>
+      {/* ours (ours#544, #1635): no ping to react-admin-telemetry.marmelab.com (third-party request on every load) */}
+      <CoreAdminUI layout={DigitLayout} dashboard={DigitDashboard} disableTelemetry>
         {/* Core entities with List/Show/Edit/Create */}
         {canViewResource('tenants') && <Resource name="tenants" list={TenantList} show={TenantShow} edit={TenantEdit} />}
         {canViewResource('departments') && <Resource name="departments" list={DepartmentList} show={DepartmentShow} edit={DepartmentEdit} create={DepartmentCreate} />}
