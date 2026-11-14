@@ -130,8 +130,13 @@ export const config = {
   identityMagicLinkRequestWindowSeconds: parseInt(
     process.env.IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS || "1800",
   ),
+  // Email requests are counted per address first, then per IP with a much
+  // higher limit: an office behind one NAT shares an IP (#2805).
   identityMagicLinkRequestLimit: parseInt(
     process.env.IDENTITY_MAGIC_LINK_REQUEST_LIMIT || "3",
+  ),
+  identityMagicLinkRequestIpLimit: parseInt(
+    process.env.IDENTITY_MAGIC_LINK_REQUEST_IP_LIMIT || "20",
   ),
   identityTrustProxyHops: parseInt(process.env.IDENTITY_TRUST_PROXY_HOPS || "0"),
   // Citizen phone OTP sign-in (#2189). The secret keys the code and phone
@@ -177,6 +182,9 @@ export const config = {
   ),
   identityPasswordSetupLimit: parseInt(
     process.env.IDENTITY_PASSWORD_SETUP_LIMIT || "3",
+  ),
+  identityPasswordSetupIpLimit: parseInt(
+    process.env.IDENTITY_PASSWORD_SETUP_IP_LIMIT || "20",
   ),
   identitySessionTtlSeconds: parseInt(
     process.env.IDENTITY_SESSION_TTL_SECONDS || "604800",

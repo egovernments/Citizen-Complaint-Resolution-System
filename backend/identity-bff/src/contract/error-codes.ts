@@ -56,6 +56,8 @@ export const ERROR_CODES = {
   // Sign-in methods and account actions.
   SIGNIN_METHODS_UNAVAILABLE: { status: 503, retry: "yes", meaning: "The Keycloak client's method catalogue can't be read" },
   SIGNUP_UNAVAILABLE: { status: 503, retry: "after-change", meaning: "Self sign-up (magic link) is not enabled" },
+  EMAIL_RATE_LIMITED: { status: 429, retry: "after-change", meaning: "Sign-up or password email: per-address quota; nothing was sent; Retry-After and retryAfter are set" },
+  NETWORK_RATE_LIMITED: { status: 429, retry: "after-change", meaning: "Sign-up or password email: per-IP quota (an office may share one IP); nothing was sent; Retry-After and retryAfter are set" },
   ACTION_NOT_ALLOWED: { status: 400, retry: "no", meaning: "The action is not in the client's digit.auth.account.actions" },
   CREDENTIAL_NOT_SECOND_FACTOR: { status: 409, retry: "no", meaning: "delete_credential targets a primary credential" },
   PROVIDER_ALREADY_LINKED: { status: 409, retry: "no", meaning: "idp_link for a provider that is already linked" },

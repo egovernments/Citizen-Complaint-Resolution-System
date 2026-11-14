@@ -20184,14 +20184,86 @@
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.signup.limit_email",
+    "message": "इस पते के लिए बहुत अधिक ईमेल मांगे गए हैं। %{minutes} मिनट बाद पुनः प्रयास करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.limit_email_one",
+    "message": "इस पते के लिए बहुत अधिक ईमेल मांगे गए हैं। 1 मिनट बाद पुनः प्रयास करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.limit_network",
+    "message": "इस नेटवर्क से बहुत अधिक अनुरोध आए हैं। %{minutes} मिनट बाद पुनः प्रयास करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.limit_network_one",
+    "message": "इस नेटवर्क से बहुत अधिक अनुरोध आए हैं। 1 मिनट बाद पुनः प्रयास करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.signup.finishing",
     "message": "Finalisation de la configuration…",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
   {
+    "code": "app.onboarding.signup.limit_email",
+    "message": "Trop d’e-mails ont été demandés pour cette adresse. Réessayez dans %{minutes} minutes.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.limit_email_one",
+    "message": "Trop d’e-mails ont été demandés pour cette adresse. Réessayez dans 1 minute.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.limit_network",
+    "message": "Trop de demandes depuis ce réseau. Réessayez dans %{minutes} minutes.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.limit_network_one",
+    "message": "Trop de demandes depuis ce réseau. Réessayez dans 1 minute.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.signup.finishing",
     "message": "Concluindo a configuração…",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.signup.limit_email",
+    "message": "Foram solicitados muitos e-mails para este endereço. Tente novamente em %{minutes} minutos.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.signup.limit_email_one",
+    "message": "Foram solicitados muitos e-mails para este endereço. Tente novamente em 1 minuto.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.signup.limit_network",
+    "message": "Muitas solicitações a partir desta rede. Tente novamente em %{minutes} minutos.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.signup.limit_network_one",
+    "message": "Muitas solicitações a partir desta rede. Tente novamente em 1 minuto.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -25610,6 +25682,30 @@
   {
     "code": "app.onboarding.signup.finishing",
     "message": "Finishing setup…",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.limit_email",
+    "message": "Too many emails were requested for this address. Try again in %{minutes} minutes.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.limit_email_one",
+    "message": "Too many emails were requested for this address. Try again in 1 minute.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.limit_network",
+    "message": "Too many requests from this network. Try again in %{minutes} minutes.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.limit_network_one",
+    "message": "Too many requests from this network. Try again in 1 minute.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

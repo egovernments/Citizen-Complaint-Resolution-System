@@ -99,6 +99,24 @@ describe("digit-employee forgot password (#2700)", () => {
         expect(title.isConnected).toBe(true);
     });
 
+    it("says how long to wait when the network is over its limit, and keeps the form (#2805)", async () => {
+        vi.stubGlobal("fetch", (input: RequestInfo | URL) =>
+            String(input instanceof Request ? input.url : input).endsWith("/password/setup-requests")
+                ? Promise.resolve(new Response(JSON.stringify({ code: "NETWORK_RATE_LIMITED", retryAfter: 900 }), { status: 429, headers: { "Retry-After": "900" } }))
+                : Promise.reject(new Error("offline")));
+        const { container } = render(<EmployeeKcPage kcContext={getKcContextMock({ pageId: "login.ftl" }) as never} />);
+        const page = within(container);
+        await waitFor(() => expect(container.querySelector("#kc-forgot-password")).not.toBeNull());
+        fireEvent.change(page.getByLabelText(/^Email/), { target: { value: "gro@example.org" } });
+        fireEvent.click(container.querySelector("#kc-forgot-password")!);
+        await waitFor(() => expect(container.querySelector("#kc-reset-password-form")).not.toBeNull());
+        fireEvent.click(page.getByRole("button", { name: /continue/i }));
+
+        await waitFor(() => expect(page.getByRole("alert")).toHaveTextContent("Too many requests from this network. Try again in 15 minutes."));
+        expect(page.queryByText(/we've sent it a link/i)).toBeNull();
+        expect(page.getByLabelText(/^Email/)).toHaveValue("gro@example.org");
+    });
+
     it("does not raise the last sign-in error again after Go back", async () => {
         vi.stubGlobal("fetch", () => Promise.reject(new Error("offline")));
         const kcContext = getKcContextMock({

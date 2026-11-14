@@ -5,8 +5,9 @@
  * bypass the unverified-federated-account check; see docs/identity-bff.md), so
  * the digit-employee login posts to the BFF's non-enumerating
  * `POST /identity/v1/password/setup-requests`, the same endpoint the
- * Configurator's password help uses. The BFF always answers 202 and emails a
- * one-use Keycloak link only when the account is eligible. With `surface` and
+ * Configurator's password help uses. The BFF answers 202 whether or not the
+ * account exists, and emails a one-use Keycloak link only when the account is
+ * eligible; over a request limit it answers 429 and sends nothing. With `surface` and
  * `tenantSlug`, the email uses that surface's Keycloak client (and theme), and
  * the link returns to that tenant's app.
  */
@@ -35,6 +36,26 @@ export function employeeSignInUrl(slug: string | undefined, base: string | undef
     }
 }
 
+/**
+ * The BFF's answer. `limited` (#2805): the address, or the network an office
+ * shares, asked for too many links; nothing was sent, and `minutes` (rounded
+ * up from `retryAfter`) says how long to wait.
+ */
+export type PasswordSetupOutcome =
+    | { status: "sent" }
+    | { status: "failed" }
+    | { status: "limited"; by: "email" | "network"; minutes: number };
+
+async function limitedOutcome(response: Response): Promise<PasswordSetupOutcome> {
+    const body = (await response.json().catch(() => null)) as { code?: unknown; retryAfter?: unknown } | null;
+    const seconds = Number(body?.retryAfter ?? response.headers.get("Retry-After"));
+    return {
+        status: "limited",
+        by: body?.code === "EMAIL_RATE_LIMITED" ? "email" : "network",
+        minutes: Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds / 60) : 1
+    };
+}
+
 export async function requestPasswordSetup(params: {
     baseUrl?: string;
     email: string;
@@ -42,7 +63,7 @@ export async function requestPasswordSetup(params: {
     surface?: "employee" | "citizen";
     tenantSlug?: string;
     fetchImpl?: typeof fetch;
-}): Promise<boolean> {
+}): Promise<PasswordSetupOutcome> {
     try {
         const response = await (params.fetchImpl ?? fetch)(passwordSetupRequestUrl(params.baseUrl), {
             method: "POST",
@@ -54,8 +75,9 @@ export async function requestPasswordSetup(params: {
                 ...(params.surface && params.tenantSlug ? { surface: params.surface, tenantSlug: params.tenantSlug } : {})
             })
         });
-        return response.status === 202 || response.ok;
+        if (response.status === 429) return await limitedOutcome(response);
+        return { status: response.status === 202 || response.ok ? "sent" : "failed" };
     } catch {
-        return false;
+        return { status: "failed" };
     }
 }

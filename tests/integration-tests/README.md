@@ -231,9 +231,10 @@ npm run test:onboarding-real
 ```
 
 A run takes about 2–5 minutes; most of it is tenant provisioning (measured: 4.0 min, then 2.0 min once #2310 removed the provisioning retries). Each run uses
-one magic-link request, and the BFF allows 3 per client IP per 30 minutes by
-default (`IDENTITY_MAGIC_LINK_REQUEST_LIMIT`), so back-to-back runs from one
-machine can stall at "No mail with a sign-in link".
+one magic-link request, and the BFF allows 3 per email and 20 per client IP per
+30 minutes by default (`IDENTITY_MAGIC_LINK_REQUEST_LIMIT`,
+`IDENTITY_MAGIC_LINK_REQUEST_IP_LIMIT`); over either, the request answers 429
+and no mail is sent.
 
 ## Project Structure
 

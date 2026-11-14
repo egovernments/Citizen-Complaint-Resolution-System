@@ -21,7 +21,7 @@ describe("requestPasswordSetup", () => {
             tenantSlug: "pg",
             fetchImpl
         });
-        expect(ok).toBe(true);
+        expect(ok).toEqual({ status: "sent" });
         expect(calls).toEqual([{
             url: "https://digit.example.org/identity/v1/password/setup-requests",
             body: { email: "asha@example.org", returnTo: "/pg/digit-ui/employee/", surface: "employee", tenantSlug: "pg" }
@@ -32,6 +32,25 @@ describe("requestPasswordSetup", () => {
         const { calls, fetchImpl } = capture();
         await requestPasswordSetup({ email: "asha@example.org", surface: "employee", fetchImpl });
         expect(calls[0]!.body).toEqual({ email: "asha@example.org" });
+    });
+});
+
+describe("requestPasswordSetup over a request limit (#2805)", () => {
+    const answer = (status: number, body?: unknown, headers?: Record<string, string>) =>
+        (async () => new Response(body === undefined ? null : JSON.stringify(body), { status, headers })) as unknown as typeof fetch;
+
+    it("reports the network limit and the wait in whole minutes, not a sent link", async () => {
+        const fetchImpl = answer(429, { code: "NETWORK_RATE_LIMITED", retryAfter: 601 }, { "Retry-After": "601" });
+        expect(await requestPasswordSetup({ email: "gro@example.org", fetchImpl })).toEqual({ status: "limited", by: "network", minutes: 11 });
+    });
+
+    it("reports the address limit, falling back to the Retry-After header", async () => {
+        const fetchImpl = answer(429, { code: "EMAIL_RATE_LIMITED" }, { "Retry-After": "120" });
+        expect(await requestPasswordSetup({ email: "gro@example.org", fetchImpl })).toEqual({ status: "limited", by: "email", minutes: 2 });
+    });
+
+    it("treats any other refusal as a failure", async () => {
+        expect(await requestPasswordSetup({ email: "gro@example.org", fetchImpl: answer(503) })).toEqual({ status: "failed" });
     });
 });
 

@@ -3,13 +3,13 @@ import { asyncRoute } from "../../app/async-route.js";
 import { errorBody } from "../../contract/error-codes.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
-import { privateRateKey, withinLimit as withinRateLimit } from "../../infrastructure/rate-limit.js";
+import { privateRateKey, reserveEmailRequest } from "../../infrastructure/rate-limit.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
 import { ensureMagicLinkSignupIdentity } from "../organizations/organization-service.js";
 import { createLoginAttempt } from "../sessions/session-store.js";
 import { enabledIdentityMethods } from "./methods.js";
 import { returnDestination } from "./redirects.js";
-import { normalizedEmail } from "./password-setup.js";
+import { normalizedEmail, refuseEmailRequest } from "./password-setup.js";
 import type { IdentityAuthMethod } from "./types.js";
 
 const ACCEPTED = {
@@ -20,10 +20,6 @@ function normalizedName(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const name = value.trim().replace(/\s+/g, " ");
   return name.length > 0 && name.length <= 100 ? name : null;
-}
-
-function withinLimit(bucket: string): Promise<boolean> {
-  return withinRateLimit(bucket, config.identityMagicLinkRequestLimit, config.identityMagicLinkRequestWindowSeconds);
 }
 
 async function sendSignupMagicLink(input: {
@@ -116,11 +112,17 @@ export function registerMagicLinkRoutes(app: express.Application): void {
     }
 
     const prefix = `${config.cachePrefix}:identity:magic-link-signup-limit`;
-    const [ipAllowed, emailAllowed] = await Promise.all([
-      withinLimit(`${prefix}:ip:${request.ip}`),
-      withinLimit(`${prefix}:email:${privateRateKey("magic-link", email)}`),
-    ]);
-    if (!ipAllowed || !emailAllowed) return response.status(202).json(ACCEPTED);
+    const allowance = await reserveEmailRequest({
+      addressKey: `${prefix}:email:${privateRateKey("magic-link", email)}`,
+      ipKey: `${prefix}:ip:${request.ip}`,
+      addressLimit: config.identityMagicLinkRequestLimit,
+      ipLimit: config.identityMagicLinkRequestIpLimit,
+      windowSeconds: config.identityMagicLinkRequestWindowSeconds,
+    });
+    if (!allowance.allowed) {
+      console.info("Signup magic-link request refused", { reason: allowance.code });
+      return refuseEmailRequest(response, allowance);
+    }
 
     const attempt = await createLoginAttempt({
       oidcClientId: config.keycloakMagicLinkClientId,
