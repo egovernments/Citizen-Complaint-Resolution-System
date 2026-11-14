@@ -497,7 +497,7 @@ export function parseDepartmentExcel(workbook: XLSX.WorkBook): {
       return;
     }
 
-    departments.push({ code, name, active });
+    departments.push({ code, name, active, row: index + 2 });
   });
 
   return {
@@ -574,7 +574,7 @@ export function parseDesignationExcel(workbook: XLSX.WorkBook): {
       return;
     }
 
-    designations.push({ code, name, description, department, active });
+    designations.push({ code, name, description, department, active, row: index + 2 });
   });
 
   return {

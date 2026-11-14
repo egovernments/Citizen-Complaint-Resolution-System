@@ -31,8 +31,8 @@ describe('Excel boolean coalescing (active column)', () => {
     const { data, validation } = parseDepartmentExcel(wb);
     expect(validation.errors).toEqual([]);
     expect(data).toEqual([
-      { code: 'DEPT_A', name: 'Active One', active: true },
-      { code: 'DEPT_B', name: 'Inactive One', active: false },
+      { code: 'DEPT_A', name: 'Active One', active: true, row: 2 },
+      { code: 'DEPT_B', name: 'Inactive One', active: false, row: 3 },
     ]);
   });
 
