@@ -15,6 +15,7 @@ import {
 import { digitApi } from '../services/digit-api.js';
 import type ExcelJS from 'exceljs';
 import { coerceForBoundaryService, largestPartCentroid } from './boundary-geometry.js';
+import { levelNamesError } from './level-names.js';
 
 // ── Types ──
 
@@ -320,6 +321,17 @@ async function runBoundaryPhase(
       error: "Couldn't read any boundary rows from the file. " +
         "Expected a 'Boundary' (or 'Boundaries'/'BoundaryMaster'/'boundary') sheet with " +
         "columns 'code', 'name', 'boundaryType', 'parentCode'.",
+    };
+  }
+
+  // boundary-service answers 200 for any level name, then its persister can't store one over 64
+  // characters (and holds up every tenant retrying it); repeated levels corrupt the hierarchy (#2803).
+  const levelError = levelNamesError(fileLevels);
+  if (levelError) {
+    return {
+      status: 'failed',
+      error: `The boundaryType column can't be used as hierarchy levels. ${levelError} Fix the sheet and upload it again.`,
+      fileLevels,
     };
   }
 

@@ -11,6 +11,8 @@ import type { SuggestionFeature } from '@/utils/turbopassSuggestions';
 import type { OfficialSet } from '@/utils/officialBoundaries';
 import type { Boundary, BoundaryExcelRow, BoundaryHierarchy } from '@/api/types';
 import type { BoundarySource } from './BoundaryImport';
+import { levelNamesProblem } from './levelNameMessages';
+import { normalizeLevelName } from '@digit-mcp/data-provider';
 
 /** What the import screen needs to reopen where the operator left it. */
 export type ImportResume =
@@ -211,6 +213,24 @@ export function addSelection(
   replaces?: string,
   saved: SavedArea[] = [],
 ): AddResult {
+  // Levels of a hierarchy not yet on the server are saved as typed, tidied: trimmed and single-spaced,
+  // with each area's level to match. One that can't be saved is refused here, before the list (#2803).
+  if (!selection.hierarchyExists) {
+    const problem = levelNamesProblem(selection.levels, t);
+    if (problem) {
+      return {
+        added: 0,
+        alreadySaved: 0,
+        duplicates: 0,
+        error: t('geography.level_name.change_and_retry', '%{problem} Change the level name, then try again.', { problem }),
+      };
+    }
+    selection = {
+      ...selection,
+      levels: selection.levels.map(normalizeLevelName),
+      boundaries: selection.boundaries.map((b) => ({ ...b, boundaryType: normalizeLevelName(b.boundaryType) })),
+    };
+  }
   const draft = drafts.get(tenantId) ?? { selections: [] };
   const error = selectionMismatch(listHierarchy(draft, replaces), selection, t);
   if (error) return { added: 0, alreadySaved: 0, duplicates: 0, error };
@@ -499,6 +519,22 @@ export async function saveBoundaryDraft(
 ): Promise<DraftSaveResult> {
   const hierarchy = listHierarchy(draft);
   if (!hierarchy) return { created: [], failed: [], schemaError: null };
+  // boundary-service takes any level name and answers 200; one the persister can't store fails
+  // later, for every tenant (#2803). Nothing is written when a name can't be saved.
+  const problem = levelNamesProblem(hierarchy.levels, t, hierarchy.hierarchyExists);
+  if (problem) {
+    throw hierarchy.hierarchyExists
+      ? new MessageError(
+          'geography.level_name.saved_unusable',
+          '%{problem} Areas can’t be saved under it, so nothing was saved. A saved level name can’t be changed: ask your platform administrator to remove the hierarchy, then add your boundaries again.',
+          { problem },
+        )
+      : new MessageError(
+          'geography.level_name.nothing_saved',
+          '%{problem} Nothing was saved. Select Edit on the item in the list, change the level name, then save again.',
+          { problem },
+        );
+  }
   const progress = (percent: number) => {
     saves.set(tenantId, percent);
     notify();
