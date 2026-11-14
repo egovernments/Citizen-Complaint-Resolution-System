@@ -15,7 +15,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { boundaryService, ApiClientError } from '@/api';
+import { boundaryService, mdmsService, ApiClientError } from '@/api';
+import type { BoundaryCreateFailure } from '@/api/services/boundary';
 import { toast } from '@/hooks/use-toast';
 import { StepHeader } from '../StepHeader';
 import { EmptyState, OptionCard, StepActions } from '../StepParts';
@@ -47,6 +48,8 @@ import { MessageError, useOnboardingT, type OnboardingT } from '../i18n';
 import { reportStepError, trackMethod } from '../telemetry';
 
 const STEP = stepById('geography');
+/** Areas a failed save lists by name; the rest are counted. */
+const MAX_FAILURES_SHOWN = 10;
 const { previous, next } = adjacentSteps('geography');
 
 interface HierarchySummary {
@@ -72,6 +75,29 @@ async function loadHierarchies(tenant: string): Promise<HierarchySummary[]> {
       };
     }),
   );
+}
+
+/** The hierarchy the step's check reads (its CMS-BOUNDARY.HierarchySchema row); undefined when unrecorded or unreadable. */
+async function recordedHierarchy(tenant: string): Promise<string | undefined> {
+  try {
+    return await mdmsService.getRecordedHierarchyType(tenant);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The saved hierarchy that has areas on one level only, or null. The step's check
+ * needs an area inside another, so it can never pass on its own: a save the server
+ * partly refused leaves this (#2795), and Upload from Excel stays open to finish it.
+ * It's the recorded hierarchy (the one the check reads), or else the one with areas.
+ */
+function unfinishedHierarchy(hierarchies: HierarchySummary[] | null, recorded?: string): HierarchySummary | null {
+  if (!hierarchies) return null;
+  const target = hierarchies.find((h) => h.hierarchyType === recorded) ?? hierarchies.find((h) => h.total > 0);
+  if (!target || target.total === 0) return null;
+  const levelsWithAreas = Object.values(target.counts).filter((count) => count > 0).length;
+  return levelsWithAreas < 2 ? target : null;
 }
 
 /** "3 districts · 12 wards", in level order. Level names are the workspace's own, so they stay as named. */
@@ -103,6 +129,8 @@ export default function GeographyStep() {
 
   const [source, setSource] = useState<BoundarySource | null>(null);
   const [hierarchies, setHierarchies] = useState<HierarchySummary[] | null>(null);
+  // The hierarchy the step's check reads, read with them.
+  const [recorded, setRecorded] = useState<string | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // Fetching boundaries needs the turbopass service; say so up front when it's missing.
@@ -129,6 +157,8 @@ export default function GeographyStep() {
     };
   }, []);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // The areas the last save didn't write, each with the server's reason, shown under saveError.
+  const [saveFailures, setSaveFailures] = useState<BoundaryCreateFailure[]>([]);
   // Save and continue asks first when it would save new boundaries: they can't be changed after.
   const [confirmSave, setConfirmSave] = useState(false);
   // Set once this visit saves: the server's check that follows reads as part of saving.
@@ -136,10 +166,11 @@ export default function GeographyStep() {
 
   useEffect(() => {
     let cancelled = false;
-    loadHierarchies(tenant)
-      .then((loaded) => {
+    Promise.all([loadHierarchies(tenant), recordedHierarchy(tenant)])
+      .then(([loaded, recordedType]) => {
         if (cancelled) return;
         setHierarchies(loaded);
+        setRecorded(recordedType);
         setLoadError(null);
       })
       .catch((err) => {
@@ -156,20 +187,26 @@ export default function GeographyStep() {
   };
 
   const hasBoundaries = !!hierarchies?.some((hierarchy) => hierarchy.total > 0);
+  // Saved boundaries the step's check can't pass on (#2795): Upload from Excel stays open to finish them.
+  const unfinished = unfinishedHierarchy(hierarchies, recorded);
   // Nothing can be added while a save runs. Otherwise one set of boundaries unless
   // the build allows more: the sources wait for the saved ones to be read, stay
-  // closed once boundaries are saved, and wait until an unsaved one is removed.
+  // closed once boundaries are saved (unless they're unfinished), and wait until
+  // an unsaved one is removed.
   const listFullReason = saving
     ? t('geography.saving', 'Saving your boundaries…')
     : GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED
       ? undefined
       : !hierarchies
         ? t('geography.list.checking_saved', 'Checking your saved boundaries…')
-        : hasBoundaries
+        : hasBoundaries && !unfinished
           ? t('geography.list.saved_already', 'Your boundaries are saved, so no more can be added.')
           : draft
             ? t('geography.list.one_at_a_time', 'Remove the boundaries below to choose different ones.')
             : undefined;
+  // Fetch and Preconfigured write into the deployment's hierarchy, which may not be the
+  // unfinished one, and a second hierarchy never completes the step: only Excel finishes it.
+  const fetchClosedReason = listFullReason ?? (unfinished ? t('geography.list.finish_with_excel', 'To finish your saved boundaries, use Upload from Excel.') : undefined);
   const { probe, recheck } = useStepProbe(
     state.tenant,
     'GEOGRAPHY',
@@ -191,30 +228,39 @@ export default function GeographyStep() {
   /** Writes the unsaved list. True when everything landed; otherwise the reason stays on screen. */
   const saveDraft = async (toSave: BoundaryDraft): Promise<boolean> => {
     setSaveError(null);
+    setSaveFailures([]);
     try {
       const result = await saveBoundaryDraft(tenant, toSave, t, hasBoundaries);
       // Whatever didn't land stays in the list for another try; the hierarchy is fixed now either way.
       keepUnsaved(tenant, result.created);
       setJustSaved(true);
       reload();
+      // Which areas didn't land and why, so they can be fixed (Edit) or tried again (#2795).
+      setSaveFailures(result.failed);
+      const notSaved =
+        result.failed.length > 0
+          ? `${
+              result.failed.length === 1
+                ? t('geography.not_saved_one', '1 area wasn’t saved, so this step isn’t complete yet.')
+                : t('geography.not_saved_other', '%{count} areas weren’t saved, so this step isn’t complete yet.', {
+                    count: result.failed.length.toLocaleString('en-US'),
+                  })
+            } ${t('geography.not_saved_next', 'They’re still in the list below: fix them with Edit, or press Save and continue to try them again.')}`
+          : null;
       const wanted = toSave.selections.reduce((count, selection) => count + selection.boundaries.length, 0);
       if (wanted > 0 && result.created.length === 0) {
         setSaveError(
-          `${t('geography.osm.create_failed', 'Failed to create boundaries.')} ${t(
-            'geography.save_retry',
-            'They are still in the list below: Save and continue tries them again.',
-          )}`,
+          notSaved ??
+            `${t('geography.osm.create_failed', 'Failed to create boundaries.')} ${t(
+              'geography.save_retry',
+              'They are still in the list below: Save and continue tries them again.',
+            )}`,
         );
         return false;
       }
       if (result.created.length) addUndo('create_boundaries', `Created ${result.created.length} boundaries`);
       const failures = [
-        result.failed.length > 0
-          ? `${t('geography.create_failures', '%{count} boundaries failed to create.', { count: result.failed.length })} ${t(
-              'geography.save_retry',
-              'They are still in the list below: Save and continue tries them again.',
-            )}`
-          : null,
+        notSaved,
         result.schemaError
           ? `${result.schemaError} ${t('geography.schema_retry', 'Save and continue tries it again.')}`
           : null,
@@ -276,6 +322,7 @@ export default function GeographyStep() {
           preconfigured={preconfiguredSet}
           resume={editing?.resume ?? null}
           list={listHierarchy(draft, editing?.id)}
+          addTo={source === 'excel' && !editing ? (unfinished?.hierarchyType ?? null) : null}
           onCancel={() => {
             trackMethod('geography', preconfiguredSet ? 'preconfigured' : source === 'osm' ? 'fetch' : 'excel', true);
             close();
@@ -285,6 +332,7 @@ export default function GeographyStep() {
             if (added.error) return added.error;
             close();
             setSaveError(null);
+            setSaveFailures([]);
             if (added.duplicates > 0) {
               toast({
                 title:
@@ -319,7 +367,7 @@ export default function GeographyStep() {
       disabled={saving}
       // With the flag off and boundaries saved, a removed leftover can't be brought back.
       removeBody={
-        !GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED && hasBoundaries
+        !GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED && hasBoundaries && !unfinished
           ? t(
               'geography.list.remove_final',
               'These boundaries haven’t been saved. Your other boundaries are, so once these are removed they can’t be added again.',
@@ -341,6 +389,18 @@ export default function GeographyStep() {
         {t('geography.intro', 'The boundary hierarchies your complaint services work in. Bring them in from one of three sources.')}
       </StepHeader>
 
+      {unfinished && !draft && !saving && (
+        <Alert variant="warning" data-testid="geography-unfinished">
+          <AlertDescription>
+            {t(
+              'geography.unfinished',
+              'Your boundaries were only partly saved. %{hierarchy} has %{summary} but nothing on the level below, so this step can’t be completed yet. Use Upload from Excel to add the missing areas.',
+              { hierarchy: unfinished.hierarchyType, summary: summaryLine(unfinished, t) },
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <section className="space-y-4">
         <h3 className="text-lg font-semibold text-foreground">
           {t('geography.how_heading', 'How do you want to bring in your geography?')}
@@ -351,7 +411,7 @@ export default function GeographyStep() {
           <PreconfiguredCard
             state={preconfigured.state}
             onRetry={preconfigured.retry}
-            disabledReason={listFullReason}
+            disabledReason={fetchClosedReason}
             onUse={() => {
               if (preconfigured.state.status !== 'ready') return;
               setPreconfiguredSet(preconfigured.state.set);
@@ -368,7 +428,7 @@ export default function GeographyStep() {
               trackMethod('geography', 'fetch');
             }}
             disabledReason={
-              boundarySources?.length === 0 ? t('geography.turbopass_unavailable', TURBOPASS_UNAVAILABLE_MESSAGE) : listFullReason
+              boundarySources?.length === 0 ? t('geography.turbopass_unavailable', TURBOPASS_UNAVAILABLE_MESSAGE) : fetchClosedReason
             }
           >
             {t(
@@ -456,7 +516,31 @@ export default function GeographyStep() {
 
       {saveError && (
         <Alert variant="destructive">
-          <AlertDescription>{saveError}</AlertDescription>
+          <AlertDescription>
+            {saveError}
+            {saveFailures.length > 0 && (
+              <ul className="mt-2 space-y-1" data-testid="geography-save-failures">
+                {saveFailures.slice(0, MAX_FAILURES_SHOWN).map(({ boundary, error, code }) => (
+                  <li key={boundary.code}>
+                    <span className="font-medium">
+                      {boundary.name && boundary.name !== boundary.code ? `${boundary.name} (${boundary.code})` : boundary.code}
+                    </span>
+                    {': '}
+                    {/* The server's own words when it said why; its code in small print. */}
+                    {code ? error : t('geography.not_saved_unconfirmed', 'The server didn’t confirm it was saved.')}
+                    {code && <span className="ml-1 text-xs opacity-70">({code})</span>}
+                  </li>
+                ))}
+                {saveFailures.length > MAX_FAILURES_SHOWN && (
+                  <li>
+                    {t('geography.not_saved_more', 'and %{count} more', {
+                      count: (saveFailures.length - MAX_FAILURES_SHOWN).toLocaleString('en-US'),
+                    })}
+                  </li>
+                )}
+              </ul>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -470,6 +554,7 @@ export default function GeographyStep() {
             }
             if (pendingRecord) {
               setSaveError(null);
+              setSaveFailures([]);
               const failed = await retryHierarchyRecord(tenant, t);
               if (failed) {
                 setSaveError(failed);

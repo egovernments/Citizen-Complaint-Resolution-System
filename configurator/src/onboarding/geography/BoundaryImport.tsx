@@ -62,6 +62,7 @@ import { useMapProviderConfig } from '@/hooks/useMapProviderConfig';
 import { BoundaryMap } from '@/components/ui/BoundaryMap';
 import { countryName, datasetName, fetchOfficialSet, statusDetail, type OfficialSet } from '@/utils/officialBoundaries';
 import { levelsMismatch, type ImportResume, type ListHierarchy, type NewSelection, type SavedArea } from './boundaryDraft';
+import { checkBoundaryRows } from './boundaryRows';
 import { LevelStatusBadge, OfficialSetSummary } from './OfficialConfidence';
 import { englishT, useOnboardingT, withNodes, type OnboardingT } from '../i18n';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
@@ -157,6 +158,7 @@ export default function BoundaryImport({
   preconfigured = null,
   resume = null,
   list = null,
+  addTo = null,
   onDone,
   onCancel,
 }: {
@@ -173,6 +175,9 @@ export default function BoundaryImport({
   resume?: ImportResume | null;
   /** The hierarchy of the boundaries already in Geography's list, if any. */
   list?: ListHierarchy | null;
+  /** A saved hierarchy that is only partly there (#2795): the Excel path adds
+   *  to it and to no other, so the missing areas land where the step's check reads. */
+  addTo?: string | null;
   /** Adds the chosen boundaries to Geography's list, checked against the areas
    *  already saved in their hierarchy; a message comes back when they can't join it. */
   onDone: (selection: NewSelection, saved?: SavedArea[]) => string | null;
@@ -200,7 +205,9 @@ export default function BoundaryImport({
         ? 'verify'
         : preconfigured || source === 'osm'
           ? 'osm-search'
-          : hasHierarchies || list
+          : addTo
+            ? 'select-hierarchy'
+            : hasHierarchies || list
             ? 'excel-landing'
             : 'create-hierarchy',
   );
@@ -352,6 +359,9 @@ export default function BoundaryImport({
         ? t('geography.excel.hierarchies_load_failed', 'Couldn’t load your hierarchies. %{reason}', { reason: hierarchiesError })
         : t('geography.excel.hierarchies_loading', 'Still reading your hierarchies. Try again in a moment.');
 
+  // "Use an existing hierarchy" offers only the one being finished, when there is one.
+  const pickableHierarchies = addTo ? existingHierarchies.filter((h) => h.hierarchyType === addTo) : existingHierarchies;
+
   // Fetch existing hierarchies on mount
   useEffect(() => {
     fetchHierarchies();
@@ -383,9 +393,11 @@ export default function BoundaryImport({
             }
           : null;
       setExistingHierarchies(inList ? [...hierarchies, inList] : hierarchies);
-      const preselected = list
-        ? (inList ?? hierarchies.find((h) => h.hierarchyType === list.hierarchyType))
-        : hierarchies.find((h) => h.hierarchyType === preferred);
+      const preselected = addTo
+        ? hierarchies.find((h) => h.hierarchyType === addTo)
+        : list
+          ? (inList ?? hierarchies.find((h) => h.hierarchyType === list.hierarchyType))
+          : hierarchies.find((h) => h.hierarchyType === preferred);
       if (preselected) {
         setSelectedHierarchy((selected) => selected ?? preselected);
       }
@@ -564,42 +576,10 @@ export default function BoundaryImport({
     setPolygonError(null);
   };
 
+  // Checked against the hierarchy the sheet goes into: its levels, and each
+  // row's parent one level up (#2795, #2796).
   const validateBoundaries = (boundaries: BoundaryExcelRow[]) => {
-    const valid: BoundaryExcelRow[] = [];
-    const invalid: { boundary: BoundaryExcelRow; error: string }[] = [];
-    const existingCodes = new Set<string>();
-
-    // Track codes for parent validation
-    boundaries.forEach(b => existingCodes.add(b.code));
-
-    for (const boundary of boundaries) {
-      const errors: string[] = [];
-
-      // Check for duplicate codes
-      if (!boundary.code) {
-        errors.push(t('geography.excel.missing_code', 'Missing boundary code'));
-      }
-
-      if (!boundary.name) {
-        errors.push(t('geography.excel.missing_name', 'Missing boundary name'));
-      }
-
-      if (!boundary.boundaryType) {
-        errors.push(t('geography.excel.missing_type', 'Missing boundary type'));
-      }
-
-      // Check if parent exists (for non-root boundaries)
-      if (boundary.parentCode && !existingCodes.has(boundary.parentCode)) {
-        errors.push(t('geography.excel.parent_missing', 'Parent "%{code}" not found', { code: boundary.parentCode }));
-      }
-
-      if (errors.length > 0) {
-        invalid.push({ boundary, error: errors.join('; ') });
-      } else {
-        valid.push(boundary);
-      }
-    }
-
+    const { valid, invalid } = checkBoundaryRows(boundaries, selectedHierarchy?.boundaryHierarchy ?? [], t);
     setValidBoundaries(valid);
     setInvalidBoundaries(invalid);
   };
@@ -1282,22 +1262,35 @@ export default function BoundaryImport({
             </Alert>
           )}
 
-          {existingHierarchies.length === 0 ? (
+          {addTo && (
+            <p className="text-xs sm:text-sm text-muted-foreground mb-4">
+              {t(
+                'geography.excel.add_to_note',
+                'Your saved boundaries are in %{hierarchy}, so the missing areas go there too. Upload your full corrected sheet: areas already saved are left as they are.',
+                { hierarchy: addTo },
+              )}
+            </p>
+          )}
+
+          {pickableHierarchies.length === 0 ? (
             // A list that failed to load is not an empty one: don't steer to "create".
             !hierarchiesError && <div className="text-center py-8">
               <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground mb-4">{t('geography.excel.none_found', 'No hierarchies found for this tenant.')}</p>
-              <Button
-                variant="outline"
-                onClick={() => setStep('create-hierarchy')}
-                className="border-primary text-primary"
-              >
-                <Plus className="w-4 h-4 mr-2" /> {t('geography.excel.create_new_button', 'Create New Hierarchy')}
-              </Button>
+              {/* Finishing a saved hierarchy: a new one would never complete the step. */}
+              {!addTo && (
+                <Button
+                  variant="outline"
+                  onClick={() => setStep('create-hierarchy')}
+                  className="border-primary text-primary"
+                >
+                  <Plus className="w-4 h-4 mr-2" /> {t('geography.excel.create_new_button', 'Create New Hierarchy')}
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-3 mb-4 sm:mb-6">
-              {existingHierarchies.map((hierarchy) => (
+              {pickableHierarchies.map((hierarchy) => (
                 <button
                   key={hierarchy.hierarchyType}
                   onClick={() => setSelectedHierarchy(hierarchy)}
@@ -1328,7 +1321,7 @@ export default function BoundaryImport({
           )}
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-            <Button variant="ghost" size="sm" onClick={() => setStep('excel-landing')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />{t('step.back', 'Back')}</Button>
+            <Button variant="ghost" size="sm" onClick={addTo ? onCancel : () => setStep('excel-landing')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />{t('step.back', 'Back')}</Button>
             <SubmitBar
               label={t('geography.excel.use_selected', 'Use Selected Hierarchy')}
               onSubmit={handleSelectHierarchy}
@@ -1418,7 +1411,7 @@ export default function BoundaryImport({
           </Alert>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-            <Button variant="ghost" size="sm" onClick={() => setStep('excel-landing')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />{t('step.back', 'Back')}</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep(addTo ? 'select-hierarchy' : 'excel-landing')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />{t('step.back', 'Back')}</Button>
           </div>
         </DigitCard>
       )}
