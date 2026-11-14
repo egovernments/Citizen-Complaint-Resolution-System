@@ -178,6 +178,7 @@ export type SignupDraftInput = Partial<
 >;
 
 export type IdentifierType =
+  | 'ORGANIZATION_NAME'
   | 'ACCOUNT_CODE'
   | 'URL_SLUG'
   | 'ORGANIZATION_ALIAS'
@@ -713,9 +714,15 @@ export function isValidUrlSlug(slug: string): boolean {
     && !RESERVED_URL_SLUGS.has(slug);
 }
 
-/** 2–32 of A-Z, 0-9 and hyphen. */
+/**
+ * The account code rule, the client's one copy of pgr-services'
+ * OnboardingIdentifierService.ACCOUNT_CODE: 2–32 of A-Z, 0-9 and hyphen,
+ * starting with a letter or digit (#2802).
+ */
+export const ACCOUNT_CODE_PATTERN = /^[A-Z0-9][A-Z0-9-]{1,31}$/;
+
 export function isValidAccountCode(code: string): boolean {
-  return /^[A-Z0-9-]{2,32}$/.test(code);
+  return ACCOUNT_CODE_PATTERN.test(code);
 }
 
 const ACCOUNT_CODE_MAX = 32;
