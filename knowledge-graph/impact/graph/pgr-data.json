@@ -1,0 +1,5127 @@
+{
+ "module": "pgr-data",
+ "nodes": [
+  {
+   "id": "service:pgr-services",
+   "label": "pgr-services",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "service:egov-persister",
+   "label": "egov-persister",
+   "layer": "application",
+   "module": "egov-persister"
+  },
+  {
+   "id": "service:egov-indexer",
+   "label": "egov-indexer",
+   "layer": "application",
+   "module": "egov-indexer"
+  },
+  {
+   "id": "service:identity-bff",
+   "label": "identity-bff",
+   "layer": "application",
+   "module": "identity-bff"
+  },
+  {
+   "id": "service:novu-bridge",
+   "label": "novu-bridge",
+   "layer": "application",
+   "module": "novu-bridge"
+  },
+  {
+   "id": "table:eg_pgr_service_v2",
+   "label": "Complaint header",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:eg_pgr_address_v2",
+   "label": "Complaint address",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:eg_pgr_document_v2",
+   "label": "Complaint documents",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:complaint_events",
+   "label": "MV: one row per workflow transition",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:complaint_facts",
+   "label": "MV: one row per complaint",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:complaint_open_state_daily",
+   "label": "Daily open-backlog snapshot",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:pgr_dashboard_tenant_timezone",
+   "label": "View: tenant dashboard timezone",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:pgr_mv_kpi",
+   "label": "MV: headline KPIs",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:pgr_mv_monthly",
+   "label": "MV: monthly series",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:pgr_mv_monthly_source",
+   "label": "MV: monthly by source",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:pgr_mv_dimension",
+   "label": "MV: dimensional breakdown",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:eg_pgr_onboarding_signup",
+   "label": "Onboarding signup",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:eg_pgr_onboarding_identifier",
+   "label": "Onboarding identifier reservation",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:eg_pgr_onboarding_operation",
+   "label": "Onboarding operation",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:eg_pgr_onboarding_workspace",
+   "label": "Onboarding workspace",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:eg_pgr_onboarding_workspace_event",
+   "label": "Workspace event log",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:eg_pgr_onboarding_workspace_rename",
+   "label": "Workspace rename request",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:eg_pgr_onboarding_workspace_name",
+   "label": "Workspace name reservation",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "table:eg_wf_processinstance_v2",
+   "label": "eg_wf_processinstance_v2",
+   "layer": "data",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "table:eg_wf_state_v2",
+   "label": "eg_wf_state_v2",
+   "layer": "data",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "table:eg_wf_assignee_v2",
+   "label": "eg_wf_assignee_v2",
+   "layer": "data",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "table:eg_wf_businessservice_v2",
+   "label": "eg_wf_businessservice_v2",
+   "layer": "data",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "table:eg_user",
+   "label": "eg_user",
+   "layer": "data",
+   "module": "egov-user"
+  },
+  {
+   "id": "table:eg_mdms_data",
+   "label": "eg_mdms_data",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "table:boundary_relationship",
+   "label": "boundary_relationship",
+   "layer": "data",
+   "module": "boundary-service"
+  },
+  {
+   "id": "table:boundary_hierarchy",
+   "label": "boundary_hierarchy",
+   "layer": "data",
+   "module": "boundary-service"
+  },
+  {
+   "id": "field:Service.applicationStatus",
+   "label": "Complaint applicationStatus",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:Service.rating",
+   "label": "Complaint rating",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:Service.serviceCode",
+   "label": "Complaint serviceCode",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:Service.additionalDetail",
+   "label": "Complaint additionalDetail",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:Service.extendedAttributes",
+   "label": "Complaint extendedAttributes",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:Service.additionalDetail.department",
+   "label": "Complaint department (additionalDetail)",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:Address.locality",
+   "label": "Address locality code",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:complaint_facts.sla_target_ms",
+   "label": "SLA target (ms)",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:complaint_facts.sla_breached",
+   "label": "SLA breached flag",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:complaint_facts.is_open",
+   "label": "Open flag",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:complaint_facts.sla_status_bucket",
+   "label": "SLA status bucket",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:complaint_facts.department_code",
+   "label": "Fact department code",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:complaint_facts.application_status",
+   "label": "Fact application status",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:complaint_facts.resolved_at",
+   "label": "Resolved timestamp",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:complaint_facts.was_rejected",
+   "label": "Was-rejected flag",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:complaint_facts.is_negative_rating",
+   "label": "Negative rating flag",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:complaint_events.is_escalation",
+   "label": "Escalation event flag",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:complaint_events.status",
+   "label": "Event status",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:complaint_events.business_sla_ms",
+   "label": "Workflow business SLA (ms)",
+   "layer": "data",
+   "module": "pgr-services"
+  },
+  {
+   "id": "field:ComplaintHierarchy.slaHours",
+   "label": "ComplaintHierarchy leaf slaHours",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "field:ComplaintHierarchy.department",
+   "label": "ComplaintHierarchy leaf department",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "field:EscalationConfig.defaultSlaByLevel",
+   "label": "EscalationConfig ladder SLA per level",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "field:EscalationConfig.overrides",
+   "label": "EscalationConfig per-serviceCode overrides",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "field:BusinessService.businessServiceSla",
+   "label": "Workflow businessServiceSla",
+   "layer": "data",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "field:DashboardConfig.timeZone",
+   "label": "dss.DashboardConfig.timeZone",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:RAINMAKER-PGR.ComplaintHierarchy",
+   "label": "RAINMAKER-PGR.ComplaintHierarchy",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:RAINMAKER-PGR.ComplaintHierarchyDefinition",
+   "label": "RAINMAKER-PGR.ComplaintHierarchyDefinition",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:RAINMAKER-PGR.EscalationConfig",
+   "label": "RAINMAKER-PGR.EscalationConfig",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:common-masters.Department",
+   "label": "common-masters.Department",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:dss.DashboardConfig",
+   "label": "dss.DashboardConfig",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:dss.KpiDefinition",
+   "label": "dss.KpiDefinition",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:dss.DashboardPack",
+   "label": "dss.DashboardPack",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:tenant.tenants",
+   "label": "tenant.tenants",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:common-masters.StateInfo",
+   "label": "common-masters.StateInfo",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:common-masters.Designation",
+   "label": "common-masters.Designation",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:common-masters.ThemeConfig",
+   "label": "common-masters.ThemeConfig",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:CMS-BOUNDARY.HierarchySchema",
+   "label": "CMS-BOUNDARY.HierarchySchema",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:ACCESSCONTROL-ROLEACTIONS.roleactions",
+   "label": "ACCESSCONTROL-ROLEACTIONS.roleactions",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:NOTIFICATIONS.EventCatalogue",
+   "label": "NOTIFICATIONS.EventCatalogue",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:NOTIFICATIONS.Routing",
+   "label": "NOTIFICATIONS.Routing",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:NOTIFICATIONS.Template",
+   "label": "NOTIFICATIONS.Template",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:NOTIFICATIONS.ProviderTemplate",
+   "label": "NOTIFICATIONS.ProviderTemplate",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "master:NOTIFICATIONS.Channel",
+   "label": "NOTIFICATIONS.Channel",
+   "layer": "data",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "wf:state:PENDINGFORASSIGNMENT",
+   "label": "PENDINGFORASSIGNMENT",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "wf:state:PENDINGFORREASSIGNMENT",
+   "label": "PENDINGFORREASSIGNMENT",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "wf:state:PENDINGATLME",
+   "label": "PENDINGATLME",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "wf:state:REJECTED",
+   "label": "REJECTED",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "wf:state:RESOLVED",
+   "label": "RESOLVED",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "wf:state:CLOSEDAFTERREJECTION",
+   "label": "CLOSEDAFTERREJECTION",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "wf:state:CLOSEDAFTERRESOLUTION",
+   "label": "CLOSEDAFTERRESOLUTION",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "wf:state:CANCELLED",
+   "label": "CANCELLED",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "wf:action:ASSIGN",
+   "label": "ASSIGN",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "wf:action:REASSIGN",
+   "label": "REASSIGN",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "wf:action:REOPEN",
+   "label": "REOPEN",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "wf:action:ESCALATE",
+   "label": "ESCALATE",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "wf:bs:PGR",
+   "label": "PGR business service",
+   "layer": "business",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "topic:save-pgr-request",
+   "label": "save-pgr-request",
+   "layer": "integration",
+   "module": "pgr-services"
+  },
+  {
+   "id": "topic:update-pgr-request",
+   "label": "update-pgr-request",
+   "layer": "integration",
+   "module": "pgr-services"
+  },
+  {
+   "id": "topic:save-pgr-request-batch",
+   "label": "save-pgr-request-batch",
+   "layer": "integration",
+   "module": "pgr-services"
+  },
+  {
+   "id": "topic:save-wf-transitions-batch",
+   "label": "save-wf-transitions-batch",
+   "layer": "integration",
+   "module": "pgr-services"
+  },
+  {
+   "id": "topic:inbox-pgr-events",
+   "label": "inbox-pgr-events",
+   "layer": "integration",
+   "module": "pgr-services"
+  },
+  {
+   "id": "topic:pgr-services-legacyIndex",
+   "label": "pgr-services-legacyIndex",
+   "layer": "integration",
+   "module": "pgr-services"
+  },
+  {
+   "id": "topic:pgr-service-reindex",
+   "label": "pgr-service-reindex",
+   "layer": "integration",
+   "module": "pgr-services"
+  },
+  {
+   "id": "topic:pgr-services-inboxIndex",
+   "label": "pgr-services-inboxIndex",
+   "layer": "integration",
+   "module": "pgr-services"
+  },
+  {
+   "id": "config:pgr.dashboard.refresh.enabled",
+   "label": "pgr.dashboard.refresh.enabled",
+   "layer": "infrastructure",
+   "module": "pgr-services"
+  },
+  {
+   "id": "config:pgr.dashboard.refresh.interval.ms",
+   "label": "pgr.dashboard.refresh.interval.ms",
+   "layer": "infrastructure",
+   "module": "pgr-services"
+  },
+  {
+   "id": "config:pgr.analytics.config-cache-ttl-ms",
+   "label": "pgr.analytics.config-cache-ttl-ms",
+   "layer": "infrastructure",
+   "module": "pgr-services"
+  },
+  {
+   "id": "config:egov.mdms.search.endpoint",
+   "label": "egov.mdms.search.endpoint",
+   "layer": "infrastructure",
+   "module": "pgr-services"
+  },
+  {
+   "id": "config:pgr.onboarding.identity-bff.url",
+   "label": "pgr.onboarding.identity-bff.url",
+   "layer": "infrastructure",
+   "module": "pgr-services"
+  },
+  {
+   "id": "config:pgr.onboarding.identity-bff.token",
+   "label": "pgr.onboarding.identity-bff.token",
+   "layer": "infrastructure",
+   "module": "pgr-services"
+  },
+  {
+   "id": "config:pgr.onboarding.runner.enabled",
+   "label": "pgr.onboarding.runner.enabled",
+   "layer": "infrastructure",
+   "module": "pgr-services"
+  },
+  {
+   "id": "config:pgr.onboarding.baseline-upgrade.enabled",
+   "label": "pgr.onboarding.baseline-upgrade.enabled",
+   "layer": "infrastructure",
+   "module": "pgr-services"
+  },
+  {
+   "id": "config:pgr.onboarding.notification-defaults.enabled",
+   "label": "pgr.onboarding.notification-defaults.enabled",
+   "layer": "infrastructure",
+   "module": "pgr-services"
+  },
+  {
+   "id": "config:pgr.onboarding.notification-account.url",
+   "label": "pgr.onboarding.notification-account.url",
+   "layer": "infrastructure",
+   "module": "pgr-services"
+  },
+  {
+   "id": "config:egov.mdms.v2.search.endpoint",
+   "label": "egov.mdms.v2.search.endpoint",
+   "layer": "infrastructure",
+   "module": "pgr-services"
+  },
+  {
+   "id": "config:egov.gateway.host",
+   "label": "egov.gateway.host",
+   "layer": "infrastructure",
+   "module": "pgr-services"
+  },
+  {
+   "id": "infra:configs/egov-persister/pgr-services-persister.yml",
+   "label": "PGR persister config",
+   "layer": "infrastructure",
+   "module": "egov-persister"
+  },
+  {
+   "id": "infra:configs/egov-persister/pgr-migration-batch.yml",
+   "label": "PGR migration-batch persister config",
+   "layer": "infrastructure",
+   "module": "egov-persister"
+  },
+  {
+   "id": "infra:configs/egov-indexer/pgr-services.yml",
+   "label": "PGR ES indexer config",
+   "layer": "infrastructure",
+   "module": "egov-indexer"
+  },
+  {
+   "id": "infra:configs/egov-indexer/pgr-inbox-indexer.yml",
+   "label": "PGR inbox indexer config",
+   "layer": "infrastructure",
+   "module": "egov-indexer"
+  },
+  {
+   "id": "class:DashboardRefreshScheduler",
+   "label": "DashboardRefreshScheduler",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:DashboardQueryBuilder",
+   "label": "DashboardQueryBuilder",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:DashboardRepository",
+   "label": "DashboardRepository",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:DashboardService",
+   "label": "DashboardService",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:RequestsApiController",
+   "label": "RequestsApiController",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:AnalyticsController",
+   "label": "AnalyticsController",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:AnalyticsService",
+   "label": "AnalyticsService",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:AnalyticsCatalog",
+   "label": "AnalyticsCatalog",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:AnalyticsPlanner",
+   "label": "AnalyticsPlanner",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:KpiQueryComposer",
+   "label": "KpiQueryComposer",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:KpiCatalogService",
+   "label": "KpiCatalogService",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:AnalyticsRowScopeResolver",
+   "label": "AnalyticsRowScopeResolver",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:AnalyticsCapabilityService",
+   "label": "AnalyticsCapabilityService",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:OnboardingApiController",
+   "label": "OnboardingApiController",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:WorkspaceApiController",
+   "label": "WorkspaceApiController",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:OnboardingService",
+   "label": "OnboardingService",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:OnboardingRunner",
+   "label": "OnboardingRunner",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:OnboardingSteps",
+   "label": "OnboardingSteps",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:OnboardingProvisionerClient",
+   "label": "OnboardingProvisionerClient",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:WorkspaceGateway",
+   "label": "WorkspaceGateway",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:WorkspaceService",
+   "label": "WorkspaceService",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:WorkspaceRepository",
+   "label": "WorkspaceRepository",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:OnboardingRepository",
+   "label": "OnboardingRepository",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:NotificationAccountClient",
+   "label": "NotificationAccountClient",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:NotificationAccountReconciler",
+   "label": "NotificationAccountReconciler",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:IdentitySessionClient",
+   "label": "IdentitySessionClient",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:BaselineUpgrader",
+   "label": "BaselineUpgrader",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:PlatformBaseline",
+   "label": "PlatformBaseline",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:NotificationDefaultsStep",
+   "label": "NotificationDefaultsStep",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:NotificationDefaults",
+   "label": "NotificationDefaults",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:WorkspaceWriteClient",
+   "label": "WorkspaceWriteClient",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "class:WorkspaceRenamePublisher",
+   "label": "WorkspaceRenamePublisher",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:GET /pgr-services/v2/dashboard",
+   "label": "GET /pgr-services/v2/dashboard",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/analytics/_access",
+   "label": "POST /pgr-services/v2/analytics/_access",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/analytics/_query",
+   "label": "POST /pgr-services/v2/analytics/_query",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/analytics/_schema",
+   "label": "POST /pgr-services/v2/analytics/_schema",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/analytics/public/packs",
+   "label": "POST /pgr-services/v2/analytics/public/packs",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/analytics/public/_query",
+   "label": "POST /pgr-services/v2/analytics/public/_query",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/analytics/public/catalog/_search",
+   "label": "POST /pgr-services/v2/analytics/public/catalog/_search",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/analytics/public/_options",
+   "label": "POST /pgr-services/v2/analytics/public/_options",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/analytics/config/_refresh",
+   "label": "POST /pgr-services/v2/analytics/config/_refresh",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/analytics/packs",
+   "label": "POST /pgr-services/v2/analytics/packs",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/analytics/catalog/_search",
+   "label": "POST /pgr-services/v2/analytics/catalog/_search",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/onboarding/signups/_create",
+   "label": "POST /pgr-services/v2/onboarding/signups/_create",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/onboarding/signups/_update",
+   "label": "POST /pgr-services/v2/onboarding/signups/_update",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/onboarding/signups/_search",
+   "label": "POST /pgr-services/v2/onboarding/signups/_search",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/onboarding/identifiers/_check",
+   "label": "POST /pgr-services/v2/onboarding/identifiers/_check",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/onboarding/signups/_submit",
+   "label": "POST /pgr-services/v2/onboarding/signups/_submit",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/onboarding/operations/_search",
+   "label": "POST /pgr-services/v2/onboarding/operations/_search",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/onboarding/operations/_retry",
+   "label": "POST /pgr-services/v2/onboarding/operations/_retry",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/onboarding/workspaces/_search",
+   "label": "POST /pgr-services/v2/onboarding/workspaces/_search",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/onboarding/workspaces/_update",
+   "label": "POST /pgr-services/v2/onboarding/workspaces/_update",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /pgr-services/v2/onboarding/workspaces/_rename",
+   "label": "POST /pgr-services/v2/onboarding/workspaces/_rename",
+   "layer": "application",
+   "module": "pgr-services"
+  },
+  {
+   "id": "api:POST /internal/identity/v1/sessions/_introspect",
+   "label": "identity-bff sessions/_introspect",
+   "layer": "integration",
+   "module": "identity-bff"
+  },
+  {
+   "id": "api:POST /internal/identity/v1/identifiers/_check",
+   "label": "identity-bff identifiers/_check",
+   "layer": "integration",
+   "module": "identity-bff"
+  },
+  {
+   "id": "api:POST /internal/identity/v1/organizations/_ensure",
+   "label": "identity-bff organizations/_ensure",
+   "layer": "integration",
+   "module": "identity-bff"
+  },
+  {
+   "id": "api:POST /internal/identity/v1/organizations/_lifecycle",
+   "label": "identity-bff organizations/_lifecycle",
+   "layer": "integration",
+   "module": "identity-bff"
+  },
+  {
+   "id": "api:POST /internal/identity/v1/memberships/_ensure",
+   "label": "identity-bff memberships/_ensure",
+   "layer": "integration",
+   "module": "identity-bff"
+  },
+  {
+   "id": "api:POST /internal/identity/v1/bindings/_ensure",
+   "label": "identity-bff bindings/_ensure",
+   "layer": "integration",
+   "module": "identity-bff"
+  },
+  {
+   "id": "api:POST /novu-bridge/novu-adapter/v1/tenants/{tenantId}/_provision",
+   "label": "novu-bridge tenants {tenantId}/_provision",
+   "layer": "integration",
+   "module": "novu-bridge"
+  },
+  {
+   "id": "api:POST /novu-bridge/novu-adapter/v1/tenants/_backfill",
+   "label": "novu-bridge tenants _backfill",
+   "layer": "integration",
+   "module": "novu-bridge"
+  },
+  {
+   "id": "coreapi:/egov-mdms-service/v2/_create/{schema}",
+   "label": "/egov-mdms-service/v2/_create/{schema}",
+   "layer": "integration",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "coreapi:/egov-mdms-service/v2/_update/{schema}",
+   "label": "/egov-mdms-service/v2/_update/{schema}",
+   "layer": "integration",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "coreapi:/egov-mdms-service/v2/_search",
+   "label": "/egov-mdms-service/v2/_search",
+   "layer": "integration",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "coreapi:/egov-mdms-service/schema/v1/_create",
+   "label": "/egov-mdms-service/schema/v1/_create",
+   "layer": "integration",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "coreapi:/egov-mdms-service/v1/_search",
+   "label": "/egov-mdms-service/v1/_search",
+   "layer": "integration",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "coreapi:/mdms-v2/v2/_update/tenant.tenants",
+   "label": "/mdms-v2/v2/_update/tenant.tenants",
+   "layer": "integration",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "coreapi:/mdms-v2/v1/_search",
+   "label": "/mdms-v2/v1/_search",
+   "layer": "integration",
+   "module": "mdms-v2"
+  },
+  {
+   "id": "coreapi:/localization/messages/v1/_upsert",
+   "label": "/localization/messages/v1/_upsert",
+   "layer": "integration",
+   "module": "egov-localization"
+  },
+  {
+   "id": "coreapi:/localization/messages/v1/_delete",
+   "label": "/localization/messages/v1/_delete",
+   "layer": "integration",
+   "module": "egov-localization"
+  },
+  {
+   "id": "coreapi:/egov-enc-service/crypto/v1/_generatekey",
+   "label": "/egov-enc-service/crypto/v1/_generatekey",
+   "layer": "integration",
+   "module": "egov-enc-service"
+  },
+  {
+   "id": "coreapi:/boundary-service/boundary-hierarchy-definition/_create",
+   "label": "/boundary-service/boundary-hierarchy-definition/_create",
+   "layer": "integration",
+   "module": "boundary-service"
+  },
+  {
+   "id": "coreapi:/boundary-service/boundary/_create",
+   "label": "/boundary-service/boundary/_create",
+   "layer": "integration",
+   "module": "boundary-service"
+  },
+  {
+   "id": "coreapi:/boundary-service/boundary-relationships/_create",
+   "label": "/boundary-service/boundary-relationships/_create",
+   "layer": "integration",
+   "module": "boundary-service"
+  },
+  {
+   "id": "coreapi:/boundary-service/boundary-relationships/_search",
+   "label": "/boundary-service/boundary-relationships/_search",
+   "layer": "integration",
+   "module": "boundary-service"
+  },
+  {
+   "id": "coreapi:/egov-workflow-v2/egov-wf/businessservice/_search",
+   "label": "/egov-workflow-v2/egov-wf/businessservice/_search",
+   "layer": "integration",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "coreapi:/egov-workflow-v2/egov-wf/businessservice/_create",
+   "label": "/egov-workflow-v2/egov-wf/businessservice/_create",
+   "layer": "integration",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "coreapi:/egov-workflow-v2/egov-wf/process/_search",
+   "label": "/egov-workflow-v2/egov-wf/process/_search",
+   "layer": "integration",
+   "module": "egov-workflow-v2"
+  },
+  {
+   "id": "coreapi:/egov-hrms/employees/_create",
+   "label": "/egov-hrms/employees/_create",
+   "layer": "integration",
+   "module": "egov-hrms"
+  },
+  {
+   "id": "coreapi:/egov-hrms/employees/_search",
+   "label": "/egov-hrms/employees/_search",
+   "layer": "integration",
+   "module": "egov-hrms"
+  },
+  {
+   "id": "coreapi:/user/oauth/token",
+   "label": "/user/oauth/token",
+   "layer": "integration",
+   "module": "egov-user"
+  },
+  {
+   "id": "coreapi:/user/_details",
+   "label": "/user/_details",
+   "layer": "integration",
+   "module": "egov-user"
+  },
+  {
+   "id": "biz:SLA",
+   "label": "SLA",
+   "layer": "business",
+   "module": "business"
+  },
+  {
+   "id": "biz:ComplaintStatus",
+   "label": "Complaint status",
+   "layer": "business",
+   "module": "business"
+  },
+  {
+   "id": "biz:Workspace",
+   "label": "Workspace",
+   "layer": "business",
+   "module": "business"
+  },
+  {
+   "id": "biz:Notification",
+   "label": "Notification",
+   "layer": "business",
+   "module": "business"
+  }
+ ],
+ "edges": [
+  {
+   "from": "table:complaint_events",
+   "to": "table:eg_pgr_service_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  FROM eg_pgr_service_v2 s",
+    "line": 14
+   },
+   "note": "svc CTE; latest def V20260915000000"
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "table:eg_pgr_address_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  LEFT JOIN eg_pgr_address_v2 a ON a.parentid = s.id",
+    "line": 15
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "table:boundary_relationship",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  FROM boundary_relationship",
+    "line": 22
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "table:boundary_hierarchy",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  FROM boundary_hierarchy h",
+    "line": 35
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "table:eg_wf_businessservice_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  FROM eg_wf_businessservice_v2",
+    "line": 60
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "table:eg_wf_assignee_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  FROM eg_wf_assignee_v2 GROUP BY processinstanceid",
+    "line": 65
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "table:eg_mdms_data",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive",
+    "line": 88
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "master:RAINMAKER-PGR.ComplaintHierarchy",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive",
+    "line": 88
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "master:RAINMAKER-PGR.ComplaintHierarchyDefinition",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "WHERE d.schemacode = 'RAINMAKER-PGR.ComplaintHierarchyDefinition' AND d.isactive",
+    "line": 96
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "table:eg_wf_processinstance_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  FROM eg_wf_processinstance_v2 pi",
+    "line": 156
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "table:eg_wf_state_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  LEFT JOIN eg_wf_state_v2 st ON st.uuid = pi.status",
+    "line": 157
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "table:pgr_dashboard_tenant_timezone",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  FROM pgr_dashboard_tenant_timezone candidate",
+    "line": 211
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "table:eg_user",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "LEFT JOIN eg_user ua ON ua.uuid = tx.actor_uuid;",
+    "line": 232
+   },
+   "note": "actor_is_system = eg_user.type SYSTEM"
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "wf:action:ASSIGN",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "(tx.action IN ('ASSIGN','REASSIGN'))         AS is_assignment",
+    "line": 177
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "wf:action:REASSIGN",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "(tx.action IN ('ASSIGN','REASSIGN'))         AS is_assignment",
+    "line": 177
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "wf:action:REOPEN",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "(tx.action = 'REOPEN')                       AS is_reopen",
+    "line": 178
+   }
+  },
+  {
+   "from": "table:complaint_events",
+   "to": "wf:action:ESCALATE",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "(tx.action = 'ESCALATE' OR coalesce(tx.escalated,false)) AS is_escalation",
+    "line": 179
+   }
+  },
+  {
+   "from": "field:complaint_events.is_escalation",
+   "to": "table:eg_wf_processinstance_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "(tx.action = 'ESCALATE' OR coalesce(tx.escalated,false)) AS is_escalation",
+    "line": 179
+   },
+   "note": "action literal or pi.escalated column"
+  },
+  {
+   "from": "field:complaint_events.status",
+   "to": "table:eg_wf_state_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "st.state AS status, st.seq AS status_seq, st.sla AS state_sla_ms,",
+    "line": 149
+   }
+  },
+  {
+   "from": "field:complaint_events.business_sla_ms",
+   "to": "field:BusinessService.businessServiceSla",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "bs.businessservicesla                        AS business_sla_ms,",
+    "line": 176
+   }
+  },
+  {
+   "from": "field:BusinessService.businessServiceSla",
+   "to": "table:eg_wf_businessservice_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "SELECT DISTINCT ON (tenantid, businessservice) tenantid, businessservice, businessservicesla",
+    "line": 59
+   }
+  },
+  {
+   "from": "field:complaint_events.status",
+   "to": "field:Service.applicationStatus",
+   "rel": "derives-from",
+   "status": "inferred",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "st.state AS status, st.seq AS status_seq, st.sla AS state_sla_ms,",
+    "line": 149
+   },
+   "note": "workflow state is the source PGR mirrors into applicationStatus; MV reads eg_wf_state_v2 not eg_pgr_service_v2.applicationstatus"
+  },
+  {
+   "from": "table:complaint_facts",
+   "to": "table:complaint_events",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  FROM complaint_events GROUP BY service_request_id",
+    "line": 265
+   }
+  },
+  {
+   "from": "table:complaint_facts",
+   "to": "table:eg_pgr_service_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "FROM eg_pgr_service_v2 s",
+    "line": 437
+   }
+  },
+  {
+   "from": "table:complaint_facts",
+   "to": "table:eg_pgr_address_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "LEFT JOIN eg_pgr_address_v2 a ON a.parentid = s.id",
+    "line": 449
+   }
+  },
+  {
+   "from": "table:complaint_facts",
+   "to": "table:pgr_dashboard_tenant_timezone",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  FROM pgr_dashboard_tenant_timezone candidate",
+    "line": 440
+   }
+  },
+  {
+   "from": "table:complaint_facts",
+   "to": "table:eg_mdms_data",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive",
+    "line": 292
+   }
+  },
+  {
+   "from": "table:complaint_facts",
+   "to": "master:RAINMAKER-PGR.ComplaintHierarchy",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive",
+    "line": 292
+   }
+  },
+  {
+   "from": "table:complaint_facts",
+   "to": "master:RAINMAKER-PGR.ComplaintHierarchyDefinition",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  WHERE d.schemacode = 'RAINMAKER-PGR.ComplaintHierarchyDefinition' AND d.isactive",
+    "line": 299
+   }
+  },
+  {
+   "from": "table:complaint_facts",
+   "to": "master:RAINMAKER-PGR.EscalationConfig",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "  WHERE schemacode = 'RAINMAKER-PGR.EscalationConfig' AND isactive",
+    "line": 361
+   }
+  },
+  {
+   "from": "table:complaint_facts",
+   "to": "wf:state:REJECTED",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "bool_or(status IN ('REJECTED','CLOSEDAFTERREJECTION'))     AS was_rejected,",
+    "line": 257
+   }
+  },
+  {
+   "from": "table:complaint_facts",
+   "to": "wf:state:CLOSEDAFTERREJECTION",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "bool_or(status IN ('REJECTED','CLOSEDAFTERREJECTION'))     AS was_rejected,",
+    "line": 257
+   }
+  },
+  {
+   "from": "table:complaint_facts",
+   "to": "wf:state:RESOLVED",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "min(entered_at) FILTER (WHERE status IN ('RESOLVED','CLOSEDAFTERRESOLUTION')) AS resolved_at,",
+    "line": 259
+   }
+  },
+  {
+   "from": "table:complaint_facts",
+   "to": "wf:state:CLOSEDAFTERRESOLUTION",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "min(entered_at) FILTER (WHERE status IN ('RESOLVED','CLOSEDAFTERRESOLUTION')) AS resolved_at,",
+    "line": 259
+   }
+  },
+  {
+   "from": "field:complaint_facts.was_rejected",
+   "to": "field:complaint_events.status",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "bool_or(status IN ('REJECTED','CLOSEDAFTERREJECTION'))     AS was_rejected,",
+    "line": 257
+   }
+  },
+  {
+   "from": "field:complaint_facts.resolved_at",
+   "to": "field:complaint_events.status",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "min(entered_at) FILTER (WHERE status IN ('RESOLVED','CLOSEDAFTERRESOLUTION')) AS resolved_at,",
+    "line": 259
+   }
+  },
+  {
+   "from": "field:complaint_facts.application_status",
+   "to": "field:complaint_events.status",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "SELECT service_request_id, status AS application_status, status_seq AS current_state_seq,",
+    "line": 268
+   }
+  },
+  {
+   "from": "field:complaint_facts.is_open",
+   "to": "table:eg_wf_state_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "(NOT coalesce(tx.status_is_terminal,false))  AS status_is_open,",
+    "line": 165
+   },
+   "note": "is_open = NOT eg_wf_state_v2.isterminatestate (no state literal)"
+  },
+  {
+   "from": "field:complaint_facts.is_open",
+   "to": "field:complaint_events.status",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "status_is_open AS is_open, assignee_uuid AS current_assignee_uuid,",
+    "line": 269
+   }
+  },
+  {
+   "from": "field:complaint_facts.sla_target_ms",
+   "to": "field:ComplaintHierarchy.slaHours",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "SELECT coalesce(ceil(m.mdms_sla_hours * 3600000)::bigint, -- 1) ComplaintHierarchy leaf slaHours",
+    "line": 525
+   },
+   "note": "precedence 1"
+  },
+  {
+   "from": "field:complaint_facts.sla_target_ms",
+   "to": "field:EscalationConfig.defaultSlaByLevel",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "lad.ladder_sla_ms,                    -- 2) escalation-ladder total",
+    "line": 526
+   },
+   "note": "precedence 2"
+  },
+  {
+   "from": "field:complaint_facts.sla_target_ms",
+   "to": "field:EscalationConfig.overrides",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "CASE WHEN jsonb_typeof(e.overrides -> s.servicecode) = 'array'",
+    "line": 481
+   },
+   "note": "per-serviceCode ladder override"
+  },
+  {
+   "from": "field:complaint_facts.sla_target_ms",
+   "to": "field:complaint_events.business_sla_ms",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "cur.business_sla_ms                   -- 3) workflow SLA (state-root fallback)",
+    "line": 527
+   },
+   "note": "precedence 3"
+  },
+  {
+   "from": "field:ComplaintHierarchy.slaHours",
+   "to": "master:RAINMAKER-PGR.ComplaintHierarchy",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "CASE WHEN data->>'slaHours' ~ '^[0-9]+([.][0-9]+)?$'",
+    "line": 283
+   }
+  },
+  {
+   "from": "field:EscalationConfig.defaultSlaByLevel",
+   "to": "master:RAINMAKER-PGR.EscalationConfig",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "data->'defaultSlaByLevel' AS default_levels,",
+    "line": 351
+   }
+  },
+  {
+   "from": "field:EscalationConfig.overrides",
+   "to": "master:RAINMAKER-PGR.EscalationConfig",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "data->'overrides'         AS overrides,",
+    "line": 350
+   }
+  },
+  {
+   "from": "field:complaint_facts.sla_breached",
+   "to": "field:complaint_facts.sla_target_ms",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "CASE WHEN cur.is_open  THEN (tgt.sla_target_ms IS NOT NULL AND (clock.now_ms - roll.created_at) > tgt.sla_target_ms)",
+    "line": 409
+   }
+  },
+  {
+   "from": "field:complaint_facts.sla_breached",
+   "to": "field:complaint_facts.is_open",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "CASE WHEN cur.is_open  THEN (tgt.sla_target_ms IS NOT NULL AND (clock.now_ms - roll.created_at) > tgt.sla_target_ms)",
+    "line": 409
+   }
+  },
+  {
+   "from": "field:complaint_facts.sla_breached",
+   "to": "field:complaint_facts.resolved_at",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "WHEN roll.resolved_at IS NOT NULL THEN (tgt.sla_target_ms IS NOT NULL AND (roll.resolved_at - roll.created_at)",
+    "line": 410
+   }
+  },
+  {
+   "from": "field:complaint_facts.sla_status_bucket",
+   "to": "field:complaint_facts.sla_target_ms",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "WHEN (clock.now_ms - roll.created_at) > 0.8*tgt.sla_target_ms   THEN 'approaching'",
+    "line": 421
+   }
+  },
+  {
+   "from": "field:complaint_facts.department_code",
+   "to": "field:ComplaintHierarchy.department",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "CASE WHEN upper(btrim(coalesce(data->>'department', data->'departments'->>0))) IN ('NA','')",
+    "line": 287
+   },
+   "note": "from MDMS leaf, not Service.additionalDetail.department"
+  },
+  {
+   "from": "field:ComplaintHierarchy.department",
+   "to": "master:RAINMAKER-PGR.ComplaintHierarchy",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "CASE WHEN upper(btrim(coalesce(data->>'department', data->'departments'->>0))) IN ('NA','')",
+    "line": 287
+   }
+  },
+  {
+   "from": "field:complaint_facts.is_negative_rating",
+   "to": "field:Service.rating",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql",
+    "match": "(s.rating IS NOT NULL) AS has_rating, s.rating, (s.rating IS NOT NULL AND s.rating <= 2) AS is_negative_rating,",
+    "line": 423
+   }
+  },
+  {
+   "from": "table:pgr_dashboard_tenant_timezone",
+   "to": "table:eg_mdms_data",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260810000000__tenant_business_calendar_grains.sql",
+    "match": "  FROM eg_mdms_data d",
+    "line": 71
+   }
+  },
+  {
+   "from": "table:pgr_dashboard_tenant_timezone",
+   "to": "master:dss.DashboardConfig",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260810000000__tenant_business_calendar_grains.sql",
+    "match": "  WHERE d.schemacode = 'dss.DashboardConfig'",
+    "line": 72
+   }
+  },
+  {
+   "from": "table:pgr_dashboard_tenant_timezone",
+   "to": "field:DashboardConfig.timeZone",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260810000000__tenant_business_calendar_grains.sql",
+    "match": "       btrim(s.data->>'timeZone') AS resolved_zone",
+    "line": 79
+   }
+  },
+  {
+   "from": "field:DashboardConfig.timeZone",
+   "to": "master:dss.DashboardConfig",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260810000000__tenant_business_calendar_grains.sql",
+    "match": "  WHERE d.schemacode = 'dss.DashboardConfig'",
+    "line": 72
+   }
+  },
+  {
+   "from": "table:pgr_mv_kpi",
+   "to": "table:eg_pgr_service_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "CREATE MATERIALIZED VIEW IF NOT EXISTS pgr_mv_kpi AS",
+    "line": 4
+   },
+   "note": "FROM eg_pgr_service_v2 s WHERE s.active = true"
+  },
+  {
+   "from": "table:pgr_mv_monthly",
+   "to": "table:eg_pgr_service_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "CREATE MATERIALIZED VIEW IF NOT EXISTS pgr_mv_monthly AS",
+    "line": 21
+   },
+   "note": "FROM eg_pgr_service_v2 s WHERE s.active = true"
+  },
+  {
+   "from": "table:pgr_mv_monthly_source",
+   "to": "table:eg_pgr_service_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "CREATE MATERIALIZED VIEW IF NOT EXISTS pgr_mv_monthly_source AS",
+    "line": 37
+   },
+   "note": "FROM eg_pgr_service_v2 s WHERE s.active = true"
+  },
+  {
+   "from": "table:pgr_mv_dimension",
+   "to": "table:eg_pgr_service_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "CREATE MATERIALIZED VIEW IF NOT EXISTS pgr_mv_dimension AS",
+    "line": 51
+   },
+   "note": "FROM eg_pgr_service_v2 s WHERE s.active = true"
+  },
+  {
+   "from": "table:pgr_mv_dimension",
+   "to": "table:eg_pgr_address_v2",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "LEFT JOIN eg_pgr_address_v2 a ON s.id = a.parentid",
+    "line": 98
+   }
+  },
+  {
+   "from": "table:pgr_mv_kpi",
+   "to": "wf:state:RESOLVED",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "  COUNT(*) FILTER (WHERE s.applicationstatus IN ('RESOLVED','CLOSEDAFTERRESOLUTION')) AS closed,",
+    "line": 8
+   }
+  },
+  {
+   "from": "table:pgr_mv_kpi",
+   "to": "wf:state:CLOSEDAFTERRESOLUTION",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "  COUNT(*) FILTER (WHERE s.applicationstatus IN ('RESOLVED','CLOSEDAFTERRESOLUTION')) AS closed,",
+    "line": 8
+   }
+  },
+  {
+   "from": "table:pgr_mv_kpi",
+   "to": "field:Service.applicationStatus",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "  COUNT(*) FILTER (WHERE s.applicationstatus IN ('RESOLVED','CLOSEDAFTERRESOLUTION')) AS closed,",
+    "line": 8
+   }
+  },
+  {
+   "from": "table:pgr_mv_dimension",
+   "to": "wf:state:RESOLVED",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "  COUNT(*) FILTER (WHERE s.applicationstatus IN ('RESOLVED','CLOSEDAFTERRESOLUTION')) AS closed,",
+    "line": 55
+   }
+  },
+  {
+   "from": "table:pgr_mv_dimension",
+   "to": "wf:state:CLOSEDAFTERRESOLUTION",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "  COUNT(*) FILTER (WHERE s.applicationstatus IN ('RESOLVED','CLOSEDAFTERRESOLUTION')) AS closed,",
+    "line": 55
+   }
+  },
+  {
+   "from": "table:pgr_mv_dimension",
+   "to": "field:Service.applicationStatus",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "  COUNT(*) FILTER (WHERE s.applicationstatus IN ('RESOLVED','CLOSEDAFTERRESOLUTION')) AS closed,",
+    "line": 55
+   }
+  },
+  {
+   "from": "table:pgr_mv_dimension",
+   "to": "field:Service.serviceCode",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "SELECT s.tenantid, 'type', s.servicecode,",
+    "line": 77
+   }
+  },
+  {
+   "from": "table:pgr_mv_dimension",
+   "to": "field:Address.locality",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql",
+    "match": "SELECT s.tenantid, 'boundary', COALESCE(a.locality, 'Unknown'),",
+    "line": 89
+   }
+  },
+  {
+   "from": "table:complaint_open_state_daily",
+   "to": "table:complaint_facts",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "          + \"FROM complaint_facts cf \"",
+    "line": 71
+   },
+   "note": "populated by scheduler INSERT...SELECT; table created V20260608000000, cols V20260629000000"
+  },
+  {
+   "from": "table:complaint_open_state_daily",
+   "to": "table:pgr_dashboard_tenant_timezone",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "          + \"FROM pgr_dashboard_tenant_timezone candidate \"",
+    "line": 73
+   }
+  },
+  {
+   "from": "table:complaint_open_state_daily",
+   "to": "field:complaint_facts.sla_breached",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "          + \"       cf.sla_breached AS sla_breached, cf.sla_status_bucket AS sla_status_bucket, \"",
+    "line": 66
+   }
+  },
+  {
+   "from": "table:complaint_open_state_daily",
+   "to": "field:complaint_facts.is_open",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "          + \"WHERE cf.is_open \"",
+    "line": 79
+   }
+  },
+  {
+   "from": "table:complaint_open_state_daily",
+   "to": "field:complaint_facts.department_code",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "          + \"       cf.current_assignee_uuid AS current_assignee_uuid, cf.department_code AS department_code, \"",
+    "line": 69
+   }
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "service:pgr-services",
+   "rel": "part-of",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "public class DashboardRefreshScheduler {",
+    "line": 32
+   }
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "table:complaint_events",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "\"complaint_events\", \"complaint_facts\"",
+    "line": 40
+   },
+   "note": "REFRESH MATERIALIZED VIEW CONCURRENTLY"
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "table:complaint_facts",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "\"complaint_events\", \"complaint_facts\"",
+    "line": 40
+   },
+   "note": "REFRESH MATERIALIZED VIEW CONCURRENTLY"
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "table:pgr_mv_kpi",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "\"pgr_mv_kpi\", \"pgr_mv_monthly\", \"pgr_mv_monthly_source\", \"pgr_mv_dimension\"",
+    "line": 45
+   },
+   "note": "legacy MV refresh"
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "table:pgr_mv_monthly",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "\"pgr_mv_kpi\", \"pgr_mv_monthly\", \"pgr_mv_monthly_source\", \"pgr_mv_dimension\"",
+    "line": 45
+   },
+   "note": "legacy MV refresh"
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "table:pgr_mv_monthly_source",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "\"pgr_mv_kpi\", \"pgr_mv_monthly\", \"pgr_mv_monthly_source\", \"pgr_mv_dimension\"",
+    "line": 45
+   },
+   "note": "legacy MV refresh"
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "table:pgr_mv_dimension",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "\"pgr_mv_kpi\", \"pgr_mv_monthly\", \"pgr_mv_monthly_source\", \"pgr_mv_dimension\"",
+    "line": 45
+   },
+   "note": "legacy MV refresh"
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "table:complaint_open_state_daily",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "\"INSERT INTO complaint_open_state_daily \"",
+    "line": 60
+   }
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "table:complaint_facts",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "          + \"FROM complaint_facts cf \"",
+    "line": 71
+   }
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "table:pgr_dashboard_tenant_timezone",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "          + \"FROM pgr_dashboard_tenant_timezone candidate \"",
+    "line": 73
+   }
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "config:pgr.dashboard.refresh.interval.ms",
+   "rel": "uses-config",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "@Scheduled(fixedDelayString = \"${pgr.dashboard.refresh.interval.ms:300000}\")",
+    "line": 88
+   }
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "config:pgr.dashboard.refresh.enabled",
+   "rel": "uses-config",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "if (!Boolean.TRUE.equals(config.getDashboardRefreshEnabled())) {",
+    "line": 90
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:GET /pgr-services/v2/dashboard",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java",
+    "match": "@GetMapping(\"/dashboard\")",
+    "line": 150
+   }
+  },
+  {
+   "from": "api:GET /pgr-services/v2/dashboard",
+   "to": "class:RequestsApiController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java",
+    "match": "@GetMapping(\"/dashboard\")",
+    "line": 150
+   }
+  },
+  {
+   "from": "class:RequestsApiController",
+   "to": "class:DashboardService",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java",
+    "match": "DashboardResponse response = dashboardService.getDashboardData(tenantId, fromDate, toDate);",
+    "line": 155
+   }
+  },
+  {
+   "from": "class:DashboardService",
+   "to": "class:DashboardRepository",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardService.java",
+    "match": "private final DashboardRepository repository;",
+    "line": 11
+   }
+  },
+  {
+   "from": "class:DashboardRepository",
+   "to": "class:DashboardQueryBuilder",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/DashboardRepository.java",
+    "match": "private final DashboardQueryBuilder queryBuilder;",
+    "line": 23
+   }
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "service:pgr-services",
+   "rel": "part-of",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "public class DashboardQueryBuilder {",
+    "line": 11
+   }
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "table:pgr_mv_kpi",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "unique_citizens FROM pgr_mv_kpi WHERE ",
+    "line": 25
+   }
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "table:pgr_mv_monthly",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "open_count, unique_citizens FROM pgr_mv_monthly WHERE ",
+    "line": 31
+   }
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "table:pgr_mv_monthly_source",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "source, total FROM pgr_mv_monthly_source WHERE ",
+    "line": 38
+   }
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "table:pgr_mv_dimension",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "completion_rate FROM pgr_mv_dimension WHERE ",
+    "line": 45
+   }
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "table:eg_pgr_service_v2",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "\" FROM {schema}.eg_pgr_service_v2 s WHERE s.active = true AND \");",
+    "line": 60
+   },
+   "note": "filtered (date range) queries hit base table"
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "table:eg_pgr_address_v2",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "LEFT JOIN {schema}.eg_pgr_address_v2 a ON s.id = a.parentid",
+    "line": 136
+   }
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "table:eg_mdms_data",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "FROM eg_mdms_data WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive = true",
+    "line": 149
+   }
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "master:RAINMAKER-PGR.ComplaintHierarchy",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "FROM eg_mdms_data WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive = true",
+    "line": 149
+   },
+   "note": "serviceCode -> department for department breakdown"
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "field:ComplaintHierarchy.department",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "data->>'department' AS dept_code",
+    "line": 148
+   }
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "master:common-masters.Department",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "FROM eg_mdms_data WHERE schemacode = 'common-masters.Department' AND isactive = true",
+    "line": 152
+   }
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "wf:state:RESOLVED",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "private static final String CLOSED_STATUSES = \"'RESOLVED','CLOSEDAFTERRESOLUTION'\";",
+    "line": 13
+   }
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "wf:state:CLOSEDAFTERRESOLUTION",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "private static final String CLOSED_STATUSES = \"'RESOLVED','CLOSEDAFTERRESOLUTION'\";",
+    "line": 13
+   }
+  },
+  {
+   "from": "class:DashboardQueryBuilder",
+   "to": "field:Service.applicationStatus",
+   "rel": "reads",
+   "status": "inferred",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "private static final String CLOSED_STATUSES = \"'RESOLVED','CLOSEDAFTERRESOLUTION'\";",
+    "line": 13
+   },
+   "note": "CLOSED_STATUSES applied to s.applicationstatus in filtered queries"
+  },
+  {
+   "from": "api:GET /pgr-services/v2/dashboard",
+   "to": "biz:ComplaintStatus",
+   "rel": "realises",
+   "status": "inferred",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java",
+    "match": "private static final String CLOSED_STATUSES = \"'RESOLVED','CLOSEDAFTERRESOLUTION'\";",
+    "line": 13
+   },
+   "note": "dashboard 'closed' = RESOLVED/CLOSEDAFTERRESOLUTION"
+  },
+  {
+   "from": "class:AnalyticsController",
+   "to": "service:pgr-services",
+   "rel": "part-of",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@RequestMapping(\"/v2/analytics\")",
+    "line": 40
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/analytics/_access",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/_access\")",
+    "line": 68
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/analytics/_access",
+   "to": "class:AnalyticsController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/_access\")",
+    "line": 68
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/analytics/_query",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/_query\")",
+    "line": 87
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/analytics/_query",
+   "to": "class:AnalyticsController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/_query\")",
+    "line": 87
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/analytics/_schema",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/_schema\")",
+    "line": 113
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/analytics/_schema",
+   "to": "class:AnalyticsController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/_schema\")",
+    "line": 113
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/analytics/public/packs",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/public/packs\")",
+    "line": 133
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/analytics/public/packs",
+   "to": "class:AnalyticsController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/public/packs\")",
+    "line": 133
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/analytics/public/_query",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/public/_query\")",
+    "line": 187
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/analytics/public/_query",
+   "to": "class:AnalyticsController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/public/_query\")",
+    "line": 187
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/analytics/public/catalog/_search",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/public/catalog/_search\")",
+    "line": 262
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/analytics/public/catalog/_search",
+   "to": "class:AnalyticsController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/public/catalog/_search\")",
+    "line": 262
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/analytics/public/_options",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/public/_options\")",
+    "line": 296
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/analytics/public/_options",
+   "to": "class:AnalyticsController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/public/_options\")",
+    "line": 296
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/analytics/config/_refresh",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/config/_refresh\")",
+    "line": 321
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/analytics/config/_refresh",
+   "to": "class:AnalyticsController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/config/_refresh\")",
+    "line": 321
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/analytics/packs",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/packs\")",
+    "line": 348
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/analytics/packs",
+   "to": "class:AnalyticsController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/packs\")",
+    "line": 348
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/analytics/catalog/_search",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/catalog/_search\")",
+    "line": 410
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/analytics/catalog/_search",
+   "to": "class:AnalyticsController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "@PostMapping(\"/catalog/_search\")",
+    "line": 410
+   }
+  },
+  {
+   "from": "class:AnalyticsController",
+   "to": "class:AnalyticsService",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "Map<String,Object> result = service.query(body, requestInfo, capabilities, tenantId, stateLen, xTraceId);",
+    "line": 101
+   }
+  },
+  {
+   "from": "class:AnalyticsController",
+   "to": "class:KpiCatalogService",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "if (!kpiCatalogService.isPublicDashboardEnabled(tenantId)) {",
+    "line": 137
+   }
+  },
+  {
+   "from": "class:AnalyticsController",
+   "to": "class:AnalyticsCapabilityService",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsController.java",
+    "match": "capabilityService.resolve(extractRequestInfo(body), tenantId);",
+    "line": 73
+   }
+  },
+  {
+   "from": "class:AnalyticsService",
+   "to": "class:AnalyticsPlanner",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsService.java",
+    "match": "private final AnalyticsPlanner planner;",
+    "line": 148
+   }
+  },
+  {
+   "from": "class:AnalyticsService",
+   "to": "class:AnalyticsCatalog",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsService.java",
+    "match": "private final AnalyticsCatalog catalog;",
+    "line": 149
+   }
+  },
+  {
+   "from": "class:AnalyticsService",
+   "to": "class:KpiCatalogService",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsService.java",
+    "match": "private final KpiCatalogService kpiCatalogService;",
+    "line": 151
+   }
+  },
+  {
+   "from": "class:AnalyticsService",
+   "to": "class:AnalyticsRowScopeResolver",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsService.java",
+    "match": "private final AnalyticsRowScopeResolver scopeResolver;",
+    "line": 152
+   }
+  },
+  {
+   "from": "class:AnalyticsService",
+   "to": "class:KpiQueryComposer",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsService.java",
+    "match": "private final KpiQueryComposer queryComposer;",
+    "line": 153
+   }
+  },
+  {
+   "from": "class:AnalyticsService",
+   "to": "table:complaint_facts",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsService.java",
+    "match": "try { return jdbc.queryForObject(\"SELECT max(facts_built_at) FROM complaint_facts\", Long.class); }",
+    "line": 814
+   }
+  },
+  {
+   "from": "class:AnalyticsService",
+   "to": "config:pgr.analytics.config-cache-ttl-ms",
+   "rel": "uses-config",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsService.java",
+    "match": "Long v = config == null ? null : config.getAnalyticsConfigCacheTtlMs();",
+    "line": 870
+   }
+  },
+  {
+   "from": "class:AnalyticsCatalog",
+   "to": "table:complaint_facts",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsCatalog.java",
+    "match": "grains.put(\"facts\", new Grain(\"facts\", \"complaint_facts\",",
+    "line": 59
+   }
+  },
+  {
+   "from": "class:AnalyticsCatalog",
+   "to": "table:complaint_events",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsCatalog.java",
+    "match": "grains.put(\"events\", new Grain(\"events\", \"complaint_events\",",
+    "line": 100
+   }
+  },
+  {
+   "from": "class:AnalyticsCatalog",
+   "to": "table:complaint_open_state_daily",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsCatalog.java",
+    "match": "grains.put(\"daily\", new Grain(\"daily\", \"complaint_open_state_daily\",",
+    "line": 127
+   }
+  },
+  {
+   "from": "class:AnalyticsCatalog",
+   "to": "field:complaint_facts.sla_breached",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsCatalog.java",
+    "match": "\"is_open\",\"is_resolved\",\"is_reopened\",\"was_rejected\",\"sla_breached\",\"current_state_sla_breached\",",
+    "line": 68
+   }
+  },
+  {
+   "from": "class:AnalyticsCatalog",
+   "to": "field:complaint_facts.is_open",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsCatalog.java",
+    "match": "\"is_open\",\"is_resolved\",\"is_reopened\",\"was_rejected\",\"sla_breached\",\"current_state_sla_breached\",",
+    "line": 68
+   }
+  },
+  {
+   "from": "class:AnalyticsCatalog",
+   "to": "field:complaint_facts.sla_target_ms",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsCatalog.java",
+    "match": "\"mdms_sla_hours\",\"sla_target_ms\"),",
+    "line": 94
+   }
+  },
+  {
+   "from": "class:AnalyticsPlanner",
+   "to": "class:AnalyticsCatalog",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsPlanner.java",
+    "match": "private final AnalyticsCatalog catalog;",
+    "line": 29
+   }
+  },
+  {
+   "from": "class:AnalyticsPlanner",
+   "to": "table:complaint_facts",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsPlanner.java",
+    "match": ".append(\" FROM \").append(g.table);",
+    "line": 120
+   },
+   "note": "table name from AnalyticsCatalog grain"
+  },
+  {
+   "from": "class:KpiCatalogService",
+   "to": "service:pgr-services",
+   "rel": "part-of",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/KpiCatalogService.java",
+    "match": "private static final String DSS_MODULE = \"dss\";",
+    "line": 35
+   }
+  },
+  {
+   "from": "class:KpiCatalogService",
+   "to": "master:dss.KpiDefinition",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/KpiCatalogService.java",
+    "match": "private static final String MASTER_KPI  = \"KpiDefinition\";",
+    "line": 36
+   }
+  },
+  {
+   "from": "class:KpiCatalogService",
+   "to": "master:dss.DashboardPack",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/KpiCatalogService.java",
+    "match": "private static final String MASTER_PACK = \"DashboardPack\";",
+    "line": 37
+   }
+  },
+  {
+   "from": "class:KpiCatalogService",
+   "to": "master:dss.DashboardConfig",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/KpiCatalogService.java",
+    "match": "private static final String MASTER_CONFIG = \"DashboardConfig\";",
+    "line": 38
+   }
+  },
+  {
+   "from": "class:KpiCatalogService",
+   "to": "field:DashboardConfig.timeZone",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/KpiCatalogService.java",
+    "match": "Object v = record.get(\"timeZone\");",
+    "line": 241
+   }
+  },
+  {
+   "from": "class:KpiCatalogService",
+   "to": "coreapi:/egov-mdms-service/v1/_search",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/KpiCatalogService.java",
+    "match": "return new StringBuilder().append(config.getMdmsHost()).append(config.getMdmsEndPoint());",
+    "line": 433
+   }
+  },
+  {
+   "from": "class:KpiCatalogService",
+   "to": "config:egov.mdms.search.endpoint",
+   "rel": "uses-config",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/config/PGRConfiguration.java",
+    "match": "@Value(\"${egov.mdms.search.endpoint}\")",
+    "line": 125
+   },
+   "note": "PGRConfiguration.mdmsEndPoint used by KpiCatalogService.getMdmsSearchUrl"
+  },
+  {
+   "from": "class:KpiCatalogService",
+   "to": "config:pgr.analytics.config-cache-ttl-ms",
+   "rel": "uses-config",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/KpiCatalogService.java",
+    "match": "Long v = config == null ? null : config.getAnalyticsConfigCacheTtlMs();",
+    "line": 380
+   }
+  },
+  {
+   "from": "class:AnalyticsRowScopeResolver",
+   "to": "class:KpiCatalogService",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsRowScopeResolver.java",
+    "match": "if (scope.departmentCodes != null && catalog.isDepartmentScopingDisabled(tenantId)) {",
+    "line": 61
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/analytics/_query",
+   "to": "biz:SLA",
+   "rel": "realises",
+   "status": "inferred",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsCatalog.java",
+    "match": "\"mdms_sla_hours\",\"sla_target_ms\"),",
+    "line": 94
+   },
+   "note": "analytics exposes SLA columns of complaint_facts"
+  },
+  {
+   "from": "class:OnboardingApiController",
+   "to": "service:pgr-services",
+   "rel": "part-of",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@RequestMapping(\"/v2/onboarding\")",
+    "line": 28
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/onboarding/signups/_create",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/signups/_create\")",
+    "line": 43
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/onboarding/signups/_create",
+   "to": "class:OnboardingApiController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/signups/_create\")",
+    "line": 43
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/onboarding/signups/_update",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/signups/_update\")",
+    "line": 52
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/onboarding/signups/_update",
+   "to": "class:OnboardingApiController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/signups/_update\")",
+    "line": 52
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/onboarding/signups/_search",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/signups/_search\")",
+    "line": 59
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/onboarding/signups/_search",
+   "to": "class:OnboardingApiController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/signups/_search\")",
+    "line": 59
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/onboarding/identifiers/_check",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/identifiers/_check\")",
+    "line": 66
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/onboarding/identifiers/_check",
+   "to": "class:OnboardingApiController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/identifiers/_check\")",
+    "line": 66
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/onboarding/signups/_submit",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/signups/_submit\")",
+    "line": 82
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/onboarding/signups/_submit",
+   "to": "class:OnboardingApiController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/signups/_submit\")",
+    "line": 82
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/onboarding/operations/_search",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/operations/_search\")",
+    "line": 114
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/onboarding/operations/_search",
+   "to": "class:OnboardingApiController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/operations/_search\")",
+    "line": 114
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/onboarding/operations/_retry",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/operations/_retry\")",
+    "line": 121
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/onboarding/operations/_retry",
+   "to": "class:OnboardingApiController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "@PostMapping(\"/operations/_retry\")",
+    "line": 121
+   }
+  },
+  {
+   "from": "class:OnboardingApiController",
+   "to": "class:OnboardingService",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "OnboardingSignup signup = service.create(principal(httpRequest), nested(request, \"Signup\"), idempotencyKey);",
+    "line": 48
+   }
+  },
+  {
+   "from": "class:OnboardingApiController",
+   "to": "class:IdentitySessionClient",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingApiController.java",
+    "match": "if (!identitySessionClient.identifierAvailable(identifier.type(), identifier.value())) {",
+    "line": 105
+   }
+  },
+  {
+   "from": "class:WorkspaceApiController",
+   "to": "service:pgr-services",
+   "rel": "part-of",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/WorkspaceApiController.java",
+    "match": "@RequestMapping(\"/v2/onboarding/workspaces\")",
+    "line": 13
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/onboarding/workspaces/_search",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/WorkspaceApiController.java",
+    "match": "@PostMapping(\"/_search\")",
+    "line": 18
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/onboarding/workspaces/_search",
+   "to": "class:WorkspaceApiController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/WorkspaceApiController.java",
+    "match": "@PostMapping(\"/_search\")",
+    "line": 18
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/onboarding/workspaces/_update",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/WorkspaceApiController.java",
+    "match": "@PostMapping(\"/_update\")",
+    "line": 19
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/onboarding/workspaces/_update",
+   "to": "class:WorkspaceApiController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/WorkspaceApiController.java",
+    "match": "@PostMapping(\"/_update\")",
+    "line": 19
+   }
+  },
+  {
+   "from": "service:pgr-services",
+   "to": "api:POST /pgr-services/v2/onboarding/workspaces/_rename",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/WorkspaceApiController.java",
+    "match": "@PostMapping(\"/_rename\")",
+    "line": 20
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/onboarding/workspaces/_rename",
+   "to": "class:WorkspaceApiController",
+   "rel": "handled-by",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/WorkspaceApiController.java",
+    "match": "@PostMapping(\"/_rename\")",
+    "line": 20
+   }
+  },
+  {
+   "from": "class:WorkspaceApiController",
+   "to": "class:WorkspaceService",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/WorkspaceApiController.java",
+    "match": "private final WorkspaceService service;",
+    "line": 15
+   }
+  },
+  {
+   "from": "class:WorkspaceApiController",
+   "to": "class:WorkspaceRenamePublisher",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/WorkspaceApiController.java",
+    "match": "private final WorkspaceRenamePublisher publisher;",
+    "line": 16
+   }
+  },
+  {
+   "from": "api:POST /pgr-services/v2/onboarding/workspaces/_search",
+   "to": "biz:Workspace",
+   "rel": "realises",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/WorkspaceApiController.java",
+    "match": "@PostMapping(\"/_search\")",
+    "line": 18
+   }
+  },
+  {
+   "from": "class:WorkspaceService",
+   "to": "class:WorkspaceRepository",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceService.java",
+    "match": "private final WorkspaceRepository repository;",
+    "line": 10
+   }
+  },
+  {
+   "from": "class:WorkspaceService",
+   "to": "class:WorkspaceGateway",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceService.java",
+    "match": "private final WorkspaceGateway gateway;",
+    "line": 11
+   }
+  },
+  {
+   "from": "class:WorkspaceRenamePublisher",
+   "to": "class:WorkspaceRepository",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceRenamePublisher.java",
+    "match": "private final WorkspaceRepository repository;",
+    "line": 12
+   }
+  },
+  {
+   "from": "class:OnboardingService",
+   "to": "class:OnboardingRepository",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingService.java",
+    "match": "private final OnboardingRepository repository;",
+    "line": 32
+   }
+  },
+  {
+   "from": "class:OnboardingRepository",
+   "to": "table:eg_pgr_onboarding_signup",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingRepository.java",
+    "match": "return jdbcTemplate.update(\"INSERT INTO eg_pgr_onboarding_signup \" +",
+    "line": 63
+   }
+  },
+  {
+   "from": "class:OnboardingRepository",
+   "to": "table:eg_pgr_onboarding_identifier",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingRepository.java",
+    "match": "int changed = jdbcTemplate.update(\"INSERT INTO eg_pgr_onboarding_identifier \" +",
+    "line": 118
+   }
+  },
+  {
+   "from": "class:OnboardingRepository",
+   "to": "table:eg_pgr_onboarding_operation",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingRepository.java",
+    "match": "jdbcTemplate.update(\"INSERT INTO eg_pgr_onboarding_operation \" +",
+    "line": 138
+   }
+  },
+  {
+   "from": "class:OnboardingRepository",
+   "to": "table:eg_pgr_onboarding_workspace_name",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingRepository.java",
+    "match": "int reserved = jdbcTemplate.update(\"INSERT INTO eg_pgr_onboarding_workspace_name(normalized_name,tenant_id) \" +",
+    "line": 112
+   }
+  },
+  {
+   "from": "class:OnboardingRepository",
+   "to": "table:eg_pgr_onboarding_workspace",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingRepository.java",
+    "match": "INSERT INTO eg_pgr_onboarding_workspace(tenant_id,status,steps,version,seed_version,updated_at,updated_by)",
+    "line": 290
+   }
+  },
+  {
+   "from": "class:OnboardingRepository",
+   "to": "table:eg_pgr_onboarding_workspace_event",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingRepository.java",
+    "match": "\"INSERT INTO eg_pgr_onboarding_workspace_event(id,tenant_id,event_type,version,details,created_at,created_by) \" +",
+    "line": 293
+   }
+  },
+  {
+   "from": "class:WorkspaceRepository",
+   "to": "table:eg_pgr_onboarding_workspace",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceRepository.java",
+    "match": "eg_pgr_onboarding_workspace",
+    "line": 34
+   }
+  },
+  {
+   "from": "class:WorkspaceRepository",
+   "to": "table:eg_pgr_onboarding_workspace_rename",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceRepository.java",
+    "match": "eg_pgr_onboarding_workspace_rename",
+    "line": 65
+   }
+  },
+  {
+   "from": "class:WorkspaceRepository",
+   "to": "table:eg_pgr_onboarding_workspace_name",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceRepository.java",
+    "match": "eg_pgr_onboarding_workspace_name",
+    "line": 77
+   }
+  },
+  {
+   "from": "class:NotificationAccountReconciler",
+   "to": "table:eg_pgr_onboarding_operation",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/NotificationAccountReconciler.java",
+    "match": "return jdbc.update(\"UPDATE eg_pgr_onboarding_operation o SET record_progress = \"",
+    "line": 106
+   }
+  },
+  {
+   "from": "class:NotificationAccountReconciler",
+   "to": "table:eg_pgr_onboarding_signup",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/NotificationAccountReconciler.java",
+    "match": "+ \"JOIN eg_pgr_onboarding_signup s ON s.id = o.signup_id \"",
+    "line": 71
+   }
+  },
+  {
+   "from": "table:eg_pgr_onboarding_operation",
+   "to": "table:eg_pgr_onboarding_signup",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260914000000__create_onboarding_tables.sql",
+    "match": "NOT NULL REFERENCES eg_pgr_onboarding_signup(id)",
+    "line": 46
+   },
+   "note": "FK signup_id -> signup(id)"
+  },
+  {
+   "from": "table:eg_pgr_onboarding_identifier",
+   "to": "table:eg_pgr_onboarding_signup",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/db/migration/main/V20260914000000__create_onboarding_tables.sql",
+    "match": "NOT NULL REFERENCES eg_pgr_onboarding_signup(id)",
+    "line": 33
+   },
+   "note": "FK signup_id -> signup(id)"
+  },
+  {
+   "from": "class:OnboardingRunner",
+   "to": "service:pgr-services",
+   "rel": "part-of",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingRunner.java",
+    "match": "public class OnboardingRunner implements SmartLifecycle {",
+    "line": 26
+   }
+  },
+  {
+   "from": "class:OnboardingRunner",
+   "to": "config:pgr.onboarding.runner.enabled",
+   "rel": "uses-config",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingRunner.java",
+    "match": "@ConditionalOnProperty(name = \"pgr.onboarding.runner.enabled\", havingValue = \"true\")",
+    "line": 25
+   }
+  },
+  {
+   "from": "class:OnboardingRunner",
+   "to": "class:OnboardingSteps",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingRunner.java",
+    "match": "steps.perform(step, signup, operation, progress);",
+    "line": 108
+   }
+  },
+  {
+   "from": "class:OnboardingRunner",
+   "to": "class:BaselineUpgrader",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingRunner.java",
+    "match": "else if (upgrader != null) upgrader.upgradeNext();",
+    "line": 90
+   }
+  },
+  {
+   "from": "class:OnboardingRunner",
+   "to": "class:OnboardingRepository",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingRunner.java",
+    "match": "private final OnboardingRepository repository;",
+    "line": 47
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "class:OnboardingProvisionerClient",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "this.client = client; this.seed = seed; this.mapper = mapper; this.identifiers = identifiers;",
+    "line": 40
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "class:PlatformBaseline",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "for (JsonNode schema : seed.schemas()) {",
+    "line": 186
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "class:NotificationDefaultsStep",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "case NotificationDefaultsStep.STEP -> { if (notificationDefaults != null) notificationDefaults.run(this, signu",
+    "line": 79
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "class:NotificationAccountClient",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "NotificationAccountClient.Outcome outcome = notificationAccounts.provision(tenant);",
+    "line": 127
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "master:tenant.tenants",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "ensureRecord(scope, tenant, \"tenant.tenants\", tenant, data, true);",
+    "line": 179
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/egov-enc-service/crypto/v1/_generatekey",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "client.write(scope, \"enc\", \"/egov-enc-service/crypto/v1/_generatekey\", Map.of(\"tenantId\", tenant))",
+    "line": 181
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/localization/messages/v1/_upsert",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "client.write(scope, \"localization\", \"/localization/messages/v1/_upsert\", Map.of(\"tenantId\", tenant, \"messages\", chunk));",
+    "line": 214
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/egov-workflow-v2/egov-wf/businessservice/_search",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "\"/egov-workflow-v2/egov-wf/businessservice/_search?tenantId=\"",
+    "line": 240
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/egov-workflow-v2/egov-wf/businessservice/_create",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "if (found.isEmpty()) createProjectedRecord(scope, \"workflow\", \"/egov-workflow-v2/egov-wf/businessservice/_create\",",
+    "line": 244
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "wf:bs:PGR",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "progress.record(\"workflow:\" + workflow.path(\"businessService\").asText(), () -> ensureWorkflow(scope, tenant, workflow));",
+    "line": 195
+   },
+   "note": "seeds every workflow in platform-baseline (only PGR)"
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/boundary-service/boundary-hierarchy-definition/_create",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "\"/boundary-service/boundary-hierarchy-definition/_create\", Map.of(\"BoundaryHierarchy\",",
+    "line": 264
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/boundary-service/boundary/_create",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "Map.of(), \"Boundary\", tenant, \"/boundary-service/boundary/_create\",",
+    "line": 269
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/boundary-service/boundary-relationships/_create",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "\"/boundary-service/boundary-relationships/_create\", Map.of(\"BoundaryRelationship\",",
+    "line": 285
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/egov-hrms/employees/_create",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "client.write(scope, \"hrms\", \"/egov-hrms/employees/_create\", Map.of(\"Employees\", List.of(employee)));",
+    "line": 415
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/egov-hrms/employees/_search",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "JsonNode page = client.read(\"hrms\", \"/egov-hrms/employees/_search?tenantId=\" + tenant",
+    "line": 451
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/egov-mdms-service/schema/v1/_create",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "createProjectedRecord(scope, \"mdms\", \"/egov-mdms-service/schema/v1/_create\", Map.of(\"SchemaDefinition\", body));",
+    "line": 496
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/egov-mdms-service/v2/_create/{schema}",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "createProjectedRecord(scope, \"mdms\", \"/egov-mdms-service/v2/_create/\" + schema, Map.of(\"Mdms\", Map.of(",
+    "line": 514
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/egov-mdms-service/v2/_update/{schema}",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "client.write(scope, \"mdms\", \"/egov-mdms-service/v2/_update/\" + schema, Map.of(\"Mdms\", record));",
+    "line": 523
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "coreapi:/egov-mdms-service/v2/_search",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "JsonNode rows = client.read(\"mdms\", client.mdmsSearchPath(), Map.of(\"MdmsCriteria\", criteria)).path(\"mdms\");",
+    "line": 504
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "api:POST /internal/identity/v1/memberships/_ensure",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "case \"MEMBERSHIP\" -> client.identity(\"memberships/_ensure\", identityBody(signup, operation, true));",
+    "line": 86
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "api:POST /internal/identity/v1/bindings/_ensure",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "client.identity(\"bindings/_ensure\", body);",
+    "line": 90
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "api:POST /internal/identity/v1/organizations/_ensure",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "client.identity(\"organizations/_ensure\", body);",
+    "line": 142
+   }
+  },
+  {
+   "from": "class:OnboardingSteps",
+   "to": "api:POST /internal/identity/v1/organizations/_lifecycle",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java",
+    "match": "client.identity(\"organizations/_lifecycle\", Map.of(\"operationId\", operation.getId().toString(),",
+    "line": 146
+   }
+  },
+  {
+   "from": "class:OnboardingProvisionerClient",
+   "to": "coreapi:/user/oauth/token",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingProvisionerClient.java",
+    "match": "login = http.postForObject(base(\"user\") + \"/user/oauth/token\", new HttpEntity<>(form, headers), Map.class);",
+    "line": 67
+   }
+  },
+  {
+   "from": "class:OnboardingProvisionerClient",
+   "to": "coreapi:/user/_details",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingProvisionerClient.java",
+    "match": "JsonNode details = exchange(base(\"user\") + \"/user/_details?access_token=\"",
+    "line": 132
+   }
+  },
+  {
+   "from": "class:OnboardingProvisionerClient",
+   "to": "config:egov.mdms.v2.search.endpoint",
+   "rel": "uses-config",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingProvisionerClient.java",
+    "match": "public String mdmsSearchPath() { return env.getProperty(\"egov.mdms.v2.search.endpoint\", \"/egov-mdms-service/v2",
+    "line": 92
+   }
+  },
+  {
+   "from": "class:OnboardingProvisionerClient",
+   "to": "config:pgr.onboarding.identity-bff.url",
+   "rel": "uses-config",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingProvisionerClient.java",
+    "match": "String url = env.getProperty(\"pgr.onboarding.identity-bff.url\", \"\");",
+    "line": 242
+   }
+  },
+  {
+   "from": "class:OnboardingProvisionerClient",
+   "to": "config:pgr.onboarding.identity-bff.token",
+   "rel": "uses-config",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingProvisionerClient.java",
+    "match": "String token = env.getProperty(\"pgr.onboarding.identity-bff.token\", \"\");",
+    "line": 241
+   }
+  },
+  {
+   "from": "class:IdentitySessionClient",
+   "to": "api:POST /internal/identity/v1/sessions/_introspect",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/IdentitySessionClient.java",
+    "match": "private static final String INTROSPECT = \"/internal/identity/v1/sessions/_introspect\";",
+    "line": 24
+   }
+  },
+  {
+   "from": "class:IdentitySessionClient",
+   "to": "api:POST /internal/identity/v1/identifiers/_check",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/IdentitySessionClient.java",
+    "match": "private static final String CHECK = \"/internal/identity/v1/identifiers/_check\";",
+    "line": 25
+   }
+  },
+  {
+   "from": "class:IdentitySessionClient",
+   "to": "config:pgr.onboarding.identity-bff.url",
+   "rel": "uses-config",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/IdentitySessionClient.java",
+    "match": "@Value(\"${pgr.onboarding.identity-bff.url:}\") String identityBffUrl,",
+    "line": 33
+   }
+  },
+  {
+   "from": "service:identity-bff",
+   "to": "api:POST /internal/identity/v1/sessions/_introspect",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/identity-bff/src/modules/onboarding/routes.ts",
+    "match": "route(\"/sessions/_introspect\"",
+    "line": 93
+   }
+  },
+  {
+   "from": "service:identity-bff",
+   "to": "api:POST /internal/identity/v1/identifiers/_check",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/identity-bff/src/modules/onboarding/routes.ts",
+    "match": "route(\"/identifiers/_check\"",
+    "line": 100
+   }
+  },
+  {
+   "from": "service:identity-bff",
+   "to": "api:POST /internal/identity/v1/organizations/_ensure",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/identity-bff/src/modules/onboarding/routes.ts",
+    "match": "route(\"/organizations/_ensure\"",
+    "line": 105
+   }
+  },
+  {
+   "from": "service:identity-bff",
+   "to": "api:POST /internal/identity/v1/organizations/_lifecycle",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/identity-bff/src/modules/onboarding/routes.ts",
+    "match": "route(\"/organizations/_lifecycle\"",
+    "line": 111
+   }
+  },
+  {
+   "from": "service:identity-bff",
+   "to": "api:POST /internal/identity/v1/memberships/_ensure",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/identity-bff/src/modules/onboarding/routes.ts",
+    "match": "route(\"/memberships/_ensure\"",
+    "line": 116
+   }
+  },
+  {
+   "from": "service:identity-bff",
+   "to": "api:POST /internal/identity/v1/bindings/_ensure",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/identity-bff/src/modules/onboarding/routes.ts",
+    "match": "route(\"/bindings/_ensure\"",
+    "line": 117
+   }
+  },
+  {
+   "from": "class:NotificationAccountClient",
+   "to": "api:POST /novu-bridge/novu-adapter/v1/tenants/{tenantId}/_provision",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/NotificationAccountClient.java",
+    "match": "JsonNode body = post(\"/novu-adapter/v1/tenants/\" + tenantId + \"/_provision\", null);",
+    "line": 81
+   },
+   "note": "base URL default http://novu-bridge:8080/novu-bridge (compose)"
+  },
+  {
+   "from": "class:NotificationAccountClient",
+   "to": "api:POST /novu-bridge/novu-adapter/v1/tenants/_backfill",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/NotificationAccountClient.java",
+    "match": "JsonNode body = post(\"/novu-adapter/v1/tenants/_backfill\", Map.of(\"tenantIds\", tenantIds));",
+    "line": 99
+   }
+  },
+  {
+   "from": "class:NotificationAccountClient",
+   "to": "config:pgr.onboarding.notification-account.url",
+   "rel": "uses-config",
+   "status": "inferred",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/application.properties",
+    "match": "pgr.onboarding.notification-account.url=${PGR_ONBOARDING_NOTIFICATION_ACCOUNT_URL:}",
+    "line": 249
+   },
+   "note": "property consumed by NotificationAccountClient (url/token)"
+  },
+  {
+   "from": "class:NotificationAccountReconciler",
+   "to": "class:NotificationAccountClient",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/NotificationAccountReconciler.java",
+    "match": "Map<String, String> answered = client.backfill(call);",
+    "line": 83
+   }
+  },
+  {
+   "from": "service:novu-bridge",
+   "to": "api:POST /novu-bridge/novu-adapter/v1/tenants/{tenantId}/_provision",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/TenantAccountController.java",
+    "match": "@PostMapping(\"/{tenantId}/_provision\")",
+    "line": 62
+   }
+  },
+  {
+   "from": "service:novu-bridge",
+   "to": "api:POST /novu-bridge/novu-adapter/v1/tenants/_backfill",
+   "rel": "exposes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/TenantAccountController.java",
+    "match": "@PostMapping(\"/_backfill\")",
+    "line": 143
+   }
+  },
+  {
+   "from": "class:WorkspaceGateway",
+   "to": "master:RAINMAKER-PGR.ComplaintHierarchy",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceGateway.java",
+    "match": "for(JsonNode row:mdms.records(tenant,\"RAINMAKER-PGR.ComplaintHierarchy\",null))",
+    "line": 71
+   },
+   "note": "setup probe: complaint categories exist"
+  },
+  {
+   "from": "class:WorkspaceGateway",
+   "to": "master:common-masters.Department",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceGateway.java",
+    "match": "for(JsonNode row:mdms.records(tenant,\"common-masters.Department\",null))",
+    "line": 127
+   }
+  },
+  {
+   "from": "class:WorkspaceGateway",
+   "to": "master:common-masters.Designation",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceGateway.java",
+    "match": "for(JsonNode row:mdms.records(tenant,\"common-masters.Designation\",null))",
+    "line": 66
+   }
+  },
+  {
+   "from": "class:WorkspaceGateway",
+   "to": "master:common-masters.ThemeConfig",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceGateway.java",
+    "match": "for(JsonNode row:mdms.records(tenant,\"common-masters.ThemeConfig\",null))",
+    "line": 61
+   }
+  },
+  {
+   "from": "class:WorkspaceGateway",
+   "to": "master:CMS-BOUNDARY.HierarchySchema",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceGateway.java",
+    "match": "for(JsonNode row:mdms.records(tenant,\"CMS-BOUNDARY.HierarchySchema\",null))",
+    "line": 88
+   }
+  },
+  {
+   "from": "class:WorkspaceGateway",
+   "to": "master:tenant.tenants",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceGateway.java",
+    "match": "JsonNode rows=mdms.records(tenant,\"tenant.tenants\",tenant);",
+    "line": 132
+   }
+  },
+  {
+   "from": "class:WorkspaceGateway",
+   "to": "master:common-masters.StateInfo",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceGateway.java",
+    "match": "JsonNode info=mdms.records(tenant,\"common-masters.StateInfo\",tenant);",
+    "line": 137
+   }
+  },
+  {
+   "from": "class:WorkspaceGateway",
+   "to": "coreapi:/boundary-service/boundary-relationships/_search",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceGateway.java",
+    "match": "client.read(\"boundary\",\"/boundary-service/boundary-relationships/_search?tenantId=\"",
+    "line": 90
+   }
+  },
+  {
+   "from": "class:WorkspaceGateway",
+   "to": "coreapi:/egov-hrms/employees/_search",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceGateway.java",
+    "match": "client.read(\"hrms\",\"/egov-hrms/employees/_search?tenantId=\"",
+    "line": 111
+   }
+  },
+  {
+   "from": "class:WorkspaceGateway",
+   "to": "api:POST /internal/identity/v1/identifiers/_check",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceGateway.java",
+    "match": "client.identity(\"identifiers/_check\",Map.of(\"identifiers\",List.of(Map.of(\"type\",\"ORGANIZATION_NAME\",\"value\",no",
+    "line": 148
+   }
+  },
+  {
+   "from": "class:WorkspaceGateway",
+   "to": "class:WorkspaceWriteClient",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceGateway.java",
+    "match": "private final WorkspaceWriteClient writes;",
+    "line": 22
+   }
+  },
+  {
+   "from": "class:WorkspaceWriteClient",
+   "to": "coreapi:/mdms-v2/v2/_update/tenant.tenants",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceWriteClient.java",
+    "match": "write(\"/mdms-v2/v2/_update/tenant.tenants\",Map.of(\"Mdms\",record),token,false);",
+    "line": 25
+   },
+   "note": "via Kong gateway (egov.gateway.host)"
+  },
+  {
+   "from": "class:WorkspaceWriteClient",
+   "to": "master:tenant.tenants",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceWriteClient.java",
+    "match": "write(\"/mdms-v2/v2/_update/tenant.tenants\",Map.of(\"Mdms\",record),token,false);",
+    "line": 25
+   }
+  },
+  {
+   "from": "class:WorkspaceWriteClient",
+   "to": "coreapi:/localization/messages/v1/_upsert",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceWriteClient.java",
+    "match": "write(\"/localization/messages/v1/_upsert\",body,token,false);",
+    "line": 28
+   }
+  },
+  {
+   "from": "class:WorkspaceWriteClient",
+   "to": "config:egov.gateway.host",
+   "rel": "uses-config",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/WorkspaceWriteClient.java",
+    "match": "URI uri=URI.create(env.getProperty(\"egov.gateway.host\",\"\"));",
+    "line": 35
+   }
+  },
+  {
+   "from": "class:BaselineUpgrader",
+   "to": "class:WorkspaceRepository",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/BaselineUpgrader.java",
+    "match": "var claim = workspaces.claimUpgrade(seed.versionNumber(), token, now + LEASE_MS, now);",
+    "line": 55
+   }
+  },
+  {
+   "from": "class:BaselineUpgrader",
+   "to": "class:PlatformBaseline",
+   "rel": "calls",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/BaselineUpgrader.java",
+    "match": "for (JsonNode schema : seed.schemas()) {",
+    "line": 112
+   }
+  },
+  {
+   "from": "class:BaselineUpgrader",
+   "to": "wf:bs:PGR",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/BaselineUpgrader.java",
+    "match": "for (JsonNode workflow : seed.workflows()) steps.ensureWorkflow(scope, tenant, workflow);",
+    "line": 128
+   },
+   "note": "re-ensures baseline workflow on upgrade"
+  },
+  {
+   "from": "class:BaselineUpgrader",
+   "to": "master:ACCESSCONTROL-ROLEACTIONS.roleactions",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/BaselineUpgrader.java",
+    "match": "static final String ROLE_ACTIONS = \"ACCESSCONTROL-ROLEACTIONS.roleactions\";",
+    "line": 33
+   }
+  },
+  {
+   "from": "class:BaselineUpgrader",
+   "to": "coreapi:/egov-mdms-service/v2/_update/{schema}",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/BaselineUpgrader.java",
+    "match": "client.write(scope, \"mdms\", \"/egov-mdms-service/v2/_update/\" + schema, Map.of(\"Mdms\", record));",
+    "line": 202
+   }
+  },
+  {
+   "from": "class:BaselineUpgrader",
+   "to": "master:common-masters.StateInfo",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/BaselineUpgrader.java",
+    "match": "String tenant = signup.getRequestedTenantId(), schema = \"common-masters.StateInfo\";",
+    "line": 184
+   }
+  },
+  {
+   "from": "class:BaselineUpgrader",
+   "to": "coreapi:/localization/messages/v1/_delete",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/BaselineUpgrader.java",
+    "match": "client.write(scope, \"localization\", \"/localization/messages/v1/_delete\", Map.of(\"tenantId\", tenant,",
+    "line": 224
+   }
+  },
+  {
+   "from": "class:BaselineUpgrader",
+   "to": "coreapi:/localization/messages/v1/_upsert",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/BaselineUpgrader.java",
+    "match": "client.write(scope, \"localization\", \"/localization/messages/v1/_upsert\", Map.of(\"tenantId\", tenant, \"messages\"",
+    "line": 232
+   }
+  },
+  {
+   "from": "class:BaselineUpgrader",
+   "to": "config:pgr.onboarding.baseline-upgrade.enabled",
+   "rel": "uses-config",
+   "status": "inferred",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/application.properties",
+    "match": "pgr.onboarding.baseline-upgrade.enabled=${PGR_ONBOARDING_BASELINE_UPGRADE_ENABLED:true}",
+    "line": 234
+   },
+   "note": "flag documented next to BaselineUpgrader"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "service:pgr-services",
+   "rel": "part-of",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/PlatformBaseline.java",
+    "match": "try (var input = new ClassPathResource(\"onboarding/platform-baseline-v1.json\").getInputStream()) {",
+    "line": 20
+   }
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "wf:bs:PGR",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "{\"tenantId\": \"{tenantid}\", \"businessService\": \"PGR\", \"business\": \"pgr-services\", \"businessServiceSla\": 432000000",
+    "line": 1180
+   },
+   "note": "baseline workflow PGR, businessServiceSla 432000000 ms"
+  },
+  {
+   "from": "wf:bs:PGR",
+   "to": "field:BusinessService.businessServiceSla",
+   "rel": "derives-from",
+   "status": "inferred",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "\"businessService\": \"PGR\", \"business\": \"pgr-services\", \"businessServiceSla\": 432000000",
+    "line": 1180
+   },
+   "note": "baseline seeds the SLA used as 3rd fallback for sla_target_ms"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "wf:state:PENDINGFORASSIGNMENT",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "\"state\": \"PENDINGFORASSIGNMENT\"",
+    "line": 1180
+   },
+   "note": "state defined in seeded PGR workflow"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "wf:state:PENDINGFORREASSIGNMENT",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "\"state\": \"PENDINGFORREASSIGNMENT\"",
+    "line": 1180
+   },
+   "note": "state defined in seeded PGR workflow"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "wf:state:PENDINGATLME",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "\"state\": \"PENDINGATLME\"",
+    "line": 1180
+   },
+   "note": "state defined in seeded PGR workflow"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "wf:state:REJECTED",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "\"state\": \"REJECTED\"",
+    "line": 1180
+   },
+   "note": "state defined in seeded PGR workflow"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "wf:state:RESOLVED",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "\"state\": \"RESOLVED\"",
+    "line": 1180
+   },
+   "note": "state defined in seeded PGR workflow"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "wf:state:CLOSEDAFTERREJECTION",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "\"state\": \"CLOSEDAFTERREJECTION\"",
+    "line": 1180
+   },
+   "note": "state defined in seeded PGR workflow"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "wf:state:CLOSEDAFTERRESOLUTION",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "\"state\": \"CLOSEDAFTERRESOLUTION\"",
+    "line": 1180
+   },
+   "note": "state defined in seeded PGR workflow"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "wf:state:CANCELLED",
+   "rel": "uses-state",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "\"state\": \"CANCELLED\"",
+    "line": 1180
+   },
+   "note": "state defined in seeded PGR workflow"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "master:RAINMAKER-PGR.ComplaintHierarchy",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "{\"code\": \"RAINMAKER-PGR.ComplaintHierarchy\", \"definition\":",
+    "line": 61
+   },
+   "note": "platform-baseline-v1.json: schema only; records workspace-owned"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "master:RAINMAKER-PGR.EscalationConfig",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "{\"code\": \"RAINMAKER-PGR.EscalationConfig\", \"definition\":",
+    "line": 64
+   },
+   "note": "platform-baseline-v1.json: schema only"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "master:RAINMAKER-PGR.ComplaintHierarchyDefinition",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "{\"code\": \"RAINMAKER-PGR.ComplaintHierarchyDefinition\", \"definition\":",
+    "line": 60
+   },
+   "note": "platform-baseline-v1.json: schema"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "master:common-masters.Department",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "{\"code\": \"common-masters.Department\", \"definition\":",
+    "line": 42
+   },
+   "note": "platform-baseline-v1.json: schema+ONBOARDING_ADMIN record"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "master:dss.DashboardConfig",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "{\"code\": \"dss.DashboardConfig\", \"definition\":",
+    "line": 69
+   },
+   "note": "platform-baseline-v1.json: schema"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "master:dss.KpiDefinition",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "{\"code\": \"dss.KpiDefinition\", \"definition\":",
+    "line": 70
+   },
+   "note": "platform-baseline-v1.json: schema+40 records"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "master:dss.DashboardPack",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "{\"code\": \"dss.DashboardPack\", \"definition\":",
+    "line": 71
+   },
+   "note": "platform-baseline-v1.json: schema+2 records"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "master:tenant.tenants",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "{\"code\": \"tenant.tenants\", \"definition\":",
+    "line": 37
+   },
+   "note": "platform-baseline-v1.json: schema"
+  },
+  {
+   "from": "class:PlatformBaseline",
+   "to": "master:ACCESSCONTROL-ROLEACTIONS.roleactions",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json",
+    "match": "{\"code\": \"ACCESSCONTROL-ROLEACTIONS.roleactions\", \"definition\":",
+    "line": 40
+   },
+   "note": "platform-baseline-v1.json: schema+636 records"
+  },
+  {
+   "from": "class:NotificationDefaultsStep",
+   "to": "class:NotificationDefaults",
+   "rel": "calls",
+   "status": "inferred",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/NotificationDefaults.java",
+    "match": "static final String RESOURCE = \"onboarding/notification-defaults.json\";",
+    "line": 20
+   },
+   "note": "step loads NotificationDefaults resource"
+  },
+  {
+   "from": "class:NotificationDefaultsStep",
+   "to": "coreapi:/egov-mdms-service/v2/_create/{schema}",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/NotificationDefaultsStep.java",
+    "match": "client.write(scope, \"mdms\", \"/egov-mdms-service/v2/_create/\" + schema, Map.of(\"Mdms\", mdms));",
+    "line": 133
+   }
+  },
+  {
+   "from": "class:NotificationDefaultsStep",
+   "to": "config:pgr.onboarding.notification-defaults.enabled",
+   "rel": "uses-config",
+   "status": "inferred",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/application.properties",
+    "match": "pgr.onboarding.notification-defaults.enabled=${PGR_ONBOARDING_NOTIFICATION_DEFAULTS_ENABLED:true}",
+    "line": 239
+   },
+   "note": "property gates NOTIFICATION_DEFAULTS step"
+  },
+  {
+   "from": "class:NotificationDefaults",
+   "to": "master:NOTIFICATIONS.EventCatalogue",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/notification-defaults.json",
+    "match": "\"code\": \"NOTIFICATIONS.EventCatalogue\",",
+    "line": 338
+   },
+   "note": "notification-defaults.json schema/records seeded per workspace"
+  },
+  {
+   "from": "class:NotificationDefaults",
+   "to": "master:NOTIFICATIONS.Routing",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/notification-defaults.json",
+    "match": "\"code\": \"NOTIFICATIONS.Routing\",",
+    "line": 457
+   },
+   "note": "notification-defaults.json schema/records seeded per workspace"
+  },
+  {
+   "from": "class:NotificationDefaults",
+   "to": "master:NOTIFICATIONS.Template",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/notification-defaults.json",
+    "match": "\"code\": \"NOTIFICATIONS.Template\",",
+    "line": 502
+   },
+   "note": "notification-defaults.json schema/records seeded per workspace"
+  },
+  {
+   "from": "class:NotificationDefaults",
+   "to": "master:NOTIFICATIONS.ProviderTemplate",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/notification-defaults.json",
+    "match": "\"code\": \"NOTIFICATIONS.ProviderTemplate\",",
+    "line": 575
+   },
+   "note": "notification-defaults.json schema/records seeded per workspace"
+  },
+  {
+   "from": "class:NotificationDefaults",
+   "to": "master:NOTIFICATIONS.Channel",
+   "rel": "writes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/notification-defaults.json",
+    "match": "\"code\": \"NOTIFICATIONS.Channel\",",
+    "line": 654
+   },
+   "note": "notification-defaults.json schema/records seeded per workspace"
+  },
+  {
+   "from": "class:NotificationDefaults",
+   "to": "biz:Notification",
+   "rel": "realises",
+   "status": "inferred",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/resources/onboarding/notification-defaults.json",
+    "match": "\"code\": \"NOTIFICATIONS.EventCatalogue\",",
+    "line": 338
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-services-persister.yml",
+   "to": "topic:save-pgr-request",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "fromTopic: save-pgr-request",
+    "line": 6
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-services-persister.yml",
+   "to": "topic:update-pgr-request",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "fromTopic: update-pgr-request",
+    "line": 129
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-services-persister.yml",
+   "to": "table:eg_pgr_service_v2",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "INSERT INTO eg_pgr_service_v2(id, tenantid, servicecode, servicerequestid, description, accountid, additionald",
+    "line": 16
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-services-persister.yml",
+   "to": "table:eg_pgr_address_v2",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "INSERT INTO eg_pgr_address_v2(id, tenantid, parentid, doorno, plotno",
+    "line": 51
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-services-persister.yml",
+   "to": "table:eg_pgr_document_v2",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "INSERT INTO eg_pgr_document_v2(id, document_type, filestore_id, document_uid, service_id",
+    "line": 100
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-services-persister.yml",
+   "to": "field:Service.serviceCode",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "- jsonPath: $.service.serviceCode",
+    "line": 23
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-services-persister.yml",
+   "to": "field:Service.additionalDetail",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "- jsonPath: $.service.additionalDetail",
+    "line": 31
+   },
+   "note": "additionaldetails JSONB (incl. department, escalation keys)"
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-services-persister.yml",
+   "to": "field:Service.extendedAttributes",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "- jsonPath: $.service.extendedAttributes",
+    "line": 35
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-services-persister.yml",
+   "to": "field:Service.applicationStatus",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "- jsonPath: $.service.applicationStatus",
+    "line": 39
+   },
+   "note": "-> eg_pgr_service_v2.applicationstatus (create)"
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-services-persister.yml",
+   "to": "field:Service.rating",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "- jsonPath: $.service.rating",
+    "line": 144
+   },
+   "note": "rating only written on update"
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-services-persister.yml",
+   "to": "field:Address.locality",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "- jsonPath: $.service.address.locality.code",
+    "line": 74
+   }
+  },
+  {
+   "from": "service:egov-persister",
+   "to": "topic:save-pgr-request",
+   "rel": "consumes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "fromTopic: save-pgr-request",
+    "line": 6
+   }
+  },
+  {
+   "from": "service:egov-persister",
+   "to": "topic:update-pgr-request",
+   "rel": "consumes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "fromTopic: update-pgr-request",
+    "line": 129
+   }
+  },
+  {
+   "from": "table:eg_pgr_service_v2",
+   "to": "field:Service.applicationStatus",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "UPDATE eg_pgr_service_v2 SET servicecode=?, rating = ?,servicerequestid=?, description=?, accountid=?, additio",
+    "line": 139
+   }
+  },
+  {
+   "from": "table:eg_pgr_service_v2",
+   "to": "field:Service.rating",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "UPDATE eg_pgr_service_v2 SET servicecode=?, rating = ?,servicerequestid=?",
+    "line": 139
+   }
+  },
+  {
+   "from": "table:eg_pgr_service_v2",
+   "to": "topic:update-pgr-request",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "fromTopic: update-pgr-request",
+    "line": 129
+   },
+   "note": "table state written asynchronously from topic"
+  },
+  {
+   "from": "table:eg_pgr_service_v2",
+   "to": "topic:save-pgr-request",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "fromTopic: save-pgr-request",
+    "line": 6
+   }
+  },
+  {
+   "from": "table:eg_pgr_address_v2",
+   "to": "field:Address.locality",
+   "rel": "derives-from",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-services-persister.yml",
+    "match": "- jsonPath: $.service.address.locality.code",
+    "line": 74
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-migration-batch.yml",
+   "to": "topic:save-pgr-request-batch",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-migration-batch.yml",
+    "match": "fromTopic: save-pgr-request-batch",
+    "line": 6
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-migration-batch.yml",
+   "to": "topic:save-wf-transitions-batch",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-migration-batch.yml",
+    "match": "fromTopic: save-wf-transitions-batch",
+    "line": 121
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-migration-batch.yml",
+   "to": "table:eg_pgr_service_v2",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-migration-batch.yml",
+    "match": "INSERT INTO eg_pgr_service_v2(id, tenantid, servicecode, servicerequestid, description, accountid, additionald",
+    "line": 10
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-migration-batch.yml",
+   "to": "table:eg_pgr_address_v2",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-migration-batch.yml",
+    "match": "INSERT INTO eg_pgr_address_v2(id, tenantid, parentid",
+    "line": 45
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-migration-batch.yml",
+   "to": "table:eg_pgr_document_v2",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-migration-batch.yml",
+    "match": "INSERT INTO eg_pgr_document_v2(id, document_type, filestore_id",
+    "line": 94
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-migration-batch.yml",
+   "to": "table:eg_wf_processinstance_v2",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-migration-batch.yml",
+    "match": "INSERT INTO eg_wf_processinstance_v2( id,tenantid,businessService,businessId,moduleName,action,status",
+    "line": 125
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-migration-batch.yml",
+   "to": "table:eg_wf_assignee_v2",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-migration-batch.yml",
+    "match": "INSERT INTO eg_wf_assignee_v2(processinstanceid, tenantid, assignee",
+    "line": 189
+   }
+  },
+  {
+   "from": "infra:configs/egov-persister/pgr-migration-batch.yml",
+   "to": "field:Service.applicationStatus",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-migration-batch.yml",
+    "match": "- jsonPath: $.service.applicationStatus",
+    "line": 29
+   }
+  },
+  {
+   "from": "service:egov-persister",
+   "to": "topic:save-pgr-request-batch",
+   "rel": "consumes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-persister/pgr-migration-batch.yml",
+    "match": "fromTopic: save-pgr-request-batch",
+    "line": 6
+   }
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "topic:save-pgr-request",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "- topic: save-pgr-request",
+    "line": 5
+   },
+   "note": "ES index pgr-services"
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "topic:update-pgr-request",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "- topic: update-pgr-request",
+    "line": 67
+   }
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "topic:pgr-services-legacyIndex",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "- topic: pgr-services-legacyIndex",
+    "line": 107
+   }
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "topic:pgr-service-reindex",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "- topic: pgr-service-reindex",
+    "line": 147
+   }
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "coreapi:/boundary-service/boundary-relationships/_search",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "- path: http://boundary-service.egov:8080/boundary-service/boundary-relationships/_search",
+    "line": 20
+   },
+   "note": "locality -> Data.ward"
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "field:Address.locality",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "codes=$.service.address.locality.code",
+    "line": 21
+   }
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "coreapi:/egov-workflow-v2/egov-wf/process/_search",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "- path: http://egov-workflow-v2.egov:8080/egov-workflow-v2/egov-wf/process/_search",
+    "line": 26
+   },
+   "note": "history=true -> Data.history"
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "coreapi:/mdms-v2/v1/_search",
+   "rel": "invokes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "- path: http://mdms-v2.egov:8080/mdms-v2/v1/_search",
+    "line": 33
+   }
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "master:common-masters.Department",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "masterName: Department",
+    "line": 35
+   },
+   "note": "department name -> Data.department"
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "field:Service.additionalDetail.department",
+   "rel": "reads",
+   "status": "inferred",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "valueJsonpath: $.department",
+    "line": 40
+   },
+   "note": "filter reads $.department (top-level), not $.service.additionalDetail.department - likely never matches"
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "master:RAINMAKER-PGR.ComplaintHierarchy",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "masterName: ComplaintHierarchy",
+    "line": 46
+   }
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "field:ComplaintHierarchy.slaHours",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "- inJsonPath: $.MdmsRes.RAINMAKER-PGR.ComplaintHierarchy.*.slaHours",
+    "line": 53
+   },
+   "note": "-> Data.slaHours (create only)"
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-services.yml",
+   "to": "field:Service.serviceCode",
+   "rel": "reads",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "valueJsonpath: $.service.serviceCode",
+    "line": 51
+   }
+  },
+  {
+   "from": "service:egov-indexer",
+   "to": "topic:save-pgr-request",
+   "rel": "consumes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "- topic: save-pgr-request",
+    "line": 5
+   }
+  },
+  {
+   "from": "service:egov-indexer",
+   "to": "topic:update-pgr-request",
+   "rel": "consumes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-services.yml",
+    "match": "- topic: update-pgr-request",
+    "line": 67
+   }
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-inbox-indexer.yml",
+   "to": "topic:inbox-pgr-events",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-inbox-indexer.yml",
+    "match": "- topic: inbox-pgr-events",
+    "line": 5
+   },
+   "note": "ES index inbox-pgr-services"
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-inbox-indexer.yml",
+   "to": "topic:pgr-services-inboxIndex",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-inbox-indexer.yml",
+    "match": "- topic: pgr-services-inboxIndex",
+    "line": 45
+   }
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-inbox-indexer.yml",
+   "to": "topic:pgr-service-reindex",
+   "rel": "maps",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-inbox-indexer.yml",
+    "match": "- topic: pgr-service-reindex",
+    "line": 66
+   }
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-inbox-indexer.yml",
+   "to": "field:Service.applicationStatus",
+   "rel": "reads",
+   "status": "inferred",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-inbox-indexer.yml",
+    "match": "- inJsonPath: $.service",
+    "line": 16
+   },
+   "note": "whole Service (incl. applicationStatus) copied to Data.service"
+  },
+  {
+   "from": "infra:configs/egov-indexer/pgr-inbox-indexer.yml",
+   "to": "table:eg_wf_processinstance_v2",
+   "rel": "reads",
+   "status": "inferred",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-inbox-indexer.yml",
+    "match": "- inJsonPath: $.service.processInstance",
+    "line": 22
+   },
+   "note": "currentProcessInstance from event payload, not DB"
+  },
+  {
+   "from": "service:egov-indexer",
+   "to": "topic:inbox-pgr-events",
+   "rel": "consumes",
+   "status": "confirmed",
+   "evidence": {
+    "file": "configs/egov-indexer/pgr-inbox-indexer.yml",
+    "match": "- topic: inbox-pgr-events",
+    "line": 5
+   }
+  },
+  {
+   "from": "class:DashboardRefreshScheduler",
+   "to": "biz:SLA",
+   "rel": "realises",
+   "status": "inferred",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java",
+    "match": "          + \"       cf.sla_breached AS sla_breached, cf.sla_status_bucket AS sla_status_bucket, \"",
+    "line": 66
+   },
+   "note": "daily SLA-breach snapshot"
+  },
+  {
+   "from": "class:OnboardingService",
+   "to": "biz:Workspace",
+   "rel": "realises",
+   "status": "inferred",
+   "evidence": {
+    "file": "backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingService.java",
+    "match": "private final OnboardingRepository repository;",
+    "line": 32
+   }
+  }
+ ]
+}
