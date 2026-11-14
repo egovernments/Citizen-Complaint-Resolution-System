@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  ACCOUNT_CODE_PATTERN,
   OnboardingError,
   __setFetchForTests,
   tenants,
@@ -173,6 +174,18 @@ describe('validation mirrors the server rules', () => {
 
   it('rejects a lowercase account code', () => {
     expect(isValidAccountCode('ke-bcg')).toBe(false);
+  });
+
+  it('holds the account code to the server rule: a letter or digit first, 2 to 32 in all (#2802)', () => {
+    const javaRule = /ACCOUNT_CODE = Pattern\.compile\("([^"]+)"\)/.exec(readFileSync(resolve(process.cwd(),
+      '../backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingIdentifierService.java'), 'utf8'));
+    expect(javaRule?.[1]).toBe(ACCOUNT_CODE_PATTERN.source);
+    expect(isValidAccountCode('-H123')).toBe(false);
+    expect(isValidAccountCode('H-123')).toBe(true);
+    expect(isValidAccountCode('9-')).toBe(true);
+    expect(isValidAccountCode('H')).toBe(false);
+    expect(isValidAccountCode('H'.repeat(32))).toBe(true);
+    expect(isValidAccountCode('H'.repeat(33))).toBe(false);
   });
 });
 
