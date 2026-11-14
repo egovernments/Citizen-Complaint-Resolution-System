@@ -16,7 +16,7 @@ initContainers:
     schemaTable: "egov_hrms_schema"
     image:
       repository: "egovio/egov-hrms-db"
-      tag: "hrms-boundary-dd641a6"
+      tag: "2.12-beta-dd641a6"
 
 # Container Configs
 # PARITY: pinned to the same tag as local-setup/docker-compose.egov-digit.yaml
@@ -24,7 +24,7 @@ initContainers:
 # on every future bump.
 image:
   repository: "egovio/egov-hrms"
-  tag: "hrms-boundary-dd641a6"
+  tag: "2.12-beta-dd641a6"
   pullPolicy: "IfNotPresent"
 replicas: "1"
 healthChecks:
