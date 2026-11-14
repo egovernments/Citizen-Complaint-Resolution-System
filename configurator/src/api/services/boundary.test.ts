@@ -236,6 +236,37 @@ describe('boundaryService.createBoundaries', () => {
       spies.forEach((spy) => spy.mockRestore());
     }
   });
+
+  it("says why an area never landed: the server's message and code, not only that it's absent (#2795)", async () => {
+    vi.useFakeTimers();
+    const row = (code: string, boundaryType: string, parent?: string): Boundary =>
+      ({ tenantId: 'ke', code, name: code, boundaryType, hierarchyType: 'ADMIN', parent }) as Boundary;
+    const rows = [row('C1', 'County'), row('W1', 'Village', 'C1')];
+    const refusal = Object.assign(new Error('Boundary type Village is not part of hierarchy ADMIN'), {
+      errors: [{ code: 'BOUNDARY_TYPE_ERROR', message: 'Boundary type Village is not part of hierarchy ADMIN' }],
+    });
+    const spies = [
+      vi.spyOn(boundaryService, 'createBoundaryEntity').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'waitForEntityVisibility').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'createBoundaryRelationship').mockImplementation(async (_t, _h, code) => {
+        if (code === 'W1') throw refusal;
+        return true;
+      }),
+      vi.spyOn(boundaryService, 'searchBoundaries').mockResolvedValue([rows[0]]),
+    ];
+    try {
+      const pending = boundaryService.createBoundaries(rows);
+      await vi.runAllTimersAsync();
+      const result = await pending;
+      expect(result.success.map((b) => b.code)).toEqual(['C1']);
+      expect(result.failed).toEqual([
+        { boundary: rows[1], error: 'Boundary type Village is not part of hierarchy ADMIN', code: 'BOUNDARY_TYPE_ERROR' },
+      ]);
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('boundaryService.existingBoundaries', () => {

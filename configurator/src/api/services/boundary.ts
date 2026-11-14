@@ -7,6 +7,20 @@ import { localizationService } from './localization';
 /** Reserved by the platform baseline for the founder's root jurisdiction. */
 export const WORKSPACE_HIERARCHY_TYPE = 'WORKSPACE';
 
+/** An area a save didn't write: the server's message and, when it sent one, its error code. */
+export interface BoundaryCreateFailure {
+  boundary: Boundary;
+  error: string;
+  /** e.g. BOUNDARY_TYPE_ERROR; absent when the server never said why. */
+  code?: string;
+}
+
+/** The DIGIT error code on an ApiClientError (read by shape: tests mock the client module). */
+function serverErrorCode(error: unknown): string | undefined {
+  const code = (error as { errors?: { code?: unknown }[] } | null)?.errors?.[0]?.code;
+  return typeof code === 'string' && code ? code : undefined;
+}
+
 const HIERARCHY_PAGE_SIZE = 100;
 /** Still finding rows after this many pages means offset is ignored, not 20,000 hierarchies. */
 const HIERARCHY_MAX_PAGES = 200;
@@ -501,10 +515,10 @@ export const boundaryService = {
     onProgress?: (done: number, total: number) => void
   ): Promise<{
     success: Boundary[];
-    failed: { boundary: Boundary; error: string }[];
+    failed: BoundaryCreateFailure[];
   }> {
     const success: Boundary[] = [];
-    const failed: { boundary: Boundary; error: string }[] = [];
+    const failed: BoundaryCreateFailure[] = [];
     const total = boundaries.length;
     if (total === 0) return { success, failed };
 
@@ -535,6 +549,7 @@ export const boundaryService = {
           failed.push({
             boundary: b,
             error: error instanceof Error ? error.message : 'Unknown error (entity)',
+            code: serverErrorCode(error),
           });
         }
         onProgress?.(++done, work);
@@ -556,6 +571,9 @@ export const boundaryService = {
       (b) => !failedEntities.has(b.code) && b.hierarchyType && b.boundaryType
     );
     const hierarchyType = boundaries.find((b) => b.hierarchyType)?.hierarchyType;
+    // The last refusal per area, so one that never lands says why (e.g.
+    // BOUNDARY_TYPE_ERROR) instead of only that it's absent (#2795).
+    const lastError = new Map<string, unknown>();
     for (const levelBoundaries of byLevel) {
       for (const b of levelBoundaries) {
         if (!failedEntities.has(b.code) && b.hierarchyType && b.boundaryType) {
@@ -563,8 +581,9 @@ export const boundaryService = {
             await this.createBoundaryRelationship(
               b.tenantId, b.hierarchyType, b.code, b.boundaryType, b.parent
             );
-          } catch {
+          } catch (error) {
             // deferred to verify — the next pass re-checks ACTUAL presence
+            lastError.set(b.code, error);
           }
         }
         onProgress?.(++done, work);
@@ -601,8 +620,9 @@ export const boundaryService = {
                 b.tenantId, b.hierarchyType as string, b.code,
                 b.boundaryType as string, b.parent
               );
-            } catch {
+            } catch (error) {
               // re-checked next round
+              lastError.set(b.code, error);
             }
           }
         }
@@ -612,13 +632,18 @@ export const boundaryService = {
     // Finalize from ACTUAL persistence, never from create() return values.
     for (const b of expectedRel) {
       if (present.has(b.code)) success.push(b);
-      else
+      else {
+        const refusal = lastError.get(b.code);
         failed.push({
           boundary: b,
           error:
-            'Relationship still absent after verify retries — boundary-service ' +
-            'persistence/visibility gap (parent may be missing).',
+            refusal instanceof Error && refusal.message
+              ? refusal.message
+              : 'Relationship still absent after verify retries — boundary-service ' +
+                'persistence/visibility gap (parent may be missing).',
+          code: serverErrorCode(refusal),
         });
+      }
     }
 
     return { success, failed };

@@ -13644,6 +13644,24 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.geography.excel.add_to_note",
+    "message": "आपकी सहेजी गई सीमाएं %{hierarchy} में हैं, इसलिए छूटे हुए क्षेत्र भी वहीं जाएंगे। अपनी पूरी सुधारी हुई शीट अपलोड करें: पहले से सहेजे गए क्षेत्र जैसे हैं वैसे ही रहेंगे।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.add_to_note",
+    "message": "Vos limites enregistrées sont dans %{hierarchy} : les zones manquantes y seront donc ajoutées. Importez votre feuille complète corrigée ; les zones déjà enregistrées restent telles quelles.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.excel.add_to_note",
+    "message": "Seus limites salvos estão em %{hierarchy}, então as áreas que faltam também vão para lá. Envie a planilha completa corrigida: as áreas já salvas ficam como estão.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.geography.excel.available_for_tenant",
     "message": "टेनेंट के लिए उपलब्ध पदानुक्रम: %{tenant}",
     "module": "configurator-ui",
@@ -14310,6 +14328,24 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.geography.excel.parent_has_error",
+    "message": "इसके मूल \"%{code}\" में त्रुटि है, इसलिए उस पंक्ति के ठीक होने तक इसे जोड़ा नहीं जा सकता।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parent_has_error",
+    "message": "Son parent « %{code} » contient une erreur : il ne peut pas être ajouté tant que cette ligne n’est pas corrigée.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parent_has_error",
+    "message": "O pai \"%{code}\" tem um erro, então não pode ser adicionado até que essa linha seja corrigida.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.geography.excel.parent_missing",
     "message": "मूल \"%{code}\" नहीं मिला",
     "module": "configurator-ui",
@@ -14324,6 +14360,42 @@
   {
     "code": "app.onboarding.geography.excel.parent_missing",
     "message": "Pai \"%{code}\" não encontrado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parent_required",
+    "message": "%{type} के लिए parentCode में एक मूल %{parentType} होना ज़रूरी है। केवल सबसे ऊपरी स्तर (%{top}) बिना मूल के रह सकता है।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parent_required",
+    "message": "Un élément %{type} doit avoir un parent %{parentType} dans parentCode. Seul le niveau supérieur (%{top}) peut rester sans parent.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parent_required",
+    "message": "Um(a) %{type} precisa de um pai %{parentType} em parentCode. Só o nível mais alto (%{top}) pode ficar sem pai.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parent_wrong_level",
+    "message": "%{type} का मूल %{expected} होना चाहिए, लेकिन \"%{parent}\" एक %{parentType} है।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parent_wrong_level",
+    "message": "Le parent d’un élément %{type} doit être un élément %{expected}, mais « %{parent} » est un élément %{parentType}.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parent_wrong_level",
+    "message": "O pai de um(a) %{type} deve ser um(a) %{expected}, mas \"%{parent}\" é um(a) %{parentType}.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -14468,6 +14540,24 @@
   {
     "code": "app.onboarding.geography.excel.root",
     "message": "[Raiz]",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.excel.row_error",
+    "message": "पंक्ति %{row}: %{error}",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.row_error",
+    "message": "Ligne %{row} : %{error}",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.excel.row_error",
+    "message": "Linha %{row}: %{error}",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -14688,6 +14778,24 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.geography.excel.top_has_parent",
+    "message": "%{type} सबसे ऊपरी स्तर है, इसलिए इसका कोई मूल नहीं हो सकता। इसका parentCode खाली छोड़ें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.top_has_parent",
+    "message": "%{type} est le niveau supérieur : il ne peut donc pas avoir de parent. Laissez son parentCode vide.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.excel.top_has_parent",
+    "message": "%{type} é o nível mais alto, então não pode ter pai. Deixe o parentCode vazio.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.geography.excel.type_exists",
     "message": "\"%{type}\" पदानुक्रम पहले से मौजूद है। इसे \"मौजूदा पदानुक्रम उपयोग करें\" के अंतर्गत चुनें, या कोई दूसरा नाम चुनें।",
     "module": "configurator-ui",
@@ -14720,6 +14828,24 @@
   {
     "code": "app.onboarding.geography.excel.type_name",
     "message": "Nome do tipo de hierarquia",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.excel.type_not_a_level",
+    "message": "\"%{type}\" इस पदानुक्रम का स्तर नहीं है। इनमें से कोई एक इस्तेमाल करें: %{levels}।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.type_not_a_level",
+    "message": "« %{type} » n’est pas un niveau de cette hiérarchie. Utilisez l’un de ceux-ci : %{levels}.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.excel.type_not_a_level",
+    "message": "\"%{type}\" não é um nível desta hierarquia. Use um destes: %{levels}.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -15858,6 +15984,24 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.geography.list.finish_with_excel",
+    "message": "अपनी सहेजी गई सीमाएं पूरी करने के लिए “Excel से अपलोड करें” इस्तेमाल करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.finish_with_excel",
+    "message": "Pour terminer vos limites enregistrées, utilisez « Importer depuis Excel ».",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.list.finish_with_excel",
+    "message": "Para concluir seus limites salvos, use Enviar do Excel.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.geography.list.inside_one",
     "message": "आपकी सूची की किसी दूसरी प्रविष्टि का 1 क्षेत्र इनके भीतर आता है। पहले उसे हटाएं।",
     "module": "configurator-ui",
@@ -16124,6 +16268,96 @@
   {
     "code": "app.onboarding.geography.load_failed",
     "message": "Não foi possível carregar seus limites. %{reason}",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_more",
+    "message": "और %{count} अन्य",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_more",
+    "message": "et %{count} de plus",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_more",
+    "message": "e mais %{count}",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_next",
+    "message": "वे अभी भी नीचे की सूची में हैं: उन्हें “संपादित करें” से ठीक करें, या फिर से कोशिश करने के लिए “सहेजें और जारी रखें” दबाएं।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_next",
+    "message": "Elles figurent toujours dans la liste ci-dessous : corrigez-les avec « Modifier », ou cliquez sur « Enregistrer et continuer » pour réessayer.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_next",
+    "message": "Elas ainda estão na lista abaixo: corrija-as com Editar ou clique em Salvar e continuar para tentar de novo.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_one",
+    "message": "1 क्षेत्र सहेजा नहीं गया, इसलिए यह चरण अभी पूरा नहीं हुआ है।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_one",
+    "message": "1 zone n’a pas été enregistrée : cette étape n’est donc pas encore terminée.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_one",
+    "message": "1 área não foi salva, então esta etapa ainda não está concluída.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_other",
+    "message": "%{count} क्षेत्र सहेजे नहीं गए, इसलिए यह चरण अभी पूरा नहीं हुआ है।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_other",
+    "message": "%{count} zones n’ont pas été enregistrées : cette étape n’est donc pas encore terminée.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_other",
+    "message": "%{count} áreas não foram salvas, então esta etapa ainda não está concluída.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_unconfirmed",
+    "message": "सर्वर ने पुष्टि नहीं की कि यह सहेजा गया।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_unconfirmed",
+    "message": "Le serveur n’a pas confirmé l’enregistrement.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_unconfirmed",
+    "message": "O servidor não confirmou que foi salva.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -17132,6 +17366,24 @@
   {
     "code": "app.onboarding.geography.turbopass_unavailable",
     "message": "A pesquisa de limites não está configurada nesta implantação: o serviço de limites turbopass não está acessível ou não tem dados de limites carregados. Um administrador pode ativá-lo (enable_turbopass, com um banco de dados de limites — consulte turbopass/README.md). Até lá, use Enviar do Excel.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.unfinished",
+    "message": "आपकी सीमाएं केवल आंशिक रूप से सहेजी गईं। %{hierarchy} में %{summary} हैं, लेकिन नीचे के स्तर पर कुछ नहीं है, इसलिए यह चरण अभी पूरा नहीं हो सकता। छूटे हुए क्षेत्र जोड़ने के लिए “Excel से अपलोड करें” इस्तेमाल करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.unfinished",
+    "message": "Vos limites n’ont été que partiellement enregistrées. %{hierarchy} contient %{summary} mais rien au niveau inférieur : cette étape ne peut donc pas encore être terminée. Utilisez « Importer depuis Excel » pour ajouter les zones manquantes.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.unfinished",
+    "message": "Seus limites foram salvos só em parte. %{hierarchy} tem %{summary}, mas nada no nível abaixo, então esta etapa ainda não pode ser concluída. Use Enviar do Excel para adicionar as áreas que faltam.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -23382,12 +23634,6 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.geography.create_failures",
-    "message": "%{count} boundaries failed to create.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
     "code": "app.onboarding.geography.creating",
     "message": "Creating...",
     "module": "configurator-ui",
@@ -23426,6 +23672,12 @@
   {
     "code": "app.onboarding.geography.excel.add_level",
     "message": "Add Level",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.add_to_note",
+    "message": "Your saved boundaries are in %{hierarchy}, so the missing areas go there too. Upload your full corrected sheet: areas already saved are left as they are.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -23652,8 +23904,26 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.excel.parent_has_error",
+    "message": "Its parent \"%{code}\" has an error, so it can’t be added until that row is fixed.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.excel.parent_missing",
     "message": "Parent \"%{code}\" not found",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parent_required",
+    "message": "A %{type} needs a parent %{parentType} in parentCode. Only the top level (%{top}) can be left without one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.parent_wrong_level",
+    "message": "A %{type}’s parent must be a %{expected}, but \"%{parent}\" is a %{parentType}.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -23702,6 +23972,12 @@
   {
     "code": "app.onboarding.geography.excel.root",
     "message": "[Root]",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.row_error",
+    "message": "Row %{row}: %{error}",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -23778,6 +24054,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.excel.top_has_parent",
+    "message": "%{type} is the top level, so it can’t have a parent. Leave its parentCode empty.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.excel.type_exists",
     "message": "A \"%{type}\" hierarchy already exists. Choose it under \"Use an existing hierarchy\", or pick another name.",
     "module": "configurator-ui",
@@ -23786,6 +24068,12 @@
   {
     "code": "app.onboarding.geography.excel.type_name",
     "message": "Hierarchy Type Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.excel.type_not_a_level",
+    "message": "\"%{type}\" isn’t a level of this hierarchy. Use one of: %{levels}.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -24168,6 +24456,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.list.finish_with_excel",
+    "message": "To finish your saved boundaries, use Upload from Excel.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.list.inside_one",
     "message": "1 area from another item in your list sits inside these. Remove that first.",
     "module": "configurator-ui",
@@ -24254,6 +24548,36 @@
   {
     "code": "app.onboarding.geography.load_failed",
     "message": "Couldn’t load your boundaries. %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_more",
+    "message": "and %{count} more",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_next",
+    "message": "They’re still in the list below: fix them with Edit, or press Save and continue to try them again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_one",
+    "message": "1 area wasn’t saved, so this step isn’t complete yet.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_other",
+    "message": "%{count} areas weren’t saved, so this step isn’t complete yet.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.not_saved_unconfirmed",
+    "message": "The server didn’t confirm it was saved.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -24590,6 +24914,12 @@
   {
     "code": "app.onboarding.geography.turbopass_unavailable",
     "message": "Boundary search isn't set up on this deployment: the turbopass boundary service isn't reachable, or has no boundary data loaded. An administrator can enable it (enable_turbopass, with a boundary DB — see turbopass/README.md). Until then, use Upload from Excel.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.unfinished",
+    "message": "Your boundaries were only partly saved. %{hierarchy} has %{summary} but nothing on the level below, so this step can’t be completed yet. Use Upload from Excel to add the missing areas.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

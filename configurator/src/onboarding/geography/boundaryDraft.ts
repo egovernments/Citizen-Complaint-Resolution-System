@@ -10,6 +10,7 @@ import type { ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
 import type { SuggestionFeature } from '@/utils/turbopassSuggestions';
 import type { OfficialSet } from '@/utils/officialBoundaries';
 import type { Boundary, BoundaryExcelRow, BoundaryHierarchy } from '@/api/types';
+import type { BoundaryCreateFailure } from '@/api/services/boundary';
 import type { BoundarySource } from './BoundaryImport';
 
 /** What the import screen needs to reopen where the operator left it. */
@@ -479,7 +480,7 @@ async function runPostCreatePipeline(
 
 export interface DraftSaveResult {
   created: Boundary[];
-  failed: { boundary: Boundary; error: string }[];
+  failed: BoundaryCreateFailure[];
   /** Set when the areas landed but the hierarchy record didn't. */
   schemaError: string | null;
 }
