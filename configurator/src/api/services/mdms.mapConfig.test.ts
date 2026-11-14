@@ -90,9 +90,24 @@ describe('upsertMapConfig tenant guard', () => {
     expect(body.Mdms.data.boundaryTenantId).toBe('ke.bomet');
   });
 
-  it('ignores a soft-deleted own record and creates instead of resurrecting it', async () => {
+  // mdms-v2 keeps a soft-deleted row's uniqueIdentifier, so creating DEFAULT over it is refused
+  // DUPLICATE_RECORD (the old expectation, "_create", only held against this mocked transport). The row comes back.
+  it('brings a soft-deleted own DEFAULT back (update, isActive true) instead of a create MDMS refuses', async () => {
     searchReturns([
       { id: 'dead', tenantId: 'ke.bomet', schemaCode: SCHEMA, uniqueIdentifier: 'DEFAULT', isActive: false, data: { code: 'DEFAULT' } },
+    ]);
+
+    await mdmsService.upsertMapConfig('ke.bomet', { defaultZoom: 12 });
+
+    const [url, body] = lastCall();
+    expect(url).toContain('_update');
+    expect(body.Mdms).toMatchObject({ id: 'dead', uniqueIdentifier: 'DEFAULT', isActive: true });
+    expect(body.Mdms.data).toMatchObject({ code: 'DEFAULT', defaultZoom: 12 });
+  });
+
+  it('a soft-deleted own row with another code does not block creating DEFAULT', async () => {
+    searchReturns([
+      { id: 'old', tenantId: 'ke.bomet', schemaCode: SCHEMA, uniqueIdentifier: 'VARIANT_B', isActive: false, data: { code: 'VARIANT_B' } },
     ]);
 
     await mdmsService.upsertMapConfig('ke.bomet', { defaultZoom: 12 });
