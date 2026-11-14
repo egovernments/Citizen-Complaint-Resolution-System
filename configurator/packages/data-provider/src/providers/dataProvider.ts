@@ -210,6 +210,8 @@ const STATE_LEVEL_SCHEMAS: ReadonlySet<string> = new Set([
   'ACCESSCONTROL-ROLES.roles',
   'ACCESSCONTROL-ROLEACTIONS.roleactions',
   'ACCESSCONTROL-ACTIONS-TEST.actions-test',
+  // every tenant row lives at the root (the tenant tree is stored there); a node creating a child writes it there
+  'tenant.tenants',
 ]);
 
 function stateRootTenant(tenantId: string): string {
