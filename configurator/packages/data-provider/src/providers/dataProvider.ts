@@ -4,6 +4,7 @@ import type { MdmsRecord } from '../client/types.js';
 import { getResourceConfig, type ResourceConfig } from './resourceRegistry.js';
 import { migrateThemeConfigToV3 } from './themeConfigMigration.js';
 import { buildNotificationLogQuery } from './notificationLogQuery.js';
+import { MAX_LEVEL_NAME_LENGTH, levelNamesError, normalizeLevelName } from '../levelNames.js';
 
 /** Extended data provider type with DIGIT-specific custom methods */
 export type DigitDataProvider = DataProvider & {
@@ -1690,13 +1691,19 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           .map((lvl) => lvl as Record<string, unknown>)
           .filter((lvl) => typeof lvl?.boundaryType === 'string' && (lvl.boundaryType as string).trim())
           .map((lvl) => ({
-            boundaryType: String(lvl.boundaryType).trim(),
+            boundaryType: normalizeLevelName(String(lvl.boundaryType)),
             parentBoundaryType:
               typeof lvl.parentBoundaryType === 'string' && lvl.parentBoundaryType.trim()
-                ? lvl.parentBoundaryType.trim()
+                ? normalizeLevelName(lvl.parentBoundaryType)
                 : null,
           }));
         if (levels.length === 0) throw new Error('At least one hierarchy level is required');
+        // boundary-service takes names its persister can't store (#2803): refuse them here.
+        if ([...hierarchyType].length > MAX_LEVEL_NAME_LENGTH) {
+          throw new Error(`The hierarchy type is ${[...hierarchyType].length} characters long. Use ${MAX_LEVEL_NAME_LENGTH} characters or fewer.`);
+        }
+        const levelError = levelNamesError(levels.map((lvl) => lvl.boundaryType));
+        if (levelError) throw new Error(levelError);
         const created = await client.boundaryHierarchyCreate(
           targetTenantId,
           hierarchyType,

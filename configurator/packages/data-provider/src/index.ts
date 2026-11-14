@@ -22,3 +22,10 @@ export type { DigitDataProvider } from './providers/dataProvider.js';
 export { createDigitAuthProvider } from './providers/authProvider.js';
 export type { DigitPermissions } from './providers/authProvider.js';
 export type { MastersCapability } from './providers/accessPolicy.js';
+
+// Boundary hierarchy level-name rules (#2803)
+export {
+  MAX_LEVEL_NAME_LENGTH, normalizeLevelName, levelNameKey,
+  levelNameProblems, levelNameProblemText, levelNamesError,
+} from './levelNames.js';
+export type { LevelNameProblem } from './levelNames.js';

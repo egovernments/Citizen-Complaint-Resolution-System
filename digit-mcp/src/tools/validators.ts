@@ -3,7 +3,8 @@ import { MDMS_SCHEMAS } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
 import { ensureAuthenticated } from '../services/auth.js';
-import { validateTenantId, validateResourceId } from '../utils/validation.js';
+import { validateTenantId, validateResourceId, ValidationError } from '../utils/validation.js';
+import { levelNameProblems, levelNameProblemText, levelNamesError } from '../utils/level-names.js';
 
 /**
  * Build an ordered list of boundary types from a hierarchy definition.
@@ -679,6 +680,16 @@ export function registerValidatorTools(registry: ToolRegistry): void {
       const boundaries = args.boundaries as { code: string; type: string; parent?: string }[];
       for (const b of boundaries) {
         validateResourceId(b.code, 'boundary.code');
+      }
+      // boundary-service answers 200 for any level name, then its persister can't store one over
+      // 64 characters (and holds up every tenant retrying it); repeated levels corrupt the hierarchy (#2803).
+      const levelError = Array.isArray(args.hierarchy_definition) ? levelNamesError(args.hierarchy_definition as string[]) : null;
+      if (levelError) throw new ValidationError('hierarchy_definition', `hierarchy_definition: ${levelError}`);
+      for (const b of boundaries) {
+        const [problem] = levelNameProblems([b.type]);
+        if (problem && (problem.kind === 'too_long' || problem.kind === 'control_char')) {
+          throw new ValidationError('boundary.type', `boundary "${b.code}" type: ${levelNameProblemText(problem, [b.type])}`);
+        }
       }
 
       await ensureAuthenticated();
