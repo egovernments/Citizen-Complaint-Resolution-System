@@ -880,6 +880,25 @@ async function writeVerifiedSignupIdentityProfile(input: {
 }
 
 /**
+ * Whether an email already belongs to an account, so sign-up should send the
+ * person to sign in instead. A provisional record this BFF created for an
+ * unfinished sign-up is not an account yet: requesting another link resumes it.
+ */
+export async function signupEmailBelongsToAccount(email: string): Promise<boolean> {
+  let existing: UserRepresentation | null;
+  try {
+    existing = await findIdentityUserByEmail(email);
+  } catch (error) {
+    // More than one user holds the address: it is certainly taken.
+    if (error instanceof IdentityAdminError && error.status === 409) return true;
+    throw error;
+  }
+  if (!existing) return false;
+  const managedDraft = existing.attributes?.[BFF_SIGNUP_USER_ATTRIBUTE]?.includes("true") === true;
+  return existing.enabled === false || !managedDraft;
+}
+
+/**
  * Creates the structural Keycloak record before email verification so its
  * profile is complete when the action token is redeemed. It grants no tenant
  * membership or role and deliberately leaves `emailVerified` false.

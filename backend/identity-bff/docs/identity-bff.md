@@ -321,7 +321,7 @@ One-time read (GETDEL).
 
 #### 3.2.5 `POST /identity/v1/authentication/magic-link-requests`
 
-Unchanged. Body `{email, firstName, lastName, returnTo?}`. Always `202 {message}`; existing, new, rate-limited and failed requests are indistinguishable. Errors: `INVALID_REQUEST`, `UNSUPPORTED_RETURN_TO` (400); `UNTRUSTED_ORIGIN` 403; `SIGNIN_METHODS_UNAVAILABLE` (the method catalogue can't be read), `SIGNUP_UNAVAILABLE` (magic link not enabled) (503).
+Body `{email, firstName, lastName, returnTo?}`. `202 {message}` for a new address, an unfinished sign-up, a rate-limited request or a failed one. An address that already has an account (any Keycloak user other than this BFF's own unfinished sign-up record) gets `409 ACCOUNT_EXISTS` and no email: the person signs in, or resets their password. Errors: `INVALID_REQUEST`, `UNSUPPORTED_RETURN_TO` (400); `UNTRUSTED_ORIGIN` 403; `ACCOUNT_EXISTS` 409; `SIGNIN_METHODS_UNAVAILABLE` (the method catalogue can't be read), `SIGNUP_UNAVAILABLE` (magic link not enabled) (503).
 
 #### 3.2.6 `POST /identity/v1/password/setup-requests` (item 5)
 
@@ -743,6 +743,7 @@ The console calls HRMS first, then the BFF. The BFF never writes HRMS (§1), and
 | `AUTH_RESULT_NOT_FOUND` | 404 | no | The sign-in result was already read or has expired |
 | `SIGNIN_METHODS_UNAVAILABLE` | 503 | yes | The Keycloak client's method catalogue can't be read |
 | `SIGNUP_UNAVAILABLE` | 503 | after-change | Self sign-up (magic link) is not enabled |
+| `ACCOUNT_EXISTS` | 409 | no | Sign-up for an email that already has an account; sign in instead |
 | `ACTION_NOT_ALLOWED` | 400 | no | The action is not in the client's digit.auth.account.actions |
 | `CREDENTIAL_NOT_SECOND_FACTOR` | 409 | no | delete_credential targets a primary credential |
 | `PROVIDER_ALREADY_LINKED` | 409 | no | idp_link for a provider that is already linked |

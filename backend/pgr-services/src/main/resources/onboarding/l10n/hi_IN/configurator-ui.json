@@ -1010,6 +1010,7 @@
 {"code": "app.onboarding.requirements.departments", "message": "कम से कम एक विभाग और एक पदनाम जोड़ें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.requirements.employees", "message": "कम से कम एक ऐसा कर्मचारी जोड़ें जो साइन इन कर सके।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.requirements.geography", "message": "स्थानों के कम से कम दो स्तर जोड़ें, उदाहरण के लिए काउंटी और उनके भीतर के वार्ड।", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.onboarding.signup_errors.ACCOUNT_EXISTS", "message": "इस ईमेल से एक खाता पहले से मौजूद है। इसके बजाय साइन इन करें, या साइन-इन पृष्ठ से अपना पासवर्ड रीसेट करें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.signup_errors.ACCOUNT_LOCKED", "message": "इस वर्कस्पेस में आपका खाता लॉक है। इसके व्यवस्थापक से इसे अनलॉक करने के लिए कहें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.signup_errors.CONFIGURATOR_ROLE_REQUIRED", "message": "कॉन्फ़िगरेटर वर्कस्पेस व्यवस्थापकों के लिए है, और यहाँ आपके खाते में कोई व्यवस्थापक भूमिका नहीं है। कर्मचारी ऐप का उपयोग करें, या किसी व्यवस्थापक से एक्सेस मांगें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.signup_errors.DIGIT_ACCOUNT_INACTIVE", "message": "इस वर्कस्पेस में आपका खाता सक्रिय नहीं है। इसके व्यवस्थापक से इसे फिर से चालू करने के लिए कहें।", "module": "configurator-ui", "locale": "hi_IN"},
