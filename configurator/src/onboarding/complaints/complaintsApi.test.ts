@@ -97,6 +97,26 @@ describe('loadComplaints', () => {
     expect(loaded.editable && loaded.draft.types).toEqual([]);
   });
 
+  it('edits a two-level hierarchy under its own level codes (a state with CATEGORY > SUB_TYPE)', async () => {
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition'
+        ? [row('PGR', { levels: [{ levelCode: 'CATEGORY' }, { levelCode: 'SUB_TYPE' }] }, { schemaCode: schema })]
+        : [
+            row('Water', { levelCode: 'CATEGORY', name: 'Water', order: 1 }),
+            row('WaterLeak', { levelCode: 'SUB_TYPE', name: 'Leak', parentCode: 'Water', department: 'WATER', slaHours: 24, order: 2 }),
+          ],
+    );
+    const loaded = await loadComplaints('acme');
+    expect(loaded.editable).toBe(true);
+    if (!loaded.editable) return;
+    expect(loaded.levels).toEqual(['CATEGORY', 'SUB_TYPE']);
+    expect(loaded.draft.types).toEqual([{ code: 'Water', name: 'Water', department: 'WATER', subtypes: [{ code: 'WaterLeak', name: 'Leak' }] }]);
+    const rows = rowsFor({ ...loaded.draft, types: [...loaded.draft.types, { name: 'Roads', department: 'ROADS', subtypes: [{ name: 'Pothole' }] }] }, ['Water', 'WaterLeak'], loaded.levels);
+    expect(rows.map((r) => [r.code, r.data.levelCode])).toEqual([
+      ['Water', 'CATEGORY'], ['WaterLeak', 'SUB_TYPE'], ['Roads', 'CATEGORY'], ['RoadsPothole', 'SUB_TYPE'],
+    ]);
+  });
+
   it('leaves a spreadsheet hierarchy with other levels alone', async () => {
     search.mockImplementation(async (_tenant, schema) =>
       schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition'
