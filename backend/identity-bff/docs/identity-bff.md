@@ -331,7 +331,7 @@ Body `{email?, returnTo?, surface?, tenantSlug?}`.
 - On `employee` and `citizen`, `tenantSlug` is required, and `returnTo` is checked against the surface prefix exactly as in `/authorize`.
 - A signed-in caller (the cookie of the chosen surface) may omit `email`.
 - Always `202 {message}`, also when rate-limited. Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE`, `UNSUPPORTED_RETURN_TO` (400); `UNTRUSTED_ORIGIN` 403; `TENANT_ROUTE_NOT_FOUND` 404; `TENANT_ROUTE_UNAVAILABLE` 503.
-- The same email is sent in-process by `workspace-members/_link` for a new user and by its `resend`, without a slug: it goes through the `digit-identity-bff` client, so its pages use the Configurator theme, which has no tenant branding.
+- The same email is sent in-process by `workspace-members/_link` for a new user and by its `resend` (#2801). A member whose DIGIT account holds a Configurator role (`DIGIT_CONFIGURATOR_ROLES`) at the workspace gets it through the `digit-identity-bff` client, without a slug, and returns to the Configurator. Every other member gets it as the `employee` surface's forgot-password does: the employee client, the workspace's slug, and a return to `/{urlSlug}/digit-ui/employee/`. When the workspace has no route or the employee client isn't configured, the Configurator path is used.
 
 #### 3.2.7 `GET /identity/v1/password/setup-complete/:state{/:tenantSlug}`
 

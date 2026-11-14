@@ -46,6 +46,7 @@ vi.mock("../../src/modules/organizations/organization-service.js", () => {
     ensureOrganizationMembership: vi.fn(async ({ organizationId, userId }: { organizationId: string; userId: string }) => { f.members.add(`${organizationId}:${userId}`); fail("membership"); }),
     sendPasswordSetupEmail: vi.fn(async () => { f.emails++; fail("email"); }),
     inspectPasswordSetupAccountById: vi.fn(async (id: string) => ({ userId: id, hasPassword: f.passwords.has(id), federatedProviders: [], emailVerified: f.users.get(id)?.emailVerified === true })),
+    readTenantMappingForTenant: vi.fn(async (tenantId: string) => ({ urlSlug: `${tenantId}-slug`, tenantId })),
   };
 });
 vi.mock("../../src/modules/workspace-members/authority.js", async (importOriginal) => ({
@@ -78,6 +79,7 @@ import { isOrganizationMember, request, sendPasswordSetupEmail } from "../../src
 import { readDigitAccount, requireWorkspace } from "../../src/modules/workspace-members/authority.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { audit } from "../../src/modules/citizen-otp/audit.js";
+import { getPasswordSetupAttempt } from "../../src/modules/sessions/session-store.js";
 import { activateStaffCredential, StaffLoginError } from "../../src/modules/accounts/credential-service.js";
 const uuid = "00000000-0000-4000-8000-000000000001";
 const input = { actor: "admin", tenantId: "pg", digitUuid: uuid, email: "employee@example.test" };
@@ -328,6 +330,40 @@ describe("admin resend of the activation email", () => {
     await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "RESEND_TOO_SOON", status: 429, retryAfter: expect.any(Number) });
     expect(f.emails).toBe(emails + 1);
     expect(f.users.get("new-1")).toEqual(before);
+  });
+  it("sends a non-admin's invite and resend password links through the employee client, back to the employee app (#2801)", async () => {
+    const savedSecret = config.keycloakEmployeeClientSecret;
+    config.keycloakEmployeeClientSecret = "employee-secret";
+    try {
+      vi.mocked(sendPasswordSetupEmail).mockClear();
+      await linkWorkspaceMember(input);
+      await linkWorkspaceMember(resend);
+      const calls = vi.mocked(sendPasswordSetupEmail).mock.calls.map(([email]) => email);
+      expect(calls).toHaveLength(2);
+      for (const email of calls) {
+        expect(email.clientId).toBe(config.keycloakEmployeeClientId);
+        const [, state, slug] = /\/password\/setup-complete\/([^/]+)\/([^/]+)$/.exec(email.redirectUri) ?? [];
+        expect(slug).toBe("pg-slug");
+        expect((await getPasswordSetupAttempt(decodeURIComponent(state!)))?.returnTo).toBe("/pg-slug/digit-ui/employee/");
+      }
+    } finally {
+      config.keycloakEmployeeClientSecret = savedSecret;
+    }
+  });
+  it("keeps a workspace admin's invite password link on the Configurator even with an employee client (#2801)", async () => {
+    const savedSecret = config.keycloakEmployeeClientSecret;
+    config.keycloakEmployeeClientSecret = "employee-secret";
+    f.targetRoles = [{ code: "EMPLOYEE", tenantId: "pg" }, { code: "MDMS_ADMIN", tenantId: "pg" }];
+    f.callerRoles = [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }, ...f.targetRoles];
+    try {
+      vi.mocked(sendPasswordSetupEmail).mockClear();
+      await linkWorkspaceMember(input);
+      const [[email]] = vi.mocked(sendPasswordSetupEmail).mock.calls;
+      expect(email.clientId).toBe(config.keycloakBffClientId);
+      expect(email.redirectUri).toMatch(/\/password\/setup-complete\/[^/]+$/);
+    } finally {
+      config.keycloakEmployeeClientSecret = savedSecret;
+    }
   });
   it("sends the invite's and the resend's password link without a slug: the Configurator theme has no tenant branding", async () => {
     vi.mocked(sendPasswordSetupEmail).mockClear();
