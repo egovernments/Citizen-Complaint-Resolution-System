@@ -63,10 +63,10 @@ public class AnalyticsService {
      * the def's own query; none can switch the aggregation level ({@code hierLevel}), fan out
      * companions ({@code compare}/{@code series}) or override the def's named {@code window}.
      * Values are scalar strings, length-capped, and dates must be ISO calendar days supplied as a
-     * pair.
+     * pair. The one exception is {@code serviceCodes} (#637): an array of such strings, size-capped.
      */
     static final Set<String> PUBLIC_QUERY_PARAMS =
-            Set.of("dateFrom", "dateTo", "ward", "serviceCode", "complaintPath");
+            Set.of("dateFrom", "dateTo", "ward", "serviceCode", "complaintPath", "serviceCodes");
     static final int PUBLIC_QUERY_PARAM_MAX_LENGTH = 128;
     private static final java.util.regex.Pattern ISO_DAY =
             java.util.regex.Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
@@ -81,7 +81,8 @@ public class AnalyticsService {
     private static final Map<String,String> PUBLIC_PARAM_COLUMNS = Map.of(
             "ward", "ward_code",
             "serviceCode", "service_code",
-            "complaintPath", "complaint_node_path");
+            "complaintPath", "complaint_node_path",
+            "serviceCodes", "service_code");
 
     /**
      * Rebuild a public ref's {@code params} from the allow-list. Returns null for an absent or
@@ -101,7 +102,8 @@ public class AnalyticsService {
             if (!PUBLIC_QUERY_PARAMS.contains(name))
                 throw new IllegalArgumentException("invalid_param: public queries accept only "
                         + new TreeSet<>(PUBLIC_QUERY_PARAMS) + "; got '" + name + "'");
-            if (v == null || !v.isValueNode() || v.isNull() || v.asText().trim().isEmpty())
+            if (name.equals("serviceCodes")) {   // #637: the one list param, a category's leaf codes
+                if (v == null || !v.isValueNode() || v.isNull() || v.asText().trim().isEmpty())
                 throw new IllegalArgumentException("invalid_param: " + name + " must be a non-empty scalar value");
             String text = v.asText().trim();
             if (text.length() > PUBLIC_QUERY_PARAM_MAX_LENGTH)
