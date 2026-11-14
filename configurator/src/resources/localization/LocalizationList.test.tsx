@@ -63,6 +63,20 @@ describe('LocalizationList', () => {
 
     // The permanent filter that drives the pivot must use the same tenant
     // locales as the columns — not a hardcoded list.
-    expect(digitListFilterSpy).toHaveBeenCalledWith({ locales: ['en_IN', 'pt_PT'] });
+    // ours (cfgreview F20, #1566): the list opens on the complaint labels (rainmaker-pgr)
+    expect(digitListFilterSpy).toHaveBeenCalledWith({ locales: ['en_IN', 'pt_PT'], module: 'rainmaker-pgr' });
+  });
+
+  it('drops the "default" column and says when a label reaches the apps (cfgreview F20, #1566)', () => {
+    mockLocales.push({ value: 'default', label: 'Default (default)' });
+    try {
+      render(<LocalizationList />);
+      const labels = screen.getAllByTestId('col').map((el) => el.textContent);
+      expect(labels).not.toContain('Default (default)');
+      expect(digitListFilterSpy).toHaveBeenLastCalledWith({ locales: ['en_IN', 'pt_PT'], module: 'rainmaker-pgr' });
+      expect(screen.getByTestId('localization-applies-note').textContent).toMatch(/24 hours/);
+    } finally {
+      mockLocales.pop();
+    }
   });
 });
