@@ -6,6 +6,7 @@ import "./styles/dashboard.css";
 
 import DashboardLayout from "./components/DashboardLayout";
 import KpiTile from "./components/KpiTile";
+import TileErrorBoundary from "./components/TileErrorBoundary";
 import CardUpdatedStamp from "./components/CardUpdatedStamp";
 import ResizeGrip from "./components/ResizeGrip";
 import GroupByLevelSelect, { levelDisplayLabel } from "./components/GroupByLevelSelect";
@@ -940,15 +941,18 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     const assembled = assembleResult(kpiId, def, batch.results);
     const tileError = errorForTile(batch.errors, kpiId);
 
+    // ours (digit-3 P0, 2026-10-14): one widget's render error stays in its card (TileErrorBoundary)
     return (
-      <KpiTile
-        def={def}
-        result={assembled}
-        results={batch.results}
-        error={tileError}
-        loading={batch.loading && !assembled}
-        groupBy={groupBy}
-      />
+      <TileErrorBoundary kpiId={kpiId}>
+        <KpiTile
+          def={def}
+          result={assembled}
+          results={batch.results}
+          error={tileError}
+          loading={batch.loading && !assembled}
+          groupBy={groupBy}
+        />
+      </TileErrorBoundary>
     );
   };
 

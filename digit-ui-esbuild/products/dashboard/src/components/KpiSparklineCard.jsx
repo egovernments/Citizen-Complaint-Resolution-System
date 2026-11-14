@@ -32,15 +32,8 @@ const RemoveIcon = () => (
   </svg>
 );
 
-function normalizeSparklineData(points) {
-  if (!Array.isArray(points) || points.length === 0) {
-    return [0, 0, 0, 0, 0, 0, 0];
-  }
-  if (points.length === 1) {
-    return [points[0], points[0]];
-  }
-  return points;
-}
+// ours (digit-3 P0, 2026-10-14): empty / all-equal series are drawn without ApexCharts (see utils/sparklineShape.js)
+import { sparklineShape } from "../utils/sparklineShape";
 
 const KpiSparklineCard = ({
   title,
@@ -57,7 +50,8 @@ const KpiSparklineCard = ({
   const isUnavailable = value === "—";
   const displayValue = value ?? (loading ? "…" : "—");
   const valueClass = getNumberTileValueClass(status, { unavailable: isUnavailable });
-  const chartData = normalizeSparklineData(sparkline);
+  const shape = useMemo(() => sparklineShape(sparkline), [JSON.stringify(sparkline ?? [])]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chartData = shape.data;
   const { containerRef, containerSize } = useChartContainerSize();
   const chartHeight = Math.max(SPARKLINE_MIN_HEIGHT, containerSize.height || SPARKLINE_MIN_HEIGHT);
   const strokeColor = useMemo(
@@ -121,7 +115,15 @@ const KpiSparklineCard = ({
       </div>
 
       <div ref={containerRef} className={sparklineTile.sparkline}>
-        {chartHeight > 0 ? (
+        {shape.kind === "none" ? (
+          <div className="tw-flex tw-h-full tw-items-end tw-text-xs tw-text-gray-400" data-testid="sparkline-none">
+            {loading ? "" : t("DASHBOARD_SPARKLINE_NO_DATA", "No trend data")}
+          </div>
+        ) : shape.kind === "flat" ? (
+          <div className="tw-flex tw-h-full tw-items-center" data-testid="sparkline-flat" aria-hidden="true">
+            <div className="tw-w-full" style={{ borderTop: `1px solid ${strokeColor}` }} />
+          </div>
+        ) : chartHeight > 0 ? (
           <Chart
             key={chartHeight}
             options={chartOptions}
