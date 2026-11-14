@@ -22,6 +22,7 @@ import { digitClient } from '@/providers/bridge';
 import { getDescriptor } from '../schemaDescriptors';
 import type { FieldSpec } from '../schemaDescriptors/types';
 import { validateGoogleMapsKey } from '@/utils/googleMaps';
+import { mapConfigCode } from './mapConfigCode';
 
 /**
  * Editor for `RAINMAKER-PGR.MapConfig`.
@@ -372,7 +373,10 @@ export function MapConfigEditor() {
   const handleSave = async () => {
     setSaving(true); setSaveError(null);
     try {
-      const payload = { ...data, code: MAP_CONFIG_KEY };
+      // ours (#1685): the row being edited keeps its own code (its unique key: MDMS refuses a change,
+      // UNIQUE_KEY_UPDATE_ERR); only a brand-new record defaults to DEFAULT.
+      const code = mapConfigCode(record, data);
+      const payload = { ...data, code };
       // mdms-v2 resolves up the tenant tree, so the loaded record may belong to a
       // PARENT tenant. Updating that would rewrite the parent for every city that
       // inherits it — so only update a record this tenant actually owns; otherwise
@@ -380,7 +384,7 @@ export function MapConfigEditor() {
       if (record && record.tenantId === tenantId) {
         await digitClient.mdmsUpdate({ ...record, data: payload } as unknown as Parameters<typeof digitClient.mdmsUpdate>[0], record.isActive);
       } else {
-        await digitClient.mdmsCreate(tenantId, SCHEMA, MAP_CONFIG_KEY, payload);
+        await digitClient.mdmsCreate(tenantId, SCHEMA, code, payload);
       }
       toast({ title: 'Map Configuration saved', description: tenantId });
       navigate('/manage/map-config');
@@ -426,7 +430,10 @@ export function MapConfigEditor() {
 
           <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6">
             <div className="space-y-4 min-w-0">
-              {codeSpec && <div className="max-w-xs"><FieldInput spec={codeSpec} data={data} setField={setField} /></div>}
+              {/* ours (#1685): an existing row's code is its unique key, shown, not editable */}
+              {codeSpec && <div className="max-w-xs">{record
+                ? <FieldShell spec={codeSpec}><Input value={mapConfigCode(record, data)} readOnly aria-readonly="true" /></FieldShell>
+                : <FieldInput spec={codeSpec} data={data} setField={setField} />}</div>}
               {sections.map((g) => {
                 const specs = g.fields.map((p) => specByPath.get(p)).filter(Boolean) as FieldSpec[];
                 if (specs.length === 0) return null;
