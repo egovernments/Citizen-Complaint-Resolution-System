@@ -30,6 +30,11 @@ export const LOGIN_MESSAGE_FALLBACKS = {
     CORE_LOGIN_FORGOT_PASSWORD_TEXT: "Enter the email address of your account and we'll send you a link to set a new password.",
     CORE_LOGIN_RESET_LINK_SENT: "If an account exists for that email address, we've sent it a link to set a new password.",
     CORE_LOGIN_RESET_LINK_FAILED: "Could not send the link. Please try again.",
+    // Over a request limit (#2805): nothing was sent. {{minutes}} is filled in by the page.
+    CORE_LOGIN_RESET_LINK_LIMITED_NETWORK: "Too many requests from this network. Try again in {{minutes}} minutes.",
+    CORE_LOGIN_RESET_LINK_LIMITED_NETWORK_ONE: "Too many requests from this network. Try again in 1 minute.",
+    CORE_LOGIN_RESET_LINK_LIMITED_EMAIL: "Too many emails were requested for this address. Try again in {{minutes}} minutes.",
+    CORE_LOGIN_RESET_LINK_LIMITED_EMAIL_ONE: "Too many emails were requested for this address. Try again in 1 minute.",
     // The password check before an account action (#2645)
     CORE_LOGIN_CONFIRM_UPDATE_PASSWORD: "Confirm it's you to change your password",
     CORE_LOGIN_CONFIRM_CONFIGURE_TOTP: "Confirm it's you to set up an authenticator",

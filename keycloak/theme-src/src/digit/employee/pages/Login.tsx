@@ -7,7 +7,7 @@ import type { LoginMessageKey } from "../../branding/strings";
 import { PasswordInput, TextField } from "../../components/Fields";
 import { PrivacyConsent, pickPrivacyPolicy, type PrivacyPolicy } from "../../components/Privacy";
 import type { DigitPageProps } from "../../shared/kc";
-import { employeeReturnTo, requestPasswordSetup } from "../../shared/passwordHelp";
+import { employeeReturnTo, requestPasswordSetup, type PasswordSetupOutcome } from "../../shared/passwordHelp";
 
 /**
  * login.js always renders PrivacyComponent and gates the submit on it; a
@@ -23,7 +23,13 @@ const CONFIRM_HEADINGS = new Map<string, LoginMessageKey>([
     ["UPDATE_EMAIL", "CORE_LOGIN_CONFIRM_UPDATE_EMAIL"]
 ]);
 
-type ResetState = "idle" | "sending" | "sent" | "failed";
+type ResetState = "idle" | "sending" | "sent" | "failed" | "limited";
+
+/** The toast for a request over its limit (#2805): who asked too often, and how long to wait. */
+function limitedKey(limit: Extract<PasswordSetupOutcome, { status: "limited" }>): LoginMessageKey {
+    const base = limit.by === "email" ? "CORE_LOGIN_RESET_LINK_LIMITED_EMAIL" : "CORE_LOGIN_RESET_LINK_LIMITED_NETWORK";
+    return limit.minutes === 1 ? `${base}_ONE` : base;
+}
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -70,6 +76,7 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
     // The sign-in messages belong to the attempt before the reset form opened; Go back must not raise them again.
     const [leftSignIn, setLeftSignIn] = useState(false);
     const [resetState, setResetState] = useState<ResetState>("idle");
+    const [resetLimit, setResetLimit] = useState<Extract<PasswordSetupOutcome, { status: "limited" }> | null>(null);
     // Bumped by each reset request and by Go back; a reply for an older value is dropped.
     const resetRequest = useRef(0);
     // Set as the request starts, so a second submit before the re-render sends nothing.
@@ -102,17 +109,23 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
             returnTo: employeeReturnTo(slug),
             surface: "employee",
             tenantSlug: slug
-        }).then(ok => {
+        }).then(outcome => {
             if (resetRequest.current !== request) return;
             resetSending.current = false;
-            setResetState(ok ? "sent" : "failed");
+            setResetLimit(outcome.status === "limited" ? outcome : null);
+            setResetState(outcome.status);
         });
     };
 
     const view = forgot
         ? {
               header: digit.t("CORE_COMMON_FORGOT_PASSWORD"),
-              toast: resetState === "failed" ? digit.t("CORE_LOGIN_RESET_LINK_FAILED") : undefined,
+              toast:
+                  resetState === "failed"
+                      ? digit.t("CORE_LOGIN_RESET_LINK_FAILED")
+                      : resetState === "limited" && resetLimit
+                        ? digit.t(limitedKey(resetLimit)).replace("{{minutes}}", String(resetLimit.minutes))
+                        : undefined,
               displayMessage: false
           }
         : {
