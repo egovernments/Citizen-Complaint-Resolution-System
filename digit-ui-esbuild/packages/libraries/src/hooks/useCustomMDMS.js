@@ -27,6 +27,11 @@ import _ from "lodash";
  *
  * @returns {Object} Returns the object of the useQuery from react-query.
  */
+const belowUserTenant = (tenantId) => {
+  const own = Digit.ULBService.getCurrentTenantId();
+  return tenantId && own && String(tenantId).startsWith(`${own}.`) ? tenantId : null;
+};
+
 const useCustomMDMS = (tenantId, moduleName, masterDetails = [], config = {}, mdmsv2 = false) => {
   if (mdmsv2) {
     //here call the mdmsv2 api and return the options array
@@ -37,7 +42,9 @@ const useCustomMDMS = (tenantId, moduleName, masterDetails = [], config = {}, md
       body: {
         MdmsCriteria: {
           // tenantId, //changing here to send user's tenantId always whether stateId or city
-          tenantId: Digit.ULBService.getCurrentTenantId(),
+          // ...except a tenant BELOW the user's (a citizen's home city, a node an employee works at under its state):
+          // that is the more specific tenant the caller means
+          tenantId: belowUserTenant(tenantId) || Digit.ULBService.getCurrentTenantId(),
           moduleDetails: [
             {
               moduleName: moduleName,
