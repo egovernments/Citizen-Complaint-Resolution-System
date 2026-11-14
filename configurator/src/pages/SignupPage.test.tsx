@@ -135,6 +135,25 @@ describe('sign-in gate', () => {
     expect(api.startSignIn).not.toHaveBeenCalled();
   });
 
+  it('says how long to wait when the sign-up link is over its limit, instead of "check your email" (#2805)', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'magic-link', label: 'Email me a sign-in link', type: 'magic_link' }],
+    });
+    vi.mocked(api.requestMagicLinkSignup).mockRejectedValue(
+      new api.OnboardingError(429, 'EMAIL_RATE_LIMITED', 'Too many emails were requested for this address. Try again later.', { retryAfter: 1500 }),
+    );
+
+    render(<SignupPage />);
+    fireEvent.change(await screen.findByLabelText(/first name/i), { target: { value: 'Amina' } });
+    fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Diallo' } });
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'amina@example.org' } });
+    fireEvent.click(screen.getByRole('button', { name: /email me a sign-in link/i }));
+
+    expect(await screen.findByText('Too many emails were requested for this address. Try again in 25 minutes.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /check your email/i })).not.toBeInTheDocument();
+  });
+
   it('hands sign-in to the backend rather than collecting a credential', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({

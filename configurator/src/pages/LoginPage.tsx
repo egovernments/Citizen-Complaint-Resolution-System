@@ -26,6 +26,7 @@ import { WorkspaceTrialDialog } from '@/components/WorkspaceTrialDialog';
 import { SESSION_EXPIRED_KEY, clearSignOutIncomplete, signOutIncomplete, signOutThisDevice } from '@/lib/session';
 import { useAuthResult } from '@/hooks/useAuthResult';
 import { describeSignupError } from '@/onboarding/signup/signupErrors';
+import { describeEmailLimit } from '@/onboarding/signup/emailLimits';
 
 type Phase = 'loading' | 'methods' | 'tenants' | 'noAccess' | 'invitations' | 'entering';
 
@@ -154,7 +155,7 @@ export default function LoginPage() {
       setShowPasswordSetup(false);
       setEmail('');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not request a password setup link.');
+      setError(describeEmailLimit(caught) ?? (caught instanceof Error ? caught.message : 'Could not request a password setup link.'));
     } finally {
       setSending(false);
     }
@@ -169,7 +170,7 @@ export default function LoginPage() {
       setNoticeTitle('Check your email');
       setNotice(response.message);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not request a password setup link.');
+      setError(describeEmailLimit(caught) ?? (caught instanceof Error ? caught.message : 'Could not request a password setup link.'));
     } finally {
       setSending(false);
     }

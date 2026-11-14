@@ -2,6 +2,7 @@ import { OnboardingError, type Operation } from '@/api/onboarding';
 import { ApiClientError } from '@/api';
 import { describeWorkspaceError } from '../errors';
 import { englishT, MessageError, type OnboardingT } from '../i18n';
+import { describeEmailLimit } from './emailLimits';
 
 /**
  * The sign-up's backend error codes, in words. Keyed by the code, as
@@ -96,6 +97,9 @@ export function describeSignupError(err: unknown, t: OnboardingT = englishT, con
     return { message: err instanceof Error && err.message ? err.message : t('signup.error_unknown', 'Something went wrong. Try again.') };
   }
 
+  // Over a sign-up link limit: say so and how long to wait (#2805).
+  const limited = describeEmailLimit(err, t);
+  if (limited) return { message: limited };
   const { code, message, status } = err;
   if (code === 'ONBOARDING_VALIDATION_ERROR') {
     const [, field, problem] = FIELD_REFUSAL.exec(message) ?? [];
