@@ -11,6 +11,8 @@ import type {
   ValidationError,
   ValidationWarning,
 } from '@/api/types';
+import { matchDepartment, noDepartmentMessage, type DepartmentChoice } from '@/onboarding/complaints/sheetDepartments';
+import { englishT, type OnboardingT } from '@/onboarding/i18n';
 
 // ============================================
 // Generic Excel Parser
@@ -932,6 +934,13 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
 // ============================================
 
 /**
+ * The template's department column. It takes a department's code or its name; the headers older
+ * templates used are still read.
+ */
+export const COMPLAINT_DEPARTMENT_HEADER = 'Department (code or name)*';
+const DEPARTMENT_HEADERS = [COMPLAINT_DEPARTMENT_HEADER, 'Department (code or name)', 'Department Name*', 'Department Name', 'department', 'Department'];
+
+/**
  * A PascalCase code from a display name, punctuation stripped: codes feed MDMS
  * uniqueIdentifiers and localization keys, where & / ' and the like break
  * lookups. "Street lights / not working" gives StreetLightsNotWorking. Mirrors
@@ -1015,10 +1024,19 @@ export interface ComplaintHierarchyParseResult {
 export function parseComplaintHierarchyExcel(
   workbook: XLSX.WorkBook,
   hierarchyType: string,
-  levelCodes: string[]
+  levelCodes: string[],
+  {
+    departments: choices,
+    t = englishT,
+  }: {
+    /**
+     * The workspace's departments. Given, each department cell must name one of them, by code or
+     * by name, and is saved as its code; a value that matches none is an error on its row.
+     */
+    departments?: DepartmentChoice[];
+    t?: OnboardingT;
+  } = {}
 ): ComplaintHierarchyParseResult {
-
-
   const levels = levelCodes.filter((l) => l && l.trim());
   const leafIdx = levels.length - 1;
   const errors: ValidationError[] = [];
@@ -1102,18 +1120,35 @@ export function parseComplaintHierarchyExcel(
     }
     seen.add(serviceCode);
     // ── MULTI-DEPT (revertible) ──────────────────────────────────────────────
-    //  "Department Name*" may be a comma-separated list (one complaint type → many
+    //  The department cell may be a comma-separated list (one complaint type → many
     //  departments). department = first (primary); departments[] = all (trimmed,
-    //  de-duped). REVERT: replace these 3 lines with the single original line
-    //      const department = cell(row, 'Department Name*', 'Department Name', 'department', 'Department');
-    //  and remove the `departments,` line from the nodeMap.set() below.
-    const departmentRaw = cell(row, 'Department Name*', 'Department Name', 'department', 'Department');
-    const departments = [...new Set(departmentRaw.split(',').map((s) => s.trim()).filter(Boolean))];
-    const department = departments[0] || '';
+    //  de-duped). REVERT: keep only the first value and remove the `departments,`
+    //  line from the nodeMap.set() below.
+    const departmentRaw = cell(row, ...DEPARTMENT_HEADERS);
+    const typed = [...new Set(departmentRaw.split(',').map((s) => s.trim()).filter(Boolean))];
     // ── end MULTI-DEPT ───────────────────────────────────────────────────────
+    // Each value is a department's code or name, saved as its code. A blank cell or a value
+    // that matches no department stops the whole sheet: it used to be saved as typed (or as
+    // 'NA'), which no GRO can ever cover, so the workspace could not finish setup (#2806).
+    const departments: string[] = [];
+    if (typed.length === 0) {
+      errors.push({ row: rowNo, field: 'department', message: noDepartmentMessage(rowNo, t), code: 'NO_DEPT' });
+    }
+    for (const value of typed) {
+      if (!choices) {
+        departments.push(value);
+        continue;
+      }
+      const match = matchDepartment(value, rowNo, choices, t);
+      if (match.ok) {
+        if (!departments.includes(match.code)) departments.push(match.code);
+      } else {
+        errors.push({ row: rowNo, field: 'department', message: match.message, code: 'UNKNOWN_DEPT', value });
+      }
+    }
+    const department = departments[0] || '';
     const slaHours = parseInt(cell(row, 'Resolution Time (Hours)*', 'Resolution Time (Hours)', 'slaHours', 'sla') || '24', 10) || 24;
     const keywords = cell(row, 'Search Words*', 'Search Words (comma separated)*', 'Search Words', 'keywords');
-    if (!department) warnings.push({ row: rowNo, field: 'department', message: `Row ${rowNo}: no department`, code: 'NO_DEPT' });
 
     // Leaf row: a node at the leaf level carrying the leaf fields. Lives in the
     // SAME node array as the interior nodes (single-master adjacency list).

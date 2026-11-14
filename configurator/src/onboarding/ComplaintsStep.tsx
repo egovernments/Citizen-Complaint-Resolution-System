@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, LayoutGrid, ListTree, MessageSquareText, Plus, UserRoundX } from 'lucide-react';
+import { AlertTriangle, FileText, LayoutGrid, ListTree, MessageSquareText, Plus, UserRoundX } from 'lucide-react';
 import { useApp } from '../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DigitCard } from '@/components/digit/DigitCard';
+import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog';
 import { ComplaintHierarchySetup } from '@/components/ComplaintHierarchySetup';
 import { toast } from '@/hooks/use-toast';
 import type { Employee } from '@/api/types';
@@ -23,12 +24,14 @@ import { listEmployees } from './employees/employeesApi';
 import { pickerChoices } from '@/lib/systemRecords';
 import {
   loadComplaints,
+  removeSheetComplaints,
   rowsFingerprint,
   saveComplaints,
   subtypeCount,
   hasMixedHours,
   DEFAULT_SLA_HOURS,
   type ComplaintDraft,
+  type ComplaintRoute,
   type DraftType,
   type LoadedComplaints,
 } from './complaints/complaintsApi';
@@ -36,6 +39,10 @@ import {
 const STEP = stepById('complaints');
 const EMPLOYEES_STEP = stepById('employees');
 const { previous } = adjacentSteps('complaints');
+
+/** How many names a notice lists before it trails off. */
+const LISTED = 8;
+const listed = (names: string[]) => (names.length > LISTED ? `${names.slice(0, LISTED).join(', ')}, …` : names.join(', '));
 
 /**
  * Unsaved work survives a reload, per workspace, until it is saved or
@@ -138,28 +145,88 @@ export default function ComplaintsStep() {
 
   const departmentName = useMemo(() => new Map(departments.map((choice) => [choice.code, choice.name])), [departments]);
 
-  const routedDepartments = !loaded ? [] : loaded.editable ? (draft?.types ?? []).map((type) => type.department) : loaded.departments;
-  const withoutGro = employees ? departmentsWithoutGro(routedDepartments, employees, tenant) : [];
-  const groHint = withoutGro.length > 0 ? t('complaints.gro_hint', 'Each department needs a GRO before you can finish.') : undefined;
-  const groNotice = withoutGro.length > 0 && (
-    <Alert>
-      <UserRoundX className="h-4 w-4" />
-      <AlertDescription className="space-y-3">
+  // Each category people file against and the department it goes to.
+  const routes: ComplaintRoute[] = !loaded
+    ? []
+    : loaded.editable
+      ? (draft?.types ?? []).map((type) => ({ name: type.name, department: type.department }))
+      : loaded.routes;
+  // A department code the workspace doesn't have (a sheet's typed name, or 'NA' from before #2806): no GRO can
+  // ever cover it, so it is named as what it is, not as a missing GRO.
+  const unknownRoutes = routes.filter((route) => route.department && !departmentName.has(route.department));
+  const unknownCodes = new Set(unknownRoutes.map((route) => route.department));
+  const withoutGro = (employees ? departmentsWithoutGro(routes.map((route) => route.department), employees, tenant) : []).filter(
+    (code) => !unknownCodes.has(code),
+  );
+  const blocked = withoutGro.length > 0 || unknownRoutes.length > 0;
+  const groHint =
+    unknownRoutes.length > 0
+      ? t('complaints.unknown_department_hint', 'Every complaint category needs a department that exists before you can finish.')
+      : withoutGro.length > 0
+        ? t('complaints.gro_hint', 'Each department needs a GRO before you can finish.')
+        : undefined;
+  const unknownNotice = unknownRoutes.length > 0 && (
+    <Alert data-testid="complaints-unknown-department">
+      <AlertTriangle className="h-4 w-4" />
+      <AlertDescription className="space-y-1">
         <p>
-          {t('complaints.no_gro', 'No one can assign complaints for %{departments}.', {
-            departments: withoutGro.map((code) => departmentName.get(code) ?? code).join(', '),
-          })}{' '}
-          {t(
-            'complaints.no_gro_why',
-            'Every department a complaint category goes to needs at least one employee with the GRO role. A DGRO doesn’t count.',
-          )}
+          {t('complaints.unknown_department', 'Some complaint categories go to a department this workspace doesn’t have: %{list}.', {
+            list: listed(unknownRoutes.map((route) => `${route.name} (“${route.department}”)`)),
+          })}
         </p>
-        <Button variant="outline" size="sm" onClick={() => navigate(EMPLOYEES_STEP.path)}>
-          {t('complaints.add_gro', 'Add a GRO in Employees')}
-        </Button>
+        <p>
+          {loaded?.editable
+            ? t('complaints.unknown_department_fix_edit', 'Edit each one and pick its department from the list.')
+            : t(
+                'complaints.unknown_department_fix_sheet',
+                'Use “Remove and upload again”, then upload the sheet with a department code or name from the Departments step.',
+              )}
+        </p>
       </AlertDescription>
     </Alert>
   );
+  const groNotice = (
+    <>
+      {unknownNotice}
+      {withoutGro.length > 0 && (
+        <Alert data-testid="complaints-no-gro">
+          <UserRoundX className="h-4 w-4" />
+          <AlertDescription className="space-y-3">
+            <p>
+              {t('complaints.no_gro', 'No one can assign complaints for %{departments}.', {
+                departments: withoutGro.map((code) => departmentName.get(code) ?? code).join(', '),
+              })}{' '}
+              {t(
+                'complaints.no_gro_why',
+                'Every department a complaint category goes to needs at least one employee with the GRO role. A DGRO doesn’t count.',
+              )}{' '}
+              {t('complaints.no_gro_categories', 'Complaint categories affected: %{categories}.', {
+                categories: listed(routes.filter((route) => withoutGro.includes(route.department)).map((route) => route.name)),
+              })}
+            </p>
+            <Button variant="outline" size="sm" onClick={() => navigate(EMPLOYEES_STEP.path)}>
+              {t('complaints.add_gro', 'Add a GRO in Employees')}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+    </>
+  );
+
+  // The spreadsheet's rows are switched off, so the step opens on the upload again.
+  const removeSheet = async () => {
+    try {
+      await removeSheetComplaints(tenant);
+    } catch (err) {
+      reportStepError('complaints', 'remove_sheet', err, tenant);
+      throw new Error(describeSaveError(err, t('complaints.remove_sheet_failed', 'Removing the complaint categories failed. Try again.'), t));
+    }
+    trackRecordSave('complaints', 'complaint_type', 'delete', { method: 'bulk' });
+    writeDraft(tenant, null);
+    toast({ title: t('complaints.sheet_removed', 'Complaint categories removed. Upload the corrected sheet.') });
+    setBulk(true);
+    reload();
+  };
 
   const finish = async () => {
     if (!await completePhase(STEP.number)) return;
@@ -242,6 +309,7 @@ export default function ComplaintsStep() {
           <ComplaintHierarchySetup
             targetTenant={tenant}
             stateTenant={state.tenant}
+            departments={pickerChoices(departments, (choice) => choice.code)}
             onError={(message) => {
               reportStepError('complaints', 'import_bulk', new Error(message), tenant);
               setSaveError(message);
@@ -293,6 +361,22 @@ export default function ComplaintsStep() {
                 levels: loaded.levels.join(' → '),
               })}
             </p>
+            <p className="mt-1 text-muted-foreground">
+              {t('complaints.from_sheet_redo', 'Something wrong in the sheet? Remove what it set up and upload a corrected one.')}
+            </p>
+            <DeleteConfirmDialog
+              title={t('complaints.remove_sheet_confirm', 'Remove the complaint categories from the spreadsheet?')}
+              description={t(
+                'complaints.remove_sheet_effect',
+                'Everything the spreadsheet set up is removed: its levels and its complaint categories. You can then upload a corrected sheet, or add categories by hand.',
+              )}
+              onConfirm={removeSheet}
+              trigger={
+                <Button variant="outline" size="sm" className="mt-3" data-testid="complaints-remove-sheet">
+                  {t('complaints.remove_sheet', 'Remove and upload again')}
+                </Button>
+              }
+            />
           </div>
         </div>
         {groNotice}
@@ -300,7 +384,7 @@ export default function ComplaintsStep() {
           onBack={previous ? () => navigate(previous.path) : undefined}
           onContinue={finish}
           continueLabel={t('complaints.finish', 'Finish setup')}
-          disabled={loaded.leafCount === 0 || withoutGro.length > 0}
+          disabled={loaded.leafCount === 0 || blocked}
           hint={groHint}
         />
       </div>
@@ -495,7 +579,7 @@ export default function ComplaintsStep() {
           onContinue={save}
           continueLabel={t('complaints.finish', 'Finish setup')}
           busy={saving}
-          disabled={types.length === 0 || withoutGro.length > 0}
+          disabled={types.length === 0 || blocked}
           hint={types.length === 0 ? t('complaints.finish_hint', 'Add at least one complaint category to finish.') : groHint}
         />
         {dirty && loaded.draft.types.length > 0 && (
