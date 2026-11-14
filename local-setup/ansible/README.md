@@ -71,6 +71,7 @@ playbook. Each profile is independent — enable any combination.
 | `otp` | `enable_otp_services: true` (requires `enable_novu: true`) | 2 | egov-otp, user-otp (their SMS goes out through novu-bridge) |
 | `notifications` | `enable_novu: true` | 8 | novu-mongo, novu-api, novu-worker, novu-ws, novu-dashboard, digit-config-service, digit-user-preferences-service, novu-bridge |
 | `mcp` | `enable_mcp: true` | 2 | mcp-postgres, digit-mcp |
+| `severity` | `enable_severity: true` | 1 | severity-service (internal port 8000 only, no public route) |
 
 **Full stack (all profiles): 57 persistent + 4 init = 61 total.**
 
@@ -104,6 +105,7 @@ git submodule update --init --recursive local-setup/ansible/nairobi-mdms
 | `digit-ui-fix` (sibling clone next to CCRS) | only when `run_ci_tests: true` — Playwright + XLSX dataloader suite | task block skipped |
 | `digit-configurator` | `nginx_features.configurator: true` — with `build_configurator: true` the deploy clones + `vite build`s it from source (`files/configurator-build.sh`); or point `configurator_build:` at a pre-built `dist/` | sync task ignored, nginx renders without `/configurator/` location |
 | `DIGIT-MCP` | `enable_mcp: true` — with `build_mcp: true` the deploy clones + `docker build`s the image locally (`files/mcp-build.sh`, tagged `digit-mcp:local`), no registry pull; else pulls `{{ docker_registry }}/digit-mcp:latest` | MCP not deployed |
+| `severity-service` | `enable_severity: true` — the deploy rsyncs the vendored `severity-service/` and `docker build`s it on the target (`files/severity-build.sh`, tagged `severity-service:local`); no registry pull | severity-service not deployed |
 
 In other words: clone CCRS, fill out `inventory/host_vars/<tenant>.yml`,
 seed OpenBao, run `./deploy.sh <tenant>`. Production deploys

@@ -2577,6 +2577,30 @@ services:
     networks:
       - egov-network
 
+  # ==================== Severity service ====================
+  # Complaint-severity scorer (FastAPI + MiniLM embeddings + CatBoost), built from
+  # the vendored severity-service/ (ansible/files/severity-build.sh -> severity-service:local).
+  # INTERNAL ONLY: no `ports:` and no nginx route — callers reach it as
+  # http://severity-service:8000 on egov-network. Gated behind its own profile
+  # (`enable_severity: true`), so it is OFF unless requested. SEVERITY_API_KEY is
+  # deliberately unset: the service is not reachable from outside the network.
+  severity-service:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    profiles: ["severity"]
+    image: ${SEVERITY_IMAGE:-severity-service:local}
+    container_name: severity-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    networks:
+      - egov-network
+
   # ==================== OpenBao (secrets backend) ====================
   # Per-tenant secrets store. File-backed KV v2; the playbook handles
   # init + auto-unseal on first deploy and stores the unseal keys at
