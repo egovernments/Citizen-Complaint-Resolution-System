@@ -68,7 +68,14 @@ function mostCommon(values: number[]): number | undefined {
 export type LoadedComplaints =
   | { editable: true; draft: ComplaintDraft; records: MdmsRecord[]; hasDefinition: boolean }
   /** Set up some other way (a spreadsheet with its own levels): shown, not edited, here. */
-  | { editable: false; leafCount: number; levels: string[]; departments: string[] };
+  | {
+      editable: false;
+      leafCount: number;
+      levels: string[];
+      departments: string[];
+      /** Each leaf by name and the department it goes to, to name those whose department was removed (#2797). */
+      routes: { name: string; department: string }[];
+    };
 
 const stateRootOf = (tenantId: string) => tenantId.split('.')[0];
 const dataOf = (record: MdmsRecord) => record.data as Record<string, unknown>;
@@ -104,11 +111,11 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
     const leafCount = active.filter((record) => dataOf(record).department != null || dataOf(record).slaHours != null).length;
     // A leaf is a row no other row names as its parent; complaints filed on it go to its department.
     const parents = new Set(active.map((record) => text(dataOf(record).parentCode)));
-    const departments = active
-      .filter((record) => !parents.has(codeOf(record)))
-      .map((record) => text(dataOf(record).department))
-      .filter(Boolean);
-    return { editable: false, leafCount, levels: definedLevels, departments: Array.from(new Set(departments)) };
+    const routes = active
+      .filter((record) => !parents.has(codeOf(record)) && text(dataOf(record).department))
+      .map((record) => ({ name: text(dataOf(record).name) || codeOf(record), department: text(dataOf(record).department) }));
+    const departments = routes.map((route) => route.department);
+    return { editable: false, leafCount, levels: definedLevels, departments: Array.from(new Set(departments)), routes };
   }
 
   const byOrder = (a: MdmsRecord, b: MdmsRecord) => Number(dataOf(a).order ?? 0) - Number(dataOf(b).order ?? 0);

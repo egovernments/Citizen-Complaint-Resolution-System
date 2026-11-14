@@ -108,6 +108,7 @@ describe('loadComplaints', () => {
       leafCount: 1,
       levels: ['AUTHORITY_TYPE', 'MAIN_CATEGORY', 'SUB_TYPE'],
       departments: ['X'],
+      routes: [{ name: 'A', department: 'X' }],
     });
   });
 
@@ -123,6 +124,11 @@ describe('loadComplaints', () => {
     );
     const loaded = await loadComplaints('acme');
     expect(loaded.editable === false && loaded.departments).toEqual(['WATER']);
+    // Leaves by name, so a removed department's categories can be named (#2797).
+    expect(loaded.editable === false && loaded.routes).toEqual([
+      { name: 'Leak', department: 'WATER' },
+      { name: 'Meter', department: 'WATER' },
+    ]);
   });
 });
 

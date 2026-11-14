@@ -21,6 +21,7 @@ import { RefreshNotice } from '../RefreshNotice';
 import { MasterDialog } from './MasterDialog';
 import { isSystemRecordCode } from '@/lib/systemRecords';
 import { BulkMastersUpload, type BulkImportSummary } from './BulkMastersUpload';
+import { checkRemovable } from './departmentUsage';
 import {
   listMasters,
   recordDepartments,
@@ -254,6 +255,15 @@ export default function DepartmentsStep() {
 
   // The confirm dialog shows a thrown error and stays open, so the wording is set here.
   const remove = async (kind: MasterKind, record: MdmsRecord) => {
+    // A department still in use stays (#2797): its employees could no longer be saved, and its
+    // complaints would keep going to a department nobody can be added to.
+    if (kind === 'department') {
+      try {
+        await checkRemovable(tenant, record.uniqueIdentifier, recordName(record), t);
+      } catch (err) {
+        throw new Error(describeSaveError(err, t('common.remove_failed', 'Removing failed. Try again.'), t));
+      }
+    }
     try {
       await removeMaster(record);
     } catch (err) {

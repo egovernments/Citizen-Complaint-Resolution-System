@@ -157,6 +157,33 @@ public class WorkspaceRouteTest {
         when(client.read(eq("hrms"),anyString(),any())).thenThrow(new OnboardingFailure("HRMS_DOWN",true));
         assertThrows(OnboardingFailure.class,()->gateway.probe("example","COMPLAINT_TYPES",null));       // unreadable HRMS never grants DONE
     }
+    /** #2797: a department removed while in use keeps Finish refused until nothing names it, or it is added back. */
+    @Test public void complaintTypesRefuseWhileACategoryOrEmployeeNamesARemovedDepartment() throws Exception {
+        String removedRoads="{\"tenantId\":\"example\",\"isActive\":false,\"data\":{\"code\":\"ROADS\",\"active\":true}}";
+        String liveRoads="{\"tenantId\":\"example\",\"data\":{\"code\":\"ROADS\",\"active\":true}}";
+        String leak="{\"tenantId\":\"example\",\"data\":{\"code\":\"Leak\",\"department\":\"WATER\",\"slaHours\":24}}";
+        String pothole="{\"tenantId\":\"example\",\"data\":{\"code\":\"Pothole\",\"department\":\"ROADS\",\"slaHours\":48}}";
+        mdms("common-masters.Department","["+WATER+","+removedRoads+"]");
+        mdms("RAINMAKER-PGR.ComplaintHierarchy","["+leak+","+pothole+"]");
+        hrms(gro("EMP_1","WATER",true,"example"),gro("E002","ROADS",true,"example"));
+        assertFalse(gateway.probe("example","COMPLAINT_TYPES",null));                                   // the live bug: Pothole routes to removed ROADS
+        // The category alone refuses it: here only the founder, whom the employee check skips, is a GRO in ROADS.
+        hrms(gro("EMP_1","WATER",true,"example"),gro("FOUNDER","ROADS",true,"example").replace("\"user\":{","\"user\":{\"uuid\":\"founder-uuid\","));
+        assertFalse(gateway.probe("example","COMPLAINT_TYPES","founder-uuid"));
+        mdms("RAINMAKER-PGR.ComplaintHierarchy","["+leak+"]");
+        for(String stranded:List.of(
+                gro("E002","ROADS",true,"example"),                                                   // current assignment in ROADS
+                gro("E002","ROADS",false,"example").replace("\"assignments\":[","\"assignments\":[{\"department\":\"WATER\",\"isCurrentAssignment\":true},"))) { // past one: HRMS checks it too
+            hrms(gro("EMP_1","WATER",true,"example"),stranded);
+            assertFalse(stranded,gateway.probe("example","COMPLAINT_TYPES",null));
+        }
+        hrms(gro("EMP_1","WATER",true,"example"),gro("E002","ROADS",true,"example").replaceFirst("\\{","{\"isActive\":false,"));
+        assertTrue(gateway.probe("example","COMPLAINT_TYPES",null));                                    // a removed employee is never edited again
+        mdms("common-masters.Department","["+WATER+","+liveRoads+"]");                                // re-adding the code brings ROADS back
+        mdms("RAINMAKER-PGR.ComplaintHierarchy","["+leak+","+pothole+"]");
+        hrms(gro("EMP_1","WATER",true,"example"),gro("E002","ROADS",true,"example"));
+        assertTrue(gateway.probe("example","COMPLAINT_TYPES",null));
+    }
     @Test public void geographyNeedsTwoLevelsInTheTenantsOwnHierarchy() throws Exception {
         when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
         when(client.read(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"TenantBoundary\":[{\"boundary\":[{\"code\":\"COUNTY\",\"children\":[{\"code\":\"WARD_1\"}]}]}]}"));

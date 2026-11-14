@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, LayoutGrid, ListTree, MessageSquareText, Plus, UserRoundX } from 'lucide-react';
+import { FileText, LayoutGrid, ListTree, MessageSquareText, Plus, AlertTriangle, UserRoundX } from 'lucide-react';
 import { useApp } from '../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { listMasters, recordName } from './departments/mastersApi';
 import { TypeDialog } from './complaints/TypeDialog';
 import { formatHours, RESOLUTION_CHOICES } from './complaints/resolution';
 import { departmentsWithoutGro } from './complaints/groCoverage';
+import { describeUses, findUses, hasUses } from './departments/departmentUsage';
 import { listEmployees } from './employees/employeesApi';
 import { pickerChoices } from '@/lib/systemRecords';
 import {
@@ -35,6 +36,7 @@ import {
 
 const STEP = stepById('complaints');
 const EMPLOYEES_STEP = stepById('employees');
+const DEPARTMENTS_STEP = stepById('departments');
 const { previous } = adjacentSteps('complaints');
 
 /**
@@ -156,6 +158,39 @@ export default function ComplaintsStep() {
         </p>
         <Button variant="outline" size="sm" onClick={() => navigate(EMPLOYEES_STEP.path)}>
           {t('complaints.add_gro', 'Add a GRO in Employees')}
+        </Button>
+      </AlertDescription>
+    </Alert>
+  );
+
+  // Categories and employees still on a removed department (#2797): their complaints reach no one who can
+  // be added, and HRMS refuses every later save of those employees. Fixed first, as the server's check is.
+  const stranded = useMemo(() => {
+    if (!loaded) return null;
+    const live = new Set(departments.map((choice) => choice.code));
+    const categories = loaded.editable
+      ? (draft?.types ?? []).filter((type) => type.department).map((type) => ({ name: type.name, department: type.department }))
+      : loaded.routes;
+    const found = findUses((department) => !live.has(department), { employees: employees ?? [], designations: [], categories });
+    return hasUses(found) ? found : null;
+  }, [loaded, departments, draft, employees]);
+  const strandedHint = stranded ? t('complaints.removed_department_hint', 'Fix the removed department above to finish.') : undefined;
+  const strandedNotice = stranded && (
+    <Alert>
+      <AlertTriangle className="h-4 w-4" />
+      <AlertDescription className="space-y-3">
+        <p>
+          {t('complaints.removed_department', 'Setup can’t finish yet. A department that was removed (%{departments}) is still used by %{uses}.', {
+            departments: stranded.departments.join(', '),
+            uses: describeUses(stranded, t),
+          })}{' '}
+          {t(
+            'complaints.removed_department_fix',
+            'To bring it back, add it again in Departments with the same code. Or move them to another department: categories on this page, employees in Employees.',
+          )}
+        </p>
+        <Button variant="outline" size="sm" onClick={() => navigate(DEPARTMENTS_STEP.path)}>
+          {t('complaints.open_departments', 'Go to Departments')}
         </Button>
       </AlertDescription>
     </Alert>
@@ -295,13 +330,14 @@ export default function ComplaintsStep() {
             </p>
           </div>
         </div>
+        {strandedNotice}
         {groNotice}
         <StepActions
           onBack={previous ? () => navigate(previous.path) : undefined}
           onContinue={finish}
           continueLabel={t('complaints.finish', 'Finish setup')}
-          disabled={loaded.leafCount === 0 || withoutGro.length > 0}
-          hint={groHint}
+          disabled={loaded.leafCount === 0 || withoutGro.length > 0 || !!stranded}
+          hint={strandedHint ?? groHint}
         />
       </div>
     );
@@ -487,6 +523,7 @@ export default function ComplaintsStep() {
         </Alert>
       )}
 
+      {strandedNotice}
       {groNotice}
 
       <div className="flex flex-wrap items-center gap-3">
@@ -495,8 +532,8 @@ export default function ComplaintsStep() {
           onContinue={save}
           continueLabel={t('complaints.finish', 'Finish setup')}
           busy={saving}
-          disabled={types.length === 0 || withoutGro.length > 0}
-          hint={types.length === 0 ? t('complaints.finish_hint', 'Add at least one complaint category to finish.') : groHint}
+          disabled={types.length === 0 || withoutGro.length > 0 || !!stranded}
+          hint={types.length === 0 ? t('complaints.finish_hint', 'Add at least one complaint category to finish.') : strandedHint ?? groHint}
         />
         {dirty && loaded.draft.types.length > 0 && (
           <Button
