@@ -10,6 +10,7 @@ import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldP
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { mdmsService, localizationService } from '@/api';
 import {
+  COMPLAINT_DEPARTMENT_HEADER,
   levelLabel,
   parseExcelFile,
   parseComplaintHierarchyExcel,
@@ -17,6 +18,9 @@ import {
 } from '@/utils/excelParser';
 import { downloadComplaintHierarchyTemplate } from '@/utils/templateBuilder';
 import { labelLocales } from '@/onboarding/labelLocales';
+import { useOnboardingT } from '@/onboarding/i18n';
+import { writeSheetHierarchy } from '@/onboarding/complaints/complaintsApi';
+import type { DepartmentChoice } from '@/onboarding/complaints/sheetDepartments';
 
 type Step = 'define' | 'template' | 'verify';
 
@@ -35,6 +39,11 @@ export interface ComplaintHierarchySetupProps {
   onDone: (summary: { nodes: number; defs: number }) => void;
   /** Optional error sink so the host phase can surface failures. */
   onError?: (message: string) => void;
+  /**
+   * The workspace's departments. The sheet's department cells must name one of them, by code or
+   * name, and the template's sample rows and Departments sheet use them.
+   */
+  departments?: DepartmentChoice[];
 }
 
 /**
@@ -44,7 +53,9 @@ export interface ComplaintHierarchySetupProps {
  * hierarchy-aware replacement for the old flat ComplaintType sheet. Mirrors the
  * boundary define-levels pattern from Phase 2.
  */
-export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onError }: ComplaintHierarchySetupProps) {
+export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onError, departments }: ComplaintHierarchySetupProps) {
+  // Only for the sheet's row messages, which onboarding translates; this panel's own copy is English.
+  const t = useOnboardingT();
   const [step, setStep] = useState<Step>('define');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +69,8 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
   const [nodes, setNodes] = useState<ComplaintHierarchyRow[]>([]);
   const [leaves, setLeaves] = useState<ComplaintHierarchyRow[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
+  // Rows to fix in the sheet before anything can be created (a blank or unknown department, a missing level).
+  const [rowErrors, setRowErrors] = useState<string[]>([]);
 
   const fail = (m: string) => {
     setError(m);
@@ -65,6 +78,13 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
   };
 
   const validLevels = () => levels.map((l) => l.trim()).filter(Boolean);
+
+  /** A department by its name, with the code kept as small print; '-' when the row has none. */
+  const departmentLabel = (code?: string) => {
+    if (!code) return '-';
+    const name = departments?.find((d) => d.code === code)?.name;
+    return name && name !== code ? `${name} (${code})` : code;
+  };
 
   // Interior (non-leaf) nodes for the verify table — `nodes` holds the whole
   // adjacency list (interior + leaves) since both share the one master.
@@ -82,12 +102,14 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
 
   const handleDefine = () => {
     if (!hierarchyType.trim()) return fail('Hierarchy type is required');
-    if (validLevels().length < 2) return fail('At least 2 levels are required (the last is the subcategory / serviceCode)');
+    if (validLevels().length < 2) {
+      return fail('Add at least 2 levels. The last one is the complaint subcategory people report.');
+    }
     setError(null);
     setStep('template');
   };
 
-  const handleDownloadTemplate = () => downloadComplaintHierarchyTemplate(hierarchyType, validLevels());
+  const handleDownloadTemplate = () => downloadComplaintHierarchyTemplate(hierarchyType, validLevels(), departments);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -97,19 +119,23 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
     setLoading(true);
     try {
       const workbook = await parseExcelFile(file);
-      const result = parseComplaintHierarchyExcel(workbook, hierarchyType, validLevels());
-      if (!result.validation.valid) {
-        fail(result.validation.errors.map((er) => er.message).join('; '));
+      const result = parseComplaintHierarchyExcel(workbook, hierarchyType, validLevels(), { departments, t });
+      // A sheet-level problem (no sheet at all) has no rows to preview.
+      const sheetErrors = result.validation.errors.filter((er) => !er.row);
+      if (sheetErrors.length > 0) {
+        fail(sheetErrors.map((er) => er.message).join('; '));
         return;
       }
-      if (result.leaves.length === 0) {
+      if (result.leaves.length === 0 && result.validation.errors.length === 0) {
         fail('No complaint subcategories found in the sheet. Fill at least one row.');
         return;
       }
+      // Row problems show in the preview, beside the rows, and keep Create switched off until fixed.
       setUploadedFile(file);
       setNodes(result.nodes);
       setLeaves(result.leaves);
       setWarnings(result.validation.warnings.map((w) => w.message));
+      setRowErrors(result.validation.errors.map((er) => er.message));
       setStep('verify');
     } catch (err) {
       console.error('Excel parse error:', err);
@@ -119,26 +145,15 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
     }
   };
 
-  const writeToTenant = async (tenant: string) => {
-    const swallow = async (p: Promise<unknown>) => {
-      try {
-        await p;
-      } catch {
-        /* duplicate / already-exists is fine on re-run */
-      }
-    };
-    await swallow(
-      mdmsService.create(tenant, HDEF_SCHEMA, hierarchyType, {
-        hierarchyType,
-        active: true,
-        levels: buildDefinitionLevels(),
-      })
-    );
-    // Write the single ComplaintHierarchy adjacency list: interior nodes AND
-    // leaf rows go to the SAME master. Leaf rows carry the leaf fields
-    // (department/departments/slaHours/keywords) which is also what marks them
-    // as leaves on read. `menuPath` is gone — grouping is carried by parentCode.
-    for (const n of nodes) {
+  const definitionData = () => ({ hierarchyType, active: true, levels: buildDefinitionLevels() });
+
+  // Write the single ComplaintHierarchy adjacency list: interior nodes AND
+  // leaf rows go to the SAME master. Leaf rows carry the leaf fields
+  // (department/departments/slaHours/keywords) which is also what marks them
+  // as leaves on read. `menuPath` is gone — grouping is carried by parentCode.
+  // A leaf always has a department: the sheet is refused without one (#2806).
+  const rowsData = () =>
+    nodes.map((n) => {
       const data: Record<string, unknown> = {
         hierarchyType: n.hierarchyType,
         levelCode: n.levelCode,
@@ -150,22 +165,36 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
         path: n.path,
       };
       if (n.isLeaf) {
-        data.department = n.department || 'NA';
+        data.department = n.department;
         if (n.departments) data.departments = n.departments;
         data.slaHours = n.slaHours;
         data.keywords = n.keywords;
       }
-      await swallow(mdmsService.create(tenant, HIERARCHY_SCHEMA, n.code, data));
-    }
+      return { code: n.code, data };
+    });
+
+  // The state root keeps every city's copy: only add what is missing there, never change another city's.
+  const writeToStateRoot = async (tenant: string) => {
+    const swallow = async (p: Promise<unknown>) => {
+      try {
+        await p;
+      } catch {
+        /* duplicate / already-exists is fine on re-run */
+      }
+    };
+    await swallow(mdmsService.create(tenant, HDEF_SCHEMA, hierarchyType, definitionData()));
+    for (const row of rowsData()) await swallow(mdmsService.create(tenant, HIERARCHY_SCHEMA, row.code, row.data));
   };
 
   const handleIngest = async () => {
+    if (rowErrors.length > 0 || leaves.some((leaf) => !leaf.department)) return;
     setLoading(true);
     setError(null);
     try {
-      await writeToTenant(targetTenant);
+      // The workspace's own copy: created, restored after a "Remove and upload again", or updated.
+      await writeSheetHierarchy(targetTenant, hierarchyType, definitionData(), rowsData());
       if (stateTenant && stateTenant !== targetTenant) {
-        await writeToTenant(stateTenant).catch((e) =>
+        await writeToStateRoot(stateTenant).catch((e) =>
           console.warn('[ComplaintHierarchy] state-root dual-write failed (non-fatal):', e)
         );
       }
@@ -214,10 +243,10 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
 
       {step === 'define' && (
         <div>
-          <SubHeader>Step 3.2: Define Complaint Hierarchy</SubHeader>
+          <SubHeader>Choose your complaint levels</SubHeader>
           <p className="text-xs sm:text-sm text-muted-foreground mb-4">
-            Add as many levels as you need — the count is the depth. The last level is the complaint subcategory
-            (its values become serviceCodes). Replaces the old flat complaint-category sheet.
+            Add as many levels as you need. People pick from the first level down, and the last level is the
+            complaint subcategory they report.
           </p>
           <div className="space-y-6">
             <LabelFieldPair>
@@ -266,7 +295,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
 
       {step === 'template' && (
         <div>
-          <SubHeader>Step 3.2: Download &amp; Upload Template</SubHeader>
+          <SubHeader>Download and upload the template</SubHeader>
           <p className="text-xs sm:text-sm text-muted-foreground mb-4">
             Hierarchy: <span className="text-primary font-medium">{hierarchyType}</span> • Levels:{' '}
             <span className="text-primary">{validLevels().join(' → ')}</span>
@@ -277,8 +306,9 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
               <strong className="text-sm font-condensed">Download Template</strong>
             </div>
             <p className="text-xs sm:text-sm mb-2 text-muted-foreground">
-              One column per level + Department Name*, Resolution Time (Hours)*, Search Words*. One row per
-              subcategory — repeat the ancestor columns to group subcategories under the same path.
+              One column per level, then {COMPLAINT_DEPARTMENT_HEADER}, Resolution Time (Hours)* and Search Words*. One
+              row per subcategory: repeat the levels above it to group subcategories together. For the department, use
+              its code or its name, as listed on the template's Departments sheet.
             </p>
             <Button size="sm" className="bg-primary hover:bg-primary/90 text-white" onClick={handleDownloadTemplate}>
               <Download className="w-4 h-4 mr-2" /> Download Template
@@ -307,8 +337,26 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
 
       {step === 'verify' && (
         <div>
-          <SubHeader>Step 3.2: Verify &amp; Create</SubHeader>
+          <SubHeader>Check and create</SubHeader>
           <div className="flex items-center gap-2 text-primary mb-3"><Check className="w-4 h-4" /><span className="text-sm truncate">File: {uploadedFile?.name}</span></div>
+          {rowErrors.length > 0 && (
+            <Alert variant="destructive" className="mb-4" data-testid="ch-row-errors">
+              <AlertTriangle className="w-4 h-4" />
+              <AlertDescription className="space-y-2">
+                <p className="text-sm font-medium">Fix these rows in your sheet, then upload it again. Nothing is created until then.</p>
+                <ul className="text-xs space-y-1">
+                  {rowErrors.slice(0, 10).map((m, i) => <li key={i}>• {m}</li>)}
+                </ul>
+                {rowErrors.length > 10 && (
+                  <p className="text-xs">And {rowErrors.length - 10} more.</p>
+                )}
+                <Button variant="outline" size="sm" onClick={() => document.getElementById('ch-file-upload')?.click()} disabled={loading}>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload the fixed sheet
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           {warnings.length > 0 && (
             <Alert variant="warning" className="mb-4">
               <AlertTriangle className="w-4 h-4" />
@@ -323,7 +371,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
             <TabsContent value="leaves" className="mt-4 overflow-x-auto">
               <Table>
                 <TableHeader><TableRow className="bg-muted/50">
-                  <TableHead className="text-xs font-condensed">serviceCode</TableHead>
+                  <TableHead className="text-xs font-condensed">Code</TableHead>
                   <TableHead className="text-xs font-condensed">Name</TableHead>
                   <TableHead className="text-xs font-condensed">Parent</TableHead>
                   <TableHead className="text-xs font-condensed">Dept</TableHead>
@@ -335,7 +383,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
                       <TableCell className="font-mono text-xs">{s.code}</TableCell>
                       <TableCell className="text-xs">{s.name}</TableCell>
                       <TableCell className="font-mono text-xs">{s.parentCode || '-'}</TableCell>
-                      <TableCell className="text-xs">{s.department || '-'}</TableCell>
+                      <TableCell className="text-xs">{departmentLabel(s.department)}</TableCell>
                       <TableCell className="text-xs">{s.slaHours}</TableCell>
                     </TableRow>
                   ))}
@@ -377,7 +425,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
             <SubmitBar
               label={loading ? 'Creating…' : `Create ${leaves.length} Subcategories`}
               onSubmit={handleIngest}
-              disabled={loading || leaves.length === 0}
+              disabled={loading || leaves.length === 0 || rowErrors.length > 0}
               icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
               data-testid="ch-create"
             />

@@ -9396,6 +9396,24 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.complaints.from_sheet_redo",
+    "message": "शीट में कुछ गलत है? उससे बना सब कुछ हटाएँ और सुधरी हुई शीट अपलोड करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.from_sheet_redo",
+    "message": "Une erreur dans la feuille de calcul ? Supprimez ce qu’elle a créé et téléversez une version corrigée.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.from_sheet_redo",
+    "message": "Algo errado na planilha? Remova o que ela criou e envie uma versão corrigida.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.complaints.gro_hint",
     "message": "पूरा करने से पहले हर विभाग में एक GRO होना चाहिए।",
     "module": "configurator-ui",
@@ -9756,6 +9774,24 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.complaints.no_gro_categories",
+    "message": "प्रभावित शिकायत प्रकार: %{categories}।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.no_gro_categories",
+    "message": "Catégories de réclamation concernées : %{categories}.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.no_gro_categories",
+    "message": "Categorias de reclamação afetadas: %{categories}.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.complaints.no_gro_why",
     "message": "जिस भी विभाग को कोई शिकायत प्रकार भेजा जाता है, उसमें GRO भूमिका वाला कम से कम एक कर्मचारी होना चाहिए। DGRO गिना नहीं जाता।",
     "module": "configurator-ui",
@@ -9846,6 +9882,78 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.complaints.remove_sheet",
+    "message": "हटाएँ और फिर से अपलोड करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet",
+    "message": "Supprimer et téléverser à nouveau",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet",
+    "message": "Remover e enviar novamente",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_confirm",
+    "message": "स्प्रेडशीट से बने शिकायत प्रकार हटाएँ?",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_confirm",
+    "message": "Supprimer les catégories de réclamation issues de la feuille de calcul ?",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_confirm",
+    "message": "Remover as categorias de reclamação da planilha?",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_effect",
+    "message": "स्प्रेडशीट से बना सब कुछ हटा दिया जाएगा: उसके स्तर और उसके शिकायत प्रकार। इसके बाद आप सुधरी हुई शीट अपलोड कर सकते हैं, या प्रकार खुद जोड़ सकते हैं।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_effect",
+    "message": "Tout ce que la feuille de calcul a créé est supprimé : ses niveaux et ses catégories de réclamation. Vous pourrez ensuite téléverser une feuille corrigée ou ajouter les catégories à la main.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_effect",
+    "message": "Tudo o que a planilha criou é removido: seus níveis e suas categorias de reclamação. Depois você pode enviar uma planilha corrigida ou adicionar as categorias manualmente.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_failed",
+    "message": "शिकायत प्रकार हटाए नहीं जा सके। पुनः प्रयास करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_failed",
+    "message": "La suppression des catégories de réclamation a échoué. Réessayez.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_failed",
+    "message": "Não foi possível remover as categorias de reclamação. Tente novamente.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.complaints.resolution_time",
     "message": "समाधान समय",
     "module": "configurator-ui",
@@ -9914,6 +10022,96 @@
   {
     "code": "app.onboarding.complaints.save_failed",
     "message": "Não foi possível salvar suas categorias de reclamação. Tente novamente.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_department_ambiguous",
+    "message": "पंक्ति %{row}: “%{value}” नाम के एक से अधिक विभाग हैं। इसके बजाय उसका कोड लिखें: %{codes}।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_department_ambiguous",
+    "message": "Ligne %{row} : plusieurs services s’appellent « %{value} ». Indiquez plutôt son code : %{codes}.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_department_ambiguous",
+    "message": "Linha %{row}: há mais de um departamento chamado “%{value}”. Use o código dele: %{codes}.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_department_none_yet",
+    "message": "पंक्ति %{row}: विभाग “%{value}” मौजूद नहीं है। इस वर्कस्पेस में अभी कोई विभाग नहीं है: पहले विभाग चरण में उन्हें जोड़ें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_department_none_yet",
+    "message": "Ligne %{row} : le service « %{value} » n’existe pas. Cet espace de travail n’a encore aucun service : ajoutez-les d’abord à l’étape Services.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_department_none_yet",
+    "message": "Linha %{row}: o departamento “%{value}” não existe. Este espaço de trabalho ainda não tem departamentos: adicione-os primeiro na etapa Departamentos.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_department_unknown",
+    "message": "पंक्ति %{row}: विभाग “%{value}” मौजूद नहीं है। इनमें से कोई एक लिखें: %{choices}।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_department_unknown",
+    "message": "Ligne %{row} : le service « %{value} » n’existe pas. Utilisez l’un de ceux-ci : %{choices}.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_department_unknown",
+    "message": "Linha %{row}: o departamento “%{value}” não existe. Use um destes: %{choices}.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_no_department",
+    "message": "पंक्ति %{row}: कोई विभाग नहीं। हर शिकायत प्रकार को एक विभाग चाहिए।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_no_department",
+    "message": "Ligne %{row} : aucun service. Chaque type de réclamation en a besoin d’un.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_no_department",
+    "message": "Linha %{row}: sem departamento. Todo tipo de reclamação precisa de um.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_removed",
+    "message": "शिकायत प्रकार हटा दिए गए। सुधरी हुई शीट अपलोड करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_removed",
+    "message": "Catégories de réclamation supprimées. Téléversez la feuille corrigée.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_removed",
+    "message": "Categorias de reclamação removidas. Envie a planilha corrigida.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -10022,6 +10220,78 @@
   {
     "code": "app.onboarding.complaints.subtypes_hint",
     "message": "Uma por linha. Você pode adicionar mais depois.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department",
+    "message": "कुछ शिकायत प्रकार ऐसे विभाग को भेजे जाते हैं जो इस वर्कस्पेस में नहीं है: %{list}।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department",
+    "message": "Certaines catégories de réclamation sont confiées à un service que cet espace de travail n’a pas : %{list}.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department",
+    "message": "Algumas categorias de reclamação vão para um departamento que este espaço de trabalho não tem: %{list}.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department_fix_edit",
+    "message": "हर एक को संपादित करें और सूची से उसका विभाग चुनें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department_fix_edit",
+    "message": "Modifiez chacune et choisissez son service dans la liste.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department_fix_edit",
+    "message": "Edite cada uma e escolha o departamento dela na lista.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department_fix_sheet",
+    "message": "“हटाएँ और फिर से अपलोड करें” चुनें, फिर विभाग चरण के किसी विभाग कोड या नाम के साथ शीट अपलोड करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department_fix_sheet",
+    "message": "Utilisez « Supprimer et téléverser à nouveau », puis téléversez la feuille avec un code ou un nom de service de l’étape Services.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department_fix_sheet",
+    "message": "Use “Remover e enviar novamente” e depois envie a planilha com um código ou nome de departamento da etapa Departamentos.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department_hint",
+    "message": "पूरा करने से पहले हर शिकायत प्रकार का विभाग मौजूद होना चाहिए।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department_hint",
+    "message": "Chaque catégorie de réclamation doit être confiée à un service existant avant que vous puissiez terminer.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department_hint",
+    "message": "Toda categoria de reclamação precisa de um departamento que exista antes que você possa concluir.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -22014,6 +22284,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.complaints.from_sheet_redo",
+    "message": "Something wrong in the sheet? Remove what it set up and upload a corrected one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.complaints.gro_hint",
     "message": "Each department needs a GRO before you can finish.",
     "module": "configurator-ui",
@@ -22134,6 +22410,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.complaints.no_gro_categories",
+    "message": "Complaint categories affected: %{categories}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.complaints.no_gro_why",
     "message": "Every department a complaint category goes to needs at least one employee with the GRO role. A DGRO doesn’t count.",
     "module": "configurator-ui",
@@ -22164,6 +22446,30 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.complaints.remove_sheet",
+    "message": "Remove and upload again",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_confirm",
+    "message": "Remove the complaint categories from the spreadsheet?",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_effect",
+    "message": "Everything the spreadsheet set up is removed: its levels and its complaint categories. You can then upload a corrected sheet, or add categories by hand.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_failed",
+    "message": "Removing the complaint categories failed. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.complaints.resolution_time",
     "message": "Resolution time",
     "module": "configurator-ui",
@@ -22184,6 +22490,36 @@
   {
     "code": "app.onboarding.complaints.save_failed",
     "message": "Saving your complaint categories failed. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_department_ambiguous",
+    "message": "Row %{row}: more than one department is called “%{value}”. Use its code instead: %{codes}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_department_none_yet",
+    "message": "Row %{row}: department “%{value}” doesn’t exist. This workspace has no departments yet: add them in the Departments step first.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_department_unknown",
+    "message": "Row %{row}: department “%{value}” doesn’t exist. Use one of: %{choices}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_no_department",
+    "message": "Row %{row}: no department. Every complaint type needs one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.sheet_removed",
+    "message": "Complaint categories removed. Upload the corrected sheet.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -22220,6 +22556,30 @@
   {
     "code": "app.onboarding.complaints.subtypes_hint",
     "message": "One per line. You can add more later.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department",
+    "message": "Some complaint categories go to a department this workspace doesn’t have: %{list}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department_fix_edit",
+    "message": "Edit each one and pick its department from the list.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department_fix_sheet",
+    "message": "Use “Remove and upload again”, then upload the sheet with a department code or name from the Departments step.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.unknown_department_hint",
+    "message": "Every complaint category needs a department that exists before you can finish.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

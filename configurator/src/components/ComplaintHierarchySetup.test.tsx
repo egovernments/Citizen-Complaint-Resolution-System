@@ -5,7 +5,13 @@ import { parseComplaintHierarchyExcel, type ComplaintHierarchyRow } from '@/util
 import { ComplaintHierarchySetup } from './ComplaintHierarchySetup';
 
 vi.mock('@/api', () => ({
-  mdmsService: { create: vi.fn(async () => ({})), getStateInfoLocales: vi.fn(async () => ['pt_MZ', 'hi_IN']) },
+  mdmsService: {
+    create: vi.fn(async () => ({})),
+    update: vi.fn(async () => ({})),
+    setActive: vi.fn(async () => ({})),
+    searchRecords: vi.fn(async () => []),
+    getStateInfoLocales: vi.fn(async () => ['pt_MZ', 'hi_IN']),
+  },
   localizationService: {
     uploadComplaintTypeLocalizationsForLocales: vi.fn(async () => undefined),
     cacheBust: vi.fn(async () => undefined),
@@ -81,5 +87,50 @@ describe('ComplaintHierarchySetup: ingesting a sheet', () => {
     ];
     expect(upload.mock.calls).toEqual([['mz.maputo', labels, ['en_IN', 'pt_MZ', 'hi_IN']]]);
     expect(mdmsService.getStateInfoLocales).toHaveBeenCalledWith('mz.maputo');
+  });
+});
+
+describe('ComplaintHierarchySetup: a sheet with rows to fix (#2806)', () => {
+  it('lists the problems in the preview and creates nothing', async () => {
+    vi.mocked(parseComplaintHierarchyExcel).mockReturnValue({
+      nodes,
+      leaves: nodes.filter((n) => n.isLeaf),
+      validation: {
+        valid: false,
+        errors: [
+          { row: 4, field: 'department', message: 'Row 4: no department. Every complaint type needs one.', code: 'NO_DEPT' },
+          { row: 2, field: 'department', message: 'Row 2: department “Sanitaton” doesn’t exist. Use one of: Sanitation Services (SANIT).', code: 'UNKNOWN_DEPT' },
+        ],
+        warnings: [],
+      },
+    });
+    const onDone = vi.fn();
+    render(<ComplaintHierarchySetup targetTenant="mz.maputo" stateTenant="mz.maputo" onDone={onDone} departments={[{ code: 'SANIT', name: 'Sanitation Services' }]} />);
+    fireEvent.click(screen.getByTestId('ch-next-template'));
+    fireEvent.change(document.getElementById('ch-file-upload')!, { target: { files: [new File(['x'], 'hierarchy.xlsx')] } });
+    await waitFor(() => expect(screen.getByTestId('complaint-hierarchy-setup').dataset.step).toBe('verify'));
+
+    expect(screen.getByTestId('ch-row-errors').textContent).toContain('Row 4: no department. Every complaint type needs one.');
+    expect(screen.getByTestId('ch-row-errors').textContent).toContain('Row 2: department “Sanitaton” doesn’t exist.');
+    expect(screen.getByTestId('ch-create')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('ch-create'));
+    expect(create).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+    // The parser was given the workspace's departments to check against.
+    expect(vi.mocked(parseComplaintHierarchyExcel).mock.calls[0][3]).toMatchObject({ departments: [{ code: 'SANIT', name: 'Sanitation Services' }] });
+  });
+
+  it('never writes a complaint type without a department (no NA stand-in)', async () => {
+    const blank = [nodes[0], { ...nodes[1], department: '' }];
+    vi.mocked(parseComplaintHierarchyExcel).mockReturnValue({ nodes: blank, leaves: [blank[1]], validation: { valid: true, errors: [], warnings: [] } });
+    const onDone = vi.fn();
+    render(<ComplaintHierarchySetup targetTenant="mz.maputo" stateTenant="mz.maputo" onDone={onDone} />);
+    fireEvent.click(screen.getByTestId('ch-next-template'));
+    fireEvent.change(document.getElementById('ch-file-upload')!, { target: { files: [new File(['x'], 'hierarchy.xlsx')] } });
+    await waitFor(() => expect(screen.getByTestId('complaint-hierarchy-setup').dataset.step).toBe('verify'));
+    fireEvent.click(screen.getByTestId('ch-create'));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(create).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
   });
 });

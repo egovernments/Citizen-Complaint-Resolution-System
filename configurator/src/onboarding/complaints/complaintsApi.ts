@@ -67,8 +67,17 @@ function mostCommon(values: number[]): number | undefined {
 
 export type LoadedComplaints =
   | { editable: true; draft: ComplaintDraft; records: MdmsRecord[]; hasDefinition: boolean }
-  /** Set up some other way (a spreadsheet with its own levels): shown, not edited, here. */
-  | { editable: false; leafCount: number; levels: string[]; departments: string[] };
+  /**
+   * Set up some other way (a spreadsheet with its own levels): shown, not edited, here. `routes` is
+   * each leaf's name and department, so a department nobody can take can be named with its categories.
+   */
+  | { editable: false; leafCount: number; levels: string[]; departments: string[]; routes: ComplaintRoute[] };
+
+/** A complaint category people file against, and the department code it goes to ('' when none). */
+export interface ComplaintRoute {
+  name: string;
+  department: string;
+}
 
 const stateRootOf = (tenantId: string) => tenantId.split('.')[0];
 const dataOf = (record: MdmsRecord) => record.data as Record<string, unknown>;
@@ -92,9 +101,11 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
   // mdms-v2 falls back to the state root's rows when a city has none of its
   // own. Those belong to the whole state, so a city workspace edits only its own.
   const records = searched.filter((record) => record.tenantId === tenantId);
-  const definition = definitions.find(
-    (record) => record.isActive !== false && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE,
-  );
+  // The workspace's own definition when it has one, even a removed one: a removed one means it has
+  // none, rather than the state root's (#2806, "Remove and upload again").
+  const pgrDefinitions = definitions.filter((record) => text(dataOf(record).hierarchyType) === HIERARCHY_TYPE);
+  const ownDefinitions = pgrDefinitions.filter((record) => record.tenantId === tenantId);
+  const definition = (ownDefinitions.length > 0 ? ownDefinitions : pgrDefinitions).find((record) => record.isActive !== false);
   const definedLevels = definition
     ? ((dataOf(definition).levels as { levelCode?: string }[] | undefined) ?? []).map((level) => level.levelCode ?? '')
     : [];
@@ -104,11 +115,11 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
     const leafCount = active.filter((record) => dataOf(record).department != null || dataOf(record).slaHours != null).length;
     // A leaf is a row no other row names as its parent; complaints filed on it go to its department.
     const parents = new Set(active.map((record) => text(dataOf(record).parentCode)));
-    const departments = active
+    const routes = active
       .filter((record) => !parents.has(codeOf(record)))
-      .map((record) => text(dataOf(record).department))
-      .filter(Boolean);
-    return { editable: false, leafCount, levels: definedLevels, departments: Array.from(new Set(departments)) };
+      .map((record) => ({ name: text(dataOf(record).name) || codeOf(record), department: text(dataOf(record).department) }));
+    const departments = routes.map((route) => route.department).filter(Boolean);
+    return { editable: false, leafCount, levels: definedLevels, departments: Array.from(new Set(departments)), routes };
   }
 
   const byOrder = (a: MdmsRecord, b: MdmsRecord) => Number(dataOf(a).order ?? 0) - Number(dataOf(b).order ?? 0);
@@ -269,22 +280,27 @@ async function sync(
 ): Promise<void> {
   // Re-read before creating: a save whose step update then failed has already created the definition, and the page
   // still holds the stale `hasDefinition` from when it loaded, so a blind create fails as a duplicate on the retry.
-  const defined = hasDefinition || (await mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA).catch(() => [] as MdmsRecord[]))
-    .some((record) => record.tenantId === tenantId && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE);
-  if (!defined) {
-    await mdmsService.create(tenantId, DEFINITION_SCHEMA, HIERARCHY_TYPE, {
-      hierarchyType: HIERARCHY_TYPE,
-      active: true,
-      levels: LEVELS.map((levelCode, index) => ({
-        levelCode,
-        order: index + 1,
-        parentLevel: index === 0 ? null : LEVELS[index - 1],
-        isFreeText: false,
-        isLeafServiceCode: index === LEVELS.length - 1,
-        label: LEVEL_LABELS[levelCode],
-      })),
-    });
-  }
+  // A removed one (a spreadsheet's, after "Remove and upload again") keeps its key taken, so it is restored
+  // with these levels instead.
+  const definition = hasDefinition
+    ? undefined
+    : (await mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA).catch(() => [] as MdmsRecord[])).find(
+        (record) => record.tenantId === tenantId && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE,
+      );
+  const definitionData = {
+    hierarchyType: HIERARCHY_TYPE,
+    active: true,
+    levels: LEVELS.map((levelCode, index) => ({
+      levelCode,
+      order: index + 1,
+      parentLevel: index === 0 ? null : LEVELS[index - 1],
+      isFreeText: false,
+      isLeafServiceCode: index === LEVELS.length - 1,
+      label: LEVEL_LABELS[levelCode],
+    })),
+  };
+  if (!hasDefinition && !definition) await mdmsService.create(tenantId, DEFINITION_SCHEMA, HIERARCHY_TYPE, definitionData);
+  else if (definition?.isActive === false) await mdmsService.setActive(definition, true, definitionData);
   const existing = (await mdmsService.searchRecords(tenantId, HIERARCHY_SCHEMA, { limit: 5000 })).filter(
     (record) => record.tenantId === tenantId && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE,
   );
@@ -335,4 +351,48 @@ export async function saveComplaints(
   await localizationService.cacheBust().catch(() => undefined);
 
   return rows.filter((row) => row.data.slaHours != null).length;
+}
+
+/**
+ * Write a hierarchy built from a spreadsheet to the workspace's own tenant: the definition and every
+ * row, created where missing, restored where removed (mdms-v2 keeps a removed row's key taken), and
+ * updated where they differ. Rows the sheet doesn't name are left as they are.
+ */
+export async function writeSheetHierarchy(
+  tenantId: string,
+  hierarchyType: string,
+  definition: Record<string, unknown>,
+  rows: { code: string; data: Record<string, unknown> }[],
+): Promise<void> {
+  const [definitions, existing] = await Promise.all([
+    mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA).catch(() => [] as MdmsRecord[]),
+    mdmsService.searchRecords(tenantId, HIERARCHY_SCHEMA, { limit: 5000 }),
+  ]);
+  const own = (record: MdmsRecord) => record.tenantId === tenantId && text(dataOf(record).hierarchyType) === hierarchyType;
+  const upsert = async (record: MdmsRecord | undefined, schema: string, key: string, data: Record<string, unknown>) => {
+    if (!record) await mdmsService.create(tenantId, schema, key, data);
+    else if (record.isActive === false) await mdmsService.setActive(record, true, data);
+    else if (!sameData(dataOf(record), data)) await mdmsService.update(record, data);
+  };
+  await upsert(definitions.find(own), DEFINITION_SCHEMA, hierarchyType, definition);
+  const byCode = new Map(existing.filter(own).map((record) => [codeOf(record), record]));
+  for (const row of rows) await upsert(byCode.get(row.code), HIERARCHY_SCHEMA, row.code, row.data);
+}
+
+/**
+ * Undo a spreadsheet hierarchy at the workspace's own tenant, so it can be uploaded again or built
+ * by hand: every PGR row is switched off, then the definition, the way management removes a record.
+ * The definition goes last, so a removal that fails part-way still shows the sheet's view and can
+ * simply be retried. The state root's copy stays: other cities may file against it, and the
+ * workspace's apps and the setup check read only its own rows.
+ */
+export async function removeSheetComplaints(tenantId: string): Promise<void> {
+  const [definitions, rows] = await Promise.all([
+    mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA),
+    mdmsService.searchRecords(tenantId, HIERARCHY_SCHEMA, { limit: 5000 }),
+  ]);
+  const live = (record: MdmsRecord) =>
+    record.tenantId === tenantId && record.isActive !== false && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE;
+  for (const record of rows.filter(live)) await mdmsService.setActive(record, false);
+  for (const record of definitions.filter(live)) await mdmsService.setActive(record, false);
 }
