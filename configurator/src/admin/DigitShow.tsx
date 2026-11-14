@@ -6,6 +6,7 @@ import { T } from '@digit-ui/datagrid';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Button } from '@/components/ui/button';
 import { MASTER_SCREEN_META } from './masterScreens';
+import { CountyOverrideNotice } from './countyOverride'; // ours (#1945)
 
 export interface DigitShowProps extends ShowControllerProps {
   /** Page title (defaults to the record's defaultTitle from ra-core) */
@@ -120,6 +121,8 @@ export function DigitShow({
 
       {/* Content card */}
       <DigitCard className="max-w-none">
+        {/* ours (#1945): at the state, a county that keeps its own copy of this record does not use this one */}
+        <CountyOverrideNotice resource={resource} record={record as Record<string, unknown> | undefined} />
         <RecordContextProvider value={record}>
           {typeof children === 'function' && record
             ? (children as (record: Record<string, unknown>) => React.ReactNode)(record as Record<string, unknown>)

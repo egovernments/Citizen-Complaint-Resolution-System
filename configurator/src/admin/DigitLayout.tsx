@@ -376,6 +376,8 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         {/* Main content */}
         <main id="main-content" className="flex-1 p-4 sm:p-6 overflow-auto min-h-0">
           {children}
+          {/* open a screen remembered across a tenant switch (a county's own record) */}
+          <AfterSwitchLanding />
         </main>
 
         {/* Powered by DIGIT (CCRS#1841) + Open DIGIT Docs */}
@@ -385,3 +387,6 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
     </div>
   );
 }
+
+// an ES import is hoisted wherever it is written
+import { AfterSwitchLanding } from './afterSwitch';

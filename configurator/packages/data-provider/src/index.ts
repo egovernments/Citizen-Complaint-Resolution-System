@@ -22,3 +22,6 @@ export type { DigitDataProvider } from './providers/dataProvider.js';
 export { createDigitAuthProvider } from './providers/authProvider.js';
 export type { DigitPermissions } from './providers/authProvider.js';
 export type { MastersCapability } from './providers/accessPolicy.js';
+// which tenants below a state override its county-scoped rows / boundary tree
+export { countyOverrides, boundaryTreeOverrides, countyScopedKey, isCountyScoped, countiesOf, COUNTY_SCOPED_KEYS } from './providers/countyScoped.js';
+export type { CountyOverride } from './providers/countyScoped.js';
