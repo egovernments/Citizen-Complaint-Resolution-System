@@ -165,11 +165,16 @@ used by host nginx (`KONG_TRUSTED_IPS`) so it preserves nginx's client-address
 chain. The supplied Compose/Ansible defaults do this; narrow the CIDRs further
 when the host-to-container address is fixed.
 
-Magic-link request throttling is independent of password setup/reset. Tune it
-with `IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS` and
-`IDENTITY_MAGIC_LINK_REQUEST_LIMIT` (defaults: 1800 seconds and 3 requests per
-IP and per email). Password recovery continues to use
-`IDENTITY_PASSWORD_SETUP_TTL_SECONDS` and `IDENTITY_PASSWORD_SETUP_LIMIT`.
+Magic-link request throttling is independent of password setup/reset. Both
+count a request per email address first, then per IP with a much higher limit,
+because everyone in an office behind one NAT shares an IP. Over either limit
+the BFF answers `429` with `Retry-After` and sends nothing, and the sign-in
+screens say how long to wait. Tune magic links with
+`IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS`, `IDENTITY_MAGIC_LINK_REQUEST_LIMIT`
+and `IDENTITY_MAGIC_LINK_REQUEST_IP_LIMIT` (defaults: 1800 seconds, 3 per email,
+20 per IP). Password setup/reset uses `IDENTITY_PASSWORD_SETUP_TTL_SECONDS`,
+`IDENTITY_PASSWORD_SETUP_LIMIT` and `IDENTITY_PASSWORD_SETUP_IP_LIMIT`
+(defaults: 900 seconds, 3 per account, 20 per IP).
 
 ## Login theme (`configurator-blue`)
 

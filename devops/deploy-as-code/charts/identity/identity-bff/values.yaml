@@ -148,9 +148,13 @@ config:
   IDENTITY_SESSION_TTL_SECONDS: ""        # BFF default: 604800
   IDENTITY_AUTH_RESULT_TTL_SECONDS: "300"
   IDENTITY_PASSWORD_SETUP_TTL_SECONDS: "900"
+  # Email requests: per address first, then per IP (an office behind one NAT
+  # shares an IP); over either limit the BFF answers 429 (#2805).
   IDENTITY_PASSWORD_SETUP_LIMIT: "3"
+  IDENTITY_PASSWORD_SETUP_IP_LIMIT: "20"
   IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS: "1800"
   IDENTITY_MAGIC_LINK_REQUEST_LIMIT: "3"
+  IDENTITY_MAGIC_LINK_REQUEST_IP_LIMIT: "20"
   IDENTITY_AUDIT_STREAM_MAXLEN: "100000"
 
   # Staff DIGIT credentials: rotate (default) or derived. Derived needs the

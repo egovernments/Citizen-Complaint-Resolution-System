@@ -2,7 +2,7 @@ import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
-import { privateRateKey, withinLimit as withinRateLimit } from "../../infrastructure/rate-limit.js";
+import { privateRateKey, reserveEmailRequest, type EmailRequestAllowance } from "../../infrastructure/rate-limit.js";
 import { errorBody } from "../../contract/error-codes.js";
 import { routeForSlug } from "../access-context/tenant-route.js";
 import {
@@ -46,8 +46,21 @@ function completionRedirectUri(state: string, tenantSlug?: string): string {
   return callback.toString();
 }
 
-function withinLimit(bucket: string): Promise<boolean> {
-  return withinRateLimit(bucket, config.identityPasswordSetupLimit, config.identityPasswordSetupTtlSeconds);
+const LIMITED_TEXT = {
+  EMAIL_RATE_LIMITED: "Too many emails were requested for this address. Try again later.",
+  NETWORK_RATE_LIMITED: "Too many requests from this network. Try again later.",
+} as const;
+
+/**
+ * An email request over its limit is told so (#2805): 429 with Retry-After,
+ * never the "we've sent you an email" answer, since nothing is sent.
+ */
+export function refuseEmailRequest(
+  response: express.Response,
+  refusal: Extract<EmailRequestAllowance, { allowed: false }>,
+): express.Response {
+  response.setHeader("Retry-After", String(refusal.retryAfter));
+  return response.status(429).json(errorBody(refusal.code, LIMITED_TEXT[refusal.code], { retryAfter: refusal.retryAfter }));
 }
 
 /** Records the attempt, then has Keycloak email the password (and, if needed, email) actions. */
@@ -140,13 +153,16 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
 
     const prefix = `${config.cachePrefix}:identity:password-setup-limit`;
     const accountRateKey = signedIn?.session.claims.sub || email!;
-    const [ipAllowed, accountAllowed] = await Promise.all([
-      withinLimit(`${prefix}:ip:${request.ip}`),
-      withinLimit(`${prefix}:account:${privateRateKey("password-setup", accountRateKey)}`),
-    ]);
-    if (!ipAllowed || !accountAllowed) {
-      console.info("Password setup request suppressed", { reason: "rate_limited" });
-      return response.status(202).json(ACCEPTED);
+    const allowance = await reserveEmailRequest({
+      addressKey: `${prefix}:account:${privateRateKey("password-setup", accountRateKey)}`,
+      ipKey: `${prefix}:ip:${request.ip}`,
+      addressLimit: config.identityPasswordSetupLimit,
+      ipLimit: config.identityPasswordSetupIpLimit,
+      windowSeconds: config.identityPasswordSetupTtlSeconds,
+    });
+    if (!allowance.allowed) {
+      console.info("Password setup request refused", { reason: allowance.code });
+      return refuseEmailRequest(response, allowance);
     }
 
     response.status(202).json(ACCEPTED);

@@ -16,11 +16,6 @@ export async function countInWindow(key: string, windowSeconds: number): Promise
   return { count: Number(count), ttl: Number(ttl) };
 }
 
-/** True while `key` has seen at most `limit` events in its window. */
-export async function withinLimit(key: string, limit: number, windowSeconds: number): Promise<boolean> {
-  return (await countInWindow(key, windowSeconds)).count <= limit;
-}
-
 /** Takes back one counted event (never below zero), e.g. for a send that failed. */
 const UNCOUNT = `local current = tonumber(redis.call('GET', KEYS[1]) or '0')
   if current > 0 then redis.call('DECR', KEYS[1]) end
@@ -28,6 +23,37 @@ const UNCOUNT = `local current = tonumber(redis.call('GET', KEYS[1]) or '0')
 
 export async function uncount(key: string): Promise<void> {
   await getRedis().eval(UNCOUNT, 1, key);
+}
+
+export type EmailRequestAllowance =
+  | { allowed: true }
+  | { allowed: false; code: "EMAIL_RATE_LIMITED" | "NETWORK_RATE_LIMITED"; retryAfter: number };
+
+/**
+ * Limits for a request that sends an email (#2805): counted per address
+ * first, then per IP with a much higher limit, because an office behind one
+ * NAT shares an IP. A request the address limit refuses costs the shared IP
+ * budget nothing; one the IP limit refuses gives back its address charge.
+ * The address counter is keyed by the address as typed, whether or not an
+ * account has it, so a refusal says nothing about which accounts exist.
+ */
+export async function reserveEmailRequest(input: {
+  addressKey: string;
+  ipKey: string;
+  addressLimit: number;
+  ipLimit: number;
+  windowSeconds: number;
+}): Promise<EmailRequestAllowance> {
+  const address = await countInWindow(input.addressKey, input.windowSeconds);
+  if (address.count > input.addressLimit) {
+    return { allowed: false, code: "EMAIL_RATE_LIMITED", retryAfter: Math.max(1, address.ttl) };
+  }
+  const ip = await countInWindow(input.ipKey, input.windowSeconds);
+  if (ip.count > input.ipLimit) {
+    await uncount(input.addressKey);
+    return { allowed: false, code: "NETWORK_RATE_LIMITED", retryAfter: Math.max(1, ip.ttl) };
+  }
+  return { allowed: true };
 }
 
 /** HMAC of an identifier under a per-purpose key: rate-limit keys never hold the identifier. */
