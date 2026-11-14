@@ -8,6 +8,7 @@ import { describeSaveError } from '../errors';
 import { reportStepError, trackTemplateDownload, trackUploadRefused } from '../telemetry';
 import { useOnboardingT } from '../i18n';
 import { importMasters, type ImportResult, type MasterInput } from './mastersApi';
+import { checkSheet } from './sheetCheck';
 
 interface Parsed {
   fileName: string;
@@ -61,15 +62,18 @@ export function BulkMastersUpload({
         trackUploadRefused('departments', 'department', 'NOTHING_FOUND');
         return;
       }
+      // Rows with a bad code, or a designation linked to a department that doesn't exist, are named and left out.
+      const checked = checkSheet(departments.data, designations.data, existingDepartments, t);
       setParsed({
         fileName: file.name,
-        departments: departments.data.filter((row) => row.active !== false).map(({ code, name }) => ({ code, name })),
-        designations: designations.data
-          .filter((row) => row.active !== false)
-          .map(({ code, name, department }) => ({ code, name, departments: department ?? [] })),
-        problems: [...departments.validation.errors, ...designations.validation.errors].map((problem) =>
-          problem.row ? t('common.row_problem', 'Row %{row}: %{problem}', { row: problem.row, problem: problem.message }) : problem.message,
-        ),
+        departments: checked.departments,
+        designations: checked.designations,
+        problems: [
+          ...[...departments.validation.errors, ...designations.validation.errors].map((problem) =>
+            problem.row ? t('common.row_problem', 'Row %{row}: %{problem}', { row: problem.row, problem: problem.message }) : problem.message,
+          ),
+          ...checked.problems,
+        ],
       });
     } catch {
       setError(t('departments.bulk.unreadable', 'That file couldn’t be read. Upload the filled-in .xlsx template.'));
@@ -146,7 +150,7 @@ export function BulkMastersUpload({
             <Button variant="ghost" onClick={() => setParsed(null)} disabled={importing}>
               {t('common.choose_another_file', 'Choose another file')}
             </Button>
-            <Button onClick={bringIn} disabled={importing} className="gap-2">
+            <Button onClick={bringIn} disabled={importing || (!parsed.departments.length && !parsed.designations.length)} className="gap-2">
               {importing && <Loader2 className="w-4 h-4 animate-spin" />}
               {t('common.bring_them_in', 'Bring them in')}
             </Button>
