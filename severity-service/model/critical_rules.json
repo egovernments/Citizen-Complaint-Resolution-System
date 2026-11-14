@@ -1,0 +1,129 @@
+{
+ "purpose": "Keyword safety net: if any rule matches the cleaned complaint text, the API raises a Critical alert no matter what the model says. Edit freely; each pattern is a case-insensitive regular expression. Prefer too many alarms over a missed emergency.",
+ "needs_native_review": "The Tamil (ta_*) rules use basic common words and should be checked and extended by a Tamil speaker.",
+ "rules": [
+  {
+   "id": "animal_bite",
+   "language": "en",
+   "describes": "a person bitten or attacked, bites, rabies",
+   "pattern": "\\b(bit|bite|bites|bitten|biting|rabid|rabies)\\b|\\b(dog|dogs|cattle|cow|cows|monkey|animal)s?\\b.{0,40}\\b(attack|attacked|attacking|chase|chased|chasing)\\b",
+   "tier": "possible"
+  },
+  {
+   "id": "electric_hazard",
+   "language": "en",
+   "describes": "electric shock, live or exposed or hanging wires, sparks",
+   "pattern": "electric(al)?\\W{0,3}shock|electrocut|\\bshock(ed|s)?\\b|live\\s+wires?|exposed\\s+(electric(al)?\\s+)?(wires?|cables?)|\\bsparks?\\b|\\bsparking\\b|short\\s*circuit|(wires?|cables?)\\s+(is\\s+|are\\s+)?(hanging|snapped|cut|fallen|lying\\s+on\\s+the\\s+road)|open\\s+junction\\s+box|transformer\\s+(blast|burst|fire|exploded)",
+   "tier": "confirmed"
+  },
+  {
+   "id": "fire_smoke",
+   "language": "en",
+   "describes": "fire, smoke, burning structures",
+   "pattern": "\\bfire\\b|\\bsmoke\\b|caught\\s+fire|on\\s+fire|\\bblaze\\b|\\bburnt\\b|\\bexplosion\\b|\\bblast\\b",
+   "tier": "possible"
+  },
+  {
+   "id": "open_hazard",
+   "language": "en",
+   "describes": "uncovered manhole, drain or pit people could fall into",
+   "pattern": "(open|uncovered|without\\s+(a\\s+)?cover|no\\s+cover|missing\\s+cover|broken\\s+cover|cover\\s+(is\\s+)?(missing|broken|open|stolen)).{0,45}(manhole|man\\s+hole|drain|swd|pit|trench|sump|well)|(manhole|man\\s+hole|drain|swd|pit|trench)\\W.{0,45}(open|uncovered|without\\s+cover|no\\s+cover|missing)|fell\\s+into\\s+(a\\s+)?(manhole|drain|pit|trench)",
+   "tier": "possible"
+  },
+  {
+   "id": "falling_structure",
+   "language": "en",
+   "describes": "tree, pole or structure fallen or about to fall",
+   "pattern": "(about\\s+to|likely\\s+to|going\\s+to|yet\\s+to|may|might|will|ready\\s+to)\\s+(fall|collapse)|\\bfell\\s+on\\b|\\bfallen\\s+(on|onto|tree|trees|branch|branches|pole|poles|wall)\\b|\\bcollaps(e|ed|ing)\\b|leaning\\s+(pole|tree|building|wall|post)|\\buproot(ed)?\\b|(tree|pole|wall|building)\\s+(is\\s+)?(falling|bent|tilted)",
+   "tier": "confirmed"
+  },
+  {
+   "id": "injury_or_death",
+   "language": "en",
+   "describes": "injury, death, accident, trapped, drowning",
+   "pattern": "\\binjur(ed|y|ies)\\b|\\b(died|death|fatal|fatality|killed|trapped|drown(ed|ing)?|unconscious|bleeding|ambulance)\\b|\\baccidents?\\b|\\bhospitali[sz]ed\\b",
+   "tier": "possible"
+  },
+  {
+   "id": "sewage_in_water_or_home",
+   "language": "en",
+   "describes": "sewage in drinking water or homes",
+   "pattern": "sewage.{0,40}(drinking\\s+water|water\\s+supply|enter|inside\\s+(the\\s+)?house|homes?)|(drinking|metro|tap|supply)\\s+water.{0,50}(sewage|drain|contaminat|worms?|larva|dirty|stink|smell)|(drain|sewage|sewer).{0,60}(drinking\\s+water|water\\s+point)|mixed\\s+with\\s+(sewage|drain)",
+   "tier": "possible"
+  },
+  {
+   "id": "outbreak",
+   "language": "en",
+   "describes": "several people ill with the same symptoms",
+   "pattern": "\\boutbreak\\b|\\bcholera\\b|\\bdiarrh(o)?ea\\b|(children|people|residents|persons).{0,30}(sick|ill|vomit|fever)",
+   "tier": "possible"
+  },
+  {
+   "id": "gas_leak",
+   "language": "en",
+   "describes": "gas leak",
+   "pattern": "gas\\s+(leak|leakage|cylinder\\s+leak)|smell\\s+of\\s+gas",
+   "tier": "confirmed"
+  },
+  {
+   "id": "ta_animal_bite",
+   "language": "ta",
+   "describes": "Tamil: dog bite, bitten",
+   "pattern": "நாய்\\s*கடி|கடித்த|கடித்து|கடிக்க",
+   "tier": "possible"
+  },
+  {
+   "id": "ta_electric",
+   "language": "ta",
+   "describes": "Tamil: electric shock, live wire",
+   "pattern": "மின்\\s*அதிர்ச்சி|ஷாக்|மின்சாரம்\\s*தாக்க|மின்\\s*கம்பி\\s*அறுந்",
+   "tier": "confirmed"
+  },
+  {
+   "id": "ta_fire",
+   "language": "ta",
+   "describes": "Tamil: fire accident, smoke",
+   "pattern": "தீ\\s*விபத்து|தீப்\\s*பிடி|தீ\\s*பிடி|புகை",
+   "tier": "possible"
+  },
+  {
+   "id": "ta_accident_injury",
+   "language": "ta",
+   "describes": "Tamil: accident, injury, died",
+   "pattern": "விபத்து|காயம்|உயிரிழ|இறந்தார்|இறந்து\\s*விட்ட",
+   "tier": "possible"
+  },
+  {
+   "id": "ta_open_hazard",
+   "language": "ta",
+   "describes": "Tamil: open manhole or drain, no cover",
+   "pattern": "(ஓப்பன்|திறந்த|திறந்தநிலை).{0,25}(சாக்கடை|மேன்ஹோல்|கால்வாய்|பள்ளம்)|மூடி\\s*இல்லாத|மூடி\\s*இல்லை",
+   "tier": "possible"
+  },
+  {
+   "id": "ta_collapse",
+   "language": "ta",
+   "describes": "Tamil: collapsed, about to fall",
+   "pattern": "இடிந்து|சாய்ந்து\\s*விழ|விழும்\\s*நிலை",
+   "tier": "possible"
+  },
+  {
+   "id": "danger_words",
+   "language": "en",
+   "describes": "the writer says it is dangerous or a risk to life (a person should look)",
+   "pattern": "\\bdanger(ous|ously)?\\b|\\brisk\\s+(to|of)\\s+(life|lives|death|accident|injury)\\b|life\\s+threatening|\\bhazard(ous)?\\b|\\bunsafe\\b|\\bimmediate(ly)?\\s+(danger|risk)\\b",
+   "tier": "possible"
+  },
+  {
+   "id": "ta_danger",
+   "language": "ta",
+   "describes": "Tamil: dangerous, danger",
+   "pattern": "ஆபத்தான|ஆபத்து|அபாயம்|அபாயகரமான",
+   "tier": "possible"
+  }
+ ],
+ "tiers": {
+  "confirmed": "precise enough to return severity Critical outright",
+  "possible": "raises a Critical alert for a person to check; the model's own answer is still returned"
+ }
+}

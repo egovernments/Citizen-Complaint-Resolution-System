@@ -1,0 +1,11 @@
+# Generated outputs stay local, except the reviewed sample and the promoted labels (with their manifest)
+output/*
+!output/sample2000_gemini_labels.csv
+!output/llm_labels.csv
+!output/llm_labels.manifest.json
+
+# Runs: keep each run's manifest.json and report.json in git, keep the (large) label files local
+runs/*/labels*.csv
+runs/*/labels.tmp
+runs/*/ids.txt
+runs/_compare/
