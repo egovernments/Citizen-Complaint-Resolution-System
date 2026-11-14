@@ -5,7 +5,7 @@ import { linkRequestId, normalizeLinkEmail } from "../bindings/link-request-id.j
 import { invitationExpiryHours } from "../bindings/invitations.js";
 import { accept, bindingsFromUser, createPending, effectiveBinding, ensureActive, readBindings, readBindingUser, recordBindingEmail, remove, type Binding } from "../bindings/store.js";
 import { BindingConflictError, BindingError, type BindingUser } from "../bindings/types.js";
-import { ensureOrganizationMembership, inspectPasswordSetupAccountById, isOrganizationMember, request } from "../organizations/organization-service.js";
+import { ensureOrganizationMembership, inspectPasswordSetupAccountById, isOrganizationMember, readTenantMappingForTenant, request } from "../organizations/organization-service.js";
 import { acquireRedisLease, getRedis } from "../../infrastructure/redis.js";
 import { createdId, paged, readUser } from "../../integrations/keycloak/admin-api.js";
 import { readOnboardingOrganizations } from "../onboarding/organization-reader.js";
@@ -14,9 +14,34 @@ import { updateKeycloakUser } from "../sync/keycloak-writer.js";
 import { accountEntries } from "../sync/state.js";
 import { mirrorPerson } from "../sync/mirror.js";
 import { sendPasswordSetup } from "../authentication/password-setup.js";
+import { oidcClientForSurface } from "../authentication/oidc.js";
+import { surfaceReturnPrefix } from "../authentication/surfaces.js";
+import type { DigitRole } from "../managed-accounts/digit-user-client.js";
 import { audit } from "../citizen-otp/audit.js";
 import { mayManageRoles, readDigitAccount, requireAccountAdmin, requireWorkspace, validateBinding } from "./authority.js";
 import { revokeAccount } from "../revocation/index.js";
+
+/**
+ * Where an invitee's password link ends (#2801). A workspace admin (a Configurator role at the
+ * tenant: the rule the Configurator's own context select applies) returns to the Configurator.
+ * Everyone else returns to the workspace's employee app through the employee client, exactly as
+ * that app's own forgot-password does, instead of a Configurator "Choose a workspace" screen
+ * they can't use. Without a workspace route or an employee client: the Configurator, as before.
+ */
+export async function passwordSetupLanding(tenantId: string, roles: DigitRole[]): Promise<{
+  returnTo: string; clientId: string; tenantSlug: string | undefined;
+}> {
+  const configurator = { returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId, tenantSlug: undefined };
+  if (roles.some((r) => r.tenantId === tenantId && config.digitConfiguratorRoles.includes(r.code))) return configurator;
+  const employee = oidcClientForSurface("employee", "password");
+  const route = employee ? await readTenantMappingForTenant(tenantId) : null;
+  if (!employee || !route) return configurator;
+  return { returnTo: surfaceReturnPrefix("employee", route.urlSlug), clientId: employee.clientId, tenantSlug: route.urlSlug };
+}
+
+async function memberLanding(tenantId: string, digitUuid: string) {
+  return passwordSetupLanding(tenantId, (await readDigitAccount(tenantId, digitUuid))?.roles ?? []);
+}
 
 export function publicBinding(subject: string, binding: Binding) {
   const { uuid, email: _email, createdAt: _at, createdBy: _by, removedBy: _removedBy, ...rest } = binding;
@@ -112,9 +137,9 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
     await ensureOrganizationMembership({ organizationId: org.id, userId: subject });
     const { binding } = await ensureActive({ subject, tenantId: input.tenantId, uuid: input.digitUuid, actor, email });
     await activate(binding, lease);
+    const landing = await memberLanding(input.tenantId, input.digitUuid);
     await lease.assertHeld();
-    await sendPasswordSetup({ userId: subject, hadPassword: false, emailVerified: fresh.emailVerified === true,
-      returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId, tenantSlug: undefined });
+    await sendPasswordSetup({ userId: subject, hadPassword: false, emailVerified: fresh.emailVerified === true, ...landing });
     await mirrorPerson(subject);
     await updateKeycloakUser(subject, (current) => {
       if (pendingMarker(current)?.requestId !== requestId) return null;
@@ -156,9 +181,9 @@ async function resendActivation(input: { actor: string; tenantId: string; digitU
     const window = await acquireRedisLease(key, { ttlMs: RESEND_COOLDOWN_SECONDS * 1000 });
     if (!window) throw new ResendTooSoonError(Math.max(1, await getRedis().ttl(key)));
     try {
+      const landing = needsPassword ? await memberLanding(input.tenantId, input.digitUuid) : null;
       await lease.assertHeld();
-      if (needsPassword) await sendPasswordSetup({ userId: subject, hadPassword: account.hasPassword, emailVerified: account.emailVerified,
-        returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId, tenantSlug: undefined });
+      if (landing) await sendPasswordSetup({ userId: subject, hadPassword: account.hasPassword, emailVerified: account.emailVerified, ...landing });
       else await sendVerifyEmail(subject);
     } catch (error) { await window.release(); throw error; }
     return { binding: publicBinding(subject, binding), identityUserCreated: false, activationEmailSent: true,
