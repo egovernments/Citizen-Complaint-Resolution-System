@@ -1,6 +1,7 @@
 import { useInput, type InputProps } from 'ra-core';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useShowFieldError } from '@/admin/useShowFieldError';
 
 const HEX_PATTERN = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
@@ -14,7 +15,7 @@ interface ColorInputProps extends InputProps {
  *  text editing if the value is not a valid hex. */
 export function ColorInput({ label, help, ...inputProps }: ColorInputProps) {
   const { id, field, fieldState, isRequired } = useInput(inputProps);
-  const hasError = fieldState.invalid && fieldState.isTouched;
+  const hasError = useShowFieldError(fieldState);
   const value = typeof field.value === 'string' ? field.value : '';
   const isValidHex = HEX_PATTERN.test(value);
 

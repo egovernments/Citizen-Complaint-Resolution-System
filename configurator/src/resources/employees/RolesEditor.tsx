@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Role } from '@/api/types';
 import { useRolesLookup } from '@/admin/hrms/useRolesLookup';
+import { useShowFieldError } from '@/admin/useShowFieldError';
+import { useFieldErrorText } from '@/admin/fieldErrorText';
 
 export interface RolesEditorProps {
   source?: string;
@@ -106,8 +108,8 @@ export function RolesEditor({
     }
   };
 
-  const hasError = fieldState.invalid && fieldState.isTouched;
-  const errorMessage = fieldState.error?.message;
+  const hasError = useShowFieldError(fieldState);
+  const errorMessage = useFieldErrorText(fieldState.error?.message);
 
   return (
     <div ref={containerRef} className="relative">

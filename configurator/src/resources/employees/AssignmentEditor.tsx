@@ -17,6 +17,7 @@ import type { Employee, EmployeeAssignment } from '@/api/types';
 import { useEmployeeLookup } from '@/admin/hrms/useEmployeeLookup';
 import { ReportingToSelect } from './ReportingToSelect';
 import { pickerChoices } from '@/lib/systemRecords';
+import { useFieldErrorText } from '@/admin/fieldErrorText';
 
 export interface AssignmentEditorProps {
   source?: string;
@@ -142,6 +143,7 @@ export function AssignmentEditor({
   };
 
   const { id, field, fieldState } = useInput({ source, validate });
+  const errorText = useFieldErrorText(fieldState.error?.message);
 
   const rows: EmployeeAssignment[] = useMemo(() => {
     if (!Array.isArray(field.value)) return [];
@@ -520,10 +522,10 @@ export function AssignmentEditor({
         </p>
       )}
 
-      {fieldState.error?.message && (
-        <p className="mt-1 text-xs text-destructive" role="alert">{fieldState.error.message}</p>
+      {errorText && (
+        <p className="mt-1 text-xs text-destructive" role="alert">{errorText}</p>
       )}
-      {!fieldState.error?.message && help && (
+      {!errorText && help && (
         <p className="mt-1 text-xs text-muted-foreground">{help}</p>
       )}
     </div>
