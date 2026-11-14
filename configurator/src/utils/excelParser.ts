@@ -708,13 +708,36 @@ export function parseComplaintTypeExcel(workbook: XLSX.WorkBook): {
 // Employee Excel Parser
 // ============================================
 
+/** A sheet row the parser kept, with its row number in the sheet (the header is row 1). */
+export type ParsedEmployeeRow = EmployeeExcelRow & { row: number };
+
+/**
+ * A sheet row the parser couldn't use, with what it read and why. The bulk
+ * import lists these in its preview as errors, so no row leaves the sheet
+ * unaccounted for (#2800).
+ */
+export interface RejectedEmployeeRow {
+  row: number;
+  employeeCode: string;
+  name: string;
+  mobileNumber: string;
+  emailId?: string;
+  department: string;
+  designation: string;
+  roles: string;
+  problems: ValidationError[];
+}
+
 export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
-  data: EmployeeExcelRow[];
+  data: ParsedEmployeeRow[];
+  /** Rows left out of `data`, each with its problems (also in validation.errors). */
+  rejected: RejectedEmployeeRow[];
   validation: ValidationResult;
 } {
   const errors: ValidationError[] = [];
   const warnings: ValidationWarning[] = [];
-  const employees: EmployeeExcelRow[] = [];
+  const employees: ParsedEmployeeRow[] = [];
+  const rejected: RejectedEmployeeRow[] = [];
 
   const sheetNames = ['Employee', 'Employees', 'EmployeeMaster', 'HRMS', 'employee'];
   let sheet: XLSX.WorkSheet | undefined;
@@ -732,12 +755,16 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
       message: `No employee sheet found. Expected one of: Employee, Employees, EmployeeMaster, HRMS, employee. Got sheets in this file: ${workbook.SheetNames.join(', ')}.`,
       code: 'WRONG_SHEET',
     });
-    return { data: [], validation: { valid: false, errors, warnings } };
+    return { data: [], rejected: [], validation: { valid: false, errors, warnings } };
   }
 
   const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
 
   jsonData.forEach((row, index) => {
+    // The row's number as the spreadsheet app shows it. sheet_to_json skips
+    // blank rows, so the index alone would miscount after one.
+    const rowNum = (row as { __rowNum__?: unknown }).__rowNum__;
+    const sheetRow = typeof rowNum === 'number' ? rowNum + 1 : index + 2;
     const employeeCode = String(row['employeeCode'] || row['EmployeeCode'] || row['code'] || '').trim();
     const name = String(row['name'] || row['Name'] || row['employeeName'] || '').trim();
     const userName = String(row['userName'] || row['UserName'] || row['username'] || '').trim();
@@ -769,14 +796,17 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
     // employeeCode is optional: the bulk imports give a blank one the next free
     // EMP_ code (planEmployeeCodes, #2456).
 
+    // What keeps this row out of `data`. Every problem is recorded, not just
+    // the first, so one pass over the sheet fixes them all (#2800).
+    const problems: ValidationError[] = [];
+    const refuse = (problem: Omit<ValidationError, 'row'>) => {
+      const error = { row: sheetRow, ...problem };
+      errors.push(error);
+      problems.push(error);
+    };
+
     if (!name) {
-      errors.push({
-        row: index + 2,
-        field: 'name',
-        message: 'Employee name is required',
-        code: 'REQUIRED_FIELD',
-      });
-      return;
+      refuse({ field: 'name', message: 'Employee name is required', code: 'REQUIRED_FIELD' });
     }
 
     // userName is not used: HRMS makes every employee's username their code
@@ -784,20 +814,15 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
     // value is ignored.
 
     if (!mobileNumber) {
-      errors.push({
-        row: index + 2,
-        field: 'mobileNumber',
-        message: 'Mobile number is required',
-        code: 'REQUIRED_FIELD',
-      });
-      return;
+      refuse({ field: 'mobileNumber', message: 'Mobile number is required', code: 'REQUIRED_FIELD' });
     } else if (!/^\d{9,10}$/.test(mobileNumber)) {
       // Loosened from `^\d{10}$` so 9-digit MDMS-valid Kenyan numbers
       // (`712345678`) survive parsing. EmployeeBulkImport's tenant-aware
       // validateRow then enforces the per-tenant rule from MDMS, and
       // `normalizeMobileForHrms` pads to 10 before HRMS submission.
+      // Advisory: the row is kept, for the tenant's own rule to decide.
       errors.push({
-        row: index + 2,
+        row: sheetRow,
         field: 'mobileNumber',
         value: mobileNumber,
         message: 'Mobile number must be 9 or 10 digits',
@@ -806,102 +831,88 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
     }
 
     if (!department) {
-      errors.push({
-        row: index + 2,
-        field: 'department',
-        message: 'Department is required',
-        code: 'REQUIRED_FIELD',
-      });
-      return;
+      refuse({ field: 'department', message: 'Department is required', code: 'REQUIRED_FIELD' });
     }
 
     if (!designation) {
-      errors.push({
-        row: index + 2,
-        field: 'designation',
-        message: 'Designation is required',
-        code: 'REQUIRED_FIELD',
-      });
-      return;
+      refuse({ field: 'designation', message: 'Designation is required', code: 'REQUIRED_FIELD' });
     }
 
     // Date of birth is OPTIONAL (egovernments/CCRS#1949). A blank cell parses
     // to `undefined` and the row is still imported — egov-hrms guards every DOB
     // rule with a null check, and the Employee edit screen has always allowed
     // clearing it. A cell that IS filled keeps every format and range check
-    // below, and a malformed one still skips the row.
+    // below, and a malformed one still keeps the row out.
     let dob: string | undefined;
     // A cell holding only whitespace is a blank cell, not a bad date.
     const dobIsBlank =
       dobRaw === undefined || dobRaw === null || (!(dobRaw instanceof Date) && String(dobRaw).trim() === '');
 
     if (!dobIsBlank) {
-      let dobYear: number;
-      let dobMonth: number;
-      let dobDay: number;
+      let parts: [number, number, number] | null = null;
 
       if (dobRaw instanceof Date) {
-        dobYear = dobRaw.getUTCFullYear();
-        dobMonth = dobRaw.getUTCMonth() + 1;
-        dobDay = dobRaw.getUTCDate();
+        parts = [dobRaw.getUTCFullYear(), dobRaw.getUTCMonth() + 1, dobRaw.getUTCDate()];
       } else if (typeof dobRaw === 'number') {
         // Excel epoch adjustment to JS epoch ms: (serial - 25569) * 86400 * 1000.
         const jsDate = new Date((dobRaw - 25569) * 86400 * 1000);
         if (Number.isNaN(jsDate.getTime())) {
-          errors.push({
-            row: index + 2,
+          refuse({
             field: 'dob',
             value: String(dobRaw),
             message: 'Date of birth is not a valid Excel date serial',
             code: 'INVALID_FORMAT',
           });
-          return;
+        } else {
+          parts = [jsDate.getUTCFullYear(), jsDate.getUTCMonth() + 1, jsDate.getUTCDate()];
         }
-        dobYear = jsDate.getUTCFullYear();
-        dobMonth = jsDate.getUTCMonth() + 1;
-        dobDay = jsDate.getUTCDate();
       } else {
         const dobStr = String(dobRaw).trim();
         const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dobStr);
-        if (!match) {
-          errors.push({
-            row: index + 2,
+        if (match) {
+          parts = [Number(match[1]), Number(match[2]), Number(match[3])];
+        } else {
+          refuse({
             field: 'dob',
             value: dobStr,
             message: 'Date of birth must be ISO format YYYY-MM-DD',
             code: 'INVALID_FORMAT',
           });
-          return;
         }
-        dobYear = Number(match[1]);
-        dobMonth = Number(match[2]);
-        dobDay = Number(match[3]);
       }
 
-      const maxYear = new Date().getFullYear() - 18;
-      if (dobYear < 1920 || dobYear > maxYear) {
-        errors.push({
-          row: index + 2,
-          field: 'dob',
-          value: `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`,
-          message: `Date of birth year must be between 1920 and ${maxYear} (employee must be at least 18)`,
-          code: 'INVALID_FORMAT',
-        });
-        return;
+      if (parts) {
+        const [dobYear, dobMonth, dobDay] = parts;
+        const iso = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
+        const maxYear = new Date().getFullYear() - 18;
+        if (dobYear < 1920 || dobYear > maxYear) {
+          refuse({
+            field: 'dob',
+            value: iso,
+            message: `Date of birth year must be between 1920 and ${maxYear} (employee must be at least 18)`,
+            code: 'INVALID_FORMAT',
+          });
+        } else {
+          dob = iso;
+        }
       }
+    }
 
-      dob = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
+    if (problems.length > 0) {
+      rejected.push({ row: sheetRow, employeeCode, name, mobileNumber, emailId, department, designation, roles, problems });
+      return;
     }
 
     if (!jurisdictions) {
       warnings.push({
-        row: index + 2,
+        row: sheetRow,
         field: 'jurisdictions',
         message: 'No jurisdictions specified - employee may not have access to any areas',
       });
     }
 
     employees.push({
+      row: sheetRow,
       employeeCode,
       name,
       userName,
@@ -919,6 +930,7 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
 
   return {
     data: employees,
+    rejected,
     validation: {
       valid: errors.length === 0,
       errors,

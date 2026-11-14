@@ -6588,6 +6588,60 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.bulk_employees.already_added",
+    "message": "पहले से जोड़ा गया",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.already_added",
+    "message": "Déjà ajouté",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.already_added",
+    "message": "Já adicionado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.already_added_info",
+    "message": "%{smart_count} पंक्ति(याँ) ऐसे कर्मचारियों की हैं जिन्हें आप पहले ही जोड़ चुके हैं, इसलिए उन्हें छोड़ दिया जाएगा। उनका विवरण बदलने या उन्हें आमंत्रण भेजने के लिए कर्मचारी सूची में उनकी पंक्ति का उपयोग करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.already_added_info",
+    "message": "%{smart_count} ligne(s) correspondent à des employés déjà ajoutés et seront ignorées. Pour modifier leurs informations ou envoyer leur invitation, utilisez leur ligne dans la liste des employés.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.already_added_info",
+    "message": "%{smart_count} linha(s) são de funcionários que você já adicionou e serão ignoradas. Para alterar os dados ou enviar o convite, use a linha da pessoa na lista de funcionários.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.already_added_skipped",
+    "message": "पहले से जोड़े गए (छोड़े गए)",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.already_added_skipped",
+    "message": "Déjà ajoutés (ignorés)",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.already_added_skipped",
+    "message": "Já adicionados (ignorados)",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.bulk_employees.assignments",
     "message": "नियुक्तियाँ",
     "module": "configurator-ui",
@@ -6710,6 +6764,42 @@
   {
     "code": "app.onboarding.bulk_employees.check_failures",
     "message": "Confira a lista de falhas abaixo e tente novamente as linhas com falha.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.code_exists",
+    "message": "%{code} पहले से मौजूद है। कर्मचारी सूची में उन्हें संपादित करें, या यह पंक्ति हटा दें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.code_exists",
+    "message": "%{code} existe déjà. Modifiez cette personne dans la liste des employés, ou supprimez cette ligne.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.code_exists",
+    "message": "%{code} já existe. Edite a pessoa na lista de funcionários ou remova esta linha.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.code_in_use",
+    "message": "कर्मचारी कोड %{code} पहले से किसी दूसरे खाते द्वारा उपयोग में है। कोई दूसरा कोड उपयोग करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.code_in_use",
+    "message": "Le code employé %{code} est déjà utilisé par un autre compte. Utilisez un autre code.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.code_in_use",
+    "message": "O código de funcionário %{code} já é usado por outra conta. Use um código diferente.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -7128,6 +7218,24 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.bulk_employees.department_required",
+    "message": "विभाग आवश्यक है",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.department_required",
+    "message": "Le service est obligatoire",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.department_required",
+    "message": "O departamento é obrigatório",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.bulk_employees.departments_loaded",
     "message": "विभाग: %{smart_count} लोड हुए",
     "module": "configurator-ui",
@@ -7178,6 +7286,24 @@
   {
     "code": "app.onboarding.bulk_employees.designation_not_found",
     "message": "Cargo \"%{code}\" não encontrado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.designation_required",
+    "message": "पदनाम आवश्यक है",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.designation_required",
+    "message": "La fonction est obligatoire",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.designation_required",
+    "message": "O cargo é obrigatório",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -7286,6 +7412,24 @@
   {
     "code": "app.onboarding.bulk_employees.dob_format",
     "message": "Data de nascimento inválida (esperado AAAA-MM-DD)",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.dob_invalid",
+    "message": "जन्म तिथि “%{value}” मान्य नहीं है। कम से कम 18 वर्ष के व्यक्ति के लिए YYYY-MM-DD का उपयोग करें, या इसे खाली छोड़ दें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.dob_invalid",
+    "message": "La date de naissance « %{value} » n’est pas valide. Utilisez AAAA-MM-JJ pour une personne d’au moins 18 ans, ou laissez la case vide.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.dob_invalid",
+    "message": "A data de nascimento \"%{value}\" não é válida. Use AAAA-MM-DD para alguém com pelo menos 18 anos, ou deixe em branco.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -7452,6 +7596,24 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.bulk_employees.existing_failed",
+    "message": "यह जाँच नहीं हो सकी कि आप किन कर्मचारियों को पहले ही जोड़ चुके हैं, इसलिए शीट की जाँच नहीं हुई। थोड़ी देर में इसे फिर से अपलोड करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.existing_failed",
+    "message": "Impossible de vérifier quels employés vous avez déjà ajoutés, la feuille n’a donc pas été vérifiée. Téléversez-la à nouveau dans un instant.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.existing_failed",
+    "message": "Não foi possível verificar quais funcionários você já adicionou, então a planilha não foi verificada. Envie-a novamente em instantes.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.bulk_employees.failed",
     "message": "विफल",
     "module": "configurator-ui",
@@ -7520,6 +7682,24 @@
   {
     "code": "app.onboarding.bulk_employees.file",
     "message": "Arquivo: %{name}",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.fix_and_upload_again",
+    "message": "नीचे दी गई पंक्तियाँ ठीक करें, फिर शीट दोबारा अपलोड करें। पहले से जोड़े गए कर्मचारी छोड़ दिए जाते हैं, इसलिए कोई दो बार नहीं जुड़ता।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.fix_and_upload_again",
+    "message": "Corrigez les lignes listées ci-dessous, puis téléversez à nouveau la feuille. Les employés déjà ajoutés sont ignorés : personne n’est ajouté deux fois.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.fix_and_upload_again",
+    "message": "Corrija as linhas listadas abaixo e envie a planilha novamente. Funcionários já adicionados são ignorados, então ninguém é adicionado duas vezes.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -7812,6 +7992,42 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.bulk_employees.mobile_in_use",
+    "message": "मोबाइल नंबर %{mobile} पहले से किसी दूसरे कर्मचारी द्वारा उपयोग में है। कोई दूसरा नंबर उपयोग करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.mobile_in_use",
+    "message": "Le numéro de mobile %{mobile} est déjà utilisé par un autre employé. Utilisez un autre numéro.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.mobile_in_use",
+    "message": "O número de celular %{mobile} já é usado por outro funcionário. Use um número diferente.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.mobile_required",
+    "message": "मोबाइल नंबर आवश्यक है",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.mobile_required",
+    "message": "Le numéro de mobile est obligatoire",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.mobile_required",
+    "message": "O número de celular é obrigatório",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.bulk_employees.more_errors",
     "message": "...और %{smart_count} अन्य त्रुटियाँ",
     "module": "configurator-ui",
@@ -7826,6 +8042,24 @@
   {
     "code": "app.onboarding.bulk_employees.more_errors",
     "message": "...e mais %{smart_count} erros",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.name_required",
+    "message": "नाम आवश्यक है",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.name_required",
+    "message": "Le nom est obligatoire",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.name_required",
+    "message": "O nome é obrigatório",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -7898,6 +8132,24 @@
   {
     "code": "app.onboarding.bulk_employees.note",
     "message": "Observação:",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.nothing_new",
+    "message": "कोई नया कर्मचारी नहीं जोड़ा गया",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.nothing_new",
+    "message": "Aucun nouvel employé ajouté",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.nothing_new",
+    "message": "Nenhum funcionário novo adicionado",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -8082,6 +8334,60 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.bulk_employees.row_named",
+    "message": "पंक्ति %{row} (%{name}): %{reason}",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.row_named",
+    "message": "Ligne %{row} (%{name}) : %{reason}",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.row_named",
+    "message": "Linha %{row} (%{name}): %{reason}",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.row_not_added",
+    "message": "यह पंक्ति नहीं जोड़ी जा सकी। फिर से कोशिश करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.row_not_added",
+    "message": "Cette ligne n’a pas pu être ajoutée. Réessayez.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.row_not_added",
+    "message": "Não foi possível adicionar esta linha. Tente novamente.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.row_reason",
+    "message": "पंक्ति %{row}: %{reason}",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.row_reason",
+    "message": "Ligne %{row} : %{reason}",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.row_reason",
+    "message": "Linha %{row}: %{reason}",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.bulk_employees.rows_skipped",
     "message": "त्रुटियों वाली %{smart_count} पंक्ति(याँ) छोड़ दी जाएंगी।",
     "module": "configurator-ui",
@@ -8096,6 +8402,24 @@
   {
     "code": "app.onboarding.bulk_employees.rows_skipped",
     "message": "%{smart_count} linha(s) com erros serão ignoradas.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.rows_to_fix",
+    "message": "अभी ठीक करनी बाकी पंक्तियाँ:",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.rows_to_fix",
+    "message": "Lignes encore à corriger :",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.rows_to_fix",
+    "message": "Linhas que ainda precisam de correção:",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -8186,6 +8510,24 @@
   {
     "code": "app.onboarding.bulk_employees.status",
     "message": "Status",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.summary_already_added",
+    "message": "%{smart_count} पहले से जोड़े गए (छोड़े गए)",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.summary_already_added",
+    "message": "%{smart_count} déjà ajouté(s) (ignoré(s))",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.summary_already_added",
+    "message": "%{smart_count} já adicionado(s) (ignorado(s))",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -21078,6 +21420,24 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.bulk_employees.already_added",
+    "message": "Already added",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.already_added_info",
+    "message": "%{smart_count} row(s) are employees you’ve already added, so they’ll be skipped. To change their details or send their invitation, use their row in the employee list.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.already_added_skipped",
+    "message": "Already added (skipped)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.bulk_employees.assignments",
     "message": "Assignments",
     "module": "configurator-ui",
@@ -21116,6 +21476,18 @@
   {
     "code": "app.onboarding.bulk_employees.check_failures",
     "message": "Check the failure list below and retry the failed rows.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.code_exists",
+    "message": "%{code} already exists. Edit them in the employee list, or remove this row.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.code_in_use",
+    "message": "Employee code %{code} is already used by another account. Use a different code.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -21258,6 +21630,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.bulk_employees.department_required",
+    "message": "Department is required",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.bulk_employees.departments_loaded",
     "message": "Departments: %{smart_count} loaded",
     "module": "configurator-ui",
@@ -21272,6 +21650,12 @@
   {
     "code": "app.onboarding.bulk_employees.designation_not_found",
     "message": "Designation \"%{code}\" not found",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.designation_required",
+    "message": "Designation is required",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -21308,6 +21692,12 @@
   {
     "code": "app.onboarding.bulk_employees.dob_format",
     "message": "Date of birth malformed (expected YYYY-MM-DD)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.dob_invalid",
+    "message": "Date of birth “%{value}” isn’t valid. Use YYYY-MM-DD for someone at least 18, or leave it blank.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -21366,6 +21756,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.bulk_employees.existing_failed",
+    "message": "Couldn’t check which employees you’ve already added, so the sheet wasn’t checked. Upload it again in a moment.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.bulk_employees.failed",
     "message": "Failed",
     "module": "configurator-ui",
@@ -21386,6 +21782,12 @@
   {
     "code": "app.onboarding.bulk_employees.file",
     "message": "File: %{name}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.fix_and_upload_again",
+    "message": "Fix the rows listed below, then upload the sheet again. Employees already added are skipped, so nobody is added twice.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -21486,8 +21888,26 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.bulk_employees.mobile_in_use",
+    "message": "Mobile number %{mobile} is already used by another employee. Use a different number.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.mobile_required",
+    "message": "Mobile number is required",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.bulk_employees.more_errors",
     "message": "...and %{smart_count} more errors",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.name_required",
+    "message": "Name is required",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -21512,6 +21932,12 @@
   {
     "code": "app.onboarding.bulk_employees.note",
     "message": "Note:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.nothing_new",
+    "message": "No new employees added",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -21576,8 +22002,32 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.bulk_employees.row_named",
+    "message": "Row %{row} (%{name}): %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.row_not_added",
+    "message": "This row couldn’t be added. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.row_reason",
+    "message": "Row %{row}: %{reason}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.bulk_employees.rows_skipped",
     "message": "%{smart_count} row(s) with errors will be skipped.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.rows_to_fix",
+    "message": "Rows still to fix:",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -21608,6 +22058,12 @@
   {
     "code": "app.onboarding.bulk_employees.status",
     "message": "Status",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.bulk_employees.summary_already_added",
+    "message": "%{smart_count} already added (skipped)",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
