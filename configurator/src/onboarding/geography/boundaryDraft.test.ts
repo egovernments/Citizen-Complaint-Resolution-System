@@ -11,6 +11,7 @@ import {
   saveProgressOf,
   usePendingHierarchyRecord,
   removeSelection,
+  restoreLeftovers,
   saveBoundaryDraft,
   setBoundaryDraft,
   useBoundaryDraft,
@@ -90,6 +91,7 @@ const codes = () => current().selections.flatMap((s) => s.boundaries.map((b) => 
 beforeEach(() => {
   vi.clearAllMocks();
   act(() => setBoundaryDraft(TENANT, null));
+  window.localStorage.clear();
   vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
   createHierarchy.mockResolvedValue({ tenantId: TENANT, hierarchyType: 'ADMIN', boundaryHierarchy: [] });
   createBoundaries.mockImplementation(async (boundaries) => ({ success: boundaries, failed: [] }));
@@ -271,6 +273,117 @@ describe('the unsaved list', () => {
       expect(removeSelection(TENANT, nairobi.id)).toBe(true);
     });
     expect(renderHook(() => useBoundaryDraft(TENANT)).result.current).toBeNull();
+  });
+});
+
+describe('what a save left unsaved, across a reload (#2795)', () => {
+  const refused = { boundary: NAIROBI[2], error: 'Boundary type is not in the hierarchy', code: 'BOUNDARY_TYPE_ERROR' };
+  const sheet = (boundaries: Boundary[]) =>
+    selection(boundaries, {
+      source: 'excel',
+      method: 'excel',
+      resume: {
+        kind: 'excel',
+        hierarchy: { tenantId: TENANT, hierarchyType: 'ADMIN', boundaryHierarchy: [{ boundaryType: 'County', active: true }, { boundaryType: 'Ward', active: true }] },
+        file: new File(['rows'], 'wards.xlsx'),
+        parsed: [],
+        valid: [],
+        invalid: [],
+        polygonFile: null,
+        polygonSidecar: null,
+      },
+    });
+  /** A reload: this tab's memory goes, the browser's storage stays. */
+  const reload = () => {
+    const kept = Array.from({ length: window.localStorage.length }, (_, i) => window.localStorage.key(i) as string).map(
+      (key) => [key, window.localStorage.getItem(key) as string] as const,
+    );
+    act(() => setBoundaryDraft(TENANT, null));
+    for (const [key, value] of kept) window.localStorage.setItem(key, value);
+  };
+  const restore = (hierarchyTypes = ['ADMIN']) => {
+    let failures: ReturnType<typeof restoreLeftovers> = null;
+    act(() => {
+      failures = restoreLeftovers(TENANT, hierarchyTypes);
+    });
+    return failures;
+  };
+
+  it('brings them back with the save’s reasons, into the hierarchy the server has', () => {
+    act(() => void addSelection(TENANT, sheet(NAIROBI)));
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    reload();
+    expect(renderHook(() => useBoundaryDraft(TENANT)).result.current).toBeNull();
+    expect(restore(['OTHER'])).toBeNull();
+    expect(restore()).toEqual([refused]);
+    expect(codes()).toEqual(['NBI_W2']);
+    const [back] = current().selections;
+    expect(back.hierarchyExists).toBe(true);
+    // The upload is named as before; only its name was kept.
+    expect(back.resume.kind === 'excel' && back.resume.file?.name).toBe('wards.xlsx');
+    // A list already there is left alone.
+    expect(restore()).toBeNull();
+  });
+
+  it('forgets them once they are all saved, or removed', () => {
+    act(() => void addSelection(TENANT, selection(NAIROBI)));
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    act(() => keepUnsaved(TENANT, [NAIROBI[2]]));
+    reload();
+    expect(restore()).toBeNull();
+
+    act(() => void addSelection(TENANT, selection(NAIROBI)));
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    const { id } = current().selections[0];
+    act(() => void removeSelection(TENANT, id));
+    reload();
+    expect(restore()).toBeNull();
+  });
+
+  it('keeps an edited list, without the reasons the page no longer shows', () => {
+    act(() => void addSelection(TENANT, sheet(NAIROBI)));
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    const { id } = current().selections[0];
+    act(() => void addSelection(TENANT, sheet([area('NBI_W2', 'Ward', 'NBI')]), undefined, id));
+    reload();
+    expect(restore()).toEqual([]);
+    expect(codes()).toEqual(['NBI_W2']);
+  });
+
+  it('keeps a list nothing was saved from in this tab only', () => {
+    act(() => void addSelection(TENANT, selection(NAIROBI)));
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it('stores the areas without a fetch’s outlines when the whole list doesn’t fit', () => {
+    const fetched = selection(NAIROBI);
+    if (fetched.resume.kind === 'osm') fetched.resume.adminLevels = [{ level: 6, features: [{}], examples: [], mappedName: 'Ward', selected: true }];
+    act(() => void addSelection(TENANT, fetched));
+    const full = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    full.mockRestore();
+    reload();
+    expect(restore()).toEqual([refused]);
+    expect(codes()).toEqual(['NBI_W2']);
+    const { resume } = current().selections[0];
+    expect(resume.kind === 'osm' && resume.adminLevels).toEqual([]);
+  });
+
+  it('carries on without storage, and ignores what it can’t read', () => {
+    act(() => void addSelection(TENANT, selection(NAIROBI)));
+    const broken = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    broken.mockRestore();
+    expect(codes()).toEqual(['NBI_W2']);
+    act(() => setBoundaryDraft(TENANT, null));
+    window.localStorage.setItem(`ccrs-geography-unsaved:${TENANT}:ADMIN`, '{not json');
+    expect(restore()).toBeNull();
+    window.localStorage.setItem(`ccrs-geography-unsaved:${TENANT}:ADMIN`, JSON.stringify({ selections: [], failed: [] }));
+    expect(restore()).toBeNull();
   });
 });
 

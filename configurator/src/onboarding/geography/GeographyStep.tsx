@@ -34,6 +34,7 @@ import {
   keepUnsaved,
   listHierarchy,
   removeSelection,
+  restoreLeftovers,
   retryHierarchyRecord,
   saveBoundaryDraft,
   useBoundarySave,
@@ -112,6 +113,17 @@ function summaryLine(hierarchy: HierarchySummary, t: OnboardingT): string {
   return parts.length ? parts.join(' · ') : t('geography.nothing_in_it_yet', 'Nothing in it yet');
 }
 
+/** Says how many areas a save left out, and that they wait in the list (above this message) to be fixed or tried again. */
+function notSavedMessage(count: number, t: OnboardingT): string {
+  return `${
+    count === 1
+      ? t('geography.not_saved_one', '1 area wasn’t saved, so this step isn’t complete yet.')
+      : t('geography.not_saved_other', '%{count} areas weren’t saved, so this step isn’t complete yet.', {
+          count: count.toLocaleString('en-US'),
+        })
+  } ${t('geography.not_saved_above', 'They’re still in the list above: fix them with Edit, or press Save and continue to try them again.')}`;
+}
+
 /** One unsaved selection, summarised like a saved hierarchy. */
 function selectionSummary(selection: BoundarySelection): HierarchySummary {
   const counts: Record<string, number> = {};
@@ -172,6 +184,12 @@ export default function GeographyStep() {
         setHierarchies(loaded);
         setRecorded(recordedType);
         setLoadError(null);
+        // After a reload, the areas a save left out come back to the list, with its reasons (#2795).
+        const restored = restoreLeftovers(tenant, loaded.map((hierarchy) => hierarchy.hierarchyType));
+        if (restored?.length) {
+          setSaveFailures(restored);
+          setSaveError(notSavedMessage(restored.length, t));
+        }
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
@@ -179,6 +197,7 @@ export default function GeographyStep() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a new language doesn't reload the boundaries
   }, [tenant, reloadKey]);
 
   const reload = () => {
@@ -190,19 +209,20 @@ export default function GeographyStep() {
   // Saved boundaries the step's check can't pass on (#2795): Upload from Excel stays open to finish them.
   const unfinished = unfinishedHierarchy(hierarchies, recorded);
   // Nothing can be added while a save runs. Otherwise one set of boundaries unless
-  // the build allows more: the sources wait for the saved ones to be read, stay
-  // closed once boundaries are saved (unless they're unfinished), and wait until
-  // an unsaved one is removed.
+  // the build allows more: the sources wait for the saved ones to be read, wait
+  // until an unsaved one is removed, and stay closed once boundaries are saved
+  // (unless they're unfinished). Areas a save left out are still to be added, so
+  // the list's reason comes before "saved" (#2795).
   const listFullReason = saving
     ? t('geography.saving', 'Saving your boundaries…')
     : GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED
       ? undefined
       : !hierarchies
         ? t('geography.list.checking_saved', 'Checking your saved boundaries…')
-        : hasBoundaries && !unfinished
-          ? t('geography.list.saved_already', 'Your boundaries are saved, so no more can be added.')
-          : draft
-            ? t('geography.list.one_at_a_time', 'Remove the boundaries below to choose different ones.')
+        : draft
+          ? t('geography.list.one_at_a_time', 'Remove the boundaries below to choose different ones.')
+          : hasBoundaries && !unfinished
+            ? t('geography.list.saved_already', 'Your boundaries are saved, so no more can be added.')
             : undefined;
   // Fetch and Preconfigured write into the deployment's hierarchy, which may not be the
   // unfinished one, and a second hierarchy never completes the step: only Excel finishes it.
@@ -232,28 +252,19 @@ export default function GeographyStep() {
     try {
       const result = await saveBoundaryDraft(tenant, toSave, t, hasBoundaries);
       // Whatever didn't land stays in the list for another try; the hierarchy is fixed now either way.
-      keepUnsaved(tenant, result.created);
+      keepUnsaved(tenant, result.created, result.failed);
       setJustSaved(true);
       reload();
       // Which areas didn't land and why, so they can be fixed (Edit) or tried again (#2795).
       setSaveFailures(result.failed);
-      const notSaved =
-        result.failed.length > 0
-          ? `${
-              result.failed.length === 1
-                ? t('geography.not_saved_one', '1 area wasn’t saved, so this step isn’t complete yet.')
-                : t('geography.not_saved_other', '%{count} areas weren’t saved, so this step isn’t complete yet.', {
-                    count: result.failed.length.toLocaleString('en-US'),
-                  })
-            } ${t('geography.not_saved_next', 'They’re still in the list below: fix them with Edit, or press Save and continue to try them again.')}`
-          : null;
+      const notSaved = result.failed.length > 0 ? notSavedMessage(result.failed.length, t) : null;
       const wanted = toSave.selections.reduce((count, selection) => count + selection.boundaries.length, 0);
       if (wanted > 0 && result.created.length === 0) {
         setSaveError(
           notSaved ??
             `${t('geography.osm.create_failed', 'Failed to create boundaries.')} ${t(
-              'geography.save_retry',
-              'They are still in the list below: Save and continue tries them again.',
+              'geography.save_retry_above',
+              'They are still in the list above: Save and continue tries them again.',
             )}`,
         );
         return false;

@@ -122,6 +122,7 @@ beforeEach(() => {
     return { success: boundaries, failed: [] };
   });
   act(() => setBoundaryDraft('ke', null));
+  window.localStorage.clear();
 });
 
 afterEach(async () => {
@@ -160,7 +161,8 @@ describe('GeographyStep', () => {
     act(() => void addSelection('ke', selection(NAIROBI)));
     renderStep();
     await saveAndConfirm();
-    expect(await screen.findByText(/1 area wasn’t saved, so this step isn’t complete yet. They’re still in the list below/)).toBeTruthy();
+    // The message sits under the list, so it points up to it.
+    expect(await screen.findByText(/1 area wasn’t saved, so this step isn’t complete yet. They’re still in the list above/)).toBeTruthy();
     expect(app.completePhase).not.toHaveBeenCalled();
     expect(screen.getByTestId('boundary-list-item').textContent).toContain('1 ward');
   });
@@ -189,6 +191,81 @@ describe('GeographyStep', () => {
     expect(app.completePhase).not.toHaveBeenCalled();
     // Still in the list to fix or retry, and the sources stay closed while it is.
     expect(screen.getByTestId('boundary-list-item').textContent).toContain('2 wards');
+  });
+
+  describe('after a reload, the areas a save missed (#2795)', () => {
+    // The browser test: an Excel sheet, County → Ward, where only PW2 is refused.
+    const PAGE = [area('PC1', 'County'), area('PW1', 'Ward', 'PC1'), area('PW2', 'Ward', 'PC1')];
+    const sheet: NewSelection = {
+      ...selection(PAGE),
+      source: 'excel',
+      method: 'excel',
+      sourceText: 'your Excel upload',
+      resume: {
+        kind: 'excel',
+        hierarchy: { tenantId: 'ke', hierarchyType: 'ADMIN', boundaryHierarchy: [{ boundaryType: 'County', active: true }, { boundaryType: 'Ward', active: true }] },
+        file: new File(['rows'], 'wards.xlsx'),
+        parsed: [],
+        valid: [],
+        invalid: [],
+        polygonFile: null,
+        polygonSidecar: null,
+      },
+    };
+    const NOT_SAVED =
+      '1 area wasn’t saved, so this step isn’t complete yet. They’re still in the list above: fix them with Edit, or press Save and continue to try them again.';
+    /** Saves the sheet with PW2 refused, then reloads: this tab's memory goes, the browser's storage stays. */
+    const saveThenReload = async () => {
+      createBoundaries.mockImplementationOnce(async (boundaries) => {
+        landed(boundaries.slice(0, 2));
+        return {
+          success: boundaries.slice(0, 2),
+          failed: [{ boundary: boundaries[2], error: 'Boundary type is not in the hierarchy', code: 'BOUNDARY_TYPE_ERROR' }],
+        };
+      });
+      server.recorded = 'ADMIN';
+      act(() => void addSelection('ke', sheet));
+      const page = renderStep();
+      await saveAndConfirm();
+      expect(await screen.findByText(NOT_SAVED)).toBeTruthy();
+      page.unmount();
+      const kept = Array.from({ length: window.localStorage.length }, (_, i) => window.localStorage.key(i) as string).map(
+        (key) => [key, window.localStorage.getItem(key) as string] as const,
+      );
+      act(() => setBoundaryDraft('ke', null));
+      for (const [key, value] of kept) window.localStorage.setItem(key, value);
+      return renderStep();
+    };
+
+    it('come back with the server’s reason, and Save and continue tries them again instead of completing the step', async () => {
+      await saveThenReload();
+      const item = await screen.findByTestId('boundary-list-item');
+      expect(item.textContent).toContain('wards.xlsx');
+      expect(item.textContent).toContain('1 ward');
+      expect(screen.getByText(NOT_SAVED)).toBeTruthy();
+      expect([...screen.getByTestId('geography-save-failures').querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+        'PW2: Boundary type is not in the hierarchy(BOUNDARY_TYPE_ERROR)',
+      ]);
+      // PW2 is still to be added, so the sources don't say nothing more can be.
+      expect(screen.queryByText('Your boundaries are saved, so no more can be added.')).toBeNull();
+      expect(screen.getAllByText('Remove the boundaries below to choose different ones.')).toHaveLength(3);
+      expect(app.completePhase).not.toHaveBeenCalled();
+
+      await saveAndConfirm();
+      await waitFor(() => expect(app.completePhase).toHaveBeenCalled());
+      expect(createBoundaries).toHaveBeenLastCalledWith([expect.objectContaining({ code: 'PW2', parent: 'PC1' })], expect.any(Function));
+      // All saved: nothing is kept for the next reload.
+      expect(window.localStorage.length).toBe(0);
+    });
+
+    it('stay gone once removed, and the step can then complete without them', async () => {
+      await saveThenReload();
+      fireEvent.click(await screen.findByRole('button', { name: 'Remove wards.xlsx' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+      await waitFor(() => expect(screen.queryByTestId('boundary-list-item')).toBeNull());
+      expect(window.localStorage.length).toBe(0);
+      await waitFor(() => expect(screen.getAllByText('Your boundaries are saved, so no more can be added.')).toHaveLength(3));
+    });
   });
 
   it('reopens Upload from Excel, and only it, for a saved hierarchy with one level (#2795)', async () => {
