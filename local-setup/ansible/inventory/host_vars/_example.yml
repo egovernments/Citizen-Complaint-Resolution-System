@@ -474,7 +474,8 @@ enable_mcp: true
 
 # severity-service: complaint-severity scorer (FastAPI + CatBoost). Internal port
 # 8000 only — no public route. Built locally from the vendored severity-service/
-# (severity-service:local); needs network on the first build (torch + encoder).
+# (severity-service:local); needs network on the first build (torch + encoder, baked
+# into the image's Hugging Face cache; the container itself runs offline).
 # Values: true | false.
 enable_severity: false
 

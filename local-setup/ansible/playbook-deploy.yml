@@ -2761,6 +2761,21 @@
           - "--omit-dir-times"
           - "--exclude=__pycache__"
           - "--exclude=.pytest_cache"
+          # Runtime needs only app/, model/, requirements.txt, Dockerfile, .dockerignore.
+          # If the full severity-service/ folder is present (training data, labelling
+          # output, notebooks, .env, pickles) none of it is copied to the target.
+          - "--exclude=/data/"
+          - "--exclude=/labelling/"
+          - "--exclude=/training/"
+          - "--exclude=/older_severity_model/"
+          - "--exclude=/scripts/"
+          - "--exclude=/ITERATIONS.md"
+          - "--exclude=/PULL_REQUEST_TEMPLATE.md"
+          - "--exclude=*.pkl"
+          - "--exclude=*.csv"
+          - "--exclude=*.xlsx"
+          - "--exclude=.env"
+          - "--exclude=.env.*"
       when: enable_severity | default(false)
 
     - name: "Build severity-service image locally (when enable_severity)"
@@ -4714,7 +4729,10 @@
     # ==================== Severity service: health wait + scoring probe ====================
     # The service publishes no host port (internal-only), so probe from inside the
     # container. The probe goes beyond /health: it scores one sample complaint and
-    # fails the deploy unless the answer is a valid severity label.
+    # fails the deploy unless the answer is a valid severity label with the
+    # description-only API's response fields (severity_id, probabilities, needs_review,
+    # model_version). The request carries only `description`: the model ignores any
+    # other field, e.g. a complaint type.
     - name: Wait for severity-service health (up to 5 min)
       ansible.builtin.command: >-
         docker exec severity-service python -c
@@ -4731,7 +4749,7 @@
         docker exec severity-service python -c
         "import json,urllib.request as u;
         r=u.Request('http://127.0.0.1:8000/severity',
-        json.dumps({'description':'Open drain overflowing near the school, sewage on the road','complaint_type':'Others'}).encode(),
+        json.dumps({'complaint_id':'ansible-probe','description':'Open drain overflowing near the school, sewage on the road'}).encode(),
         {'Content-Type':'application/json'});
         print(u.urlopen(r).read().decode())"
       register: severity_probe
@@ -4742,6 +4760,10 @@
       ansible.builtin.assert:
         that:
           - (severity_probe.stdout | from_json).severity in ['Low', 'Medium', 'High', 'Critical']
+          - (severity_probe.stdout | from_json).severity_id in [0, 1, 2, 3]
+          - (severity_probe.stdout | from_json).probabilities | length == 4
+          - (severity_probe.stdout | from_json).needs_review is boolean
+          - (severity_probe.stdout | from_json).model_version | length > 0
         fail_msg: "severity-service answered but returned no valid severity: {{ severity_probe.stdout | default('') }}"
         success_msg: "severity-service scoring OK ({{ (severity_probe.stdout | from_json).severity }})."
       when: enable_severity | default(false)

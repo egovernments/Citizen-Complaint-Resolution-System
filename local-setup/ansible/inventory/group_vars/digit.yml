@@ -418,7 +418,9 @@ wsl_processors: 6
 
 # severity-service (complaint-severity scorer, internal port 8000 only, no public
 # route). Off by default; true adds the `severity` compose profile and builds the
-# vendored severity-service/ on the target (severity-service:local).
+# vendored severity-service/ on the target (severity-service:local). Only app/, model/,
+# requirements.txt and the Dockerfile are synced/built; training data and labelling
+# output are never copied. The scorer is description-only (no complaint type input).
 enable_severity: false
 # On-target directory the vendored severity-service/ is rsynced to for the build.
 severity_repo: "{{ digit_dir }}/severity-service"

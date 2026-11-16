@@ -2578,7 +2578,7 @@ services:
       - egov-network
 
   # ==================== Severity service ====================
-  # Complaint-severity scorer (FastAPI + MiniLM embeddings + CatBoost), built from
+  # Complaint-severity scorer (description-only: FastAPI + MiniLM embeddings + CatBoost), built from
   # the vendored severity-service/ (ansible/files/severity-build.sh -> severity-service:local).
   # INTERNAL ONLY: no `ports:` and no nginx route — callers reach it as
   # http://severity-service:8000 on egov-network. Gated behind its own profile
