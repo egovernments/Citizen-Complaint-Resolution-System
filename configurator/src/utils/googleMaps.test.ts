@@ -108,7 +108,14 @@ describe('validateGoogleMapsKey', () => {
     await vi.advanceTimersByTimeAsync(0);
     const probe = fake.maps[0].div as HTMLElement;
     expect(probe.isConnected).toBe(true);
-    const style = probe.style;
+    // The map fills a holder that carries the placement, so Google rewriting the
+    // map div's own position (it sets relative) can't push it below the page.
+    expect(probe.style.width).toBe('100%');
+    expect(probe.style.height).toBe('100%');
+    const holder = probe.parentElement as HTMLElement;
+    expect(holder.parentElement).toBe(document.body);
+    probe.style.position = 'relative';
+    const style = holder.style;
     expect(style.position).toBe('fixed');
     expect(style.display).not.toBe('none');
     for (const edge of [style.top, style.left]) {
@@ -119,11 +126,11 @@ describe('validateGoogleMapsKey', () => {
     expect(parseFloat(style.height)).toBeGreaterThan(0);
     expect(style.opacity).toBe('0');
     expect(style.pointerEvents).toBe('none');
-    expect(probe.hasAttribute('inert')).toBe(true);
-    expect(probe.getAttribute('aria-hidden')).toBe('true');
+    expect(holder.hasAttribute('inert')).toBe(true);
+    expect(holder.getAttribute('aria-hidden')).toBe('true');
     await vi.advanceTimersByTimeAsync(8000);
     await expect(check).resolves.toBe('unverified');
-    expect(probe.isConnected).toBe(false);
+    expect(holder.isConnected).toBe(false);
   });
 
   it('rejects as soon as Google refuses the key, saying what to fix', async () => {

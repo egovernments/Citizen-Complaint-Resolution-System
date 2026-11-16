@@ -74,6 +74,9 @@ export type GoogleKeyCheck = 'ok' | 'unverified';
 // gm_authFailure nor tilesloaded, so it could never reject a key. The probe
 // sits in the viewport's corner instead: see-through, behind the page, and out
 // of reach of pointer, keyboard and screen reader for the seconds the check takes.
+// The map goes in a holder that carries this style: Google rewrites the map
+// div's own position to relative, which would drop it below the page and
+// briefly add a scrollbar.
 const KEY_PROBE_STYLE =
   'position:fixed;top:0;left:0;width:200px;height:200px;opacity:0;pointer-events:none;z-index:-1';
 
@@ -83,11 +86,14 @@ export async function validateGoogleMapsKey(
 ): Promise<GoogleKeyCheck> {
   const g = await loadGoogleMaps(apiKey);
   if (authFailed) throw authError();
+  const holder = document.createElement('div');
+  holder.style.cssText = KEY_PROBE_STYLE;
+  holder.setAttribute('aria-hidden', 'true');
+  holder.setAttribute('inert', '');
   const probe = document.createElement('div');
-  probe.style.cssText = KEY_PROBE_STYLE;
-  probe.setAttribute('aria-hidden', 'true');
-  probe.setAttribute('inert', '');
-  document.body.appendChild(probe);
+  probe.style.cssText = 'width:100%;height:100%';
+  holder.appendChild(probe);
+  document.body.appendChild(holder);
   const timers: ReturnType<typeof setTimeout>[] = [];
   let onFail = () => {};
   try {
@@ -103,7 +109,7 @@ export async function validateGoogleMapsKey(
   } finally {
     timers.forEach(clearTimeout);
     authListeners.delete(onFail);
-    probe.remove();
+    holder.remove();
   }
 }
 
