@@ -1,0 +1,1131 @@
+{
+  "campaign": "Bomet CCRS 2.20 complaint API ramps",
+  "test_dates_local": [
+    "2026-11-15",
+    "2026-11-16"
+  ],
+  "timezone": "Asia/Kolkata",
+  "scope": "main-phase complaint lifecycle; peak-hold throughput",
+  "records": [
+    {
+      "id": "initial-2vu",
+      "vus": 2,
+      "series": "initial",
+      "dataset_policy": "grows between levels",
+      "main": {
+        "journey_successes": 80,
+        "journey_failures": 0,
+        "journey_success_rate": 1,
+        "http_errors": 0,
+        "http_requests": 320,
+        "http_error_rate": 0,
+        "http_p95_ms": 460.30674999999997,
+        "http_p99_ms": 496.55959,
+        "journey_p95_ms": 11712.949999999999,
+        "journey_p99_ms": 11942.18
+      },
+      "thresholds_passed": true,
+      "error_free": true,
+      "hold": {
+        "criterion": "longest contiguous interval with sampled total active VUs >=95% of observed peak; main completions/requests only",
+        "observed_peak_vus": 2,
+        "start_utc": "2026-11-15T16:14:00.819430+00:00",
+        "end_utc": "2026-11-15T16:19:36.817184+00:00",
+        "seconds": 335.9977538585663,
+        "successful_journeys": 71,
+        "http_requests": 284,
+        "successful_journeys_per_second": 0.21131093641145735,
+        "http_requests_per_second": 0.8452437456458294,
+        "not_daily_capacity": "No extrapolation to daily production capacity"
+      },
+      "main_response_counts": [
+        {
+          "scenario": "main",
+          "step": "PGR_Assign",
+          "status": "200",
+          "count": 80
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Create",
+          "status": "200",
+          "count": 80
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Resolve",
+          "status": "200",
+          "count": 80
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Search",
+          "status": "200",
+          "count": 80
+        }
+      ],
+      "k6_main_metrics": {
+        "http_req_failed{scenario:main}": {
+          "type": "rate",
+          "contains": "default",
+          "values": {
+            "passes": 0,
+            "fails": 320,
+            "rate": 0
+          },
+          "thresholds": {
+            "rate<0.01": {
+              "ok": true
+            }
+          }
+        },
+        "transaction_duration{scenario:main}": {
+          "thresholds": {
+            "p(95)<15000": {
+              "ok": true
+            },
+            "p(99)<25000": {
+              "ok": true
+            }
+          },
+          "type": "trend",
+          "contains": "time",
+          "values": {
+            "avg": 9504.95,
+            "min": 7215,
+            "med": 9367.5,
+            "max": 12067,
+            "p(95)": 11712.949999999999,
+            "p(99)": 11942.18
+          }
+        },
+        "http_req_duration{scenario:main}": {
+          "contains": "time",
+          "values": {
+            "med": 359.1595,
+            "max": 520.627,
+            "p(95)": 460.30674999999997,
+            "p(99)": 496.55959,
+            "avg": 369.354759375,
+            "min": 292.687
+          },
+          "thresholds": {
+            "p(95)<5000": {
+              "ok": true
+            },
+            "p(99)<10000": {
+              "ok": true
+            }
+          },
+          "type": "trend"
+        },
+        "transaction_success{scenario:main}": {
+          "type": "rate",
+          "contains": "default",
+          "values": {
+            "rate": 1,
+            "passes": 80,
+            "fails": 0
+          },
+          "thresholds": {
+            "rate>0.95": {
+              "ok": true
+            }
+          }
+        }
+      },
+      "source_sha256": {
+        "summary.json": "17e0428d43c39de7abc2bd8eb79cef61ee3a3c5dfaae26a1869afcdca0e248bf",
+        "analysis.json": "e5cb7c73133cfcebeed3578efd6327eb3118810fd270af41e25644b10def1b01",
+        "metrics.jsonl": "8860e5e76be609fa0328ad7ca9e4cf76a3b34b78648beedd4b96912e005988ff"
+      }
+    },
+    {
+      "id": "initial-10vu",
+      "vus": 10,
+      "series": "initial",
+      "dataset_policy": "grows between levels",
+      "main": {
+        "journey_successes": 412,
+        "journey_failures": 0,
+        "journey_success_rate": 1,
+        "http_errors": 0,
+        "http_requests": 1648,
+        "http_error_rate": 0,
+        "http_p95_ms": 430.8372999999999,
+        "http_p99_ms": 545.34979,
+        "journey_p95_ms": 11285.099999999999,
+        "journey_p99_ms": 11904.12
+      },
+      "thresholds_passed": true,
+      "error_free": true,
+      "hold": {
+        "criterion": "longest contiguous interval with sampled total active VUs >=95% of observed peak; main completions/requests only",
+        "observed_peak_vus": 10,
+        "start_utc": "2026-11-15T17:33:20.596751+00:00",
+        "end_utc": "2026-11-15T17:38:33.596541+00:00",
+        "seconds": 312.9997899532318,
+        "successful_journeys": 329,
+        "http_requests": 1321,
+        "successful_journeys_per_second": 1.051118916243231,
+        "http_requests_per_second": 4.220450116587563,
+        "not_daily_capacity": "No extrapolation to daily production capacity"
+      },
+      "main_response_counts": [
+        {
+          "scenario": "main",
+          "step": "PGR_Assign",
+          "status": "200",
+          "count": 412
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Create",
+          "status": "200",
+          "count": 412
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Resolve",
+          "status": "200",
+          "count": 412
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Search",
+          "status": "200",
+          "count": 412
+        }
+      ],
+      "k6_main_metrics": {
+        "http_req_duration{scenario:main}": {
+          "type": "trend",
+          "contains": "time",
+          "values": {
+            "avg": 356.9855752427186,
+            "min": 281.921,
+            "med": 347.4135,
+            "max": 1629,
+            "p(95)": 430.8372999999999,
+            "p(99)": 545.34979
+          },
+          "thresholds": {
+            "p(95)<5000": {
+              "ok": true
+            },
+            "p(99)<10000": {
+              "ok": true
+            }
+          }
+        },
+        "http_req_failed{scenario:main}": {
+          "contains": "default",
+          "values": {
+            "rate": 0,
+            "passes": 0,
+            "fails": 1648
+          },
+          "thresholds": {
+            "rate<0.01": {
+              "ok": true
+            }
+          },
+          "type": "rate"
+        },
+        "transaction_duration{scenario:main}": {
+          "type": "trend",
+          "contains": "time",
+          "values": {
+            "p(99)": 11904.12,
+            "avg": 9502.706310679612,
+            "min": 6170,
+            "med": 9485.5,
+            "max": 12505,
+            "p(95)": 11285.099999999999
+          },
+          "thresholds": {
+            "p(95)<15000": {
+              "ok": true
+            },
+            "p(99)<25000": {
+              "ok": true
+            }
+          }
+        },
+        "transaction_success{scenario:main}": {
+          "type": "rate",
+          "contains": "default",
+          "values": {
+            "rate": 1,
+            "passes": 412,
+            "fails": 0
+          },
+          "thresholds": {
+            "rate>0.95": {
+              "ok": true
+            }
+          }
+        }
+      },
+      "source_sha256": {
+        "summary.json": "19c5a9e7f6f0d5dbcaddad4178a10dc5ffd7db760d1a29b2100cb056cb8cdd2a",
+        "analysis.json": "f0434db3349af69a95de18e9f44313971874d1883aaf9065639cc2b89f95ecb6",
+        "metrics.jsonl": "138c68639212dbbaffe232df948b7b444b758f5973c35e82a26d5b544a22b476"
+      }
+    },
+    {
+      "id": "initial-50vu",
+      "vus": 50,
+      "series": "initial",
+      "dataset_policy": "grows between levels",
+      "main": {
+        "journey_successes": 2428,
+        "journey_failures": 0,
+        "journey_success_rate": 1,
+        "http_errors": 0,
+        "http_requests": 9712,
+        "http_error_rate": 0,
+        "http_p95_ms": 388.5305,
+        "http_p99_ms": 428.9978,
+        "journey_p95_ms": 11196.3,
+        "journey_p99_ms": 11844.46
+      },
+      "thresholds_passed": true,
+      "error_free": true,
+      "hold": {
+        "criterion": "longest contiguous interval with sampled total active VUs >=95% of observed peak; main completions/requests only",
+        "observed_peak_vus": 50,
+        "start_utc": "2026-11-15T23:55:01.885618+00:00",
+        "end_utc": "2026-11-16T00:00:19.883859+00:00",
+        "seconds": 317.9982409477234,
+        "successful_journeys": 1696,
+        "http_requests": 6788,
+        "successful_journeys_per_second": 5.333362835421502,
+        "http_requests_per_second": 21.346030027618607,
+        "not_daily_capacity": "No extrapolation to daily production capacity"
+      },
+      "main_response_counts": [
+        {
+          "scenario": "main",
+          "step": "PGR_Assign",
+          "status": "200",
+          "count": 2428
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Create",
+          "status": "200",
+          "count": 2428
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Resolve",
+          "status": "200",
+          "count": 2428
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Search",
+          "status": "200",
+          "count": 2428
+        }
+      ],
+      "k6_main_metrics": {
+        "transaction_duration{scenario:main}": {
+          "type": "trend",
+          "contains": "time",
+          "values": {
+            "p(95)": 11196.3,
+            "p(99)": 11844.46,
+            "avg": 9337.125617792422,
+            "min": 5866,
+            "med": 9349.5,
+            "max": 12877
+          },
+          "thresholds": {
+            "p(95)<15000": {
+              "ok": true
+            },
+            "p(99)<25000": {
+              "ok": true
+            }
+          }
+        },
+        "http_req_failed{scenario:main}": {
+          "type": "rate",
+          "contains": "default",
+          "values": {
+            "rate": 0,
+            "passes": 0,
+            "fails": 9712
+          },
+          "thresholds": {
+            "rate<0.01": {
+              "ok": true
+            }
+          }
+        },
+        "http_req_duration{scenario:main}": {
+          "type": "trend",
+          "contains": "time",
+          "values": {
+            "max": 848.218,
+            "p(95)": 388.5305,
+            "p(99)": 428.9978,
+            "avg": 329.19663014826943,
+            "min": 274.151,
+            "med": 323.836
+          },
+          "thresholds": {
+            "p(95)<5000": {
+              "ok": true
+            },
+            "p(99)<10000": {
+              "ok": true
+            }
+          }
+        },
+        "transaction_success{scenario:main}": {
+          "thresholds": {
+            "rate>0.95": {
+              "ok": true
+            }
+          },
+          "type": "rate",
+          "contains": "default",
+          "values": {
+            "rate": 1,
+            "passes": 2428,
+            "fails": 0
+          }
+        }
+      },
+      "source_sha256": {
+        "summary.json": "93bbb72282f3f02a3a20a3f1d88070058f7a26dc4cb9e476481c82f95a2ed09e",
+        "analysis.json": "1e7b9d72aed883570b79cfc73fb0aff81eec468141ee31543f773e35ef2d52cc",
+        "metrics.jsonl": "7347ef06ec44bc749434116e55579fe96dbcd13b7d7703d6f12ff14d7362641e"
+      }
+    },
+    {
+      "id": "initial-75vu",
+      "vus": 75,
+      "series": "initial",
+      "dataset_policy": "grows between levels",
+      "main": {
+        "journey_successes": 3620,
+        "journey_failures": 0,
+        "journey_success_rate": 1,
+        "http_errors": 0,
+        "http_requests": 14480,
+        "http_error_rate": 0,
+        "http_p95_ms": 424.67629999999997,
+        "http_p99_ms": 482.9323199999999,
+        "journey_p95_ms": 11347.1,
+        "journey_p99_ms": 12076.06
+      },
+      "thresholds_passed": true,
+      "error_free": true,
+      "hold": {
+        "criterion": "longest contiguous interval with sampled total active VUs >=95% of observed peak; main completions/requests only",
+        "observed_peak_vus": 75,
+        "start_utc": "2026-11-16T00:07:26.834963+00:00",
+        "end_utc": "2026-11-16T00:12:45.833527+00:00",
+        "seconds": 318.99856400489807,
+        "successful_journeys": 2540,
+        "http_requests": 10170,
+        "successful_journeys_per_second": 7.962418288381384,
+        "http_requests_per_second": 31.881021257023104,
+        "not_daily_capacity": "No extrapolation to daily production capacity"
+      },
+      "main_response_counts": [
+        {
+          "scenario": "main",
+          "step": "PGR_Assign",
+          "status": "200",
+          "count": 3620
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Create",
+          "status": "200",
+          "count": 3620
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Resolve",
+          "status": "200",
+          "count": 3620
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Search",
+          "status": "200",
+          "count": 3620
+        }
+      ],
+      "k6_main_metrics": {
+        "http_req_duration{scenario:main}": {
+          "type": "trend",
+          "contains": "time",
+          "values": {
+            "med": 349.355,
+            "max": 1204.089,
+            "p(95)": 424.67629999999997,
+            "p(99)": 482.9323199999999,
+            "avg": 355.08005165746124,
+            "min": 282.288
+          },
+          "thresholds": {
+            "p(95)<5000": {
+              "ok": true
+            },
+            "p(99)<10000": {
+              "ok": true
+            }
+          }
+        },
+        "http_req_failed{scenario:main}": {
+          "type": "rate",
+          "contains": "default",
+          "values": {
+            "rate": 0,
+            "passes": 0,
+            "fails": 14480
+          },
+          "thresholds": {
+            "rate<0.01": {
+              "ok": true
+            }
+          }
+        },
+        "transaction_duration{scenario:main}": {
+          "type": "trend",
+          "contains": "time",
+          "values": {
+            "p(99)": 12076.06,
+            "avg": 9408.888674033149,
+            "min": 5954,
+            "med": 9414,
+            "max": 12957,
+            "p(95)": 11347.1
+          },
+          "thresholds": {
+            "p(95)<15000": {
+              "ok": true
+            },
+            "p(99)<25000": {
+              "ok": true
+            }
+          }
+        },
+        "transaction_success{scenario:main}": {
+          "type": "rate",
+          "contains": "default",
+          "values": {
+            "passes": 3620,
+            "fails": 0,
+            "rate": 1
+          },
+          "thresholds": {
+            "rate>0.95": {
+              "ok": true
+            }
+          }
+        }
+      },
+      "source_sha256": {
+        "summary.json": "b6ca24ab34c91d930026f785606d25254edbcd981b66ba0f19d7a330c613c6e6",
+        "analysis.json": "1da2b9ff969b9e79a1bfe6df5c820eaa73be2b23cddb5fd5f6355437255e5003",
+        "metrics.jsonl": "a37fc7fc3272df1f7c9547a1ee7252272cf0fa737aa5a6c9cdf5c9ec6e66ddc2"
+      }
+    },
+    {
+      "id": "initial-100vu",
+      "vus": 100,
+      "series": "initial",
+      "dataset_policy": "grows between levels",
+      "main": {
+        "journey_successes": 4740,
+        "journey_failures": 0,
+        "journey_success_rate": 1,
+        "http_errors": 0,
+        "http_requests": 18960,
+        "http_error_rate": 0,
+        "http_p95_ms": 497.48815,
+        "http_p99_ms": 566.01935,
+        "journey_p95_ms": 11487.1,
+        "journey_p99_ms": 12269.98
+      },
+      "thresholds_passed": true,
+      "error_free": true,
+      "hold": {
+        "criterion": "longest contiguous interval with sampled total active VUs >=95% of observed peak; main completions/requests only",
+        "observed_peak_vus": 100,
+        "start_utc": "2026-11-16T00:19:52.495460+00:00",
+        "end_utc": "2026-11-16T00:25:13.498558+00:00",
+        "seconds": 321.00309801101685,
+        "successful_journeys": 3334,
+        "http_requests": 13340,
+        "successful_journeys_per_second": 10.386192596451442,
+        "http_requests_per_second": 41.55723132473373,
+        "not_daily_capacity": "No extrapolation to daily production capacity"
+      },
+      "main_response_counts": [
+        {
+          "scenario": "main",
+          "step": "PGR_Assign",
+          "status": "200",
+          "count": 4740
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Create",
+          "status": "200",
+          "count": 4740
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Resolve",
+          "status": "200",
+          "count": 4740
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Search",
+          "status": "200",
+          "count": 4740
+        }
+      ],
+      "k6_main_metrics": {
+        "http_req_failed{scenario:main}": {
+          "contains": "default",
+          "values": {
+            "rate": 0,
+            "passes": 0,
+            "fails": 18960
+          },
+          "thresholds": {
+            "rate<0.01": {
+              "ok": true
+            }
+          },
+          "type": "rate"
+        },
+        "http_req_duration{scenario:main}": {
+          "type": "trend",
+          "contains": "time",
+          "values": {
+            "p(95)": 497.48815,
+            "p(99)": 566.01935,
+            "avg": 398.8972923523217,
+            "min": 305.525,
+            "med": 387.5195,
+            "max": 1568.936
+          },
+          "thresholds": {
+            "p(95)<5000": {
+              "ok": true
+            },
+            "p(99)<10000": {
+              "ok": true
+            }
+          }
+        },
+        "transaction_duration{scenario:main}": {
+          "type": "trend",
+          "contains": "time",
+          "values": {
+            "p(99)": 12269.98,
+            "avg": 9594.022784810126,
+            "min": 6310,
+            "med": 9594,
+            "max": 13110,
+            "p(95)": 11487.1
+          },
+          "thresholds": {
+            "p(95)<15000": {
+              "ok": true
+            },
+            "p(99)<25000": {
+              "ok": true
+            }
+          }
+        },
+        "transaction_success{scenario:main}": {
+          "type": "rate",
+          "contains": "default",
+          "values": {
+            "fails": 0,
+            "rate": 1,
+            "passes": 4740
+          },
+          "thresholds": {
+            "rate>0.95": {
+              "ok": true
+            }
+          }
+        }
+      },
+      "source_sha256": {
+        "summary.json": "e496e5dc7d08b68ad9341212cf2a0b611757d40705ac546fa5319e6d6cda0906",
+        "analysis.json": "19924bead31112b14ec54fb024d66173132729c6aac46e406c68dc5a4479f377",
+        "metrics.jsonl": "02ed09ba43be197224745373b5e54b545a99dba0771f1822b35bc2e7c443b852"
+      }
+    },
+    {
+      "id": "initial-125vu",
+      "vus": 125,
+      "series": "initial",
+      "dataset_policy": "grows between levels",
+      "main": {
+        "journey_successes": 5626,
+        "journey_failures": 64,
+        "journey_success_rate": 0.9887521968365554,
+        "http_errors": 146,
+        "http_requests": 22804,
+        "http_error_rate": 0.006402385546395369,
+        "http_p95_ms": 735.5543999999999,
+        "http_p99_ms": 1003.1893299999995,
+        "journey_p95_ms": 12089.1,
+        "journey_p99_ms": 12932.44
+      },
+      "thresholds_passed": true,
+      "error_free": false,
+      "hold": {
+        "criterion": "longest contiguous interval with sampled total active VUs >=95% of observed peak; main completions/requests only",
+        "observed_peak_vus": 125,
+        "start_utc": "2026-11-16T00:32:19.264351+00:00",
+        "end_utc": "2026-11-16T00:37:40.281844+00:00",
+        "seconds": 321.01749300956726,
+        "successful_journeys": 3960,
+        "http_requests": 15854,
+        "successful_journeys_per_second": 12.335776355595614,
+        "http_requests_per_second": 49.38671675293254,
+        "not_daily_capacity": "No extrapolation to daily production capacity"
+      },
+      "main_response_counts": [
+        {
+          "scenario": "main",
+          "step": "PGR_Assign",
+          "status": "200",
+          "count": 5690
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Assign",
+          "status": "400",
+          "count": 95
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Create",
+          "status": "200",
+          "count": 5690
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Resolve",
+          "status": "200",
+          "count": 5639
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Resolve",
+          "status": "400",
+          "count": 51
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Search",
+          "status": "200",
+          "count": 5639
+        }
+      ],
+      "k6_main_metrics": {
+        "http_req_failed{scenario:main}": {
+          "values": {
+            "rate": 0.006402385546395369,
+            "passes": 146,
+            "fails": 22658
+          },
+          "thresholds": {
+            "rate<0.01": {
+              "ok": true
+            }
+          },
+          "type": "rate",
+          "contains": "default"
+        },
+        "http_req_duration{scenario:main}": {
+          "thresholds": {
+            "p(95)<5000": {
+              "ok": true
+            },
+            "p(99)<10000": {
+              "ok": true
+            }
+          },
+          "type": "trend",
+          "contains": "time",
+          "values": {
+            "avg": 495.6811955358709,
+            "min": 236.563,
+            "med": 458.528,
+            "max": 3297.442,
+            "p(95)": 735.5543999999999,
+            "p(99)": 1003.1893299999995
+          }
+        },
+        "transaction_duration{scenario:main}": {
+          "values": {
+            "max": 15548,
+            "p(95)": 12089.1,
+            "p(99)": 12932.44,
+            "avg": 9993.327943760984,
+            "min": 5302,
+            "med": 9970.5
+          },
+          "thresholds": {
+            "p(95)<15000": {
+              "ok": true
+            },
+            "p(99)<25000": {
+              "ok": true
+            }
+          },
+          "type": "trend",
+          "contains": "time"
+        },
+        "transaction_success{scenario:main}": {
+          "values": {
+            "rate": 0.9887521968365554,
+            "passes": 5626,
+            "fails": 64
+          },
+          "thresholds": {
+            "rate>0.95": {
+              "ok": true
+            }
+          },
+          "type": "rate",
+          "contains": "default"
+        }
+      },
+      "source_sha256": {
+        "summary.json": "4a5cbe1534699cf4cce5ccd1a598bbb0fa1b33c7fa9640b4faec1facbd9bf4e2",
+        "analysis.json": "2888100e8703c1f73b0ab3ad5689c1ff837e977513f3babaadc74873aced3e27",
+        "metrics.jsonl": "403b09ace96a12a47ada9d5d3914a9c757fcfaeb42e5f6f18c6359c6b98620a9"
+      }
+    },
+    {
+      "id": "controlled-125vu",
+      "vus": 125,
+      "series": "controlled",
+      "dataset_policy": "fixed 2525 global PGR rows",
+      "main": {
+        "journey_successes": 5937,
+        "journey_failures": 0,
+        "journey_success_rate": 1,
+        "http_errors": 0,
+        "http_requests": 23748,
+        "http_error_rate": 0,
+        "http_p95_ms": 513.8276999999999,
+        "http_p99_ms": 669.4807199999998,
+        "journey_p95_ms": 11524.199999999999,
+        "journey_p99_ms": 12238.28
+      },
+      "thresholds_passed": true,
+      "error_free": true,
+      "hold": {
+        "criterion": "longest contiguous interval with sampled total active VUs >=95% of observed peak; main completions/requests only",
+        "observed_peak_vus": 125,
+        "start_utc": "2026-11-16T07:13:01.100476+00:00",
+        "end_utc": "2026-11-16T07:18:20.107351+00:00",
+        "seconds": 319.006875038147,
+        "successful_journeys": 4144,
+        "http_requests": 16598,
+        "successful_journeys_per_second": 12.990315646032577,
+        "http_requests_per_second": 52.03022661506967,
+        "not_daily_capacity": "No extrapolation to daily production capacity"
+      },
+      "main_response_counts": [
+        {
+          "scenario": "main",
+          "step": "PGR_Assign",
+          "status": "200",
+          "count": 5937
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Create",
+          "status": "200",
+          "count": 5937
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Resolve",
+          "status": "200",
+          "count": 5937
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Search",
+          "status": "200",
+          "count": 5937
+        }
+      ],
+      "k6_main_metrics": {
+        "transaction_duration{scenario:main}": {
+          "type": "trend",
+          "contains": "time",
+          "values": {
+            "p(95)": 11524.199999999999,
+            "p(99)": 12238.28,
+            "avg": 9571.543877379148,
+            "min": 5874,
+            "med": 9558,
+            "max": 14051
+          },
+          "thresholds": {
+            "p(95)<15000": {
+              "ok": true
+            },
+            "p(99)<25000": {
+              "ok": true
+            }
+          }
+        },
+        "transaction_success{scenario:main}": {
+          "type": "rate",
+          "contains": "default",
+          "values": {
+            "rate": 1,
+            "passes": 5937,
+            "fails": 0
+          },
+          "thresholds": {
+            "rate>0.95": {
+              "ok": true
+            }
+          }
+        },
+        "http_req_duration{scenario:main}": {
+          "values": {
+            "med": 370.84000000000003,
+            "max": 2816.511,
+            "p(95)": 513.8276999999999,
+            "p(99)": 669.4807199999998,
+            "avg": 390.03377459154416,
+            "min": 286.539
+          },
+          "thresholds": {
+            "p(95)<5000": {
+              "ok": true
+            },
+            "p(99)<10000": {
+              "ok": true
+            }
+          },
+          "type": "trend",
+          "contains": "time"
+        },
+        "http_req_failed{scenario:main}": {
+          "contains": "default",
+          "values": {
+            "rate": 0,
+            "passes": 0,
+            "fails": 23748
+          },
+          "thresholds": {
+            "rate<0.01": {
+              "ok": true
+            }
+          },
+          "type": "rate"
+        }
+      },
+      "source_sha256": {
+        "summary.json": "294461d15bfc77b6d6eb24e2d705140e0ab8b11cadd37bc24277e55979481ef2",
+        "analysis.json": "3574a46e1672de7b8fa216c6f923431bb02191760c96d4d27c8f761ef4f77d79",
+        "metrics.jsonl": "83014323ae97aac3c2999c43a68e937465cc12449e904ecfec3c8658f0a17d83"
+      }
+    },
+    {
+      "id": "controlled-150vu",
+      "vus": 150,
+      "series": "controlled",
+      "dataset_policy": "fixed 2525 global PGR rows",
+      "main": {
+        "journey_successes": 6579,
+        "journey_failures": 334,
+        "journey_success_rate": 0.9516852307247216,
+        "http_errors": 544,
+        "http_requests": 27683,
+        "http_error_rate": 0.01965104938048622,
+        "http_p95_ms": 688.4452,
+        "http_p99_ms": 860.23038,
+        "journey_p95_ms": 12043,
+        "journey_p99_ms": 12826.16
+      },
+      "thresholds_passed": false,
+      "error_free": false,
+      "hold": {
+        "criterion": "longest contiguous interval with sampled total active VUs >=95% of observed peak; main completions/requests only",
+        "observed_peak_vus": 150,
+        "start_utc": "2026-11-16T08:11:58.539615+00:00",
+        "end_utc": "2026-11-16T08:17:17.541874+00:00",
+        "seconds": 319.002259016037,
+        "successful_journeys": 4458,
+        "http_requests": 19185,
+        "successful_journeys_per_second": 13.974822666619065,
+        "http_requests_per_second": 60.14063994147303,
+        "not_daily_capacity": "No extrapolation to daily production capacity"
+      },
+      "main_response_counts": [
+        {
+          "scenario": "main",
+          "step": "PGR_Assign",
+          "status": "200",
+          "count": 6904
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Assign",
+          "status": "400",
+          "count": 301
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Create",
+          "status": "200",
+          "count": 6913
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Resolve",
+          "status": "200",
+          "count": 6661
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Resolve",
+          "status": "400",
+          "count": 243
+        },
+        {
+          "scenario": "main",
+          "step": "PGR_Search",
+          "status": "200",
+          "count": 6661
+        }
+      ],
+      "k6_main_metrics": {
+        "http_req_duration{scenario:main}": {
+          "type": "trend",
+          "contains": "time",
+          "values": {
+            "avg": 462.66762796662096,
+            "min": 264.071,
+            "med": 433.817,
+            "max": 2463.968,
+            "p(95)": 688.4452,
+            "p(99)": 860.23038
+          },
+          "thresholds": {
+            "p(95)<5000": {
+              "ok": true
+            },
+            "p(99)<10000": {
+              "ok": true
+            }
+          }
+        },
+        "transaction_success{scenario:main}": {
+          "type": "rate",
+          "contains": "default",
+          "values": {
+            "passes": 6579,
+            "fails": 334,
+            "rate": 0.9516852307247216
+          },
+          "thresholds": {
+            "rate>0.95": {
+              "ok": true
+            }
+          }
+        },
+        "transaction_duration{scenario:main}": {
+          "contains": "time",
+          "values": {
+            "avg": 9856.972081585418,
+            "min": 3063,
+            "med": 9879,
+            "max": 14274,
+            "p(95)": 12043,
+            "p(99)": 12826.16
+          },
+          "thresholds": {
+            "p(95)<15000": {
+              "ok": true
+            },
+            "p(99)<25000": {
+              "ok": true
+            }
+          },
+          "type": "trend"
+        },
+        "http_req_failed{scenario:main}": {
+          "contains": "default",
+          "values": {
+            "rate": 0.01965104938048622,
+            "passes": 544,
+            "fails": 27139
+          },
+          "thresholds": {
+            "rate<0.01": {
+              "ok": false
+            }
+          },
+          "type": "rate"
+        }
+      },
+      "source_sha256": {
+        "summary.json": "4f1d9d6066de74298f9af007fd9c7e95f7f56ec2e18d4131ba45245e08cd9f5b",
+        "analysis.json": "7c48dfc9ebd82d2a7e856e9e65846aced9107f9623bd1d3ea9c604f48e4e234c",
+        "metrics.jsonl": "02041224d62c02dc5331c111a698d4364434f7dc9fd2411492b33fc5fc92beb3"
+      }
+    }
+  ],
+  "controlled_150_diagnosis": {
+    "terminal_failed_requests": 252,
+    "stale_final_status_checks_inferred": 82,
+    "http400_assign": 301,
+    "terminal_assign_invalid_action": 9,
+    "terminal_resolve_invalid_action": 243,
+    "pending_ids_match_terminal_errors": true,
+    "first_http400_utc": "2026-11-16T08:12:08.195026+00:00",
+    "last_http400_utc": "2026-11-16T08:17:08.126874+00:00",
+    "max_sampled_persister_lag": 365,
+    "minimum_available_GiB": 6.886241912841797,
+    "critical_runtime_start_and_restart_counts_unchanged": true,
+    "javascript_type_reference_syntax_go_errors": 0,
+    "status_check_inference": "All create calls succeeded; exactly one HTTP200 search per successful RESOLVE; 252 terminal errors account for pending records, leaving 82 final RESOLVED-status checks false. Later DB resolved count exceeds client-validated count by the same 82; no per-record mapping for these 82.",
+    "retryable_assign_invalid_update_attempts": 292
+  },
+  "controlled_baseline": {
+    "global_pgr_rows": 2525,
+    "same_test_workspace_fingerprint": true
+  },
+  "preservation": {
+    "original_synthetic_complaints": 17689,
+    "original_rows_verified_restored": true,
+    "controlled_125_records_backed_up_and_removed": 6096,
+    "controlled_150_records_retained": 7110,
+    "controlled_150_states_at_audit": {
+      "RESOLVED": 6858,
+      "PENDINGFORASSIGNMENT": 9,
+      "PENDINGATLME": 243
+    }
+  },
+  "evidence_scope": "Sanitized aggregates and source hashes; raw request bodies, identities, tokens, and per-record IDs are not included."
+}
