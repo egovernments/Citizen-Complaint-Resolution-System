@@ -807,7 +807,7 @@ citizens (easy to miss, and not created by the headless path):
     "RequestInfo":{"authToken":"'"$TOKEN"'","userInfo":{"userName":"ADMIN","tenantId":"<root>","type":"EMPLOYEE"}},
     "Mdms":{"tenantId":"<tenant>","schemaCode":"RAINMAKER-PGR.MapConfig","uniqueIdentifier":"DEFAULT",
       "data":{"code":"DEFAULT","boundaryTenantId":"<tenant>","center":{"lat":<lat>,"lng":<lng>},
-              "defaultZoom":11,"baseMapTheme":"voyager","geocodeCountryCodes":"<cc>"},"isActive":true}}'
+              "defaultZoom":11,"baseMapTheme":"osm","geocodeCountryCodes":"<cc>"},"isActive":true}}'
   ```
 
 - **`pgr_boundary_lowest_level`** (host_vars → globalConfigs `PGR_BOUNDARY_LOWEST_LEVEL`)

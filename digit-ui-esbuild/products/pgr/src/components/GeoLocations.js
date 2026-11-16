@@ -110,8 +110,8 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   // Nominatim Accept-Language is ISO 639-1 — derive from the active i18n
   // locale (e.g. `sw_KE` → `sw`) so place names come back in the user's
   // language on `?Accept-Language=` (closes egovernments/CCRS#520 for the
-  // address-text path; map TILE labels are baked into the CARTO raster
-  // tiles and require a vector-tile provider swap to translate.)
+  // address-text path; map TILE labels are baked into the raster tiles
+  // and require a vector-tile provider swap to translate.)
   const nominatimLang = ((i18n?.language || Digit?.StoreData?.getCurrentLanguage?.() || "en") + "").split("_")[0] || "en";
 
   // Base tile theme, ward highlight, starting position and geocoding scope are
