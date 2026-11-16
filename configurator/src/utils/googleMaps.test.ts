@@ -98,6 +98,48 @@ describe('validateGoogleMapsKey', () => {
     await expect(check).resolves.toBe('unverified');
   });
 
+  // Google authenticates (and renders) only a map inside the viewport with a
+  // real size: an offscreen probe got no verdict, so every key, even junk, came
+  // back 'unverified' and was saved.
+  it('draws the probe map inside the viewport with a real size, invisible and inert', async () => {
+    vi.useFakeTimers();
+    const { fake } = loadWithFake();
+    const check = validateGoogleMapsKey('key', { timeoutMs: 8000, graceMs: 1000 });
+    await vi.advanceTimersByTimeAsync(0);
+    const probe = fake.maps[0].div as HTMLElement;
+    expect(probe.isConnected).toBe(true);
+    const style = probe.style;
+    expect(style.position).toBe('fixed');
+    expect(style.display).not.toBe('none');
+    for (const edge of [style.top, style.left]) {
+      expect(parseFloat(edge)).toBeGreaterThanOrEqual(0);
+      expect(parseFloat(edge)).toBeLessThan(50);
+    }
+    expect(parseFloat(style.width)).toBeGreaterThan(0);
+    expect(parseFloat(style.height)).toBeGreaterThan(0);
+    expect(style.opacity).toBe('0');
+    expect(style.pointerEvents).toBe('none');
+    expect(probe.hasAttribute('inert')).toBe(true);
+    expect(probe.getAttribute('aria-hidden')).toBe('true');
+    await vi.advanceTimersByTimeAsync(8000);
+    await expect(check).resolves.toBe('unverified');
+    expect(probe.isConnected).toBe(false);
+  });
+
+  it('rejects as soon as Google refuses the key, saying what to fix', async () => {
+    vi.useFakeTimers();
+    loadWithFake();
+    const check = validateGoogleMapsKey('key', { timeoutMs: 8000, graceMs: 1000 });
+    let error: Error | undefined;
+    check.catch((e: Error) => { error = e; });
+    await vi.advanceTimersByTimeAsync(0);
+    (window as any).gm_authFailure();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(error?.message).toMatch(/Google rejected this API key/);
+    expect(error?.message).toMatch(/enable the Maps JavaScript API/);
+    expect(error?.message).toContain(`allow this site (${window.location.host}) in its HTTP-referrer restrictions`);
+  });
+
   it('rejects when Google refuses the key, even after the tiles loaded', async () => {
     vi.useFakeTimers();
     const { fake } = loadWithFake();

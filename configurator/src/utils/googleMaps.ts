@@ -7,8 +7,8 @@
 //    work, so it is reported ("reload the page") rather than silently ignored.
 //  - A bad key doesn't fail the script load. Google calls window.gm_authFailure
 //    later, once a map tries to authenticate — so validateGoogleMapsKey() draws
-//    an offscreen map and waits for a verdict, and every drawn map keeps
-//    listening for one.
+//    a probe map and waits for a verdict, and every drawn map keeps listening
+//    for one.
 //
 // Boundaries still come from turbopass: Google does not expose administrative
 // boundary polygons through its APIs. This only changes the map they are
@@ -24,8 +24,9 @@ let authFailed = false;
 const authListeners = new Set<() => void>();
 
 function authError(): Error {
+  const site = window.location?.host;
   return new Error(
-    'Google rejected this API key. Enable the Maps JavaScript API for it and allow this site in its HTTP-referrer restrictions.',
+    `Google rejected this API key. Check it is copied in full, enable the Maps JavaScript API for it in Google Cloud Console, and allow this site${site ? ` (${site})` : ''} in its HTTP-referrer restrictions.`,
   );
 }
 
@@ -68,6 +69,14 @@ export function loadGoogleMaps(apiKey: string): Promise<GoogleNs> {
  */
 export type GoogleKeyCheck = 'ok' | 'unverified';
 
+// Google authenticates a key — and draws tiles — only for a map inside the
+// viewport with a real size. A map offscreen or under display:none gets neither
+// gm_authFailure nor tilesloaded, so it could never reject a key. The probe
+// sits in the viewport's corner instead: see-through, behind the page, and out
+// of reach of pointer, keyboard and screen reader for the seconds the check takes.
+const KEY_PROBE_STYLE =
+  'position:fixed;top:0;left:0;width:200px;height:200px;opacity:0;pointer-events:none;z-index:-1';
+
 export async function validateGoogleMapsKey(
   apiKey: string,
   { timeoutMs = 8000, graceMs = 1000 }: { timeoutMs?: number; graceMs?: number } = {},
@@ -75,7 +84,9 @@ export async function validateGoogleMapsKey(
   const g = await loadGoogleMaps(apiKey);
   if (authFailed) throw authError();
   const probe = document.createElement('div');
-  probe.style.cssText = 'position:absolute;left:-9999px;width:10px;height:10px';
+  probe.style.cssText = KEY_PROBE_STYLE;
+  probe.setAttribute('aria-hidden', 'true');
+  probe.setAttribute('inert', '');
   document.body.appendChild(probe);
   const timers: ReturnType<typeof setTimeout>[] = [];
   let onFail = () => {};

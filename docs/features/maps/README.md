@@ -102,11 +102,13 @@ The upsert only updates a record the tenant *owns*, otherwise it shadow-creates,
 so it never rewrites a parent record inherited down the tenant tree.
 
 **Google Maps key, at onboarding.** Phase 2's fetch-boundaries step has an optional
-*Map provider* panel. It checks the key with Google first (an offscreen map — Google
-reports a bad key only once a map tries to load), then upserts `mapProvider: "google"`
-and `googleMapsApiKey`. Boundaries still come from turbopass: Google's APIs don't expose
-administrative boundary polygons. The key is sent to every browser that draws a map, so
-restrict it to the deployment's domain (HTTP referrers) in Google Cloud Console.
+*Map provider* panel. It checks the key with Google first (an invisible map pinned
+inside the viewport — Google reports a bad key only for a map it actually renders, and
+never for one offscreen), then upserts `mapProvider: "google"` and `googleMapsApiKey`.
+A key Google rejects is not saved. Boundaries still come from turbopass: Google's APIs
+don't expose administrative boundary polygons. The key is sent to every browser that
+draws a map, so restrict it to the deployment's domain (HTTP referrers) in Google Cloud
+Console.
 
 **By hand, in management.** The **Map Configuration** editor exposes every field
 as an override: a basemap dropdown, a colour picker, and a live map preview where
