@@ -263,6 +263,9 @@ describe('GeographyStep', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Remove wards.xlsx' }));
       fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
       await waitFor(() => expect(screen.queryByTestId('boundary-list-item')).toBeNull());
+      // The message was about the removed areas, so it goes with them.
+      expect(screen.queryByText(NOT_SAVED)).toBeNull();
+      expect(screen.queryByTestId('geography-save-failures')).toBeNull();
       expect(window.localStorage.length).toBe(0);
       await waitFor(() => expect(screen.getAllByText('Your boundaries are saved, so no more can be added.')).toHaveLength(3));
     });

@@ -390,7 +390,14 @@ export default function GeographyStep() {
         setPreconfiguredSet(selection.preconfigured);
         setSource(selection.source);
       }}
-      onRemove={(selection) => removeSelection(tenant, selection.id)}
+      onRemove={(selection) => {
+        removeSelection(tenant, selection.id);
+        // The not-saved message is about what's in the list: once the list is empty it's out of date.
+        if (saveFailures.length > 0 && (draft?.selections.length ?? 0) <= 1) {
+          setSaveFailures([]);
+          setSaveError(null);
+        }
+      }}
     />
   );
 
