@@ -7,17 +7,16 @@ class SeverityRequest(BaseModel):
             "example": {
                 "complaint_id": "2024-297EJL",
                 "description": "Stray dogs are attacking children near the school",
-                "complaint_type": "Street Dogs",
             }
         }
     )
 
     complaint_id: str | None = Field(None, description="Echoed back in the response.")
-    description: str = Field(..., description="Raw complaint text; cleaned server-side.")
-    complaint_type: str | None = Field(
-        None,
-        description="PGR complaint type display name (COMPLAINTTYPENAME), unchanged. "
-        "Omitted -> 'Others'. Values unseen in training are scored as an unknown category.",
+    description: str = Field(
+        ...,
+        min_length=1,
+        description="Raw complaint text (English or Tamil); cleaned server-side. "
+        "This is the only model input. Other fields, such as a complaint type, are ignored.",
     )
 
 
@@ -26,12 +25,12 @@ class SeverityResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "complaint_id": "2024-297EJL",
-                "severity": "High",
-                "severity_id": 2,
-                "confidence": 0.81,
-                "probabilities": {"Low": 0.02, "Medium": 0.12, "High": 0.81, "Critical": 0.05},
+                "severity": "Critical",
+                "severity_id": 3,
+                "confidence": 0.96,
+                "probabilities": {"Low": 0.01, "Medium": 0.01, "High": 0.02, "Critical": 0.96},
                 "needs_review": False,
-                "model_version": "catboost_pgr-2026-10-24",
+                "model_version": "catboost_desc_only-cv5-2026-11-08",
             }
         }
     )
@@ -41,9 +40,7 @@ class SeverityResponse(BaseModel):
     severity_id: int = Field(..., description="0=Low, 1=Medium, 2=High, 3=Critical")
     confidence: float = Field(..., description="Probability of the returned severity.")
     probabilities: dict[str, float]
-    needs_review: bool = Field(
-        ..., description="True when confidence is below the review threshold."
-    )
+    needs_review: bool = Field(..., description="True when confidence is below the review threshold.")
     model_version: str
 
 
@@ -58,5 +55,4 @@ class BatchResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     model_version: str
-    critical_threshold: float
     review_threshold: float

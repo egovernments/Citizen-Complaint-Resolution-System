@@ -1,56 +1,28 @@
-import json
-
-import numpy as np
-import pandas as pd
-from catboost import CatBoostClassifier
-from sentence_transformers import SentenceTransformer
+import importlib.util
+from pathlib import Path
 
 from .config import Settings
-from .preprocess import text_for_model
 
-EMBED_DIM = 384
-FEATURES = [f"e{i}" for i in range(EMBED_DIM)] + ["ctype"]
+
+def _load_bundle_class(model_dir: Path):
+    """Load SeverityModel from the model bundle itself, so the bundle stays the single source of truth."""
+    spec = importlib.util.spec_from_file_location("severity_predictor", model_dir / "severity_predictor.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.SeverityModel
 
 
 class SeverityPredictor:
-    """Loads the encoder and CatBoost model once and scores complaints."""
+    """Loads the encoder and CatBoost model once and scores complaint descriptions."""
 
     def __init__(self, cfg: Settings):
         self.cfg = cfg
-        self.labels: list[str] = json.loads(cfg.label_map_path.read_text("utf-8"))["labels"]
+        self.model = _load_bundle_class(cfg.model_dir)(str(cfg.model_dir))
+        self.labels: list[str] = self.model.labels
 
-        self.model = CatBoostClassifier()
-        self.model.load_model(str(cfg.model_path))
-        if list(self.model.feature_names_) != FEATURES:
-            raise RuntimeError("Model feature schema does not match e0..e383 + ctype")
-        if len(self.labels) != len(self.model.classes_):
-            raise RuntimeError("label_map.json does not match the model's classes")
-
-        self.encoder = SentenceTransformer(cfg.encoder_path)
-        self.encoder.max_seq_length = cfg.max_seq_length
-
-    def predict(self, items: list[tuple[str, str | None]]) -> list[dict]:
-        """items: (raw description, complaint type display name) pairs, one result each."""
-        texts = [text_for_model(d) for d, _ in items]
-        emb = self.encoder.encode(texts, normalize_embeddings=True, batch_size=32)
-        X = pd.DataFrame(np.asarray(emb, dtype=float), columns=FEATURES[:-1])
-        X["ctype"] = [c or self.cfg.default_ctype for _, c in items]
-        proba = self.model.predict_proba(X)
-
-        critical_id = len(self.labels) - 1
+    def predict(self, descriptions: list[str]) -> list[dict]:
         out = []
-        for p in proba:
-            sev = int(np.argmax(p))
-            if p[critical_id] >= self.cfg.critical_threshold:
-                sev = critical_id
-            confidence = float(p[sev])
-            out.append(
-                {
-                    "severity_id": sev,
-                    "severity": self.labels[sev],
-                    "confidence": round(confidence, 4),
-                    "probabilities": {l: round(float(x), 4) for l, x in zip(self.labels, p)},
-                    "needs_review": confidence < self.cfg.review_threshold,
-                }
-            )
+        for r in self.model.predict(descriptions):
+            r["needs_review"] = r["confidence"] < self.cfg.review_threshold
+            out.append(r)
         return out
