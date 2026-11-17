@@ -2429,7 +2429,15 @@ services:
     environment:
       POSTGRES_DB: mcp_sessions
       POSTGRES_USER: mcp
-      POSTGRES_PASSWORD: ${MCP_DB_PASSWORD:?MCP_DB_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
+      # No published default any more (it was mcp123), and deliberately
+      # `:-` rather than `:?`: compose interpolates the whole file before
+      # profiles are applied, so a required variable aborts `up` on every
+      # box, including the ones with MCP off that hold no such secret
+      # (review of #2788). The deploy refuses an empty value when enable_mcp
+      # is on; started by hand with an empty one, this container stops at
+      # initdb and digit-mcp cannot connect — a visible failure, not a weak
+      # credential.
+      POSTGRES_PASSWORD: ${MCP_DB_PASSWORD:-}
     volumes:
       - mcp_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -2490,7 +2498,7 @@ services:
       SESSION_DB_PORT: "5432"
       SESSION_DB_NAME: mcp_sessions
       SESSION_DB_USER: mcp
-      SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:?MCP_DB_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
+      SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:-}
       EGOV_REDIS_HOST: redis
       EGOV_REDIS_PORT: "6379"
       # DIGIT egov-db read-only pool for the dashboard endpoints
@@ -2558,7 +2566,7 @@ services:
       SESSION_DB_PORT: "5432"
       SESSION_DB_NAME: mcp_sessions
       SESSION_DB_USER: mcp
-      SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:?MCP_DB_PASSWORD must be set in ./.env (the deploy renders it from OpenBao)}
+      SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:-}
       EGOV_REDIS_HOST: redis
       EGOV_REDIS_PORT: "6379"
       DIGIT_DB_HOST: postgres

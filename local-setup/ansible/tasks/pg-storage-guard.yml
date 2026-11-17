@@ -139,17 +139,19 @@
         exit 0
       fi
       if [ -n "$anon" ]; then
-        # An anonymous volume is only OUR stranded database when THIS digit_dir
-        # has carried a stack before. A brand-new digit_dir is a brand-new
-        # compose project, which cannot have created it — it belongs to an
-        # earlier stack elsewhere on the host, or a stray `docker run postgres`
-        # — and refusing on it forced pg_allow_data_loss on every fresh
-        # directory (issue #2783 gap 6). Same markers the "already carries a
-        # stack" stat below reads.
-        if [ -n "$DIGIT_DIR" ] \
-           && [ ! -e "$DIGIT_DIR/docker-compose.egov-digit.yaml" ] \
-           && [ ! -e "$DIGIT_DIR/.openbao/init.json" ]; then
-          echo "SAFE foreign-anon-volume:$anon"
+        # An anonymous volume is another stack's — not ours, not stranded by
+        # this deploy — only when it SAYS so: compose labels the volumes it
+        # creates with com.docker.compose.project, and a label naming another
+        # project is another compose project on this host (a different
+        # digit_dir, issue #2783 gap 6). Anything else refuses, as before: no
+        # label, or this project's. The first cut classified on "this digit_dir
+        # has no compose file yet", which is exactly the state of a live stack
+        # whose operator ran `compose down` and then moved digit_dir — the
+        # deploy would have brought up an empty database next to the real one
+        # (review of #2788).
+        anon_proj=$(docker volume inspect -f '{{ index .Labels "com.docker.compose.project" }}' "$anon" 2>/dev/null || true)
+        if [ -n "$anon_proj" ] && [ "$anon_proj" != "$this_proj" ]; then
+          echo "SAFE foreign-anon-volume:$anon (project:$anon_proj)"
         else
           echo "ANON dangling-volume:$anon"
         fi

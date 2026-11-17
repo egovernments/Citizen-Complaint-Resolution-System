@@ -67,6 +67,29 @@ json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+# POST one create body, retrying a transient failure (no reply, a 5xx while
+# egov-enc-service is still warming up) with backoff before giving up. Final
+# answers — the user in the reply (created), DuplicateUserName, a validation
+# error — return at once. Since this script exits 1 on a failed create and
+# hrms-prereq-gate waits on it, one blip must not fail `docker compose up`
+# (review of #2788).
+POST_ATTEMPTS=5
+post_create() {
+  local BODY=$1 RESPONSE="" attempt
+  for attempt in $(seq 1 $POST_ATTEMPTS); do
+    RESPONSE=$(curl -s -X POST "$EGOV_USER_HOST/user/users/_createnovalidate" \
+      -H 'Content-Type: application/json' -d "$BODY" || true)
+    if echo "$RESPONSE" | grep -qE '"userName"|DuplicateUserName|INVALID_'; then
+      break
+    fi
+    if [ "$attempt" -lt "$POST_ATTEMPTS" ]; then
+      echo "    transient failure (attempt $attempt/$POST_ATTEMPTS): ${RESPONSE:-no response}; retrying in $((attempt * 5))s"
+      sleep $((attempt * 5))
+    fi
+  done
+  printf '%s' "$RESPONSE"
+}
+
 # Wait for egov-user to be healthy
 echo "Waiting for egov-user service..."
 for i in $(seq 1 $MAX_RETRIES); do
@@ -94,9 +117,7 @@ create_user() {
 
   echo "  Creating user: $USERNAME on '$TENANT'"
 
-  RESPONSE=$(curl -s -X POST "$EGOV_USER_HOST/user/users/_createnovalidate" \
-    -H 'Content-Type: application/json' \
-    -d "{
+  RESPONSE=$(post_create "{
       \"RequestInfo\": {\"apiId\": \"digit\", \"ver\": \"1.0\"},
       \"User\": {
         \"userName\": \"$USERNAME\",
@@ -200,9 +221,7 @@ done
 # HRMS searches for this user by roleCodes=INTERNAL_MICROSERVICE_ROLE on startup.
 echo ""
 echo "── Seeding state-level SYSTEM user: INTERNAL_USER (on pg) ──"
-INTERNAL_USER_RESPONSE=$(curl -s -X POST "$EGOV_USER_HOST/user/users/_createnovalidate" \
-  -H 'Content-Type: application/json' \
-  -d '{
+INTERNAL_USER_RESPONSE=$(post_create '{
     "RequestInfo": {"apiId": "digit", "ver": "1.0"},
     "User": {
       "userName": "INTERNAL_USER",

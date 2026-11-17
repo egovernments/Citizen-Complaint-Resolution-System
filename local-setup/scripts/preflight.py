@@ -301,6 +301,14 @@ def r_egov_user_password_policy(cfg):
                    "8-15 characters, at least one digit, one lower-case letter, one upper-case "
                    "letter and one of @#$%, no whitespace. egov-user refuses to create the user, "
                    "so the deploy cannot sign in as it.")
+        elif re.search(r"""['"\\`]""", val):
+            # Rendered into the compose .env and into shell commands and JSON
+            # bodies by the deploy and user-seed; a quote, backslash or backtick
+            # survives egov-user's rule but not that plumbing.
+            yield (FAIL,
+                   f"{path} contains a quote, backslash or backtick. The deploy writes it into "
+                   ".env and into JSON request bodies, where those characters change the value "
+                   "or break the request. Use @, # or % as the special character.")
         elif re.search(r"\$[A-Za-z_{]", val):
             # BOOTSTRAP_PASSWORD, EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD and
             # IDENTITY_DIGIT_ADMIN_PASSWORD are rendered into the compose .env, and
@@ -330,11 +338,13 @@ def r_identity_admin_password_conflict(cfg):
         return
     bff_tenant = str(get(cfg, "identity_digit_admin_tenant_id") or get(cfg, "state_tenant_id")
                      or get(cfg, "tenant_id") or "pg")
-    # The stock ADMIN on pg* exists before anything the deploy seeds, with
-    # eGov@123, whenever the dump is loaded or user-seed seeds the stock users
-    # (its default). The deploy never rewrites an existing user's password.
+    # The stock ADMIN on pg* holds eGov@123 when the dump is loaded, or when
+    # user-seed creates it as a STOCK user — which it does only while the
+    # bootstrap user is someone else. With bootstrap_user ADMIN (the default)
+    # user-seed creates ADMIN with bootstrap_password instead (review of
+    # #2788). The deploy never rewrites an existing user's password.
     stock_admin = (get(cfg, "db_fast_path") is True
-                   or get(cfg, "seed_stock_users") is not False)
+                   or (get(cfg, "seed_stock_users") is not False and boot_user != "ADMIN"))
     if bff_user == "ADMIN" and bff_tenant.split(".")[0] == "pg" and stock_admin:
         expected, owner = DUMP_ADMIN_PASSWORD, (
             f"the stock ADMIN on {bff_tenant}, which db/full-dump.sql and user-seed ship "
@@ -640,6 +650,13 @@ SELF_TEST_CASES = [
      {"egov-user-password-policy"}),
     ("stock-shaped password is clean", {"bootstrap_password": "eGov@123"}, set()),
     ("15-char password is clean", {"bootstrap_password": "Abcdefghijkl1@%"}, set()),
+    ("password with a single quote fires", {"internal_user_password": "Ab1@x'yz9"},
+     {"egov-user-password-policy"}),
+    ("password with a double quote fires", {"bootstrap_password": 'Ab1@x"yz9'},
+     {"egov-user-password-policy"}),
+    ("password with a backslash fires",
+     {"bootstrap_secrets": {"egov_hrms_default_password": "Ab1@x\\yz9"}},
+     {"egov-user-password-policy"}),
     ("CHANGE_ME placeholder is left to the playbook's own assert",
      {"bootstrap_secrets": {"identity_digit_admin_password": "CHANGE_ME",
                             "egov_hrms_default_password": "CHANGE_ME"}},
@@ -677,6 +694,24 @@ SELF_TEST_CASES = [
       "identity_digit_admin_username": "ADMIN", "identity_digit_admin_tenant_id": "ke",
       "bootstrap_secrets": {"identity_digit_admin_password": "Other@123"}},
      set()),
+    ("ADMIN as bootstrap user without the dump: user-seed gives ADMIN bootstrap_password, "
+     "so the BFF on ADMIN with that password is clean",
+     {"db_fast_path": False, "bootstrap_user": "ADMIN", "bootstrap_password": "Ops@12345",
+      "identity_digit_admin_username": "ADMIN",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Ops@12345"}},
+     set()),
+    ("ADMIN as bootstrap user without the dump: the BFF on ADMIN with eGov@123 fires "
+     "(ADMIN was created with bootstrap_password)",
+     {"db_fast_path": False, "bootstrap_password": "Ops@12345",
+      "identity_digit_admin_username": "ADMIN",
+      "bootstrap_secrets": {"identity_digit_admin_password": "eGov@123"}},
+     {"identity-admin-password-conflict"}),
+    ("ADMIN as bootstrap user WITH the dump: the dump's ADMIN keeps eGov@123, so bootstrap_password fires",
+     {"db_fast_path": True, "db_fast_path_ack_data_wipe": True, "bootstrap_password": "Ops@12345",
+      "identity_digit_admin_username": "ADMIN",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Ops@12345",
+                            "elasticsearch_master_password": "asd@#$@$!132123"}},
+     {"identity-admin-password-conflict"}),
     ("BFF on ADMIN of pg without the dump or stock users follows bootstrap_password",
      {"db_fast_path": False, "seed_stock_users": False, "bootstrap_password": "Ops@12345",
       "identity_digit_admin_username": "ADMIN",

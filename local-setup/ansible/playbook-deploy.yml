@@ -1548,7 +1548,10 @@
     # rewrite puts state_root back only when this run's MCP bootstrap succeeded.
     # A box an earlier deploy already switched must keep state_root even when the
     # bootstrap re-run fails (its users and enc keys live under it), so note that
-    # from the file the previous deploy left behind (review of #2788).
+    # from the file the previous deploy left behind (review of #2788). The file
+    # alone is not proof — it survives `docker compose down -v` — so the
+    # post-bootstrap gate below also checks the database still holds users
+    # under state_root before trusting it.
     - name: "Compose — note whether an earlier deploy already switched this stack onto state_root"
       ansible.builtin.shell:
         cmd: >-
@@ -3131,9 +3134,41 @@
         url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
         headers:
           X-Vault-Token: "{{ bao_root_token }}"
-        status_code: [200]
+        # 404 = nothing stored yet; the assert below names what is missing.
+        status_code: [200, 404]
       register: bao_secrets
       no_log: true
+
+    # _example.yml ships these as CHANGE_ME, and the seed above stores neither
+    # placeholders nor empty values, so a tenant that never replaced one has no
+    # such key in OpenBao. The .env render below has no default for them and
+    # died with "'dict object' has no attribute 'postgres_password'" — or, with
+    # every value a placeholder, the read 404'd — neither naming the cause
+    # (review of #2788). mcp_db_password only matters with MCP on; the opt-in
+    # checks below cover the other feature-gated secrets.
+    - name: "OpenBao — every secret the compose .env needs is stored (none left as CHANGE_ME)"
+      vars:
+        _unset_secret_keys: >-
+          {%- set stored = (bao_secrets.json.data.data | default({})) if (bao_secrets.status | default(0) | int) == 200 else {} -%}
+          {%- set out = [] -%}
+          {%- for k in ['postgres_password', 'minio_root_user', 'minio_root_password',
+                        'elasticsearch_master_password', 'egov_hrms_default_password']
+                       + (['mcp_db_password'] if (enable_mcp | default(false) | bool) else []) -%}
+            {%- set v = stored[k] | default('', true) | string -%}
+            {%- if (v | length) == 0 or v == 'CHANGE_ME' -%}{%- set _ = out.append(k) -%}{%- endif -%}
+          {%- endfor -%}
+          {{ out | to_json }}
+      ansible.builtin.assert:
+        that:
+          - (_unset_secret_keys | from_json) | length == 0
+        fail_msg: >-
+          OpenBao holds no usable value at {{ secrets_path }} for:
+          {{ (_unset_secret_keys | from_json) | join(', ') }} — unset, empty, or still the
+          CHANGE_ME placeholder from _example.yml, which the seed deliberately does not store.
+          The compose .env needs each of them. Put real values in bootstrap_secrets in
+          host_vars/{{ inventory_hostname }}.yml (first deploy of this tenant) or store them with
+          `bao kv patch {{ secrets_path }} <key>=<value>`, then redeploy.
+        success_msg: "every secret the compose .env needs is stored"
 
     # Refuse to deploy an opt-in stack on a secret that is published in this
     # public repo. Runs HERE — right after the OpenBao read and before the .env
@@ -3190,12 +3225,13 @@
           - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123",            empty_fatal: true }
           - { feature: "Search (enable_search_stack)", enabled: "{{ enable_search_stack | default(false) }}", var: "elasticsearch_password", bad: "changeme-elastic", empty_fatal: true }
 
-    # Since #2788 the compose file has no fallback for these: an empty
-    # MCP_DB_PASSWORD aborts `docker compose up` (`${VAR:?}`), and an empty
-    # ELASTICSEARCH_PASSWORD is sent to an Elasticsearch that still holds the
-    # password it was first started with, so egov-indexer and the inbox get
-    # 401 and indexing stops silently. That breaks existing boxes too, so it
-    # is fatal on every box; the published-default case below only warns there.
+    # Since #2788 the compose file has no published fallback for these: an empty
+    # MCP_DB_PASSWORD leaves digit-mcp-postgres unable to initialise and
+    # digit-mcp unable to connect, and an empty ELASTICSEARCH_PASSWORD is sent
+    # to an Elasticsearch that still holds the password it was first started
+    # with, so egov-indexer and the inbox get 401 and indexing stops silently.
+    # That breaks existing boxes too, so it is fatal on every box that has the
+    # feature on; the published-default case below only warns there.
     - name: "Opt-in stacks — refuse an EMPTY secret that the compose file no longer defaults (every box)"
       ansible.builtin.assert:
         that:
@@ -3467,7 +3503,7 @@
           #   bao kv put {{ secrets_path }} <key>=<value>
           # NOT by editing this file directly (it's regenerated each deploy).
           POSTGRES_PASSWORD={{ bao_secrets.json.data.data.postgres_password }}
-          MCP_DB_PASSWORD={{ bao_secrets.json.data.data.mcp_db_password }}
+          MCP_DB_PASSWORD={{ bao_secrets.json.data.data.mcp_db_password | default('', true) }}
           MINIO_ROOT_USER={{ bao_secrets.json.data.data.minio_root_user }}
           MINIO_ROOT_PASSWORD={{ bao_secrets.json.data.data.minio_root_password }}
           # NB: intentionally NO AWS_KEY / AWS_SECRETKEY here. egov-filestore's
@@ -6588,6 +6624,34 @@
     # skips them entirely; `success | default(true)` read both as success and
     # the stack was switched onto a tenant nobody seeded (issue #2783 gap 9,
     # review of #2788). Only a 200 whose body says success=true counts.
+    #
+    # "Already switched" was read off the compose file before the copy, and
+    # that file survives `docker compose down -v`. A wiped and re-seeded
+    # database holds only the pg* tenants, so staying on state_root would
+    # protect nothing and would switch the stack onto a tenant nobody seeded
+    # (the gap-9 crash-loop). Ask the database: the users an earlier switch
+    # created under state_root (the bootstrap's ADMIN, INTERNAL_USER) are the
+    # data that staying switched protects (review of #2788, 4560394946).
+    - name: "mcp-bootstrap — confirm the earlier switch is backed by data (users under state_root)"
+      ansible.builtin.shell:
+        cmd: >-
+          docker exec docker-postgres psql -U egov -d egov -tAc
+          "select count(*) from eg_user where tenantid = '{{ state_root }}'"
+        executable: /bin/bash
+      register: _state_root_data_probe
+      changed_when: false
+      failed_when: false
+      when:
+        - state_root != 'pg'
+        - state_root_previously_switched | default(false) | bool
+
+    - name: "mcp-bootstrap — an earlier switch counts only while its data is still there"
+      ansible.builtin.set_fact:
+        state_root_previously_switched: >-
+          {{ (state_root_previously_switched | default(false) | bool)
+             and (_state_root_data_probe.stdout | default('0') | trim | int) > 0 }}
+      when: state_root != 'pg'
+
     - name: "mcp-bootstrap — classify each bootstrap call (ran; answered 200 with success=true)"
       ansible.builtin.set_fact:
         _mcp_root_bootstrap_ran: "{{ mcp_root_bootstrap is defined and not (mcp_root_bootstrap.skipped | default(false) | bool) }}"
@@ -6614,7 +6678,7 @@
                                       if (_mcp_city_bootstrap_ran | bool) else 'skipped — MCP unreachable' }}.
           See the detailed-failure-entries debug output above. Re-run with
           `tolerate_bootstrap_failures: true` to continue past this; the stack
-          then stays on pg unless an earlier deploy already switched it.
+          then stays on pg unless an earlier deploy already switched it (and its data is still there).
       when:
         - state_root != 'pg'
         - not (tolerate_bootstrap_failures | default(false))
@@ -6642,12 +6706,21 @@
              or ((_mcp_root_bootstrap_ok | default(false) | bool)
                  and (_mcp_city_bootstrap_ok | default(false) | bool)) }}
 
+    # Every task below that acts on state_root is gated on this ONE fact rather
+    # than on the pair `state_root != 'pg'` + `state_root_bootstrap_ok`, which
+    # had been pasted onto 25 tasks and missed on master-repair (review of
+    # #2788). master-repair also runs alone (`--tags master-repair`), where this
+    # play's bootstrap facts do not exist; it defaults the fact to true there.
+    - name: "mcp-bootstrap — one gate for every task that acts on state_root"
+      ansible.builtin.set_fact:
+        state_root_switch: "{{ state_root != 'pg' and (state_root_bootstrap_ok | bool) }}"
+
     - name: "mcp-bootstrap — WARNING: the bootstrap of state_root failed, services stay on pg"
       ansible.builtin.debug:
         msg: >-
           tolerate_bootstrap_failures is set, the MCP bootstrap of {{ state_root }} did not succeed
           (root ok: {{ _mcp_root_bootstrap_ok | default(false) }}, city ok: {{ _mcp_city_bootstrap_ok | default(false) }})
-          and no earlier deploy switched this stack onto {{ state_root }}, so this deploy does NOT rewrite
+          and no earlier deploy switched this stack onto {{ state_root }} with its data still present, so this deploy does NOT rewrite
           STATE_LEVEL_TENANT_ID, recreate services against {{ state_root }}, or seed users on it. The stack
           keeps running on pg. Fix the bootstrap (see the failure entries above) and redeploy.
       when: not (state_root_bootstrap_ok | bool)
@@ -6666,8 +6739,7 @@
         regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg$'
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     # Normally a no-op: "Set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose
     # before any container starts" rewrote this line right after the compose file was
@@ -6686,8 +6758,7 @@
         replace: '\1NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: {{ state_root }}'
       register: core_sms_tenant_rewrite
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     - name: "post-bootstrap — set EGOV_STATE_LEVEL_TENANT_ID (state-root) in compose"
       replace:
@@ -6695,8 +6766,7 @@
         regexp: '^(\s+)EGOV_STATE_LEVEL_TENANT_ID: pg$'
         replace: '\1EGOV_STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     # egov-hrms reads `EGOV_STATELEVEL_TENANT` (no underscore between
     # STATE/LEVEL) — distinct from `EGOV_STATE_LEVEL_TENANT_ID` above —
@@ -6711,8 +6781,7 @@
         regexp: '^(\s+)EGOV_STATELEVEL_TENANT: pg$'
         replace: '\1EGOV_STATELEVEL_TENANT: {{ state_root }}'
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     # Keep UI links tenant-correct. Escalation tenant discovery does not read
     # this map; it reads STATE_LEVEL_TENANT_ID and discovers cities from MDMS.
@@ -6722,8 +6791,7 @@
         regexp: '^(\s+)EGOV_UI_APP_HOST_MAP: "\{pg:'
         replace: '\1EGOV_UI_APP_HOST_MAP: "{{ "{" }}{{ state_root }}:'
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (city tier — enc-service + workflow) in compose"
       replace:
@@ -6731,8 +6799,7 @@
         regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg\.citya$'
         replace: '\1STATE_LEVEL_TENANT_ID: {{ tenant_id }}'
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (inbox-service `mz` default) in compose"
       replace:
@@ -6740,8 +6807,7 @@
         regexp: '^(\s+)STATE_LEVEL_TENANT_ID: mz$'
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     # The hrms-prereq-gate one-shot searches egov-user for the
     # INTERNAL_MICROSERVICE_ROLE user at tenant `pg` before letting HRMS
@@ -6755,8 +6821,7 @@
         regexp: '("tenantId":")pg(","roleCodes":\["INTERNAL_MICROSERVICE_ROLE"\])'
         replace: '\1{{ state_root }}\2'
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     - name: "post-bootstrap — recreate services (except egov-hrms) to pick up new STATE_LEVEL_TENANT_ID"
       ansible.builtin.shell: >-
@@ -6765,8 +6830,7 @@
       args:
         chdir: "{{ digit_dir }}"
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     - name: "post-bootstrap — wait for egov-user healthy before restarting egov-hrms"
       ansible.builtin.shell: >-
@@ -6777,8 +6841,7 @@
       until: user_ready.rc == 0
       changed_when: false
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     # user-seed.sh only creates INTERNAL_USER on `pg`. HRMS (now pointed at
     # state_root) tries to self-create it at boot, but egov-user's tenant-aware
@@ -6814,8 +6877,25 @@
       # directly over the internal service mesh instead, bypassing the gateway entirely; mirror
       # that here via egov-user-proxy on the docker network (egovio/curl:latest is already
       # pulled for this stack — see hrms-prereq-gate/user-seed-container in the compose files).
+      # The body reaches curl through the environment as to_json output, never
+      # inline in the shell: a quote or backslash in internal_user_password
+      # otherwise ends the shell string or breaks the JSON, and every attempt
+      # fails with a message about the tenant's mobile rule (review of #2788).
+      vars:
+        _internal_user_body:
+          RequestInfo: {apiId: digit, ver: "1.0"}
+          User:
+            userName: INTERNAL_USER
+            name: Internal Microservice User
+            mobileNumber: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='9999999999') }}"
+            gender: MALE
+            active: true
+            type: SYSTEM
+            tenantId: "{{ state_root }}"
+            password: "{{ internal_user_password | default('System@123') }}"
+            roles:
+              - {code: INTERNAL_MICROSERVICE_ROLE, name: Internal Microservice Role, tenantId: "{{ state_root }}"}
       ansible.builtin.shell: |
-        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"INTERNAL_USER","name":"Internal Microservice User","mobileNumber":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='9999999999') }}","gender":"MALE","active":true,"type":"SYSTEM","tenantId":"{{ state_root }}","password":"{{ internal_user_password | default('System@123') }}","roles":[{"code":"INTERNAL_MICROSERVICE_ROLE","name":"Internal Microservice Role","tenantId":"{{ state_root }}"}]}}'
         for i in $(seq 1 30); do
           # egov-user actually caches this under egov-user:mobile-val:<tenantId>:<countryCode|default>
           # (confirmed directly against a live box) — "validationRules" (the key this loop used to
@@ -6826,7 +6906,7 @@
           for k in $stale_keys; do
             docker exec {{ redis_container | default('digit-redis') }} redis-cli DEL "$k" >/dev/null 2>&1 || true
           done
-          resp=$(docker run --rm --network "{{ digit_dir | basename }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
+          resp=$(docker run --rm --network "{{ digit_dir | basename }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$SEED_BODY")
           code=$(printf '%s' "$resp" | tail -n1)
           content=$(printf '%s' "$resp" | sed '$d')
           if [ "$code" = "200" ] || printf '%s' "$content" | grep -q DuplicateUserName; then
@@ -6836,16 +6916,17 @@
           echo "attempt $i/30: http=$code $(printf '%s' "$content" | head -c 120)"
           sleep 10
         done
-        echo "INTERNAL_USER seed failed after 30 attempts — tenant UserValidation never went live" >&2
+        echo "INTERNAL_USER seed on {{ state_root }} failed after 30 attempts; last reply: http=$code $(printf '%s' "$content" | head -c 300)" >&2
         exit 1
       args:
         chdir: "{{ digit_dir }}"
+      environment:
+        SEED_BODY: "{{ _internal_user_body | to_json }}"
       register: internal_user_seed
       changed_when: "'CHANGED' in (internal_user_seed.stdout | default(''))"
       no_log: true
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     # The MCP tenant bootstrap is supposed to create an ADMIN eg_user on
     # state_root, but if it ran during the async UserValidation window (above)
@@ -6869,10 +6950,27 @@
       # bootstrap call, so it must bypass Kong (never add _createnovalidate to Kong's
       # AUTH_OPTIONAL — that would make arbitrary unauthenticated user/role creation, including
       # SUPERUSER, public) and hit egov-user directly over the internal docker network instead.
+      vars:
+        _state_admin_body:
+          RequestInfo: {apiId: digit, ver: "1.0"}
+          User:
+            userName: "{{ bootstrap_user | default('ADMIN') }}"
+            name: Admin
+            mobileNumber: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='8888888888') }}"
+            gender: MALE
+            active: true
+            type: EMPLOYEE
+            tenantId: "{{ state_root }}"
+            password: "{{ bootstrap_password | default('eGov@123') }}"
+            roles:
+              - {code: SUPERUSER, name: Super User, tenantId: "{{ state_root }}"}
+              - {code: LOC_ADMIN, name: Localisation Admin, tenantId: "{{ state_root }}"}
+              - {code: MDMS_ADMIN, name: MDMS Admin, tenantId: "{{ state_root }}"}
+              - {code: EMPLOYEE, name: Employee, tenantId: "{{ state_root }}"}
+              - {code: ACCOUNT_ADMIN, name: Account Admin, tenantId: "{{ state_root }}"}
       ansible.builtin.shell: |
-        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"{{ bootstrap_user | default('ADMIN') }}","name":"Admin","mobileNumber":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='8888888888') }}","gender":"MALE","active":true,"type":"EMPLOYEE","tenantId":"{{ state_root }}","password":"{{ bootstrap_password | default('eGov@123') }}","roles":[{"code":"SUPERUSER","name":"Super User","tenantId":"{{ state_root }}"},{"code":"LOC_ADMIN","name":"Localisation Admin","tenantId":"{{ state_root }}"},{"code":"MDMS_ADMIN","name":"MDMS Admin","tenantId":"{{ state_root }}"},{"code":"EMPLOYEE","name":"Employee","tenantId":"{{ state_root }}"},{"code":"ACCOUNT_ADMIN","name":"Account Admin","tenantId":"{{ state_root }}"}]}}'
         for i in $(seq 1 6); do
-          resp=$(docker run --rm --network "{{ digit_dir | basename }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
+          resp=$(docker run --rm --network "{{ digit_dir | basename }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$SEED_BODY")
           code=$(printf '%s' "$resp" | tail -n1)
           content=$(printf '%s' "$resp" | sed '$d')
           if [ "$code" = "200" ]; then echo "CHANGED ADMIN created on {{ state_root }} (attempt $i)"; exit 0; fi
@@ -6882,12 +6980,13 @@
         echo "ADMIN seed on {{ state_root }} failed" >&2; exit 1
       args:
         chdir: "{{ digit_dir }}"
+      environment:
+        SEED_BODY: "{{ _state_admin_body | to_json }}"
       register: admin_state_seed
       changed_when: "'CHANGED' in (admin_state_seed.stdout | default(''))"
       no_log: true
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     # The Identity BFF's DIGIT account (issue #2783 gap 2). identity-bff signs
     # in to DIGIT as identity_digit_admin_username on identity_digit_admin_tenant_id
@@ -6904,6 +7003,19 @@
         _bff_admin_user: "{{ identity_digit_admin_username | default(bootstrap_user | default('ADMIN')) }}"
         _bff_admin_tenant: "{{ identity_digit_admin_tenant_id | default(state_tenant_id) }}"
         _bff_admin_password: "{{ bao_secrets_identity.json.data.data.identity_digit_admin_password | default(bao_secrets_identity.json.data.data.token_exchange_system_password | default('eGov@123')) }}"
+        # Compared on the ROOT of the account's tenant: a city under state_root
+        # (ke.mycity) is seeded by this run's bootstrap just like ke itself, and
+        # egov-user validates the mobile number against that root's rule.
+        _bff_admin_on_state_root: "{{ (identity_digit_admin_tenant_id | default(state_tenant_id)).split('.')[0] == state_root }}"
+        # egov-user checks the mobile number against the rule of the tenant the
+        # account is created on (also on _createnovalidate). core_mobile_configs
+        # is state_root's rule; an account on the pg root (_example.yml) must
+        # satisfy pg's, which db/full-dump.sql ships as the India default — the
+        # same rule user-seed's fixed numbers on pg* rely on (review of #2788).
+        _bff_admin_mobile_regex: >-
+          {{ (core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$'))
+             if ((identity_digit_admin_tenant_id | default(state_tenant_id)).split('.')[0] == state_root)
+             else '^[6-9][0-9]{9}$' }}
       no_log: true
 
     - name: "Identity BFF — ensure its DIGIT admin account exists on {{ identity_digit_admin_tenant_id | default(state_tenant_id) }}"
@@ -6913,7 +7025,7 @@
           User:
             userName: "{{ _bff_admin_user }}"
             name: "Identity BFF Administrator"
-            mobileNumber: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='6666666666') }}"
+            mobileNumber: "{{ _bff_admin_mobile_regex | derive_valid_mobile(preferred='6666666666') }}"
             gender: MALE
             active: true
             type: EMPLOYEE
@@ -6943,8 +7055,8 @@
       register: bff_admin_seed
       changed_when: "'CHANGED' in (bff_admin_seed.stdout | default(''))"
       no_log: true
-      # On a state_root whose bootstrap failed the tenant is not usable yet.
-      when: _bff_admin_tenant != state_root or (state_root_bootstrap_ok | bool)
+      # On a state_root whose bootstrap failed the tenant (and its cities) is not usable yet.
+      when: not (_bff_admin_on_state_root | bool) or (state_root_bootstrap_ok | bool)
 
     - name: "Identity BFF — its DIGIT admin can sign in"
       ansible.builtin.uri:
@@ -6969,7 +7081,7 @@
       delay: 10
       until: bff_admin_login.status | default(0) in [200, 400, 401]
       no_log: true
-      when: _bff_admin_tenant != state_root or (state_root_bootstrap_ok | bool)
+      when: not (_bff_admin_on_state_root | bool) or (state_root_bootstrap_ok | bool)
 
     - name: "Identity BFF — refuse to leave identity-bff retrying a login that locks its account"
       ansible.builtin.assert:
@@ -6985,7 +7097,7 @@
           its own account — set identity_digit_admin_username to a name that does not exist yet (e.g. IDENTITY_BFF)
           and redeploy, this task creates it with identity_digit_admin_password; or (c) reset the user's password
           through the user API. A locked account unlocks after egov-user's cool-down.
-      when: _bff_admin_tenant != state_root or (state_root_bootstrap_ok | bool)
+      when: not (_bff_admin_on_state_root | bool) or (state_root_bootstrap_ok | bool)
 
     # PGR onboarding provisioner (#2269 review item 7). With the runner on, PGR
     # provisions every self-service signup as this account; without it the
@@ -7129,8 +7241,7 @@
         chdir: "{{ digit_dir }}"
       changed_when: true
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     # Without this wait a crash-looping HRMS (e.g. missing system user on
     # state_root) sails through and the deploy reports success — that is
@@ -7143,8 +7254,7 @@
       until: hrms_health_post.stdout == 'healthy'
       changed_when: false
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     # `docker compose restart egov-user` above does NOT cascade to
     # egov-user-proxy. The proxy keeps its prior `healthy` state
@@ -7186,8 +7296,7 @@
       until: user_kong_ready_post.status in [200, 400, 401]
       changed_when: false
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     # digit-mcp is a long-lived Node process that has been up since well before this
     # point — it never gets recreated by "recreate services (except egov-hrms)" above (it
@@ -7205,8 +7314,7 @@
         chdir: "{{ digit_dir }}"
       changed_when: true
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
         - enable_mcp | default(false)
 
     - name: "post-bootstrap — wait for digit-mcp health after recreate (up to 2 min)"
@@ -7217,8 +7325,7 @@
       until: mcp_health_post_recreate.rc == 0
       changed_when: false
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
         - enable_mcp | default(false)
 
     # egov-user's EncryptionDecryptionUtil.encryptObject() uses stateLevelTenantId
@@ -7273,8 +7380,7 @@
       changed_when: "'CHANGED' in (mcp_rekey_root.stdout | default(''))"
       failed_when: mcp_rekey_root.rc != 0
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
       no_log: true
 
     - name: "post-bootstrap — re-provision ADMIN with city enc key (user_only)"
@@ -7301,7 +7407,7 @@
       register: mcp_rekey_city
       changed_when: "'CHANGED' in (mcp_rekey_city.stdout | default(''))"
       failed_when: mcp_rekey_city.rc != 0
-      when: state_root != 'pg' and tenant_id != state_root and (state_root_bootstrap_ok | bool)
+      when: (state_root_switch | bool) and tenant_id != state_root
       no_log: true
 
     # ────────────────────────────────────────────────────────────────
@@ -7342,8 +7448,7 @@
       until: cfg_i18n_auth.status == 200
       no_log: true
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     - name: "configurator-i18n — upsert configurator-ui bundle (per locale)"
       ansible.builtin.uri:
@@ -7368,8 +7473,7 @@
         configurator_i18n_bundle: "{{ lookup('file', playbook_dir ~ '/files/configurator-localization/configurator-ui.json') | from_json }}"
       loop: "{{ configurator_i18n_bundle | map(attribute='locale') | unique | list }}"
       when:
-        - state_root != 'pg'
-        - state_root_bootstrap_ok | bool
+        - state_root_switch | bool
 
     # ────────────────────────────────────────────────────────────────
     # Novu Twilio bootstrap. Runs only when:
@@ -8957,6 +9061,7 @@
     - name: "master-repair — stage tenant-master repair script"
       when:
         - state_root != 'pg'
+        - state_root_switch | default(true) | bool   # a failed, tolerated bootstrap left the stack on pg
         - verify_tenant_masters | default(true) | bool
       tags: ['master-repair']
       ansible.builtin.copy:
@@ -8967,6 +9072,7 @@
     - name: "master-repair — compare {{ state_root }}'s access-control rows with pg's"
       when:
         - state_root != 'pg'
+        - state_root_switch | default(true) | bool   # a failed, tolerated bootstrap left the stack on pg
         - verify_tenant_masters | default(true) | bool
       tags: ['master-repair']
       # Credentials go through `environment:`, never the command line: a failed task
@@ -8996,6 +9102,7 @@
     - name: "master-repair — result"
       when:
         - state_root != 'pg'
+        - state_root_switch | default(true) | bool   # a failed, tolerated bootstrap left the stack on pg
         - verify_tenant_masters | default(true) | bool
       tags: ['master-repair']
       ansible.builtin.debug:
@@ -9004,6 +9111,7 @@
     - name: "master-repair — ACTION: {{ state_root }} looks like a truncated bootstrap (report only, nothing written)"
       when:
         - state_root != 'pg'
+        - state_root_switch | default(true) | bool   # a failed, tolerated bootstrap left the stack on pg
         - verify_tenant_masters | default(true) | bool
         - not (repair_tenant_masters | default(false) | bool)
         - "'TRUNCATION-SIGNATURE' in (master_repair.stdout | default(''))"
@@ -9021,6 +9129,7 @@
     - name: "master-repair — restart egov-accesscontrol after restoring role-actions"
       when:
         - state_root != 'pg'
+        - state_root_switch | default(true) | bool   # a failed, tolerated bootstrap left the stack on pg
         - verify_tenant_masters | default(true) | bool
         - "'ACL-CHANGED' in (master_repair.stdout | default(''))"
       tags: ['master-repair']
@@ -9037,6 +9146,7 @@
     - name: "master-repair — wait for egov-accesscontrol to come back"
       when:
         - state_root != 'pg'
+        - state_root_switch | default(true) | bool   # a failed, tolerated bootstrap left the stack on pg
         - verify_tenant_masters | default(true) | bool
         - "'ACL-CHANGED' in (master_repair.stdout | default(''))"
       tags: ['master-repair']
@@ -9054,6 +9164,7 @@
     - name: "master-repair — fail when the tenant cannot be repaired through the API"
       when:
         - state_root != 'pg'
+        - state_root_switch | default(true) | bool   # a failed, tolerated bootstrap left the stack on pg
         - verify_tenant_masters | default(true) | bool
         - repair_tenant_masters | default(false) | bool
         - not (tolerate_bootstrap_failures | default(false))
