@@ -18,23 +18,21 @@ import { oidcClientForSurface } from "../authentication/oidc.js";
 import { liveRouteForTenant } from "../access-context/tenant-route.js";
 import type { DigitRole } from "../managed-accounts/digit-user-client.js";
 import { audit } from "../citizen-otp/audit.js";
-import { mayManageRoles, readDigitAccount, requireAccountAdmin, requireWorkspace, validateBinding } from "./authority.js";
+import { holdsConfiguratorRole, mayManageRoles, readDigitAccount, requireAccountAdmin, requireWorkspace, validateBinding } from "./authority.js";
 import { revokeAccount } from "../revocation/index.js";
 
 /**
- * Where an invitee's password link ends (#2801). A workspace admin (a Configurator role at the
- * tenant: the rule the Configurator's own context select applies) returns to the Configurator.
- * Everyone else returns to the workspace's employee app through the employee client, exactly as
- * that app's own forgot-password does, instead of a Configurator "Choose a workspace" screen
- * they can't use. Without an employee client or a live workspace route (`liveRouteForTenant`),
- * and when the route lookup fails: the Configurator, as before, so a landing problem never stops
- * the email.
+ * Where an invitee's password link ends (#2801). A workspace admin (`holdsConfiguratorRole`, the rule
+ * context selection applies) returns to the Configurator. Everyone else returns to the workspace's
+ * employee app through the employee client, exactly as that app's own forgot-password does, instead
+ * of a Configurator "Choose a workspace" screen they can't use. Without an employee client or a live
+ * workspace route (`liveRouteForTenant`), and when the route lookup fails: the Configurator, as
+ * before, so a landing problem never stops the email.
  */
 export async function passwordSetupLanding(tenantId: string, roles: DigitRole[]): Promise<PasswordSetupLanding> {
   const configurator = { returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId, tenantSlug: undefined };
-  if (roles.some((r) => r.tenantId === tenantId && config.digitConfiguratorRoles.includes(r.code))) return configurator;
   const employee = oidcClientForSurface("employee", "password");
-  if (!employee) return configurator;
+  if (!employee || holdsConfiguratorRole(roles, tenantId)) return configurator;
   try {
     const route = await liveRouteForTenant(tenantId);
     return route ? surfacePasswordLanding("employee", employee, route) : configurator;

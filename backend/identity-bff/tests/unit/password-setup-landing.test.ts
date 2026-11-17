@@ -69,6 +69,11 @@ describe("passwordSetupLanding", () => {
     expect(landing.returnTo).toBe("/nairobi/digit-ui/employee/");
   });
 
+  it("follows DIGIT_CONFIGURATOR_ROLES, the list context selection checks", async () => {
+    config.digitConfiguratorRoles = [...saved.digitConfiguratorRoles, "GRO"];
+    expect(await passwordSetupLanding("ke", gro)).toEqual(configurator);
+  });
+
   it("falls back to the Configurator when the workspace has no route", async () => {
     vi.mocked(readTenantMappingForTenant).mockResolvedValue(null);
     expect(await passwordSetupLanding("ke", gro)).toEqual(configurator);

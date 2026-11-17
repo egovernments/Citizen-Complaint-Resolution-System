@@ -57,6 +57,15 @@ export async function validateBinding(input: { subject: string; tenantId: string
 }
 
 /**
+ * Whether the roles open the Configurator at the tenant (#2599): one of `DIGIT_CONFIGURATOR_ROLES`, held at
+ * that tenant itself. Context selection refuses the Configurator without it, and a workspace invite (#2801)
+ * sends only these members back to the Configurator, so the two must never disagree.
+ */
+export function holdsConfiguratorRole(roles: DigitRole[], tenantId: string): boolean {
+  return roles.some((r) => r.tenantId === tenantId && config.digitConfiguratorRoles.includes(r.code));
+}
+
+/**
  * The role rule shared by `_link` and `_updateEmail`. A target role is checked when it is administrative
  * (ADMINISTRATIVE_ROLES or `*_ADMIN`, including HRMS roles at sub-tenants such as pg.citya under pg) or when it sits
  * outside the workspace subtree (any role at pgx or another root, since the caller's DIGIT token would carry it). The

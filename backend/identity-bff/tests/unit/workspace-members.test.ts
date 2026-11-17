@@ -55,7 +55,7 @@ vi.mock("../../src/modules/workspace-members/authority.js", async (importOrigina
   const original = await importOriginal<typeof import("../../src/modules/workspace-members/authority.js")>();
   const account = (tenantId: string, uuid: string) => ({ tenantId, uuid, type: "EMPLOYEE", active: true, userName: "employee", name: "Employee", roles: f.targetRoles });
   return {
-    mayManageRoles: original.mayManageRoles,
+    mayManageRoles: original.mayManageRoles, holdsConfiguratorRole: original.holdsConfiguratorRole,
     validateBinding: vi.fn(async ({ tenantId, uuid }: { tenantId: string; uuid: string }) => account(tenantId, uuid)),
     requireAccountAdmin: vi.fn(async () => ({ roles: f.callerRoles })),
     requireWorkspace: vi.fn(async (tenantId: string) => ({ id: tenantId, alias: tenantId, name: tenantId, lifecycle: "ACTIVE", enabled: true })),
