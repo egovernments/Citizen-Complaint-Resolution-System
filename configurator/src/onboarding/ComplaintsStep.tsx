@@ -20,6 +20,7 @@ import { listMasters, recordName } from './departments/mastersApi';
 import { TypeDialog } from './complaints/TypeDialog';
 import { formatHours, RESOLUTION_CHOICES } from './complaints/resolution';
 import { departmentsWithoutGro } from './complaints/groCoverage';
+import { shortList } from './complaints/sheetDepartments';
 import { listEmployees } from './employees/employeesApi';
 import { pickerChoices } from '@/lib/systemRecords';
 import {
@@ -39,10 +40,6 @@ import {
 const STEP = stepById('complaints');
 const EMPLOYEES_STEP = stepById('employees');
 const { previous } = adjacentSteps('complaints');
-
-/** How many names a notice lists before it trails off. */
-const LISTED = 8;
-const listed = (names: string[]) => (names.length > LISTED ? `${names.slice(0, LISTED).join(', ')}, …` : names.join(', '));
 
 /**
  * Unsaved work survives a reload, per workspace, until it is saved or
@@ -171,7 +168,7 @@ export default function ComplaintsStep() {
       <AlertDescription className="space-y-1">
         <p>
           {t('complaints.unknown_department', 'Some complaint categories go to a department this workspace doesn’t have: %{list}.', {
-            list: listed(unknownRoutes.map((route) => `${route.name} (“${route.department}”)`)),
+            list: shortList(unknownRoutes.map((route) => `${route.name} (“${route.department}”)`)),
           })}
         </p>
         <p>
@@ -201,7 +198,7 @@ export default function ComplaintsStep() {
                 'Every department a complaint category goes to needs at least one employee with the GRO role. A DGRO doesn’t count.',
               )}{' '}
               {t('complaints.no_gro_categories', 'Complaint categories affected: %{categories}.', {
-                categories: listed(routes.filter((route) => withoutGro.includes(route.department)).map((route) => route.name)),
+                categories: shortList(routes.filter((route) => withoutGro.includes(route.department)).map((route) => route.name)),
               })}
             </p>
             <Button variant="outline" size="sm" onClick={() => navigate(EMPLOYEES_STEP.path)}>

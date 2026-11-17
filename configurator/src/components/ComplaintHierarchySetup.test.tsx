@@ -120,6 +120,15 @@ describe('ComplaintHierarchySetup: a sheet with rows to fix (#2806)', () => {
     expect(vi.mocked(parseComplaintHierarchyExcel).mock.calls[0][3]).toMatchObject({ departments: [{ code: 'SANIT', name: 'Sanitation Services' }] });
   });
 
+  it('shows each subcategory’s department by name, with its code', async () => {
+    render(
+      <ComplaintHierarchySetup targetTenant="mz.maputo" stateTenant="mz.maputo" onDone={vi.fn()} departments={[{ code: 'WATER', name: 'Water Works' }]} />,
+    );
+    fireEvent.click(screen.getByTestId('ch-next-template'));
+    fireEvent.change(document.getElementById('ch-file-upload')!, { target: { files: [new File(['x'], 'hierarchy.xlsx')] } });
+    expect(await screen.findByRole('cell', { name: 'Water Works (WATER)' })).toBeTruthy();
+  });
+
   it('never writes a complaint type without a department (no NA stand-in)', async () => {
     const blank = [nodes[0], { ...nodes[1], department: '' }];
     vi.mocked(parseComplaintHierarchyExcel).mockReturnValue({ nodes: blank, leaves: [blank[1]], validation: { valid: true, errors: [], warnings: [] } });

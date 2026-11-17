@@ -113,6 +113,13 @@ describe('the complaints sheet department column', () => {
     expect(parse([row('Roads')], [{ code: 'ROADS', name: 'Roads' }]).validation.errors).toEqual([]);
   });
 
+  it('lists eight departments to choose from, then trails off', () => {
+    const many = Array.from({ length: 9 }, (_, i) => ({ code: `D${i + 1}`, name: `Dept ${i + 1}` }));
+    expect(parse([row('Nope')], many).validation.errors[0].message).toBe(
+      'Row 2: department “Nope” doesn’t exist. Use one of: Dept 1 (D1), Dept 2 (D2), Dept 3 (D3), Dept 4 (D4), Dept 5 (D5), Dept 6 (D6), Dept 7 (D7), Dept 8 (D8), ….',
+    );
+  });
+
   it('says to add departments first when the workspace has none', () => {
     const result = parse([row('SANIT')], []);
     expect(result.validation.errors[0].message).toBe(

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus, Download, Upload, Check, ChevronRight, Loader2, AlertTriangle, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -20,7 +20,7 @@ import { downloadComplaintHierarchyTemplate } from '@/utils/templateBuilder';
 import { labelLocales } from '@/onboarding/labelLocales';
 import { useOnboardingT } from '@/onboarding/i18n';
 import { writeSheetHierarchy } from '@/onboarding/complaints/complaintsApi';
-import type { DepartmentChoice } from '@/onboarding/complaints/sheetDepartments';
+import { departmentLabel, type DepartmentChoice } from '@/onboarding/complaints/sheetDepartments';
 
 type Step = 'define' | 'template' | 'verify';
 
@@ -79,12 +79,9 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
 
   const validLevels = () => levels.map((l) => l.trim()).filter(Boolean);
 
+  const departmentByCode = useMemo(() => new Map((departments ?? []).map((d) => [d.code, d])), [departments]);
   /** A department by its name, with the code kept as small print; '-' when the row has none. */
-  const departmentLabel = (code?: string) => {
-    if (!code) return '-';
-    const name = departments?.find((d) => d.code === code)?.name;
-    return name && name !== code ? `${name} (${code})` : code;
-  };
+  const departmentCell = (code?: string) => (code ? departmentLabel(departmentByCode.get(code) ?? { code }) : '-');
 
   // Interior (non-leaf) nodes for the verify table — `nodes` holds the whole
   // adjacency list (interior + leaves) since both share the one master.
@@ -383,7 +380,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
                       <TableCell className="font-mono text-xs">{s.code}</TableCell>
                       <TableCell className="text-xs">{s.name}</TableCell>
                       <TableCell className="font-mono text-xs">{s.parentCode || '-'}</TableCell>
-                      <TableCell className="text-xs">{departmentLabel(s.department)}</TableCell>
+                      <TableCell className="text-xs">{departmentCell(s.department)}</TableCell>
                       <TableCell className="text-xs">{s.slaHours}</TableCell>
                     </TableRow>
                   ))}

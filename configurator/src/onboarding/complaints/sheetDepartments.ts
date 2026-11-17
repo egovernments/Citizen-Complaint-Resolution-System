@@ -15,13 +15,22 @@ export type DepartmentMatch =
 /** Lower case with runs of spaces folded, so " sanitation  services" matches "Sanitation Services". */
 const fold = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 
-/** How many departments an error lists before it trails off. */
+/** How many entries a message lists before it trails off. */
 const LISTED = 8;
+
+/** "A, B, C, …": the first few, then an ellipsis when there are more. */
+export function shortList(items: string[]): string {
+  return items.length > LISTED ? `${items.slice(0, LISTED).join(', ')}, …` : items.join(', ');
+}
+
+/** "Sanitation Services (SANIT)": the name, with the code as small print; the code alone when that is all it has. */
+export function departmentLabel(department: DepartmentChoice): string {
+  return department.name && department.name !== department.code ? `${department.name} (${department.code})` : department.code;
+}
 
 /** "Sanitation Services (SANIT), Roads (ROADS), …": names first, the code as small print. */
 export function departmentList(departments: DepartmentChoice[]): string {
-  const shown = departments.slice(0, LISTED).map((d) => (d.name && d.name !== d.code ? `${d.name} (${d.code})` : d.code));
-  return departments.length > LISTED ? `${shown.join(', ')}, …` : shown.join(', ');
+  return shortList(departments.map(departmentLabel));
 }
 
 /** A blank department cell. */
