@@ -267,6 +267,24 @@ describe('Employee rows the parser leaves out are returned, by sheet row (#2800)
     expect(rejected.map((row) => row.row)).toEqual([4]);
   });
 
+  it('keeps a refused row’s cells as the sheet has them, the refused date of birth included', () => {
+    const wb = XLSX.utils.book_new();
+    const cells = { employeeCode: 'EMP_040', name: 'Ali Hassan', mobileNumber: '712345679', gender: 'MALE', jurisdictions: 'WARD_1,WARD_2' };
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet([
+        { ...cells, department: 'ROADS', designation: 'ENGINEER', dob: '14/05/1990' },
+        { ...cells, employeeCode: 'EMP_041', department: '', designation: 'ENGINEER', dob: '1990-05-14' },
+      ]),
+      'Employee',
+    );
+    const { rejected } = parseEmployeeExcel(wb);
+    expect(rejected.map(({ row, dob, gender, jurisdictions }) => ({ row, dob, gender, jurisdictions }))).toEqual([
+      { row: 2, dob: '14/05/1990', gender: 'MALE', jurisdictions: 'WARD_1,WARD_2' },
+      { row: 3, dob: '1990-05-14', gender: 'MALE', jurisdictions: 'WARD_1,WARD_2' },
+    ]);
+  });
+
   it('keeps a row whose mobile only fails the 9-10 digit hint: the tenant rule decides', () => {
     const { data, rejected } = sheet([['EMP_030', 'Jane Kamau', '25471234567', 'j@example.org', 'ROADS', 'ENGINEER', '', '']]);
     expect(rejected).toEqual([]);

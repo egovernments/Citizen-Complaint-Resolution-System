@@ -243,18 +243,10 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
 
   // A row the parser left out (a required cell blank, a bad date), shown as an
   // error with every reason rather than dropped from the preview (#2800).
-  const refusedRow = (rejected: RejectedEmployeeRow): ParsedEmployee => ({
-    row: rejected.row,
-    employeeCode: rejected.employeeCode,
-    name: rejected.name,
-    mobileNumber: rejected.mobileNumber,
-    emailId: rejected.emailId,
-    department: rejected.department,
-    designation: rejected.designation,
-    roles: rejected.roles,
-    jurisdictions: '',
+  const refusedRow = ({ problems, ...row }: RejectedEmployeeRow): ParsedEmployee => ({
+    ...row,
     status: 'error',
-    error: rejected.problems.map((problem) => describeSheetProblem(problem, t)).join('; '),
+    error: problems.map((problem) => describeSheetProblem(problem, t)).join('; '),
   });
 
   // `sheet` is every row of the upload, the refused ones included, for the codes

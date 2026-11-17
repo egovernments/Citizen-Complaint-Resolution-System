@@ -714,19 +714,10 @@ export type ParsedEmployeeRow = EmployeeExcelRow & { row: number };
 /**
  * A sheet row the parser couldn't use, with what it read and why. The bulk
  * import lists these in its preview as errors, so no row leaves the sheet
- * unaccounted for (#2800).
+ * unaccounted for (#2800). Every cell is as the sheet has it, a date of birth
+ * it refused included, so the preview shows the value a problem is about.
  */
-export interface RejectedEmployeeRow {
-  row: number;
-  employeeCode: string;
-  name: string;
-  mobileNumber: string;
-  emailId?: string;
-  department: string;
-  designation: string;
-  roles: string;
-  problems: ValidationError[];
-}
+export type RejectedEmployeeRow = ParsedEmployeeRow & { problems: ValidationError[] };
 
 export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
   data: ParsedEmployeeRow[];
@@ -899,7 +890,23 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
     }
 
     if (problems.length > 0) {
-      rejected.push({ row: sheetRow, employeeCode, name, mobileNumber, emailId, department, designation, roles, problems });
+      const dobRefused = problems.find((problem) => problem.field === 'dob')?.value;
+      rejected.push({
+        row: sheetRow,
+        employeeCode,
+        name,
+        userName,
+        mobileNumber,
+        emailId,
+        gender,
+        dob: dob ?? dobRefused,
+        department,
+        designation,
+        roles,
+        jurisdictions,
+        dateOfAppointment,
+        problems,
+      });
       return;
     }
 

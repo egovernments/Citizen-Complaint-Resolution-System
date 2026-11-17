@@ -55,9 +55,9 @@ const record = (code: string, name: string, mobileNumber: string, emailId: strin
     jurisdictions: [{ boundary: 'WARD_1', isActive: true }],
   }) as unknown as EmployeeRecord;
 
-const upload = (rows: string[][] = ROWS) => {
+const upload = (rows: string[][] = ROWS, header = HEADER) => {
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([HEADER, ...rows]), 'Employee');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...rows]), 'Employee');
   const bytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
   const input = document.getElementById('employee-file-upload') as HTMLInputElement;
   fireEvent.change(input, { target: { files: [new File([bytes], 'staff.xlsx')] } });
@@ -135,6 +135,15 @@ describe('employee sheet preview and results', () => {
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /Create 1 Employees/ }));
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
     expect(create.mock.calls[0][0].code).toBe('EMP_0011');
+  });
+
+  it('shows a refused row’s date of birth as the sheet has it, beside the reason (#2800)', async () => {
+    render(<BulkEmployeeImport onDone={vi.fn()} onCancel={vi.fn()} />);
+    await waitFor(() => expect((document.getElementById('employee-file-upload') as HTMLInputElement).disabled).toBe(false));
+    upload([['E009', 'Ruth Achieng', '712000009', 'ruth@example.org', 'ROADS', 'ENGINEER', 'EMPLOYEE', 'WARD_1', '14/05/1990']], [...HEADER, 'dob']);
+    await screen.findByText(/Summary: 1 total/);
+    expect(screen.getByText(/^Row 2: Date of birth “14\/05\/1990” isn’t valid/)).toBeTruthy();
+    expect(screen.getByRole('cell', { name: '14/05/1990' })).toBeTruthy();
   });
 
   it('stops when it can’t tell who is already added, rather than counting them as created (#2798)', async () => {
