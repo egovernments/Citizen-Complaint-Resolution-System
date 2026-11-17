@@ -112,6 +112,15 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
             component={() => <PGRSearchInbox />}
           />
 
+          {/* The old UI's addresses for a complaint and for a new one, still in
+              bookmarks, old links and MDMS menu rows, open the pages that
+              replaced them (#2808). */}
+          <Redirect
+            from={`${path}/complaint/details/:id`}
+            to={{ ...location, pathname: `${path}/complaint-details/:id` }}
+          />
+          <Redirect from={`${path}/complaint/create`} to={{ ...location, pathname: `${path}/create-complaint` }} />
+
           {/* Old inbox address and anything else unknown (#2808). The list
               is under this app's own path, so the no-top-bar mount stays
               no-top-bar. */}

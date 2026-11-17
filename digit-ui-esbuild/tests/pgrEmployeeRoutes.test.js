@@ -165,6 +165,23 @@ test("any address without a page goes to the complaints list and says why in the
   }
 });
 
+test("the old UI's complaint and new-complaint addresses open the pages that replaced them", async () => {
+  const id = "PG-PGR-2026-01-01-000001";
+  for (const [url, to, name] of [
+    [`${APP}/complaint/details/${id}`, `${APP}/complaint-details/${id}`, "details"],
+    [`${APP}/complaint/create`, `${APP}/create-complaint`, "create"],
+  ]) {
+    const { history, html, warnings } = await visit({ pathname: url, search: "?from=bookmark", hash: "#top", state: { from: "menu" } });
+    assert.deepEqual(where(history), { pathname: to, search: "?from=bookmark", hash: "#top", state: { from: "menu" } }, url);
+    assert.equal(html(), `<div><main>${name}</main></div>`, url);
+    assert.deepEqual(warnings, [], url);
+  }
+  // Without an ID there is no complaint to open, so it is an address without a page.
+  const { history, warnings } = await visit(`${APP}/complaint/details`);
+  assert.equal(history.location.pathname, LIST);
+  assert.equal(warnings.length, 1);
+});
+
 test("under the no-top-bar mount, the complaints list it opens is the no-top-bar one", async () => {
   // Core mounts the employee app at /<ctx>/employee and at /<ctx>/no-top-bar/employee.
   const mount = "/digit-ui/no-top-bar/employee/pgr";
