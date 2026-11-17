@@ -15,22 +15,26 @@
  */
 
 import { AppContainer, PrivateRoute } from "@egovernments/digit-ui-react-components";
-import React from "react";
+import React, { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Redirect, Route, Switch } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 
 /**
  * Any complaints address without a page of its own goes to the complaints
- * list, which the menu calls "Search Complaint". The commonest is
+ * list (`to`), which the menu calls "Search Complaint". The commonest is
  * `/employee/pgr/inbox`, the inbox's address before it moved to `inbox-v2`:
  * it is still in bookmarks, old MDMS menu rows and guides, and it used to
- * open a blank page under the breadcrumb (#2808). The query string is kept.
+ * open a blank page under the breadcrumb (#2808). The query string, the hash
+ * and any history state are kept. The console says why, once per arrival:
+ * from an effect, not from render.
  */
-const ToComplaintsList = ({ location }) => {
-  const to = `/${window?.contextPath}/employee/pgr/inbox-v2`;
-  console.warn(`PGR: no complaints page at ${location.pathname}; opening the complaints list (${to}) instead.`);
-  return <Redirect to={{ pathname: to, search: location.search }} />;
+const ToComplaintsList = ({ to }) => {
+  const location = useLocation();
+  useEffect(() => {
+    console.warn(`PGR: no complaints page at ${location.pathname}; opening the complaints list (${to}) instead.`);
+  }, [location.pathname, to]);
+  return <Redirect to={{ ...location, pathname: to }} />;
 };
 
 const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
@@ -108,8 +112,12 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
             component={() => <PGRSearchInbox />}
           />
 
-          {/* Old inbox address and anything else unknown (#2808) */}
-          <Route render={(props) => <ToComplaintsList {...props} />} />
+          {/* Old inbox address and anything else unknown (#2808). The list
+              is under this app's own path, so the no-top-bar mount stays
+              no-top-bar. */}
+          <Route>
+            <ToComplaintsList to={`${path}/inbox-v2`} />
+          </Route>
         </Switch>
 
       </AppContainer>
