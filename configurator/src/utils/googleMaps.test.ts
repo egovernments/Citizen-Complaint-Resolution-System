@@ -33,6 +33,7 @@ describe('loadGoogleMaps', () => {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function fakeGoogle() {
   const maps: any[] = [];
+  const cleared: any[] = [];
   class FakeMap {
     listeners: Record<string, () => void> = {};
     data = {
@@ -67,11 +68,14 @@ function fakeGoogle() {
         addListenerOnce: (map: FakeMap, name: string, fn: () => void) => {
           map.listeners[name] = fn;
         },
-        clearInstanceListeners() {},
+        clearInstanceListeners: (map: FakeMap) => {
+          map.listeners = {};
+          cleared.push(map);
+        },
       },
     },
   };
-  return { google, maps };
+  return { google, maps, cleared };
 }
 
 const mapsScripts = () =>
@@ -144,11 +148,13 @@ describe('validateGoogleMapsKey', () => {
 
   it('rejects as soon as Google refuses the key, saying what to fix', async () => {
     vi.useFakeTimers();
-    loadWithFake();
+    const { fake } = loadWithFake();
     const check = validateGoogleMapsKey('key', { timeoutMs: 8000, graceMs: 1000 });
     let error: Error | undefined;
     check.catch((e: Error) => { error = e; });
     await vi.advanceTimersByTimeAsync(0);
+    const holder = (fake.maps[0].div as HTMLElement).parentElement as HTMLElement;
+    expect(holder.isConnected).toBe(true);
     (window as any).gm_authFailure();
     await vi.advanceTimersByTimeAsync(0);
     expect(error?.message).toMatch(/Google rejected this API key/);
@@ -157,6 +163,23 @@ describe('validateGoogleMapsKey', () => {
     // Typed, so onboarding can show it in the operator's language.
     expect(error).toBeInstanceOf(GoogleKeyRejectedError);
     expect((error as GoogleKeyRejectedError).site).toBe(window.location.host);
+    // A refused key leaves no probe behind.
+    expect(holder.isConnected).toBe(false);
+  });
+
+  it('disposes the probe map, and tiles that arrive after the verdict start no timer', async () => {
+    vi.useFakeTimers();
+    const { fake } = loadWithFake();
+    const check = validateGoogleMapsKey('key', { timeoutMs: 8000, graceMs: 1000 });
+    const settled = expect(check).rejects.toThrow(GoogleKeyRejectedError);
+    await vi.advanceTimersByTimeAsync(0);
+    const probeMap = fake.maps[0];
+    const lateTiles = probeMap.listeners.tilesloaded;
+    (window as any).gm_authFailure();
+    await settled;
+    expect(fake.cleared).toEqual([probeMap]);
+    lateTiles();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('rejects when Google refuses the key, even after the tiles loaded', async () => {

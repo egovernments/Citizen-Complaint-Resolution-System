@@ -127,14 +127,17 @@ export async function validateGoogleMapsKey(
   document.body.appendChild(holder);
   const timers: ReturnType<typeof setTimeout>[] = [];
   let onFail = () => {};
+  let map: any;
+  let settled = false;
   try {
     return await new Promise<GoogleKeyCheck>((resolve, reject) => {
       onFail = () => reject(new GoogleKeyRejectedError());
       authListeners.add(onFail);
       timers.push(setTimeout(() => resolve('unverified'), timeoutMs));
-      const map = new g.maps.Map(probe, { center: { lat: 0, lng: 0 }, zoom: 1 });
+      map = new g.maps.Map(probe, { center: { lat: 0, lng: 0 }, zoom: 1 });
       g.maps.event.addListenerOnce(map, 'tilesloaded', () => {
-        timers.push(setTimeout(() => resolve('ok'), graceMs));
+        // Tiles that arrive once the check is over start no timer.
+        if (!settled) timers.push(setTimeout(() => resolve('ok'), graceMs));
       });
     });
   } catch (e) {
@@ -143,8 +146,10 @@ export async function validateGoogleMapsKey(
     if (e instanceof GoogleKeyRejectedError) unloadGoogleMaps();
     throw e;
   } finally {
+    settled = true;
     timers.forEach(clearTimeout);
     authListeners.delete(onFail);
+    if (map) g.maps.event.clearInstanceListeners(map);
     holder.remove();
   }
 }
