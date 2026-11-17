@@ -506,7 +506,7 @@ export const boundaryService = {
   // heal-boundary-relationships.py existed. Separating the passes, gating on
   // entity visibility, and retrying the residual lag closes that race.
   async createBoundaries(
-    input: Boundary[],
+    boundaries: Boundary[],
     // Writes done of all the writes: an entity and a relationship per boundary.
     onProgress?: (done: number, total: number) => void,
     // The hierarchy's level names as it stores them, broadest first.
@@ -517,14 +517,14 @@ export const boundaryService = {
   }> {
     const success: Boundary[] = [];
     const failed: { boundary: Boundary; error: string }[] = [];
-    const total = input.length;
+    const total = boundaries.length;
     if (total === 0) return { success, failed };
 
     // One code is one boundary: a batch that repeats a code would fold two rows into one
     // boundary, with whichever name was written last. Refuse before writing anything (#2456).
     const seen = new Set<string>();
     const repeated = new Set<string>();
-    for (const { code } of input) (seen.has(code) ? repeated : seen).add(code);
+    for (const { code } of boundaries) (seen.has(code) ? repeated : seen).add(code);
     if (repeated.size > 0) {
       throw new Error(`Each boundary needs its own code. Used more than once: ${[...repeated].join(', ')}`);
     }
@@ -532,7 +532,7 @@ export const boundaryService = {
     // Each area goes under its level spelled as the hierarchy spells it (boundary-service matches
     // it exactly), tidied when the hierarchy is new. boundary-service answers 200 for a level the
     // persister can't store, which then holds up every tenant: refuse before writing anything (#2803).
-    const boundaries = input.map((b) => (b.boundaryType ? { ...b, boundaryType: levelNameIn(levels, b.boundaryType) } : b));
+    boundaries = boundaries.map((b) => (b.boundaryType ? { ...b, boundaryType: levelNameIn(levels, b.boundaryType) } : b));
     for (const b of boundaries) {
       const tooLong = b.boundaryType ? tooLongForLevel(b.boundaryType) : null;
       if (tooLong) {

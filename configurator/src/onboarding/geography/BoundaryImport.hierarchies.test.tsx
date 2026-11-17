@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { BoundaryHierarchy } from '@/api/types';
 import type { TenantHierarchies } from '@/api/services/tenantHierarchy';
+import { boundaryService } from '@/api';
+import type { ImportResume, NewSelection } from './boundaryDraft';
 
 // "Use an existing hierarchy" (Excel path): a list that failed to load must not
 // read as a tenant with no hierarchies (#1915 review).
@@ -17,8 +19,6 @@ vi.mock('@/hooks/useMapProviderConfig', () => ({
 }));
 
 import BoundaryImport from './BoundaryImport';
-import { boundaryService } from '@/api';
-import type { ImportResume } from './boundaryDraft';
 
 const hierarchy = (hierarchyType: string): BoundaryHierarchy => ({
   tenantId: 'ke',
@@ -140,7 +140,7 @@ describe('BoundaryImport: Fetch into a saved hierarchy', () => {
     };
     loadTenantHierarchies.mockResolvedValue({ hierarchies: [saved], hierarchyType: 'ADMIN' });
     const existing = vi.spyOn(boundaryService, 'existingBoundaries').mockResolvedValue([]);
-    const onDone = vi.fn((..._args: unknown[]) => null);
+    const onDone = vi.fn<(selection: NewSelection) => string | null>(() => null);
     try {
       render(<BoundaryImport source="osm" hasHierarchies sourceChoices={[]} resume={resume} onDone={onDone} onCancel={vi.fn()} />);
       const create = await screen.findByRole('button', { name: 'Create Hierarchy & Boundaries' });
