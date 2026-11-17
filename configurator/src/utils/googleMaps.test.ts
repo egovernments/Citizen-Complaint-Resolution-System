@@ -74,6 +74,9 @@ function fakeGoogle() {
   return { google, maps };
 }
 
+const mapsScripts = () =>
+  [...document.querySelectorAll<HTMLScriptElement>('script[src*="maps.googleapis.com"]')];
+
 /** Starts a load, then answers it the way Google's script does. */
 function loadWithFake(key = 'key') {
   const fake = fakeGoogle();
@@ -165,6 +168,79 @@ describe('validateGoogleMapsKey', () => {
     fake.maps[0].listeners.tilesloaded();
     (window as any).gm_authFailure();
     await settled;
+  });
+});
+
+// Before the probe could see a refusal, a refused key stayed loaded: a corrected key got "reload the
+// page", and the same key, once fixed in Cloud Console, was refused again without asking Google.
+describe('validateGoogleMapsKey after Google refused a key', () => {
+  afterEach(() => vi.useRealTimers());
+
+  /** Checks `key` against a Google that refuses it; resolves to the script that loaded it. */
+  async function refuse(key: string) {
+    loadWithFake(key);
+    const [script] = mapsScripts();
+    const check = validateGoogleMapsKey(key, { timeoutMs: 8000, graceMs: 1000 });
+    const settled = expect(check).rejects.toThrow(GoogleKeyRejectedError);
+    await vi.advanceTimersByTimeAsync(0);
+    (window as any).gm_authFailure();
+    await settled;
+    return script;
+  }
+
+  /** Checks `key` against a fresh Google that accepts it. */
+  async function accept(key: string) {
+    const check = validateGoogleMapsKey(key, { timeoutMs: 8000, graceMs: 1000 });
+    const { fake } = loadWithFake(key);
+    await vi.advanceTimersByTimeAsync(0);
+    fake.maps[0].listeners.tilesloaded();
+    await vi.advanceTimersByTimeAsync(1000);
+    return check;
+  }
+
+  it('unloads the refused key, so the next check starts from a clean page', async () => {
+    vi.useFakeTimers();
+    await refuse('AIzaCutOff');
+    expect(mapsScripts()).toEqual([]);
+    expect((window as any).google).toBeUndefined();
+  });
+
+  it('checks a corrected key with Google, with no page reload', async () => {
+    vi.useFakeTimers();
+    await refuse('AIzaCutOff');
+    await expect(accept('AIzaCutOffKeyInFull')).resolves.toBe('ok');
+    expect(mapsScripts().map((s) => new URL(s.src).searchParams.get('key'))).toEqual(['AIzaCutOffKeyInFull']);
+  });
+
+  it('asks Google again about the same key, once it is allowed in Cloud Console', async () => {
+    vi.useFakeTimers();
+    const refused = await refuse('AIzaKey');
+    expect(refused).toBeDefined();
+    await expect(accept('AIzaKey')).resolves.toBe('ok');
+    expect(mapsScripts()).toHaveLength(1);
+    expect(mapsScripts()[0]).not.toBe(refused);
+  });
+
+  it('lets a map draw with another key after a refused check, with no page reload', async () => {
+    vi.useFakeTimers();
+    await refuse('AIzaTypo');
+    const container = document.createElement('div');
+    const draw = drawGeoJsonOnGoogleMap(container, { type: 'FeatureCollection', features: [] }, '#000', 'AIzaSavedKey');
+    loadWithFake('AIzaSavedKey');
+    const dispose = await draw;
+    expect(container.childElementCount).toBe(1);
+    dispose();
+  });
+
+  it('asks Google again about a key it refused under a drawn map', async () => {
+    vi.useFakeTimers();
+    const { pending } = loadWithFake('AIzaKey');
+    await pending;
+    const onAuthFailure = vi.fn();
+    await drawGeoJsonOnGoogleMap(document.createElement('div'), { type: 'FeatureCollection', features: [] }, '#000', 'AIzaKey', { onAuthFailure });
+    (window as any).gm_authFailure();
+    expect(onAuthFailure).toHaveBeenCalled();
+    await expect(accept('AIzaKey')).resolves.toBe('ok');
   });
 });
 

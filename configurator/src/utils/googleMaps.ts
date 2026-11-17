@@ -5,6 +5,8 @@
 // Two constraints shape this file:
 //  - Google allows one API key per page load. Asking for a second key can't
 //    work, so it is reported ("reload the page") rather than silently ignored.
+//    A key the check sees Google refuse is unloaded instead, so the operator
+//    can check a corrected key without a reload.
 //  - A bad key doesn't fail the script load. Google calls window.gm_authFailure
 //    later, once a map tries to authenticate — so validateGoogleMapsKey() draws
 //    a probe map and waits for a verdict, and every drawn map keeps listening
@@ -39,6 +41,22 @@ export class GoogleKeyRejectedError extends Error {
     this.name = 'GoogleKeyRejectedError';
     this.site = site;
   }
+}
+
+/**
+ * Forgets the loaded key and the API it loaded, so the next load fetches the API afresh and Google
+ * gives a new verdict. The API's own modules come from maps.googleapis.com too, so they go with its
+ * loader script. Its custom elements stay registered (a browser can't unregister one): the next load
+ * registers its own under new names and logs "already defined" warnings, which are harmless.
+ */
+function unloadGoogleMaps(): void {
+  loaded = null;
+  authFailed = false;
+  document.querySelectorAll('script[src*="maps.googleapis.com"]').forEach((s) => s.remove());
+  const w = window as any;
+  delete w.google;
+  delete w.gm_authFailure;
+  delete w[CALLBACK];
 }
 
 export function loadGoogleMaps(apiKey: string): Promise<GoogleNs> {
@@ -95,8 +113,10 @@ export async function validateGoogleMapsKey(
   apiKey: string,
   { timeoutMs = 8000, graceMs = 1000 }: { timeoutMs?: number; graceMs?: number } = {},
 ): Promise<GoogleKeyCheck> {
+  // A check asks Google again: a key it refused before, here or under a drawn map, may have been
+  // corrected, or allowed in Cloud Console since.
+  if (authFailed) unloadGoogleMaps();
   const g = await loadGoogleMaps(apiKey);
-  if (authFailed) throw new GoogleKeyRejectedError();
   const holder = document.createElement('div');
   holder.style.cssText = KEY_PROBE_STYLE;
   holder.setAttribute('aria-hidden', 'true');
@@ -117,6 +137,11 @@ export async function validateGoogleMapsKey(
         timers.push(setTimeout(() => resolve('ok'), graceMs));
       });
     });
+  } catch (e) {
+    // Don't keep a refused key loaded: the next check, of a corrected key or of this one once
+    // Cloud Console allows it, loads Google Maps afresh, with no page reload.
+    if (e instanceof GoogleKeyRejectedError) unloadGoogleMaps();
+    throw e;
   } finally {
     timers.forEach(clearTimeout);
     authListeners.delete(onFail);
@@ -188,8 +213,6 @@ export async function drawGeoJsonOnGoogleMap(
 
 /** Test hook: forget any loaded key. */
 export function resetGoogleMapsForTests(): void {
-  loaded = null;
-  authFailed = false;
+  unloadGoogleMaps();
   authListeners.clear();
-  document.querySelectorAll('script[src*="maps.googleapis.com"]').forEach((s) => s.remove());
 }

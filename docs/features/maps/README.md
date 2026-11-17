@@ -105,10 +105,11 @@ so it never rewrites a parent record inherited down the tenant tree.
 *Map provider* panel. It checks the key with Google first (an invisible map pinned
 inside the viewport — Google reports a bad key only for a map it actually renders, and
 never for one offscreen), then upserts `mapProvider: "google"` and `googleMapsApiKey`.
-A key Google rejects is not saved. Boundaries still come from turbopass: Google's APIs
-don't expose administrative boundary polygons. The key is sent to every browser that
-draws a map, so restrict it to the deployment's domain (HTTP referrers) in Google Cloud
-Console.
+A key Google rejects during the check is not saved; the operator can correct it, or fix
+it in Google Cloud Console, and save again without reloading the page. Boundaries still
+come from turbopass: Google's APIs don't expose administrative boundary polygons. The
+key is sent to every browser that draws a map, so restrict it to the deployment's domain
+(HTTP referrers) in Google Cloud Console.
 
 **By hand, in management.** The **Map Configuration** editor exposes every field
 as an override: a basemap dropdown, a colour picker, and a live map preview where
