@@ -66,4 +66,36 @@ describe('mapConfigProblem (#2804)', () => {
     expect(mapConfigProblem({ defaultZoom: 12.5 })).toMatch(/whole number from 0 to 22/);
     expect(mapConfigProblem({ defaultZoom: 23 })).toMatch(/whole number from 0 to 22/);
   });
+
+  it('refuses a minimum or maximum zoom the schema would reject', () => {
+    expect(mapConfigProblem({ minZoom: 3.5 })).toBe('Minimum zoom must be a whole number from 0 to 22.');
+    expect(mapConfigProblem({ minZoom: -1 })).toBe('Minimum zoom must be a whole number from 0 to 22.');
+    expect(mapConfigProblem({ maxZoom: 23 })).toBe('Maximum zoom must be a whole number from 0 to 22.');
+    expect(mapConfigProblem({ maxZoom: 18.2 })).toBe('Maximum zoom must be a whole number from 0 to 22.');
+    expect(mapConfigProblem({ minZoom: 0, maxZoom: 22 })).toBeNull();
+  });
+
+  it('refuses a minimum zoom above the maximum', () => {
+    expect(mapConfigProblem({ minZoom: 15, maxZoom: 10 })).toMatch(/Minimum zoom can't be more than Maximum zoom/);
+    expect(mapConfigProblem({ minZoom: 10, maxZoom: 10 })).toBeNull();
+  });
+
+  const BOX = { minLon: 36.6, minLat: -1.45, maxLon: 37.1, maxLat: -1.15 };
+
+  it('accepts no search box, or all four edges', () => {
+    expect(mapConfigProblem({ searchViewbox: BOX })).toBeNull();
+    expect(mapConfigProblem({ searchViewbox: {} })).toBeNull();
+  });
+
+  it('refuses a search box with only some of its edges', () => {
+    expect(mapConfigProblem({ searchViewbox: { minLon: 36.6 } })).toMatch(/needs all four edges/);
+    expect(mapConfigProblem({ searchViewbox: { minLon: BOX.minLon, minLat: BOX.minLat, maxLon: BOX.maxLon } })).toMatch(/needs all four edges/);
+  });
+
+  it('refuses a search box edge out of range, or a box turned inside out', () => {
+    expect(mapConfigProblem({ searchViewbox: { ...BOX, minLon: -181 } })).toBe('Search box — west must be a number between -180 and 180.');
+    expect(mapConfigProblem({ searchViewbox: { ...BOX, maxLat: 91 } })).toBe('Search box — north must be a number between -90 and 90.');
+    expect(mapConfigProblem({ searchViewbox: { ...BOX, minLon: 37.2 } })).toMatch(/west edge must be left of its east edge/);
+    expect(mapConfigProblem({ searchViewbox: { ...BOX, minLat: -1.15 } })).toMatch(/south edge below its north edge/);
+  });
 });

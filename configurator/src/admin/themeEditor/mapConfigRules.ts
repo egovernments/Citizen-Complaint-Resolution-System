@@ -77,10 +77,23 @@ export const KEYLESS_CARTO_NOTE =
 
 const isBlank = (v: unknown) => v === undefined || v === null || v === '';
 
+const isWholeZoom = (v: unknown) => {
+  const z = Number(v);
+  return Number.isInteger(z) && z >= 0 && z <= 22;
+};
+
+const SEARCH_BOX_EDGES = [
+  { key: 'minLon', label: 'Search box — west', min: -180, max: 180 },
+  { key: 'minLat', label: 'Search box — south', min: -90, max: 90 },
+  { key: 'maxLon', label: 'Search box — east', min: -180, max: 180 },
+  { key: 'maxLat', label: 'Search box — north', min: -90, max: 90 },
+] as const;
+
 /**
  * Plain-language reason the record can't be saved, or null. Checks only what
  * the citizen map would otherwise ignore or the server would refuse with a
- * schema error: the starting point needs both halves, in range.
+ * schema error: the starting point needs both halves, the search box all four
+ * edges, every number in range and every zoom a whole number from 0 to 22.
  */
 export function mapConfigProblem(data: Obj): string | null {
   const center = (data.center && typeof data.center === 'object' ? data.center : {}) as Obj;
@@ -95,9 +108,26 @@ export function mapConfigProblem(data: Obj): string | null {
     if (!Number.isFinite(la) || la < -90 || la > 90) return 'Start latitude must be a number between -90 and 90.';
     if (!Number.isFinite(ln) || ln < -180 || ln > 180) return 'Start longitude must be a number between -180 and 180.';
   }
-  if (!isBlank(data.defaultZoom)) {
-    const z = Number(data.defaultZoom);
-    if (!Number.isInteger(z) || z < 0 || z > 22) return 'Start zoom must be a whole number from 0 to 22.';
+  if (!isBlank(data.defaultZoom) && !isWholeZoom(data.defaultZoom)) return 'Start zoom must be a whole number from 0 to 22.';
+  if (!isBlank(data.minZoom) && !isWholeZoom(data.minZoom)) return 'Minimum zoom must be a whole number from 0 to 22.';
+  if (!isBlank(data.maxZoom) && !isWholeZoom(data.maxZoom)) return 'Maximum zoom must be a whole number from 0 to 22.';
+  if (!isBlank(data.minZoom) && !isBlank(data.maxZoom) && Number(data.minZoom) > Number(data.maxZoom)) {
+    return 'Minimum zoom can\'t be more than Maximum zoom.';
+  }
+
+  const box = (data.searchViewbox && typeof data.searchViewbox === 'object' ? data.searchViewbox : {}) as Obj;
+  const filled = SEARCH_BOX_EDGES.filter((edge) => !isBlank(box[edge.key]));
+  if (filled.length > 0 && filled.length < SEARCH_BOX_EDGES.length) {
+    return 'The search box needs all four edges (west, south, east and north), or none. Use "Set search area to this view" under the map, or "Clear search area".';
+  }
+  if (filled.length === SEARCH_BOX_EDGES.length) {
+    for (const edge of SEARCH_BOX_EDGES) {
+      const v = Number(box[edge.key]);
+      if (!Number.isFinite(v) || v < edge.min || v > edge.max) return `${edge.label} must be a number between ${edge.min} and ${edge.max}.`;
+    }
+    if (Number(box.minLon) >= Number(box.maxLon) || Number(box.minLat) >= Number(box.maxLat)) {
+      return 'The search box\'s west edge must be left of its east edge, and its south edge below its north edge.';
+    }
   }
   return null;
 }
