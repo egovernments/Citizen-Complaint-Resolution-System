@@ -62,6 +62,25 @@ interface ParsedEmployee extends ParsedEmployeeRow {
 }
 
 /**
+ * The rows HRMS already has just as the sheet describes them: skipped, and where
+ * to change them instead. The preview and the confirm dialog both show it.
+ */
+function AlreadyAddedNote({ count, className }: { count: number; className?: string }) {
+  const t = useOnboardingT();
+  return (
+    <Alert variant="info" className={className}>
+      <AlertDescription className="text-xs sm:text-sm">
+        {t(
+          'bulk_employees.already_added_info',
+          '%{smart_count} row(s) are employees you’ve already added, so they’ll be skipped. To change their details or send their invitation, use their row in the employee list.',
+          { smart_count: count },
+        )}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+/**
  * The staff-list route into Employees: a template built from the workspace's
  * own departments, designations, roles and boundaries, filled in and uploaded,
  * checked row by row, then created. Hands back to the Employees list when done
@@ -484,6 +503,16 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     }
   };
 
+  // Nothing on the sheet to create: the results, with no create run behind them.
+  const handleFinishWithoutCreating = () => {
+    setCreatedCount(0);
+    setFailedCount(0);
+    setFailures([]);
+    setCreatedEmployees([]);
+    setOutcomes({});
+    setStep('complete');
+  };
+
   const handleDownloadTemplate = () => {
     downloadEmployeeTemplate(targetTenant, departments, designations, boundaries, roles, t);
     trackTemplateDownload('employees', 'employee');
@@ -815,17 +844,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
             <span className="text-destructive">{t('bulk_employees.summary_errors', '%{smart_count} errors', { smart_count: errorCount })}</span>
           </p>
 
-          {skippedCount > 0 && (
-            <Alert variant="info" className="mb-3 sm:mb-4">
-              <AlertDescription className="text-xs sm:text-sm">
-                {t(
-                  'bulk_employees.already_added_info',
-                  '%{smart_count} row(s) are employees you’ve already added, so they’ll be skipped. To change their details or send their invitation, use their row in the employee list.',
-                  { smart_count: skippedCount },
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
+          {skippedCount > 0 && <AlreadyAddedNote count={skippedCount} className="mb-3 sm:mb-4" />}
 
           {/* Every refused row, by its row number: nothing is cut off, so one
               pass over the sheet can fix them all (#2800). */}
@@ -866,12 +885,17 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                   {t('bulk_employees.reupload', 'Re-upload Fixed File')}
                 </Button>
               )}
-              <SubmitBar
-                label={t('bulk_employees.create_count', 'Create %{smart_count} Employees', { smart_count: validCount })}
-                onSubmit={() => setShowConfirmDialog(true)}
-                disabled={validCount === 0}
-                icon={<ChevronRight className="w-4 h-4" />}
-              />
+              {/* Every row already added or refused: nothing to create, so the run
+                  ends here, with its results, rather than on a disabled button. */}
+              {validCount > 0 ? (
+                <SubmitBar
+                  label={t('bulk_employees.create_count', 'Create %{smart_count} Employees', { smart_count: validCount })}
+                  onSubmit={() => setShowConfirmDialog(true)}
+                  icon={<ChevronRight className="w-4 h-4" />}
+                />
+              ) : (
+                <SubmitBar label={t('bulk_employees.done', 'Done')} onSubmit={handleFinishWithoutCreating} icon={<ChevronRight className="w-4 h-4" />} />
+              )}
             </div>
           </div>
         </DigitCard>
@@ -960,18 +984,20 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       {/* Complete */}
       {step === 'complete' && (
         <DigitCard>
-          {/* Nothing created and nothing failed: every row was already added or
-              refused. That is not "0 failed" (#2799). */}
+          {/* A success only when no row is left to fix: rows the preview refused
+              count as much as rows that failed to create. Nothing created with
+              nothing to fix means every row was already added (#2799). */}
           <Banner
-            successful={failedCount === 0 && (createdCount > 0 || errorCount === 0)}
+            successful={rowsToFix.length === 0}
             message={
-              createdCount > 0 && failedCount === 0
-                ? t('bulk_employees.all_created', 'Employees Created Successfully!')
+              rowsToFix.length > 0
+                ? t('bulk_employees.created_to_fix', '%{created} created, %{smart_count} still to fix', {
+                    created: createdCount,
+                    smart_count: rowsToFix.length,
+                  })
                 : createdCount > 0
-                ? t('bulk_employees.some_created', 'Created %{created}, %{failed} failed', { created: createdCount, failed: failedCount })
-                : failedCount === 0
-                ? t('bulk_employees.nothing_new', 'No new employees added')
-                : t('bulk_employees.none_created', 'No employees created — %{failed} failed', { failed: failedCount })
+                ? t('bulk_employees.all_created', 'Employees Created Successfully!')
+                : t('bulk_employees.nothing_new', 'No new employees added')
             }
             info={
               rowsToFix.length > 0
@@ -1108,17 +1134,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               </AlertDescription>
             </Alert>
           )}
-          {skippedCount > 0 && (
-            <Alert variant="info">
-              <AlertDescription className="text-xs sm:text-sm">
-                {t(
-                  'bulk_employees.already_added_info',
-                  '%{smart_count} row(s) are employees you’ve already added, so they’ll be skipped. To change their details or send their invitation, use their row in the employee list.',
-                  { smart_count: skippedCount },
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
+          {skippedCount > 0 && <AlreadyAddedNote count={skippedCount} />}
 
           <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
             <Button

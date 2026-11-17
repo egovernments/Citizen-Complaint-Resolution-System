@@ -323,6 +323,7 @@
 {"code": "app.onboarding.bulk_employees.create_failed", "message": "Failed to create employees. Please try again.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.bulk_employees.created", "message": "Created", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.bulk_employees.created_of", "message": "%{created} of %{total} employees created", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.bulk_employees.created_to_fix", "message": "%{created} created, %{smart_count} still to fix", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.bulk_employees.creating_named", "message": "Creating %{name}...", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.bulk_employees.creating_title", "message": "Step 4.3: Creating Employees", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.bulk_employees.department_not_found", "message": "Department \"%{code}\" not found", "module": "configurator-ui", "locale": "en_IN"},

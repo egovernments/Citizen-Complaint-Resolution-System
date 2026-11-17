@@ -102,7 +102,9 @@ describe('employee sheet preview and results', () => {
     expect(within(dialog).getByText(/1 row\(s\) are employees you’ve already added/)).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: /Create 2 Employees/ }));
 
-    await screen.findByText('Created 1, 1 failed');
+    // Not a success: three rows the preview refused and one that failed are left to fix.
+    const banner = await screen.findByRole('heading', { name: '1 created, 4 still to fix' });
+    expect(banner.className).toContain('text-destructive');
     expect(create.mock.calls.map(([employee]) => employee.code)).toEqual(['E001', 'E005']);
     const counts = (label: string) => screen.getByText(label).closest('tr')?.textContent;
     expect(counts('✓ Created')).toBe('✓ Created1');
@@ -114,6 +116,45 @@ describe('employee sheet preview and results', () => {
     ).toBeTruthy();
     expect(screen.getByText('Row 3: Mobile number is required')).toBeTruthy();
     expect(screen.getByText('Row 5: E002 already exists. Edit them in the employee list, or remove this row.')).toBeTruthy();
+  });
+
+  it('is no success while refused rows are left, even with every valid row created (#2799)', async () => {
+    create.mockImplementation(async (employee: Employee) => employee);
+    await page();
+    fireEvent.click(screen.getByRole('button', { name: /Create 2 Employees/ }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /Create 2 Employees/ }));
+    const banner = await screen.findByRole('heading', { name: '2 created, 3 still to fix' });
+    expect(banner.className).toContain('text-destructive');
+    expect(screen.queryByText('Employees Created Successfully!')).toBeNull();
+  });
+
+  it('ends with Done, not a disabled Create 0, when every row is already added (#2799)', async () => {
+    render(<BulkEmployeeImport onDone={vi.fn()} onCancel={vi.fn()} />);
+    await waitFor(() => expect((document.getElementById('employee-file-upload') as HTMLInputElement).disabled).toBe(false));
+    upload([ROWS[4]]);
+    await screen.findByText(/Summary: 1 total/);
+    expect(screen.queryByRole('button', { name: /Create 0 Employees/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Done/ }));
+
+    const banner = await screen.findByRole('heading', { name: 'No new employees added' });
+    expect(banner.className).toContain('text-success');
+    expect(screen.getByText('⏭️ Already added (skipped)').closest('tr')?.textContent).toBe('⏭️ Already added (skipped)1');
+    expect(screen.queryByText('Rows still to fix:')).toBeNull();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('ends with Done and the rows to fix when every row is refused or already added (#2799)', async () => {
+    render(<BulkEmployeeImport onDone={vi.fn()} onCancel={vi.fn()} />);
+    await waitFor(() => expect((document.getElementById('employee-file-upload') as HTMLInputElement).disabled).toBe(false));
+    upload([ROWS[1], ROWS[4]]);
+    await screen.findByText(/Summary: 2 total/);
+    fireEvent.click(screen.getByRole('button', { name: /Done/ }));
+
+    const banner = await screen.findByRole('heading', { name: '0 created, 1 still to fix' });
+    expect(banner.className).toContain('text-destructive');
+    expect(screen.getByText('Rows still to fix:')).toBeTruthy();
+    expect(screen.getByText('Row 2: Mobile number is required')).toBeTruthy();
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('finds a re-uploaded row without a code by its email, and never hands a refused row’s code to another (#2799)', async () => {

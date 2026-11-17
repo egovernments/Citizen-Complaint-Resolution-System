@@ -326,6 +326,7 @@
 {"code": "app.onboarding.bulk_employees.create_failed", "message": "Échec de la création des employés. Veuillez réessayer.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.bulk_employees.created", "message": "Créé", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.bulk_employees.created_of", "message": "%{created} employés créés sur %{total}", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.bulk_employees.created_to_fix", "message": "%{created} créé(s), %{smart_count} encore à corriger", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.bulk_employees.creating_named", "message": "Création de %{name}...", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.bulk_employees.creating_title", "message": "Étape 4.3 : Création des employés", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.bulk_employees.department_not_found", "message": "Service « %{code} » introuvable", "module": "configurator-ui", "locale": "fr_FR"},

@@ -326,6 +326,7 @@
 {"code": "app.onboarding.bulk_employees.create_failed", "message": "कर्मचारी नहीं बनाए जा सके। कृपया पुनः प्रयास करें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.bulk_employees.created", "message": "बनाया गया", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.bulk_employees.created_of", "message": "%{total} में से %{created} कर्मचारी बनाए गए", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.onboarding.bulk_employees.created_to_fix", "message": "%{created} बनाए गए, %{smart_count} अभी ठीक करने बाकी", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.bulk_employees.creating_named", "message": "%{name} बनाया जा रहा है...", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.bulk_employees.creating_title", "message": "चरण 4.3: कर्मचारी बनाए जा रहे हैं", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.bulk_employees.department_not_found", "message": "विभाग “%{code}” नहीं मिला", "module": "configurator-ui", "locale": "hi_IN"},
