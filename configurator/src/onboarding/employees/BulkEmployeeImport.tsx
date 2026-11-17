@@ -37,7 +37,7 @@ import {
 import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import { parseExcelFile, parseEmployeeExcel, type ParsedEmployeeRow, type RejectedEmployeeRow } from '@/utils/excelParser';
 import { downloadEmployeeTemplate, employeeTemplateFilename } from '@/utils/templateBuilder';
-import { codeProblem, employeesByCode, matchesSheetRow, withEmployeeCodes, type EmployeeRecord } from './employeesApi';
+import { alreadyAdded, codeProblem, employeesByCode, withEmployeeCodes, type EmployeeRecord } from './employeesApi';
 import { describeImportFailure, describeSheetProblem, rowReason } from './bulkResults';
 import { reportStepError, trackImport, trackTemplateDownload, trackUploadRefused } from '../telemetry';
 import { useOnboardingT } from '../i18n';
@@ -205,8 +205,10 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
         trackUploadRefused('employees', 'employee', 'EXISTING_UNAVAILABLE');
         return;
       }
+      // A refused row's code stays taken: the fixed re-upload still asks for it.
+      const rows = withEmployeeCodes(result.data, existing, result.rejected.map((row) => row.employeeCode));
       const validatedEmployees = [
-        ...validateEmployees(withEmployeeCodes(result.data, existing), existing),
+        ...validateEmployees(rows, [...rows, ...result.rejected], existing),
         ...result.rejected.map(refusedRow),
       ].sort((a, b) => a.row - b.row);
       setEmployees(validatedEmployees);
@@ -255,18 +257,24 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     error: rejected.problems.map((problem) => describeSheetProblem(problem, t)).join('; '),
   });
 
-  const validateEmployees = (rawEmployees: ParsedEmployeeRow[], existing: Map<string, EmployeeRecord>): ParsedEmployee[] => {
+  // `sheet` is every row of the upload, the refused ones included, for the codes
+  // checks across rows.
+  const validateEmployees = (
+    rawEmployees: ParsedEmployeeRow[],
+    sheet: { employeeCode: string }[],
+    existing: Map<string, EmployeeRecord>,
+  ): ParsedEmployee[] => {
     const deptCodes = departments.map((d) => d.code);
     const desigCodes = designations.map((d) => d.code);
     const validRoles = roles.map((r) => r.code);
 
     return rawEmployees.map((emp) => {
-      const clash = codeProblem(emp, rawEmployees, existing);
       // Added already, just as the row has them (an earlier upload of this
       // sheet, say): skipped, never counted as created again (#2799).
-      if (clash && 'exists' in clash && matchesSheetRow(emp, clash.exists, (cell) => resolveJurisdiction(cell).match?.code)) {
+      if (alreadyAdded(emp, sheet, existing, (cell) => resolveJurisdiction(cell).match?.code)) {
         return { ...emp, status: 'skipped' };
       }
+      const clash = codeProblem(emp, sheet, existing);
       const errors: string[] = [];
       if (!emp.emailId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emp.emailId)) errors.push(t('bulk_employees.email_required', 'A valid email is required to invite an employee.'));
       if (clash) {

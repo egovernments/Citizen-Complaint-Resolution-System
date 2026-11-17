@@ -55,9 +55,9 @@ const record = (code: string, name: string, mobileNumber: string, emailId: strin
     jurisdictions: [{ boundary: 'WARD_1', isActive: true }],
   }) as unknown as EmployeeRecord;
 
-const upload = () => {
+const upload = (rows: string[][] = ROWS) => {
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([HEADER, ...ROWS]), 'Employee');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([HEADER, ...rows]), 'Employee');
   const bytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
   const input = document.getElementById('employee-file-upload') as HTMLInputElement;
   fireEvent.change(input, { target: { files: [new File([bytes], 'staff.xlsx')] } });
@@ -114,6 +114,27 @@ describe('employee sheet preview and results', () => {
     ).toBeTruthy();
     expect(screen.getByText('Row 3: Mobile number is required')).toBeTruthy();
     expect(screen.getByText('Row 5: E002 already exists. Edit them in the employee list, or remove this row.')).toBeTruthy();
+  });
+
+  it('finds a re-uploaded row without a code by its email, and never hands a refused row’s code to another (#2799)', async () => {
+    existing.mockResolvedValue(new Map([['EMP_0004', record('EMP_0004', 'Lucy Njeri', '712000004', 'lucy@example.org', 'ROADS')]]));
+    render(<BulkEmployeeImport onDone={vi.fn()} onCancel={vi.fn()} />);
+    await waitFor(() => expect((document.getElementById('employee-file-upload') as HTMLInputElement).disabled).toBe(false));
+    upload([
+      ['', 'Lucy Njeri', '712000004', 'lucy@example.org', 'ROADS', 'ENGINEER', 'EMPLOYEE', 'WARD_1'], // row 2: added on an earlier run
+      ['EMP_0010', 'Sam Kiptoo', '', 'sam@example.org', 'ROADS', 'ENGINEER', 'EMPLOYEE', 'WARD_1'], // row 3: refused, keeps EMP_0010
+      ['', 'Tom Ouma', '712000006', 'tom@example.org', 'ROADS', 'ENGINEER', 'EMPLOYEE', 'WARD_1'], // row 4: new
+      ['EMP_0010', 'Ann Wairimu', '712000007', 'ann@example.org', 'ROADS', 'ENGINEER', 'EMPLOYEE', 'WARD_1'], // row 5: row 3's code
+    ]);
+    await screen.findByText(/Summary: 4 total/);
+    expect(screen.getByText('1 already added (skipped)')).toBeTruthy();
+    expect(screen.getByText('Row 3: Mobile number is required')).toBeTruthy();
+    expect(screen.getByText('Row 5: EMP_0010 is on more than one row')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Create 1 Employees/ }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /Create 1 Employees/ }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create.mock.calls[0][0].code).toBe('EMP_0011');
   });
 
   it('stops when it can’t tell who is already added, rather than counting them as created (#2798)', async () => {

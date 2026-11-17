@@ -106,6 +106,26 @@ describe('bulk import codes, through the real parser (#2456)', () => {
     ]);
   });
 
+  it('gives a code-less row the code of the active employee with its email, so a re-upload finds them (#2799)', () => {
+    expect(check(sheet([{ emailId: ' ANITA@example.org' }, { emailId: 'b@example.org' }]))).toEqual([
+      { code: 'EMP_0001', problem: { exists: hrms.get('EMP_0001') } },
+      { code: 'EMP_0008', problem: null },
+    ]);
+  });
+
+  it('never gives a code-less row a removed employee’s code', () => {
+    const removed = new Map([
+      ...hrms,
+      ['EMP_0007', { ...employee('EMP_0007', { isActive: false }), user: { name: 'Old Hand', emailId: 'old@example.org' } } as unknown as Employee],
+    ]);
+    expect(withEmployeeCodes(sheet([{ emailId: 'old@example.org' }]), removed).map((row) => row.employeeCode)).toEqual(['EMP_0008']);
+  });
+
+  it('keeps the codes refused rows ask for out of the numbering (#2799)', () => {
+    const rows = sheet([{ emailId: 'a@example.org' }]);
+    expect(withEmployeeCodes(rows, hrms, ['EMP_0010', '']).map((row) => row.employeeCode)).toEqual(['EMP_0011']);
+  });
+
   it('flags a code on two rows of the sheet', () => {
     expect(check(sheet([{ employeeCode: 'EMP_0020', emailId: 'a@example.org' }, { employeeCode: 'EMP_0020', emailId: 'b@example.org' }]))
       .map((row) => row.problem)).toEqual([{ repeated: true }, { repeated: true }]);
