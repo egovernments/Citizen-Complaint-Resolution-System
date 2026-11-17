@@ -548,6 +548,7 @@
 {"code": "app.onboarding.departments.no_departments", "message": "Aucun service pour l’instant. Les réclamations y sont orientées : ajoutez-en au moins un.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.departments.no_designations", "message": "Aucune fonction pour l’instant. Chaque employé en occupe une : ajoutez-en au moins une.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.departments.remove_department_effect", "message": "Les réclamations et les employés ne pourront plus utiliser %{name} ensuite.", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.departments.remove_department_unused", "message": "%{name} n’est supprimé que si aucun employé, aucune fonction ni aucune catégorie de réclamation ne l’utilise.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.departments.remove_designation_effect", "message": "Les employés ne pourront plus occuper la fonction %{name} ensuite.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.departments.search_departments", "message": "Rechercher des services", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.departments.search_designations", "message": "Rechercher des fonctions", "module": "configurator-ui", "locale": "fr_FR"},

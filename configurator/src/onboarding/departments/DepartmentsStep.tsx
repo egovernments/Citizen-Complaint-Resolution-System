@@ -146,7 +146,7 @@ function MasterSection({
                         description={
                           isDesignation
                             ? t('departments.remove_designation_effect', 'Employees won’t be able to hold %{name} after this.', { name })
-                            : t('departments.remove_department_effect', 'Complaints and employees won’t be able to use %{name} after this.', { name })
+                            : t('departments.remove_department_unused', '%{name} is removed only if no employee, designation or complaint category uses it.', { name })
                         }
                         onConfirm={() => onRemove(record)}
                         trigger={

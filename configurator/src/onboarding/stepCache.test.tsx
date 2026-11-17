@@ -155,6 +155,8 @@ describe('Departments', () => {
     vi.mocked(checkRemovable).mockRejectedValueOnce(new Error(inUse));
     fireEvent.click(screen.getByRole('button', { name: 'Remove Roads' }));
     const dialog = await screen.findByRole('alertdialog');
+    // The confirmation says up front that a department in use stays.
+    expect(within(dialog).getByText('Roads is removed only if no employee, designation or complaint category uses it.')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
     expect(await within(dialog).findByText(inUse)).toBeInTheDocument();

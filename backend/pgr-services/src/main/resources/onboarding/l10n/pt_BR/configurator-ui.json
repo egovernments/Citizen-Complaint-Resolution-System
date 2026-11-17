@@ -548,6 +548,7 @@
 {"code": "app.onboarding.departments.no_departments", "message": "Nenhum departamento ainda. As reclamações são encaminhadas para eles, então adicione pelo menos um.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.departments.no_designations", "message": "Nenhum cargo ainda. Todo funcionário ocupa um, então adicione pelo menos um.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.departments.remove_department_effect", "message": "Reclamações e funcionários não poderão mais usar %{name} depois disso.", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.onboarding.departments.remove_department_unused", "message": "%{name} só é removido se nenhum funcionário, cargo ou categoria de reclamação o usar.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.departments.remove_designation_effect", "message": "Os funcionários não poderão mais ocupar %{name} depois disso.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.departments.search_departments", "message": "Pesquisar departamentos", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.departments.search_designations", "message": "Pesquisar cargos", "module": "configurator-ui", "locale": "pt_BR"},

@@ -67,6 +67,8 @@ function staticCalls(): Map<string, string> {
 const RETIRED: Record<string, string> = {
   'employees.signs_in_as': 'They sign in as %{username}.',
   'bulk_employees.got_account': 'User account (username: employee code)',
+  // A department in use can't be removed any more (#2797), so the confirmation says so under a new key.
+  'departments.remove_department_effect': 'Complaints and employees won’t be able to use %{name} after this.',
 };
 
 /** The keys built at runtime, from the lists they come from. */

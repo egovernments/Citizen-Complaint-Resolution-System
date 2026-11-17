@@ -546,6 +546,7 @@
 {"code": "app.onboarding.departments.no_departments", "message": "No departments yet. Complaints are routed to them, so add at least one.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.departments.no_designations", "message": "No designations yet. Every employee holds one, so add at least one.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.departments.remove_department_effect", "message": "Complaints and employees won’t be able to use %{name} after this.", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.departments.remove_department_unused", "message": "%{name} is removed only if no employee, designation or complaint category uses it.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.departments.remove_designation_effect", "message": "Employees won’t be able to hold %{name} after this.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.departments.search_departments", "message": "Search departments", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.departments.search_designations", "message": "Search designations", "module": "configurator-ui", "locale": "en_IN"},
