@@ -67,22 +67,11 @@ export function BulkMastersUpload({
       }
       // Rows with a bad code, or a designation linked to a department that doesn't exist, are named and left out.
       const checked = checkSheet(
-        departments.data,
-        designations.data,
+        { departments, designations },
         { departments: existingDepartments, designations: existingDesignations, linkable: linkableDepartments },
         t,
       );
-      setParsed({
-        fileName: file.name,
-        departments: checked.departments,
-        designations: checked.designations,
-        problems: [
-          ...[...departments.validation.errors, ...designations.validation.errors].map((problem) =>
-            problem.row ? t('common.row_problem', 'Row %{row}: %{problem}', { row: problem.row, problem: problem.message }) : problem.message,
-          ),
-          ...checked.problems,
-        ],
-      });
+      setParsed({ fileName: file.name, ...checked });
     } catch {
       setError(t('departments.bulk.unreadable', 'That file couldn’t be read. Upload the filled-in .xlsx template.'));
       trackUploadRefused('departments', 'department', 'UNREADABLE');

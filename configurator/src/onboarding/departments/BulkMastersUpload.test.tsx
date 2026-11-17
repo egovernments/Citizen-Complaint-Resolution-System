@@ -42,7 +42,7 @@ describe('BulkMastersUpload', () => {
     );
     fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
 
-    expect(await screen.findByText('Row 3: department NOPE doesn’t exist. Add it to the Department sheet, or use one you already have.')).toBeTruthy();
+    expect(await screen.findByText('Designation row 3: department NOPE doesn’t exist. Add it to the Department sheet, or use one you already have.')).toBeTruthy();
     expect(screen.getByText('masters.xlsx has 1 department and 1 designation.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Bring them in' }));

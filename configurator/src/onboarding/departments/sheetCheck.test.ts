@@ -12,8 +12,7 @@ function workbook(departments: Record<string, unknown>[], designations: Record<s
 
 const check = (wb: XLSX.WorkBook, workspace: Partial<Record<keyof SheetContext, string[]>> = {}) =>
   checkSheet(
-    parseDepartmentExcel(wb).data,
-    parseDesignationExcel(wb).data,
+    { departments: parseDepartmentExcel(wb), designations: parseDesignationExcel(wb) },
     {
       departments: new Set(workspace.departments),
       designations: new Set(workspace.designations),
@@ -31,7 +30,7 @@ describe('checkSheet', () => {
       ],
     );
     const result = check(wb);
-    expect(result.problems).toEqual(['Row 3: department NOPE doesn’t exist. Add it to the Department sheet, or use one you already have.']);
+    expect(result.problems).toEqual(['Designation row 3: department NOPE doesn’t exist. Add it to the Department sheet, or use one you already have.']);
     expect(result.designations.map((row) => row.code)).toEqual(['CLERK']);
     expect(result.departments).toEqual([{ code: 'ROADS', name: 'Roads' }]);
   });
@@ -61,7 +60,7 @@ describe('checkSheet', () => {
   it('lists every missing department on the row', () => {
     const wb = workbook([], [{ code: 'ENG', name: 'Engineer', department: 'NOPE,GHOST' }]);
     expect(check(wb).problems).toEqual([
-      'Row 2: departments NOPE, GHOST don’t exist. Add them to the Department sheet, or use ones you already have.',
+      'Designation row 2: departments NOPE, GHOST don’t exist. Add them to the Department sheet, or use ones you already have.',
     ]);
   });
 
@@ -77,16 +76,16 @@ describe('checkSheet', () => {
     expect(result.departments).toEqual([]);
     expect(result.designations).toEqual([]);
     expect(result.problems).toEqual([
-      'Row 3: department code “BAD CODE!” can only use capital letters, digits and underscores.',
-      'Row 2: department OFF doesn’t exist. Add it to the Department sheet, or use one you already have.',
+      'Department row 3: department code “BAD CODE!” can only use capital letters, digits and underscores.',
+      'Designation row 2: department OFF doesn’t exist. Add it to the Department sheet, or use one you already have.',
     ]);
   });
 
   it('refuses codes the add dialog refuses (D-2)', () => {
     const wb = workbook([{ code: 'roads', name: 'Roads' }], [{ code: 'Ward Officer', name: 'Ward officer' }]);
     expect(check(wb).problems).toEqual([
-      'Row 2: department code “roads” can only use capital letters, digits and underscores.',
-      'Row 2: designation code “Ward Officer” can only use capital letters, digits and underscores.',
+      'Department row 2: department code “roads” can only use capital letters, digits and underscores.',
+      'Designation row 2: designation code “Ward Officer” can only use capital letters, digits and underscores.',
     ]);
   });
 
@@ -109,6 +108,17 @@ describe('checkSheet', () => {
     expect(result.designations).toEqual([
       { code: 'OLD', name: 'Old post', departments: ['GONE'] },
       { code: 'old_clerk', name: 'Old clerk', departments: [] },
+    ]);
+  });
+
+  it('names the sheet on the parser’s own problems too, by the sheet’s row number', () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['code', 'name'], ['ROADS', 'Roads'], [], ['WATER']]), 'Department');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['code', 'name', 'department'], ['', 'Clerk'], ['ENG', 'Engineer', 'WATER']]), 'Designation');
+    expect(check(wb).problems).toEqual([
+      'Department row 4: Department name is required',
+      'Designation row 2: Designation code is required',
+      'Designation row 3: department WATER doesn’t exist. Add it to the Department sheet, or use one you already have.',
     ]);
   });
 });

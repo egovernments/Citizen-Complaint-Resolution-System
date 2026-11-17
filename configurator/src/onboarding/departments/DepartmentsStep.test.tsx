@@ -76,7 +76,7 @@ describe('DepartmentsStep bulk upload', () => {
 
     expect(await screen.findByText('masters.xlsx has 0 departments and 2 designations.')).toBeInTheDocument();
     expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
-      'Row 4: department NOPE doesn’t exist. Add it to the Department sheet, or use one you already have.',
+      'Designation row 4: department NOPE doesn’t exist. Add it to the Department sheet, or use one you already have.',
     ]);
     fireEvent.click(screen.getByRole('button', { name: 'Bring them in' }));
     await waitFor(() =>
