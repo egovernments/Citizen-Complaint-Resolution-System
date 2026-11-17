@@ -46,9 +46,11 @@ vi.mock("../../src/modules/organizations/organization-service.js", () => {
     ensureOrganizationMembership: vi.fn(async ({ organizationId, userId }: { organizationId: string; userId: string }) => { f.members.add(`${organizationId}:${userId}`); fail("membership"); }),
     sendPasswordSetupEmail: vi.fn(async () => { f.emails++; fail("email"); }),
     inspectPasswordSetupAccountById: vi.fn(async (id: string) => ({ userId: id, hasPassword: f.passwords.has(id), federatedProviders: [], emailVerified: f.users.get(id)?.emailVerified === true })),
-    readTenantMappingForTenant: vi.fn(async (tenantId: string) => ({ urlSlug: `${tenantId}-slug`, tenantId })),
   };
 });
+vi.mock("../../src/modules/access-context/tenant-route.js", () => ({
+  liveRouteForTenant: vi.fn(async (tenantId: string) => ({ urlSlug: `${tenantId}-slug`, tenantId, rootTenantId: tenantId, parentTenantId: null, fallbackTenantIds: [], name: tenantId })),
+}));
 vi.mock("../../src/modules/workspace-members/authority.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../src/modules/workspace-members/authority.js")>();
   const account = (tenantId: string, uuid: string) => ({ tenantId, uuid, type: "EMPLOYEE", active: true, userName: "employee", name: "Employee", roles: f.targetRoles });
@@ -80,11 +82,12 @@ vi.mock("../../src/modules/revocation/index.js", () => ({ revokeAccount: vi.fn(a
 vi.mock("../../src/modules/citizen-otp/audit.js", () => ({ audit: vi.fn(async () => {}) }));
 import { acceptWorkspaceInvitation, declineWorkspaceInvitation, linkWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberEmail } from "../../src/modules/workspace-members/service.js";
 import { readOnboardingOrganizations } from "../../src/modules/onboarding/organization-reader.js";
-import { isOrganizationMember, readTenantMappingForTenant, request, sendPasswordSetupEmail } from "../../src/modules/organizations/organization-service.js";
+import { isOrganizationMember, request, sendPasswordSetupEmail } from "../../src/modules/organizations/organization-service.js";
 import { readDigitAccount, requireWorkspace } from "../../src/modules/workspace-members/authority.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { audit } from "../../src/modules/citizen-otp/audit.js";
 import { getPasswordSetupAttempt } from "../../src/modules/sessions/session-store.js";
+import { liveRouteForTenant } from "../../src/modules/access-context/tenant-route.js";
 import { activateStaffCredential, StaffLoginError } from "../../src/modules/accounts/credential-service.js";
 const uuid = "00000000-0000-4000-8000-000000000001";
 const input = { actor: "admin", tenantId: "pg", digitUuid: uuid, email: "employee@example.test" };
@@ -439,7 +442,7 @@ describe("admin resend of the activation email", () => {
 describe("working out the invitee's password landing (#2801)", () => {
   const resend = { ...input, resend: true };
   const windowKey = () => `${config.cachePrefix}:identity:member-resend:pg:${uuid}`;
-  const pgRoute = { urlSlug: "pg-slug", tenantId: "pg" } as Awaited<ReturnType<typeof readTenantMappingForTenant>>;
+  const pgRoute = { urlSlug: "pg-slug", tenantId: "pg", rootTenantId: "pg", parentTenantId: null, fallbackTenantIds: [], name: "pg" };
   const savedSecret = config.keycloakEmployeeClientSecret;
   let warn: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
@@ -452,7 +455,7 @@ describe("working out the invitee's password landing (#2801)", () => {
 
   it("on invite: before membership and activation, from the account validateBinding read", async () => {
     let seen: object | undefined;
-    vi.mocked(readTenantMappingForTenant).mockImplementationOnce(async () => {
+    vi.mocked(liveRouteForTenant).mockImplementationOnce(async () => {
       seen = { member: f.members.has("pg:new-1"), bindings: bindingDoc(f.users.get("new-1")!).bindings.length, activations: f.activations };
       return pgRoute;
     });
@@ -464,7 +467,7 @@ describe("working out the invitee's password landing (#2801)", () => {
   });
 
   it("on invite: a failed route lookup still sends the email, through the Configurator, and finishes the link", async () => {
-    vi.mocked(readTenantMappingForTenant).mockImplementationOnce(async () => { throw new Error("Keycloak Admin unavailable"); });
+    vi.mocked(liveRouteForTenant).mockImplementationOnce(async () => { throw new Error("Keycloak Admin unavailable"); });
     await expect(linkWorkspaceMember(input)).resolves.toMatchObject({ activationEmailSent: true, binding: { state: "active" } });
     expect(sent().map((email) => email.clientId)).toEqual([config.keycloakBffClientId]);
     expect(sent()[0].redirectUri).toMatch(/\/password\/setup-complete\/[^/]+$/);
@@ -476,7 +479,7 @@ describe("working out the invitee's password landing (#2801)", () => {
     await linkWorkspaceMember(input);
     vi.mocked(sendPasswordSetupEmail).mockClear();
     let held: number[] = [];
-    vi.mocked(readTenantMappingForTenant).mockImplementationOnce(async () => {
+    vi.mocked(liveRouteForTenant).mockImplementationOnce(async () => {
       held = [await getRedis().exists(personLeaseKey("new-1")), await getRedis().exists(windowKey())];
       return pgRoute;
     });
@@ -490,7 +493,7 @@ describe("working out the invitee's password landing (#2801)", () => {
   it("on resend: a failed route lookup still sends the email, through the Configurator, and keeps the cooldown", async () => {
     await linkWorkspaceMember(input);
     vi.mocked(sendPasswordSetupEmail).mockClear();
-    vi.mocked(readTenantMappingForTenant).mockImplementationOnce(async () => { throw new Error("DIGIT unavailable"); });
+    vi.mocked(liveRouteForTenant).mockImplementationOnce(async () => { throw new Error("DIGIT unavailable"); });
     await expect(linkWorkspaceMember(resend)).resolves.toMatchObject({ activationEmailSent: true, activationEmail: "password_setup" });
     expect(sent().map((email) => email.clientId)).toEqual([config.keycloakBffClientId]);
     expect(await getRedis().exists(windowKey())).toBe(1);

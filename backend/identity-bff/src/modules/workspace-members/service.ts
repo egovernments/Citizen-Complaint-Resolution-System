@@ -5,7 +5,7 @@ import { linkRequestId, normalizeLinkEmail } from "../bindings/link-request-id.j
 import { invitationExpiryHours } from "../bindings/invitations.js";
 import { accept, bindingsFromUser, createPending, effectiveBinding, ensureActive, readBindings, readBindingUser, recordBindingEmail, remove, type Binding } from "../bindings/store.js";
 import { BindingConflictError, BindingError, type BindingUser } from "../bindings/types.js";
-import { ensureOrganizationMembership, inspectPasswordSetupAccountById, isOrganizationMember, readTenantMappingForTenant, request } from "../organizations/organization-service.js";
+import { ensureOrganizationMembership, inspectPasswordSetupAccountById, isOrganizationMember, request } from "../organizations/organization-service.js";
 import { acquireRedisLease, getRedis } from "../../infrastructure/redis.js";
 import { createdId, paged, readUser } from "../../integrations/keycloak/admin-api.js";
 import { readOnboardingOrganizations } from "../onboarding/organization-reader.js";
@@ -13,9 +13,9 @@ import { organizationAttribute } from "../onboarding/primitives.js";
 import { updateKeycloakUser } from "../sync/keycloak-writer.js";
 import { accountEntries } from "../sync/state.js";
 import { mirrorPerson } from "../sync/mirror.js";
-import { sendPasswordSetup } from "../authentication/password-setup.js";
+import { sendPasswordSetup, surfacePasswordLanding, type PasswordSetupLanding } from "../authentication/password-setup.js";
 import { oidcClientForSurface } from "../authentication/oidc.js";
-import { surfaceReturnPrefix } from "../authentication/surfaces.js";
+import { liveRouteForTenant } from "../access-context/tenant-route.js";
 import type { DigitRole } from "../managed-accounts/digit-user-client.js";
 import { audit } from "../citizen-otp/audit.js";
 import { mayManageRoles, readDigitAccount, requireAccountAdmin, requireWorkspace, validateBinding } from "./authority.js";
@@ -26,19 +26,18 @@ import { revokeAccount } from "../revocation/index.js";
  * tenant: the rule the Configurator's own context select applies) returns to the Configurator.
  * Everyone else returns to the workspace's employee app through the employee client, exactly as
  * that app's own forgot-password does, instead of a Configurator "Choose a workspace" screen
- * they can't use. Without a workspace route or an employee client, and when the route lookup
- * fails: the Configurator, as before, so a landing problem never stops the email.
+ * they can't use. Without an employee client or a live workspace route (`liveRouteForTenant`),
+ * and when the route lookup fails: the Configurator, as before, so a landing problem never stops
+ * the email.
  */
-export async function passwordSetupLanding(tenantId: string, roles: DigitRole[]): Promise<{
-  returnTo: string; clientId: string; tenantSlug: string | undefined;
-}> {
+export async function passwordSetupLanding(tenantId: string, roles: DigitRole[]): Promise<PasswordSetupLanding> {
   const configurator = { returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId, tenantSlug: undefined };
   if (roles.some((r) => r.tenantId === tenantId && config.digitConfiguratorRoles.includes(r.code))) return configurator;
   const employee = oidcClientForSurface("employee", "password");
   if (!employee) return configurator;
   try {
-    const route = await readTenantMappingForTenant(tenantId);
-    return route ? { returnTo: surfaceReturnPrefix("employee", route.urlSlug), clientId: employee.clientId, tenantSlug: route.urlSlug } : configurator;
+    const route = await liveRouteForTenant(tenantId);
+    return route ? surfacePasswordLanding("employee", employee, route) : configurator;
   } catch (error) {
     console.warn("Password setup landing unavailable; the link returns to the Configurator", { tenantId, error: (error as Error).message });
     return configurator;
