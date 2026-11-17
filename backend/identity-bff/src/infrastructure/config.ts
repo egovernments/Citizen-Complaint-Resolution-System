@@ -130,8 +130,8 @@ export const config = {
   identityMagicLinkRequestWindowSeconds: parseInt(
     process.env.IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS || "1800",
   ),
-  // Email requests are counted per address first, then per IP with a much
-  // higher limit: an office behind one NAT shares an IP (#2805).
+  // Email requests are counted per IP (IPv6 by /64) and per address, with the
+  // IP limit much higher: an office behind one NAT shares an IP (#2805).
   identityMagicLinkRequestLimit: parseInt(
     process.env.IDENTITY_MAGIC_LINK_REQUEST_LIMIT || "3",
   ),

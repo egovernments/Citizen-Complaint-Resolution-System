@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { isIP } from "node:net";
 import { config } from "./config.js";
 import { getRedis } from "./redis.js";
 
@@ -25,35 +26,83 @@ export async function uncount(key: string): Promise<void> {
   await getRedis().eval(UNCOUNT, 1, key);
 }
 
-export type EmailRequestAllowance =
+/**
+ * Counts one request against several fixed windows in a single atomic script
+ * (one round trip), in order. The first bucket over its limit refuses the
+ * request and keeps that charge, as refused requests count where they were
+ * refused. Later buckets are not counted. Earlier ones give their charge back
+ * unless they are `keepOnRefusal`. A given-back counter that reaches zero is
+ * deleted, so a refused request never starts a window. Returns the 1-based
+ * index of the refusing bucket and its window's remaining seconds, or 0.
+ */
+const RESERVE_IN_WINDOWS = `for i = 1, #KEYS do
+    local count = redis.call('INCR', KEYS[i])
+    if redis.call('TTL', KEYS[i]) < 0 then redis.call('EXPIRE', KEYS[i], ARGV[3 * i - 1]) end
+    if count > tonumber(ARGV[3 * i - 2]) then
+      for j = 1, i - 1 do
+        if ARGV[3 * j] ~= '1' and redis.call('DECR', KEYS[j]) <= 0 then redis.call('DEL', KEYS[j]) end
+      end
+      return {i, redis.call('TTL', KEYS[i])}
+    end
+  end
+  return {0, 0}`;
+
+export interface WindowBucket {
+  key: string;
+  limit: number;
+  windowSeconds: number;
+  /** Keep this charge when a later bucket refuses the request; by default it is given back. */
+  keepOnRefusal?: boolean;
+}
+
+export type WindowReservation =
   | { allowed: true }
-  | { allowed: false; code: "EMAIL_RATE_LIMITED" | "NETWORK_RATE_LIMITED"; retryAfter: number };
+  | { allowed: false; refusedBy: number; retryAfter: number };
 
 /**
- * Limits for a request that sends an email (#2805): counted per address
- * first, then per IP with a much higher limit, because an office behind one
- * NAT shares an IP. A request the address limit refuses costs the shared IP
- * budget nothing; one the IP limit refuses gives back its address charge.
- * The address counter is keyed by the address as typed, whether or not an
- * account has it, so a refusal says nothing about which accounts exist.
+ * One request against `buckets`, checked in the given order: either all of
+ * them have room and are charged, or `refusedBy` is the index of the first
+ * that refused, with the seconds left in its window. A Redis failure leaves
+ * nothing half-charged.
  */
-export async function reserveEmailRequest(input: {
-  addressKey: string;
-  ipKey: string;
-  addressLimit: number;
-  ipLimit: number;
-  windowSeconds: number;
-}): Promise<EmailRequestAllowance> {
-  const address = await countInWindow(input.addressKey, input.windowSeconds);
-  if (address.count > input.addressLimit) {
-    return { allowed: false, code: "EMAIL_RATE_LIMITED", retryAfter: Math.max(1, address.ttl) };
+export async function reserveInWindows(buckets: readonly WindowBucket[]): Promise<WindowReservation> {
+  const args = buckets.flatMap((bucket) => [bucket.limit, bucket.windowSeconds, bucket.keepOnRefusal ? 1 : 0]);
+  const [refusedBy, ttl] = await getRedis().eval(
+    RESERVE_IN_WINDOWS, buckets.length, ...buckets.map((bucket) => bucket.key), ...args,
+  ) as [number, number];
+  return Number(refusedBy) === 0
+    ? { allowed: true }
+    : { allowed: false, refusedBy: Number(refusedBy) - 1, retryAfter: Math.max(1, Number(ttl)) };
+}
+
+/** The eight 16-bit groups of a valid IPv6 address (an embedded IPv4 tail fills the last two). */
+function ipv6Groups(address: string): number[] {
+  const parse = (part: string | undefined) => (part ? part.split(":") : []).flatMap((group) => {
+    if (!group.includes(".")) return [parseInt(group, 16)];
+    const [a, b, c, d] = group.split(".").map(Number) as [number, number, number, number];
+    return [(a << 8) | b, (c << 8) | d];
+  });
+  const [head, tail] = address.split("::");
+  const front = parse(head);
+  const back = parse(tail);
+  return [...front, ...new Array<number>(8 - front.length - back.length).fill(0), ...back];
+}
+
+/**
+ * The network a per-IP limit counts a caller under. IPv4 is the address
+ * itself, also when written as IPv4-mapped IPv6. IPv6 is its /64: a home or
+ * host is normally given a whole /64, so keying single IPv6 addresses would
+ * give one caller endless fresh budgets.
+ */
+export function rateLimitNetwork(ip: string | undefined): string {
+  if (!ip) return "unknown";
+  const address = ip.split("%")[0]!;
+  if (isIP(address) !== 6) return ip;
+  const groups = ipv6Groups(address);
+  if (groups.slice(0, 5).every((group) => group === 0) && groups[5] === 0xffff) {
+    return [groups[6]! >> 8, groups[6]! & 0xff, groups[7]! >> 8, groups[7]! & 0xff].join(".");
   }
-  const ip = await countInWindow(input.ipKey, input.windowSeconds);
-  if (ip.count > input.ipLimit) {
-    await uncount(input.addressKey);
-    return { allowed: false, code: "NETWORK_RATE_LIMITED", retryAfter: Math.max(1, ip.ttl) };
-  }
-  return { allowed: true };
+  return `${groups.slice(0, 4).map((group) => group.toString(16)).join(":")}::/64`;
 }
 
 /** HMAC of an identifier under a per-purpose key: rate-limit keys never hold the identifier. */

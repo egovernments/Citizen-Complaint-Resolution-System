@@ -3,13 +3,14 @@ import { asyncRoute } from "../../app/async-route.js";
 import { errorBody } from "../../contract/error-codes.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
-import { privateRateKey, reserveEmailRequest } from "../../infrastructure/rate-limit.js";
+import { privateRateKey } from "../../infrastructure/rate-limit.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
 import { ensureMagicLinkSignupIdentity } from "../organizations/organization-service.js";
 import { createLoginAttempt } from "../sessions/session-store.js";
 import { enabledIdentityMethods } from "./methods.js";
 import { returnDestination } from "./redirects.js";
-import { normalizedEmail, refuseEmailRequest } from "./password-setup.js";
+import { refuseEmailRequest, reserveEmailRequest } from "./email-request-limits.js";
+import { normalizedEmail } from "./password-setup.js";
 import type { IdentityAuthMethod } from "./types.js";
 
 const ACCEPTED = {
@@ -114,7 +115,8 @@ export function registerMagicLinkRoutes(app: express.Application): void {
     const prefix = `${config.cachePrefix}:identity:magic-link-signup-limit`;
     const allowance = await reserveEmailRequest({
       addressKey: `${prefix}:email:${privateRateKey("magic-link", email)}`,
-      ipKey: `${prefix}:ip:${request.ip}`,
+      networkKeyPrefix: `${prefix}:ip`,
+      ip: request.ip,
       addressLimit: config.identityMagicLinkRequestLimit,
       ipLimit: config.identityMagicLinkRequestIpLimit,
       windowSeconds: config.identityMagicLinkRequestWindowSeconds,
