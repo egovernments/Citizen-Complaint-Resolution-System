@@ -375,6 +375,38 @@ describe('a spreadsheet hierarchy that has to go (#2806)', () => {
     expect(loaded.editable && loaded.hasDefinition).toBe(false);
   });
 
+  it("opens a new city for editing, not on the sheet levels another city's upload left at the state root", async () => {
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === DEFINITION
+        ? [definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SECTOR', 'SUB_TYPE'], { tenantId: 'ke' })]
+        : [row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', department: 'SANIT' }, { tenantId: 'ke' })],
+    );
+    const loaded = await loadComplaints('ke.b');
+    expect(loaded.editable).toBe(true);
+    expect(loaded.editable && loaded.draft.types).toEqual([]);
+    expect(loaded.editable && loaded.hasDefinition).toBe(false);
+
+    // Built by hand, the city gets a two-level definition of its own.
+    if (loaded.editable) await saveComplaints('ke.b', loaded, draft);
+    expect(create).toHaveBeenCalledWith(
+      'ke.b',
+      DEFINITION,
+      'PGR',
+      expect.objectContaining({ levels: [expect.objectContaining({ levelCode: 'COMPLAINT_TYPE' }), expect.objectContaining({ levelCode: 'SUB_TYPE' })] }),
+    );
+  });
+
+  it("shows a city's own rows under the state root's sheet levels, so it can remove them", async () => {
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === DEFINITION
+        ? [definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'], { tenantId: 'ke' })]
+        : [row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', name: 'Uncollected waste', department: 'SANIT', slaHours: 24 }, { tenantId: 'ke.b' })],
+    );
+    const loaded = await loadComplaints('ke.b');
+    expect(loaded.editable).toBe(false);
+    expect(loaded.editable === false && loaded.levels).toEqual(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE']);
+  });
+
   it('restores the removed definition with two levels when the categories are then added by hand', async () => {
     const removed = definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'], { isActive: false });
     search.mockImplementation(async (_tenant, schema) => (schema === DEFINITION ? [removed] : []));

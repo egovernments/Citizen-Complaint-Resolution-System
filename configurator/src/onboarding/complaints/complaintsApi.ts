@@ -101,15 +101,20 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
   // mdms-v2 falls back to the state root's rows when a city has none of its
   // own. Those belong to the whole state, so a city workspace edits only its own.
   const records = searched.filter((record) => record.tenantId === tenantId);
+  const active = records.filter((record) => record.isActive !== false && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE);
   // The workspace's own definition when it has one, even a removed one: a removed one means it has
-  // none, rather than the state root's (#2806, "Remove and upload again").
+  // none, rather than the state root's (#2806, "Remove and upload again"). The state root's (a city
+  // search falls back to it) counts only for a city with rows of its own: one with none would be
+  // shown another city's sheet levels it can neither edit nor remove.
   const pgrDefinitions = definitions.filter((record) => text(dataOf(record).hierarchyType) === HIERARCHY_TYPE);
   const ownDefinitions = pgrDefinitions.filter((record) => record.tenantId === tenantId);
-  const definition = (ownDefinitions.length > 0 ? ownDefinitions : pgrDefinitions).find((record) => record.isActive !== false);
+  const definition =
+    ownDefinitions.length > 0 || active.length > 0
+      ? (ownDefinitions.length > 0 ? ownDefinitions : pgrDefinitions).find((record) => record.isActive !== false)
+      : undefined;
   const definedLevels = definition
     ? ((dataOf(definition).levels as { levelCode?: string }[] | undefined) ?? []).map((level) => level.levelCode ?? '')
     : [];
-  const active = records.filter((record) => record.isActive !== false && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE);
 
   if (definition && definedLevels.join('|') !== LEVELS.join('|')) {
     const leafCount = active.filter((record) => dataOf(record).department != null || dataOf(record).slaHours != null).length;
