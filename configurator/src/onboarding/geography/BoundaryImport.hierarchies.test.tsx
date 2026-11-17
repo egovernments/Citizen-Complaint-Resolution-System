@@ -81,4 +81,28 @@ describe('BoundaryImport: create a hierarchy', () => {
     // At least two named levels.
     expect(screen.getByText(/Define Levels/).querySelector('[data-required-mark]')).not.toBeNull();
   });
+
+  // #2803: the type is checked and saved as one trimmed value; boundary-service stores it in 64 characters.
+  const createWithType = async (typed: string) => {
+    render(<BoundaryImport source="excel" hasHierarchies={false} sourceChoices={[]} onDone={vi.fn()} onCancel={vi.fn()} />);
+    const create = await screen.findByRole('button', { name: 'Create Hierarchy' });
+    await waitFor(() => expect((create as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.change(document.getElementById('hierarchyType')!, { target: { value: typed } });
+    fireEvent.click(create);
+  };
+
+  it('saves the hierarchy type trimmed, as it was checked', async () => {
+    loadTenantHierarchies.mockResolvedValue({ hierarchies: [] });
+    const sixtyFour = 'H'.repeat(64);
+    await createWithType(`${sixtyFour}  `);
+    expect(await screen.findByText(`Boundary_Template_${sixtyFour}.xlsx`)).toBeTruthy();
+  });
+
+  it('finds a type already there when only surrounding spaces differ', async () => {
+    loadTenantHierarchies.mockResolvedValue({ hierarchies: [hierarchy('REVENUE')], hierarchyType: 'REVENUE' });
+    await createWithType(' REVENUE ');
+    expect(
+      await screen.findByText('A "REVENUE" hierarchy already exists. Choose it under "Use an existing hierarchy", or pick another name.'),
+    ).toBeTruthy();
+  });
 });

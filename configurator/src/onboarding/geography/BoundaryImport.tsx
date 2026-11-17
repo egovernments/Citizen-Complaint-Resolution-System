@@ -438,6 +438,9 @@ export default function BoundaryImport({
   // Excel path handlers (develop's original flow)
   // ============================================
 
+  // The hierarchy type as it is saved: trimmed, once, for every check and the save (#2803).
+  const typedHierarchyType = hierarchyType.trim();
+
   // Defines the hierarchy here only: it is created on the server with its
   // areas, when Geography's Save and continue saves them.
   const handleCreateHierarchy = () => {
@@ -448,17 +451,17 @@ export default function BoundaryImport({
       if (hierarchiesError) void fetchHierarchies();
       return;
     }
-    if (!hierarchyType.trim()) {
+    if (!typedHierarchyType) {
       setError(t('geography.excel.type_required', 'Hierarchy type name is required'));
       return;
     }
     // boundary-service stores the type in a 64-character column (#2803).
-    const typeTooLong = hierarchyTypeMessage(hierarchyType, t);
+    const typeTooLong = hierarchyTypeMessage(typedHierarchyType, t);
     if (typeTooLong) {
       setError(typeTooLong);
       return;
     }
-    if (hierarchyType.trim().toUpperCase() === WORKSPACE_HIERARCHY_TYPE) {
+    if (typedHierarchyType.toUpperCase() === WORKSPACE_HIERARCHY_TYPE) {
       setError(
         t('geography.excel.type_reserved', '"%{type}" is reserved for the workspace root. Choose another hierarchy name.', {
           type: WORKSPACE_HIERARCHY_TYPE,
@@ -477,10 +480,10 @@ export default function BoundaryImport({
       setError(fixLevelNames(t));
       return;
     }
-    if (existingHierarchies.some(h => h.hierarchyType === hierarchyType)) {
+    if (existingHierarchies.some(h => h.hierarchyType === typedHierarchyType)) {
       setError(
         t('geography.excel.type_exists', 'A "%{type}" hierarchy already exists. Choose it under "Use an existing hierarchy", or pick another name.', {
-          type: hierarchyType,
+          type: typedHierarchyType,
         }),
       );
       return;
@@ -489,7 +492,7 @@ export default function BoundaryImport({
     setError(null);
     const newHierarchy: BoundaryHierarchy = {
       tenantId: boundaryTenant,
-      hierarchyType,
+      hierarchyType: typedHierarchyType,
       boundaryHierarchy: validLevels.map((boundaryType, index) => ({
         boundaryType,
         parentBoundaryType: index > 0 ? validLevels[index - 1] : undefined,
@@ -738,7 +741,7 @@ export default function BoundaryImport({
     const levels = selectedHierarchy
       ? getHierarchyLevels(selectedHierarchy)
       : hierarchyLevels;
-    const type = selectedHierarchy?.hierarchyType || hierarchyType || 'ADMIN';
+    const type = selectedHierarchy?.hierarchyType || typedHierarchyType || 'ADMIN';
     downloadBoundaryTemplate(type, levels);
     trackTemplateDownload('geography', 'boundary');
   };
