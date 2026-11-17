@@ -1133,17 +1133,22 @@ export function parseComplaintHierarchyExcel(
     const departments: string[] = [];
     if (typed.length === 0) {
       errors.push({ row: rowNo, field: 'department', message: noDepartmentMessage(rowNo, t), code: 'NO_DEPT' });
-    }
-    for (const value of typed) {
-      if (!choices) {
-        departments.push(value);
-        continue;
-      }
-      const match = matchDepartment(value, rowNo, choices, t);
-      if (match.ok) {
-        if (!departments.includes(match.code)) departments.push(match.code);
-      } else {
-        errors.push({ row: rowNo, field: 'department', message: match.message, code: 'UNKNOWN_DEPT', value });
+    } else if (!choices) {
+      departments.push(...typed);
+    } else {
+      // The whole cell first, so a name with a comma in it ("Roads, Bridges and Drains") is one
+      // department; it is read as a list only when the whole cell names none.
+      const whole = matchDepartment(departmentRaw, rowNo, choices, t);
+      const splitUp = !whole.ok && !whole.ambiguous && departmentRaw.includes(',');
+      const matches = splitUp
+        ? typed.map((value) => [value, matchDepartment(value, rowNo, choices, t)] as const)
+        : [[departmentRaw, whole] as const];
+      for (const [value, match] of matches) {
+        if (match.ok) {
+          if (!departments.includes(match.code)) departments.push(match.code);
+        } else {
+          errors.push({ row: rowNo, field: 'department', message: match.message, code: 'UNKNOWN_DEPT', value });
+        }
       }
     }
     const department = departments[0] || '';

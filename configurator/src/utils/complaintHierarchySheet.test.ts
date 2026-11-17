@@ -64,6 +64,13 @@ describe('the complaints sheet department column', () => {
     expect(result.leaves[0].department).toBe('');
   });
 
+  it('reads a name with a comma in it as one department, and a list only when the whole cell is none', () => {
+    const departments = [...DEPARTMENTS, { code: 'RBD', name: 'Roads, Bridges and Drains' }];
+    const result = parse([row('Roads, Bridges and Drains', 'A'), row(' roads,  bridges and drains ', 'B'), row('RBD, SANIT', 'C')], departments);
+    expect(result.validation.errors).toEqual([]);
+    expect(result.leaves.map((leaf) => leaf.departments)).toEqual([['RBD'], ['RBD'], ['RBD', 'SANIT']]);
+  });
+
   it('flags each unknown value in a list on its own', () => {
     const result = parse([row('SANIT, NA, Parks')]);
     expect(result.validation.errors.map((e) => e.value)).toEqual(['NA', 'Parks']);
@@ -76,6 +83,16 @@ describe('the complaints sheet department column', () => {
     ]);
     expect(result.validation.errors.map((e) => e.message)).toEqual([
       'Row 2: more than one department is called “Works”. Use its code instead: WORKS_N, WORKS_S.',
+    ]);
+  });
+
+  it('asks for the code when two departments share a name with a comma in it, rather than splitting it', () => {
+    const result = parse([row('Roads, Bridges')], [
+      { code: 'RB_N', name: 'Roads, Bridges' },
+      { code: 'RB_S', name: 'Roads, bridges' },
+    ]);
+    expect(result.validation.errors.map((e) => e.message)).toEqual([
+      'Row 2: more than one department is called “Roads, Bridges”. Use its code instead: RB_N, RB_S.',
     ]);
   });
 
@@ -107,6 +124,13 @@ describe('the complaints template', () => {
     const result = parseComplaintHierarchyExcel(wb, 'PGR', LEVELS, { departments: DEPARTMENTS });
     expect(result.validation.errors).toEqual([]);
     expect(result.leaves.map((leaf) => leaf.department)).toEqual(['SANIT', 'SANIT', 'ROADS']);
+  });
+
+  it('passes its own sample rows when a department’s name has a comma in it', () => {
+    const departments = [{ code: 'RBD', name: 'Roads, Bridges and Drains' }, ...DEPARTMENTS];
+    const result = parseComplaintHierarchyExcel(buildComplaintHierarchyTemplate(LEVELS, departments), 'PGR', LEVELS, { departments });
+    expect(result.validation.errors).toEqual([]);
+    expect(result.leaves.map((leaf) => leaf.department)).toEqual(['RBD', 'RBD', 'SANIT']);
   });
 
   it('lists the departments on their own sheet, without the founder’s system department', () => {

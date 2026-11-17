@@ -9,7 +9,8 @@ export interface DepartmentChoice {
 /** What one cell value of the complaints sheet's department column resolves to. */
 export type DepartmentMatch =
   | { ok: true; code: string }
-  | { ok: false; message: string };
+  /** `ambiguous`: the value names more than one department, rather than none. */
+  | { ok: false; message: string; ambiguous?: true };
 
 /** Lower case with runs of spaces folded, so " sanitation  services" matches "Sanitation Services". */
 const fold = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -47,6 +48,7 @@ export function matchDepartment(
   if (byName.length > 1) {
     return {
       ok: false,
+      ambiguous: true,
       message: t(
         'complaints.sheet_department_ambiguous',
         'Row %{row}: more than one department is called “%{value}”. Use its code instead: %{codes}.',
