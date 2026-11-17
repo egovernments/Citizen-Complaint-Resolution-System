@@ -1,4 +1,4 @@
-import { MAX_LEVEL_NAME_LENGTH, levelNameProblems, normalizeLevelName, type LevelNameProblem } from '@digit-mcp/data-provider';
+import { firstLevelNameProblem, levelNameProblems, tooLongForLevel, type LevelNameProblem } from '@digit-mcp/data-provider';
 import { englishT, type OnboardingT } from '../i18n';
 
 /**
@@ -42,11 +42,11 @@ export function levelNameMessages(names: readonly string[], levelLabel: (index: 
 
 /** Why a hierarchy type name can't be saved, or null: boundary-service stores it in a 64-character column too. */
 export function hierarchyTypeMessage(hierarchyType: string, t: OnboardingT = englishT): string | null {
-  const length = [...hierarchyType.trim()].length;
-  if (length <= MAX_LEVEL_NAME_LENGTH) return null;
+  const tooLong = tooLongForLevel(hierarchyType.trim());
+  if (!tooLong) return null;
   return t('geography.excel.type_too_long', 'The hierarchy type name is %{length} characters long. Use %{max} characters or fewer.', {
-    length,
-    max: MAX_LEVEL_NAME_LENGTH,
+    length: tooLong.length,
+    max: tooLong.max,
   });
 }
 
@@ -60,12 +60,9 @@ export const fixLevelNames = (t: OnboardingT = englishT) =>
  * persister can't store counts.
  */
 export function levelNamesProblem(levels: readonly string[], t: OnboardingT = englishT, exists = false): string | null {
-  const problems = levelNameProblems(levels);
-  const index = problems.findIndex((p) => p !== null && (!exists || p.kind === 'too_long' || p.kind === 'control_char'));
-  if (index < 0) return null;
-  const problem = problems[index]!;
-  const chars = [...normalizeLevelName(levels[index] ?? '')];
-  const name = chars.length > 40 ? `${chars.slice(0, 40).join('')}…` : chars.join('');
+  const first = firstLevelNameProblem(levels, { saved: exists });
+  if (!first) return null;
+  const { problem, name } = first;
   switch (problem.kind) {
     case 'required':
       return t('geography.level_name.required', 'One of the levels has no name.');
