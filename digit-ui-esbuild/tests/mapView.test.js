@@ -18,7 +18,14 @@ process.on("exit", () => {
     // Best effort; the temp file is process-scoped.
   }
 });
-const { resolveBaseTiles, isKeylessCartoUrl, boundsOfFeatures, resolveOpeningView, CITY_ZOOM } = require(OUT);
+const {
+  resolveBaseTiles,
+  isKeylessCartoUrl,
+  boundsOfFeatures,
+  resolveOpeningView,
+  CITY_ZOOM,
+  nextOpeningView,
+} = require(OUT);
 
 const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const KEYED_CARTO = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=abc123";
@@ -110,4 +117,39 @@ test("with nothing else known the map opens on the deployment default at city zo
 test("the opening zoom stays inside the tenant's zoom limits", () => {
   assert.equal(resolveOpeningView({ fallbackCenter: MAPUTO, maxZoom: 10 }).zoom, 10);
   assert.equal(resolveOpeningView({ configCenter: MAPUTO, configZoom: 3, minZoom: 6 }).zoom, 6);
+});
+
+const OUTLINE_VIEW = resolveOpeningView({ outline: NAIROBI, fallbackCenter: MAPUTO });
+const FALLBACK_VIEW = resolveOpeningView({ fallbackCenter: MAPUTO });
+const CONFIG_VIEW = resolveOpeningView({ configCenter: MAPUTO, fallbackCenter: MAPUTO });
+const step = (over) =>
+  nextOpeningView({ ready: true, view: FALLBACK_VIEW, boundariesDone: false, waitedOut: false, applied: null, userMoved: false, hasPin: false, ...over });
+
+test("the opening view waits for MapConfig, then opens a MapConfig centre at once", () => {
+  assert.equal(step({ ready: false, view: CONFIG_VIEW }), null);
+  assert.equal(step({ view: CONFIG_VIEW }), "config");
+  assert.equal(step({ view: CONFIG_VIEW, applied: "config" }), null);
+});
+
+test("without a MapConfig centre it waits for the wards, but not past the wait", () => {
+  assert.equal(step({}), null, "wards still loading");
+  assert.equal(step({ view: OUTLINE_VIEW }), null, "some wards in, more loading");
+  assert.equal(step({ view: OUTLINE_VIEW, boundariesDone: true }), "outline:all");
+  assert.equal(step({ boundariesDone: true }), "fallback", "the tenant has no wards");
+  assert.equal(step({ waitedOut: true }), "fallback", "nothing in yet");
+  assert.equal(step({ view: OUTLINE_VIEW, waitedOut: true }), "outline:some");
+});
+
+test("a better view later moves the map, the same view never twice", () => {
+  assert.equal(step({ view: OUTLINE_VIEW, waitedOut: true, applied: "fallback" }), "outline:some");
+  assert.equal(step({ view: OUTLINE_VIEW, waitedOut: true, applied: "outline:some" }), null);
+  assert.equal(step({ view: OUTLINE_VIEW, boundariesDone: true, waitedOut: true, applied: "outline:some" }), "outline:all");
+  assert.equal(step({ boundariesDone: true, waitedOut: true, applied: "fallback" }), null, "no wards after all");
+});
+
+test("nothing moves the map once the citizen has, or while there is a pin", () => {
+  for (const over of [{ userMoved: true }, { hasPin: true }]) {
+    assert.equal(step({ view: CONFIG_VIEW, ...over }), null);
+    assert.equal(step({ view: OUTLINE_VIEW, boundariesDone: true, applied: "fallback", ...over }), null);
+  }
 });

@@ -150,3 +150,36 @@ export const resolveOpeningView = ({ configCenter, configZoom, outline, fallback
   }
   return { source: "fallback", center: fallbackCenter, zoom: clampZoom(CITY_ZOOM, minZoom, maxZoom) };
 };
+
+// How long the citizen map waits for the ward outlines before it opens anyway
+// (#2804). Most tenants' wards arrive well inside this; a slow or hung
+// boundary-service call must not hold the map on a loading state.
+export const OPENING_VIEW_WAIT_MS = 3000;
+
+/**
+ * Names an opening view, so the caller can tell a better view from a repeat:
+ * "config", "outline:some" (wards still loading), "outline:all" or "fallback".
+ */
+export const openingViewKey = (view, boundariesDone) =>
+  view.source === "outline" ? `outline:${boundariesDone ? "all" : "some"}` : view.source;
+
+/**
+ * The opening view the citizen map should move to now, as its key, or null to
+ * leave the map where it is.
+ *
+ * - A MapConfig centre opens at once.
+ * - Otherwise the map waits for the wards: until all of them are in, or until
+ *   `waitedOut` (OPENING_VIEW_WAIT_MS), whichever is first. Then it opens on the
+ *   wards loaded so far, else on the fallback.
+ * - A better view that turns up later (the wards after the fallback, or all of
+ *   them after some) is applied too, so a slow tenant still ends up on its
+ *   outline.
+ * - Nothing moves the map once the citizen has (pan, zoom, search, locate-me)
+ *   or while there is a pin.
+ */
+export const nextOpeningView = ({ ready, view, boundariesDone, waitedOut, applied, userMoved, hasPin }) => {
+  if (!ready || userMoved || hasPin) return null;
+  if (view.source !== "config" && !boundariesDone && !waitedOut) return null;
+  const key = openingViewKey(view, boundariesDone);
+  return key === applied ? null : key;
+};

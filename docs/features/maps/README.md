@@ -63,6 +63,11 @@ Before a location is picked (and after Clear), the complaint map opens at:
 2. else the outline of the tenant's ward boundaries (`boundaryTenantId`), fitted to the view;
 3. else the deployment's `MAP_CENTER`, else the built-in default, at zoom 12.
 
+Without a `center`, the map shows a loading state while the ward geometry
+loads, for at most 3 seconds. Then it opens on the wards loaded so far, else on
+(3). If more wards arrive later, the map moves to them, but only until the
+citizen pans, zooms, searches, uses locate-me or drops a pin.
+
 If the tiles fail to load, the map shows "Map couldn't load. You can still pick
 the location by typing the address/area." (`CS_MAP_TILES_FAILED`).
 
