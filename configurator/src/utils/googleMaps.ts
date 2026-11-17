@@ -23,11 +23,22 @@ let loaded: { key: string; promise: Promise<GoogleNs> } | null = null;
 let authFailed = false;
 const authListeners = new Set<() => void>();
 
-function authError(): Error {
-  const site = window.location?.host;
-  return new Error(
-    `Google rejected this API key. Check it is copied in full, enable the Maps JavaScript API for it in Google Cloud Console, and allow this site${site ? ` (${site})` : ''} in its HTTP-referrer restrictions.`,
-  );
+/** What to tell an operator whose key Google refused. Onboarding shows it translated, as geography.google.rejected. */
+export const GOOGLE_KEY_REJECTED_MESSAGE =
+  'Google rejected this API key. Check it is copied in full, enable the Maps JavaScript API for it in Google Cloud Console, and allow this site (%{site}) in its HTTP-referrer restrictions.';
+
+/** Google refused the key. `site` is the host the key's HTTP-referrer restrictions must allow. */
+export class GoogleKeyRejectedError extends Error {
+  readonly site: string;
+  constructor(site: string = window.location?.host ?? '') {
+    super(
+      site
+        ? GOOGLE_KEY_REJECTED_MESSAGE.replace('%{site}', site)
+        : GOOGLE_KEY_REJECTED_MESSAGE.replace(' (%{site})', ''),
+    );
+    this.name = 'GoogleKeyRejectedError';
+    this.site = site;
+  }
 }
 
 export function loadGoogleMaps(apiKey: string): Promise<GoogleNs> {
@@ -85,7 +96,7 @@ export async function validateGoogleMapsKey(
   { timeoutMs = 8000, graceMs = 1000 }: { timeoutMs?: number; graceMs?: number } = {},
 ): Promise<GoogleKeyCheck> {
   const g = await loadGoogleMaps(apiKey);
-  if (authFailed) throw authError();
+  if (authFailed) throw new GoogleKeyRejectedError();
   const holder = document.createElement('div');
   holder.style.cssText = KEY_PROBE_STYLE;
   holder.setAttribute('aria-hidden', 'true');
@@ -98,7 +109,7 @@ export async function validateGoogleMapsKey(
   let onFail = () => {};
   try {
     return await new Promise<GoogleKeyCheck>((resolve, reject) => {
-      onFail = () => reject(authError());
+      onFail = () => reject(new GoogleKeyRejectedError());
       authListeners.add(onFail);
       timers.push(setTimeout(() => resolve('unverified'), timeoutMs));
       const map = new g.maps.Map(probe, { center: { lat: 0, lng: 0 }, zoom: 1 });
@@ -134,7 +145,7 @@ export async function drawGeoJsonOnGoogleMap(
 ): Promise<() => void> {
   const g = await loadGoogleMaps(apiKey);
   if (isCancelled?.()) return () => {};
-  if (authFailed) throw authError();
+  if (authFailed) throw new GoogleKeyRejectedError();
   const host = document.createElement('div');
   host.style.cssText = 'width:100%;height:100%';
   container.appendChild(host);
@@ -164,7 +175,7 @@ export async function drawGeoJsonOnGoogleMap(
   });
   // Google can reject the key after the map exists (gm_authFailure fires
   // late); the caller swaps to another map instead of Google's error overlay.
-  const onFail = () => onAuthFailure?.(authError());
+  const onFail = () => onAuthFailure?.(new GoogleKeyRejectedError());
   authListeners.add(onFail);
   return () => {
     authListeners.delete(onFail);

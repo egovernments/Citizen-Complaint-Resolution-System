@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { drawGeoJsonOnGoogleMap, loadGoogleMaps, resetGoogleMapsForTests, validateGoogleMapsKey } from './googleMaps';
+import {
+  drawGeoJsonOnGoogleMap,
+  GoogleKeyRejectedError,
+  loadGoogleMaps,
+  resetGoogleMapsForTests,
+  validateGoogleMapsKey,
+} from './googleMaps';
 
 afterEach(() => resetGoogleMapsForTests());
 
@@ -145,6 +151,9 @@ describe('validateGoogleMapsKey', () => {
     expect(error?.message).toMatch(/Google rejected this API key/);
     expect(error?.message).toMatch(/enable the Maps JavaScript API/);
     expect(error?.message).toContain(`allow this site (${window.location.host}) in its HTTP-referrer restrictions`);
+    // Typed, so onboarding can show it in the operator's language.
+    expect(error).toBeInstanceOf(GoogleKeyRejectedError);
+    expect((error as GoogleKeyRejectedError).site).toBe(window.location.host);
   });
 
   it('rejects when Google refuses the key, even after the tiles loaded', async () => {

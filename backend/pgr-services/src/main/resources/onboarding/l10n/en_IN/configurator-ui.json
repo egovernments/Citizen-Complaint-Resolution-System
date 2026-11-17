@@ -767,6 +767,7 @@
 {"code": "app.onboarding.geography.google.google_maps", "message": "Google Maps", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.google.key_placeholder", "message": "Google Maps JavaScript API key", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.google.osm_tiles", "message": "OpenStreetMap tiles", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.geography.google.rejected", "message": "Google rejected this API key. Check it is copied in full, enable the Maps JavaScript API for it in Google Cloud Console, and allow this site (%{site}) in its HTTP-referrer restrictions.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.google.replace_key", "message": "Replace the saved key", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.google.save", "message": "Save", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.google.save_failed", "message": "%{check}, and saving it to Map Config failed: %{reason}. A deployment whose MapConfig schema predates the mapProvider field rejects it — see docs/features/maps/README.md.", "module": "configurator-ui", "locale": "en_IN"},
