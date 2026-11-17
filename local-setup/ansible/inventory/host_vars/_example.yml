@@ -895,6 +895,12 @@ identity_trust_proxy_hops: 2            # host nginx + Kong; override for anothe
 identity_login_ttl_seconds: 1800        # match Keycloak's browser-login timeout
 identity_magic_link_request_window_seconds: 1800
 identity_magic_link_request_limit: 3
+# Per-network limits of the sign-up link and password link emails in the same
+# windows (#2805; IPv6 counts by /64). 20 so a whole office behind one NAT can
+# sign up or reset passwords. Raise them for a bigger office on one public IP;
+# lower them if no users share one.
+identity_magic_link_request_ip_limit: 20
+identity_password_setup_ip_limit: 20
 identity_signin_methods: [password, google, github]
 identity_signup_methods: [magic_link, google, github]
 # Citizen sign-in methods on the digit-ui citizen client (KEYCLOAK_CITIZEN_SIGNIN_METHODS).
