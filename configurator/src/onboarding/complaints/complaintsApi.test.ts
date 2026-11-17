@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { localizationService, mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
 import {
   loadComplaints,
+  MDMS_WRITES_IN_FLIGHT,
   nextData,
   removeSheetComplaints,
   rowsFingerprint,
@@ -497,5 +498,72 @@ describe('a spreadsheet hierarchy that has to go (#2806)', () => {
     expect(create.mock.calls).toEqual([
       ['acme', 'RAINMAKER-PGR.ComplaintHierarchy', 'GarbageOverflowingBin', expect.objectContaining({ department: 'SANIT' })],
     ]);
+  });
+});
+
+describe('a big sheet, written or removed (#2806)', () => {
+  const definition = definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE']);
+  const leaves = Array.from({ length: 30 }, (_, i) => row(`Leaf${i}`, { levelCode: 'SUB_TYPE', department: 'SANIT', slaHours: 24 }));
+  const acme: MdmsRecord = { id: 'acme', tenantId: 'acme', schemaCode: 'tenant.tenants', uniqueIdentifier: 'acme', isActive: true, data: { code: 'acme' } };
+
+  // Each MDMS write stays open for a moment, counting how many are open at once.
+  let open = 0;
+  let most = 0;
+  const slowWrite = async () => {
+    open += 1;
+    most = Math.max(most, open);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    open -= 1;
+    return {} as MdmsRecord;
+  };
+
+  beforeEach(() => {
+    open = 0;
+    most = 0;
+  });
+  afterEach(() => {
+    setActive.mockImplementation(async () => ({}) as MdmsRecord);
+    create.mockImplementation(async () => ({}) as MdmsRecord);
+  });
+
+  it('switches rows off several at a time, never more than the limit, and the definition last', async () => {
+    search.mockImplementation(async (_tenant, schema) => (schema === 'tenant.tenants' ? [acme] : schema === DEFINITION ? [definition] : leaves));
+    setActive.mockImplementation(slowWrite);
+
+    await removeSheetComplaints('acme');
+
+    expect(most).toBeGreaterThan(1);
+    expect(most).toBeLessThanOrEqual(MDMS_WRITES_IN_FLIGHT);
+    expect(setActive).toHaveBeenCalledTimes(31);
+    expect(setActive.mock.calls.at(-1)).toEqual([definition, false]);
+  });
+
+  it('keeps the definition when a row fails, so the remove can simply be retried', async () => {
+    search.mockImplementation(async (_tenant, schema) => (schema === 'tenant.tenants' ? [acme] : schema === DEFINITION ? [definition] : leaves));
+    setActive.mockImplementation(async (record) => {
+      if (record.id === 'Leaf3') throw new Error('mdms-v2 unavailable');
+      return slowWrite();
+    });
+
+    await expect(removeSheetComplaints('acme')).rejects.toThrow('mdms-v2 unavailable');
+    expect(setActive).not.toHaveBeenCalledWith(definition, false);
+    expect(open).toBe(0);
+  });
+
+  it('writes rows several at a time, never more than the limit', async () => {
+    search.mockResolvedValue([]);
+    create.mockImplementation(slowWrite);
+
+    await writeSheetHierarchy(
+      'acme',
+      'PGR',
+      { hierarchyType: 'PGR', active: true, levels: [] },
+      leaves.map((leaf) => ({ code: String(leaf.data.code), data: leaf.data })),
+    );
+
+    expect(most).toBeGreaterThan(1);
+    expect(most).toBeLessThanOrEqual(MDMS_WRITES_IN_FLIGHT);
+    expect(create).toHaveBeenCalledTimes(31);
+    expect(create.mock.calls[0][1]).toBe(DEFINITION);
   });
 });

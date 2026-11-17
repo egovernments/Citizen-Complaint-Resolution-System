@@ -1,5 +1,6 @@
 import { localizationService, mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
+import { forEachLimited } from '@/lib/forEachLimited';
 import { KNOWN_LEVEL_LABELS, toPascal } from '@/utils/excelParser';
 import { labelLocales } from '../labelLocales';
 import { MessageError } from '../i18n';
@@ -24,6 +25,8 @@ const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
 const DEFINITION_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchyDefinition';
 const HIERARCHY_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchy';
 const TENANT_SCHEMA = 'tenant.tenants';
+/** How many MDMS row writes a sheet write or remove keeps in flight: one at a time, hundreds of rows take minutes. */
+export const MDMS_WRITES_IN_FLIGHT = 6;
 export const DEFAULT_SLA_HOURS = 72;
 
 export interface DraftSubtype {
@@ -384,7 +387,7 @@ export async function writeSheetHierarchy(
   };
   await upsert(definitions.find(own), DEFINITION_SCHEMA, hierarchyType, definition);
   const byCode = new Map(existing.filter(own).map((record) => [codeOf(record), record]));
-  for (const row of rows) await upsert(byCode.get(row.code), HIERARCHY_SCHEMA, row.code, row.data);
+  await forEachLimited(rows, MDMS_WRITES_IN_FLIGHT, (row) => upsert(byCode.get(row.code), HIERARCHY_SCHEMA, row.code, row.data));
 }
 
 /**
@@ -417,6 +420,6 @@ export async function removeSheetComplaints(tenantId: string): Promise<void> {
   ]);
   const live = (record: MdmsRecord) =>
     record.tenantId === tenantId && record.isActive !== false && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE;
-  for (const record of rows.filter(live)) await mdmsService.setActive(record, false);
+  await forEachLimited(rows.filter(live), MDMS_WRITES_IN_FLIGHT, (record) => mdmsService.setActive(record, false));
   for (const record of definitions.filter(live)) await mdmsService.setActive(record, false);
 }

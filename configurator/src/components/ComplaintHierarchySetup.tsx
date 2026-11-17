@@ -19,7 +19,8 @@ import {
 import { downloadComplaintHierarchyTemplate } from '@/utils/templateBuilder';
 import { labelLocales } from '@/onboarding/labelLocales';
 import { useOnboardingT } from '@/onboarding/i18n';
-import { HIERARCHY_TYPE, writeSheetHierarchy } from '@/onboarding/complaints/complaintsApi';
+import { HIERARCHY_TYPE, MDMS_WRITES_IN_FLIGHT, writeSheetHierarchy } from '@/onboarding/complaints/complaintsApi';
+import { forEachLimited } from '@/lib/forEachLimited';
 import { departmentLabel, type DepartmentChoice } from '@/onboarding/complaints/sheetDepartments';
 
 type Step = 'define' | 'template' | 'verify';
@@ -193,7 +194,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
       }
     };
     await swallow(mdmsService.create(tenant, HDEF_SCHEMA, hierarchyType, definitionData()));
-    for (const row of rowsData()) await swallow(mdmsService.create(tenant, HIERARCHY_SCHEMA, row.code, row.data));
+    await forEachLimited(rowsData(), MDMS_WRITES_IN_FLIGHT, (row) => swallow(mdmsService.create(tenant, HIERARCHY_SCHEMA, row.code, row.data)));
   };
 
   const handleIngest = async () => {

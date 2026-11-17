@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { localizationService, mdmsService } from '@/api';
 import { parseComplaintHierarchyExcel, type ComplaintHierarchyRow } from '@/utils/excelParser';
+import { MDMS_WRITES_IN_FLIGHT } from '@/onboarding/complaints/complaintsApi';
 import { ComplaintHierarchySetup } from './ComplaintHierarchySetup';
 
 vi.mock('@/api', () => ({
@@ -106,6 +107,43 @@ describe('ComplaintHierarchySetup: the hierarchy type (#2806)', () => {
 
     expect(vi.mocked(parseComplaintHierarchyExcel).mock.calls[0][1]).toBe('PGR');
     expect(create).toHaveBeenCalledWith('mz.maputo', 'RAINMAKER-PGR.ComplaintHierarchyDefinition', 'PGR', expect.objectContaining({ hierarchyType: 'PGR' }));
+  });
+});
+
+describe('ComplaintHierarchySetup: a city’s copy at the state root', () => {
+  it('only adds rows there, several at a time', async () => {
+    const many = Array.from({ length: 20 }, (_, i) =>
+      node(`Leaf${i}`, 'SUB_TYPE', { isLeaf: true, department: 'WATER', slaHours: 24 }),
+    );
+    vi.mocked(parseComplaintHierarchyExcel).mockReturnValue({ nodes: many, leaves: many, validation: { valid: true, errors: [], warnings: [] } });
+    let open = 0;
+    let most = 0;
+    // Counts the state root's writes only: the city's own go first, through writeSheetHierarchy.
+    create.mockImplementation(async (tenant) => {
+      if (tenant !== 'ke') return {} as Awaited<ReturnType<typeof mdmsService.create>>;
+      open += 1;
+      most = Math.max(most, open);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      open -= 1;
+      return {} as Awaited<ReturnType<typeof mdmsService.create>>;
+    });
+    try {
+      const onDone = vi.fn();
+      render(<ComplaintHierarchySetup targetTenant="ke.b" stateTenant="ke" onDone={onDone} />);
+      fireEvent.click(screen.getByTestId('ch-next-template'));
+      fireEvent.change(document.getElementById('ch-file-upload')!, { target: { files: [new File(['x'], 'hierarchy.xlsx')] } });
+      await waitFor(() => expect(screen.getByTestId('complaint-hierarchy-setup').dataset.step).toBe('verify'));
+      fireEvent.click(screen.getByTestId('ch-create'));
+      await waitFor(() => expect(onDone).toHaveBeenCalled());
+
+      const atRoot = create.mock.calls.filter(([tenant, schema]) => tenant === 'ke' && schema === 'RAINMAKER-PGR.ComplaintHierarchy');
+      expect(atRoot).toHaveLength(20);
+      expect(most).toBeGreaterThan(1);
+      expect(most).toBeLessThanOrEqual(MDMS_WRITES_IN_FLIGHT);
+      expect(mdmsService.update).not.toHaveBeenCalled();
+    } finally {
+      create.mockImplementation(async () => ({}) as Awaited<ReturnType<typeof mdmsService.create>>);
+    }
   });
 });
 
