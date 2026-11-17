@@ -109,9 +109,12 @@ export type GoogleKeyCheck = 'ok' | 'unverified';
 const KEY_PROBE_STYLE =
   'position:fixed;top:0;left:0;width:200px;height:200px;opacity:0;pointer-events:none;z-index:-1';
 
+// graceMs: Google refused a bad key about 1 s after the check began, script download included, while
+// a good key's tiles took about 3 s. 2.5 s lets a refusal trail the tiles by more than twice that
+// whole round trip, and still leaves the tiles 5.5 s of the 8 s timeout.
 export async function validateGoogleMapsKey(
   apiKey: string,
-  { timeoutMs = 8000, graceMs = 1000 }: { timeoutMs?: number; graceMs?: number } = {},
+  { timeoutMs = 8000, graceMs = 2500 }: { timeoutMs?: number; graceMs?: number } = {},
 ): Promise<GoogleKeyCheck> {
   // A check asks Google again: a key it refused before, here or under a drawn map, may have been
   // corrected, or allowed in Cloud Console since.

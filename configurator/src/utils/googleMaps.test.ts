@@ -182,6 +182,18 @@ describe('validateGoogleMapsKey', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('waits 2.5 s after the tiles for a refusal before calling a key ok', async () => {
+    vi.useFakeTimers();
+    const { fake } = loadWithFake();
+    const check = validateGoogleMapsKey('key');
+    const settled = expect(check).rejects.toThrow(GoogleKeyRejectedError);
+    await vi.advanceTimersByTimeAsync(0);
+    fake.maps[0].listeners.tilesloaded();
+    await vi.advanceTimersByTimeAsync(2400);
+    (window as any).gm_authFailure();
+    await settled;
+  });
+
   it('rejects when Google refuses the key, even after the tiles loaded', async () => {
     vi.useFakeTimers();
     const { fake } = loadWithFake();
