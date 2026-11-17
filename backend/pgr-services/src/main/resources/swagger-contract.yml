@@ -232,6 +232,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OnboardingOperationResponse'
+        '400':
+          description: >-
+            Refused. An ONBOARDING_IDENTIFIER_TAKEN error also names the taken identifier in
+            Errors[0].identifierType (one of OnboardingIdentifier.type), so a client can put the
+            refusal under the matching field without reading the message.
+          content:
+            application/json:
+              schema:
+                $ref: 'https://raw.githubusercontent.com/egovernments/municipal-services/common-contract/docs/common-contract-v2-0-0.yml#/components/schemas/ErrorRes'
   /onboarding/operations/_search:
     post:
       tags: [Tenant Onboarding]
