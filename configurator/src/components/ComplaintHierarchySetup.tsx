@@ -108,6 +108,18 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
 
   const handleDownloadTemplate = () => downloadComplaintHierarchyTemplate(hierarchyType, validLevels(), departments);
 
+  // A file that can't be used clears the last one's preview too, so nothing on screen is from a file
+  // that is no longer the one chosen; the upload screen shows why.
+  const unusable = (message: string) => {
+    setUploadedFile(null);
+    setNodes([]);
+    setLeaves([]);
+    setWarnings([]);
+    setRowErrors([]);
+    setStep('template');
+    fail(message);
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -120,11 +132,11 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
       // A sheet-level problem (no sheet at all) has no rows to preview.
       const sheetErrors = result.validation.errors.filter((er) => !er.row);
       if (sheetErrors.length > 0) {
-        fail(sheetErrors.map((er) => er.message).join('; '));
+        unusable(sheetErrors.map((er) => er.message).join('; '));
         return;
       }
       if (result.leaves.length === 0 && result.validation.errors.length === 0) {
-        fail('No complaint subcategories found in the sheet. Fill at least one row.');
+        unusable('No complaint subcategories found in the sheet. Fill at least one row.');
         return;
       }
       // Row problems show in the preview, beside the rows, and keep Create switched off until fixed.
@@ -136,7 +148,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
       setStep('verify');
     } catch (err) {
       console.error('Excel parse error:', err);
-      fail('Failed to parse the file. Ensure it is the downloaded .xlsx template.');
+      unusable('Failed to parse the file. Ensure it is the downloaded .xlsx template.');
     } finally {
       setLoading(false);
     }

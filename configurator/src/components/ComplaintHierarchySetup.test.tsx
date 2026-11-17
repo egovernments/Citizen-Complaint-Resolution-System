@@ -129,6 +129,33 @@ describe('ComplaintHierarchySetup: a sheet with rows to fix (#2806)', () => {
     expect(await screen.findByRole('cell', { name: 'Water Works (WATER)' })).toBeTruthy();
   });
 
+  it('clears the last file’s preview when the fixed sheet can’t be used', async () => {
+    vi.mocked(parseComplaintHierarchyExcel).mockReturnValueOnce({
+      nodes,
+      leaves: nodes.filter((n) => n.isLeaf),
+      validation: {
+        valid: false,
+        errors: [{ row: 4, field: 'department', message: 'Row 4: no department. Every complaint type needs one.', code: 'NO_DEPT' }],
+        warnings: [],
+      },
+    });
+    render(<ComplaintHierarchySetup targetTenant="mz.maputo" stateTenant="mz.maputo" onDone={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('ch-next-template'));
+    const upload = document.getElementById('ch-file-upload')!;
+    fireEvent.change(upload, { target: { files: [new File(['x'], 'old.xlsx')] } });
+    await waitFor(() => expect(screen.getByTestId('complaint-hierarchy-setup').dataset.step).toBe('verify'));
+    expect(screen.getByText('File: old.xlsx')).toBeTruthy();
+
+    // "Upload the fixed sheet" with a file that has no rows at all.
+    vi.mocked(parseComplaintHierarchyExcel).mockReturnValueOnce({ nodes: [], leaves: [], validation: { valid: true, errors: [], warnings: [] } });
+    fireEvent.change(upload, { target: { files: [new File(['x'], 'new.xlsx')] } });
+
+    expect(await screen.findByText('No complaint subcategories found in the sheet. Fill at least one row.')).toBeTruthy();
+    expect(screen.getByTestId('complaint-hierarchy-setup').dataset.step).toBe('template');
+    expect(screen.queryByText('File: old.xlsx')).toBeNull();
+    expect(screen.queryByTestId('ch-row-errors')).toBeNull();
+  });
+
   it('never writes a complaint type without a department (no NA stand-in)', async () => {
     const blank = [nodes[0], { ...nodes[1], department: '' }];
     vi.mocked(parseComplaintHierarchyExcel).mockReturnValue({ nodes: blank, leaves: [blank[1]], validation: { valid: true, errors: [], warnings: [] } });
