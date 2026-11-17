@@ -30,9 +30,9 @@ export function noDepartmentMessage(row: number, t: OnboardingT = englishT): str
 }
 
 /**
- * One department cell value, by code first, then by name, ignoring case and extra spaces. A
- * value that matches nothing, or a name two departments share, comes back as the message the
- * preview shows for its row.
+ * One department cell value, by code or by name, ignoring case and extra spaces. A value that
+ * matches nothing, a name two departments share, or one department's code that is another's
+ * name, comes back as the message the preview shows for its row.
  */
 export function matchDepartment(
   value: string,
@@ -42,8 +42,21 @@ export function matchDepartment(
 ): DepartmentMatch {
   const wanted = fold(value);
   const byCode = departments.find((d) => fold(d.code) === wanted);
-  if (byCode) return { ok: true, code: byCode.code };
   const byName = departments.filter((d) => d.name && fold(d.name) === wanted);
+  // Another department's name too: the cell could mean either, so neither is picked silently.
+  const alsoNamed = byName.filter((d) => d !== byCode);
+  if (byCode && alsoNamed.length === 0) return { ok: true, code: byCode.code };
+  if (byCode) {
+    return {
+      ok: false,
+      ambiguous: true,
+      message: t(
+        'complaints.sheet_department_code_or_name',
+        'Row %{row}: “%{value}” is the code of one department and the name of another: %{choices}. Use a name or code that only one of them has.',
+        { row, value, choices: departmentList([byCode, ...alsoNamed]) },
+      ),
+    };
+  }
   if (byName.length === 1) return { ok: true, code: byName[0].code };
   if (byName.length > 1) {
     return {

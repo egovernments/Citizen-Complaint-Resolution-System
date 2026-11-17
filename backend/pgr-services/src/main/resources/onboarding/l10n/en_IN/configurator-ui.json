@@ -483,6 +483,7 @@
 {"code": "app.onboarding.complaints.resolve_within_default", "message": "Resolve within %{time} (default)", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.complaints.save_failed", "message": "Saving your complaint categories failed. Try again.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.complaints.sheet_department_ambiguous", "message": "Row %{row}: more than one department is called “%{value}”. Use its code instead: %{codes}.", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.complaints.sheet_department_code_or_name", "message": "Row %{row}: “%{value}” is the code of one department and the name of another: %{choices}. Use a name or code that only one of them has.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.complaints.sheet_department_none_yet", "message": "Row %{row}: department “%{value}” doesn’t exist. This workspace has no departments yet: add them in the Departments step first.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.complaints.sheet_department_unknown", "message": "Row %{row}: department “%{value}” doesn’t exist. Use one of: %{choices}.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.complaints.sheet_no_department", "message": "Row %{row}: no department. Every complaint type needs one.", "module": "configurator-ui", "locale": "en_IN"},

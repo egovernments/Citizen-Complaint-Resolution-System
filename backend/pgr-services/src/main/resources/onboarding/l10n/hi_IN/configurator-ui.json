@@ -485,6 +485,7 @@
 {"code": "app.onboarding.complaints.resolve_within_default", "message": "%{time} के भीतर हल करें (डिफ़ॉल्ट)", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.complaints.save_failed", "message": "आपके शिकायत प्रकार सहेजे नहीं जा सके। पुनः प्रयास करें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.complaints.sheet_department_ambiguous", "message": "पंक्ति %{row}: “%{value}” नाम के एक से अधिक विभाग हैं। इसके बजाय उसका कोड लिखें: %{codes}।", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.onboarding.complaints.sheet_department_code_or_name", "message": "पंक्ति %{row}: “%{value}” एक विभाग का कोड है और दूसरे विभाग का नाम: %{choices}। ऐसा नाम या कोड लिखें जो इनमें से केवल एक का हो।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.complaints.sheet_department_none_yet", "message": "पंक्ति %{row}: विभाग “%{value}” मौजूद नहीं है। इस वर्कस्पेस में अभी कोई विभाग नहीं है: पहले विभाग चरण में उन्हें जोड़ें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.complaints.sheet_department_unknown", "message": "पंक्ति %{row}: विभाग “%{value}” मौजूद नहीं है। इनमें से कोई एक लिखें: %{choices}।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.complaints.sheet_no_department", "message": "पंक्ति %{row}: कोई विभाग नहीं। हर शिकायत प्रकार को एक विभाग चाहिए।", "module": "configurator-ui", "locale": "hi_IN"},

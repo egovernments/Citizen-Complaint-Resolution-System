@@ -485,6 +485,7 @@
 {"code": "app.onboarding.complaints.resolve_within_default", "message": "Resolver em até %{time} (padrão)", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.complaints.save_failed", "message": "Não foi possível salvar suas categorias de reclamação. Tente novamente.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.complaints.sheet_department_ambiguous", "message": "Linha %{row}: há mais de um departamento chamado “%{value}”. Use o código dele: %{codes}.", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.onboarding.complaints.sheet_department_code_or_name", "message": "Linha %{row}: “%{value}” é o código de um departamento e o nome de outro: %{choices}. Use um nome ou código que só um deles tenha.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.complaints.sheet_department_none_yet", "message": "Linha %{row}: o departamento “%{value}” não existe. Este espaço de trabalho ainda não tem departamentos: adicione-os primeiro na etapa Departamentos.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.complaints.sheet_department_unknown", "message": "Linha %{row}: o departamento “%{value}” não existe. Use um destes: %{choices}.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.complaints.sheet_no_department", "message": "Linha %{row}: sem departamento. Todo tipo de reclamação precisa de um.", "module": "configurator-ui", "locale": "pt_BR"},

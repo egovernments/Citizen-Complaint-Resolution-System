@@ -96,6 +96,23 @@ describe('the complaints sheet department column', () => {
     ]);
   });
 
+  it('refuses a value that is one department’s code and another’s name, naming both', () => {
+    const departments = [
+      { code: 'ROADS', name: 'Road Works' },
+      { code: 'PWD', name: 'Roads' },
+    ];
+    const result = parse([row('Roads', 'A'), row('PWD', 'B'), row('road works', 'C')], departments);
+    expect(result.validation.errors.map((e) => [e.row, e.message])).toEqual([
+      [
+        2,
+        'Row 2: “Roads” is the code of one department and the name of another: Road Works (ROADS), Roads (PWD). Use a name or code that only one of them has.',
+      ],
+    ]);
+    expect(result.leaves.map((leaf) => leaf.department)).toEqual(['', 'PWD', 'ROADS']);
+    // A department whose code and name are the same word is not two departments.
+    expect(parse([row('Roads')], [{ code: 'ROADS', name: 'Roads' }]).validation.errors).toEqual([]);
+  });
+
   it('says to add departments first when the workspace has none', () => {
     const result = parse([row('SANIT')], []);
     expect(result.validation.errors[0].message).toBe(

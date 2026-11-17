@@ -485,6 +485,7 @@
 {"code": "app.onboarding.complaints.resolve_within_default", "message": "À résoudre sous %{time} (par défaut)", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.complaints.save_failed", "message": "L’enregistrement de vos catégories de réclamation a échoué. Réessayez.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.complaints.sheet_department_ambiguous", "message": "Ligne %{row} : plusieurs services s’appellent « %{value} ». Indiquez plutôt son code : %{codes}.", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.complaints.sheet_department_code_or_name", "message": "Ligne %{row} : « %{value} » est le code d’un service et le nom d’un autre : %{choices}. Indiquez un nom ou un code qu’un seul d’entre eux possède.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.complaints.sheet_department_none_yet", "message": "Ligne %{row} : le service « %{value} » n’existe pas. Cet espace de travail n’a encore aucun service : ajoutez-les d’abord à l’étape Services.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.complaints.sheet_department_unknown", "message": "Ligne %{row} : le service « %{value} » n’existe pas. Utilisez l’un de ceux-ci : %{choices}.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.complaints.sheet_no_department", "message": "Ligne %{row} : aucun service. Chaque type de réclamation en a besoin d’un.", "module": "configurator-ui", "locale": "fr_FR"},
