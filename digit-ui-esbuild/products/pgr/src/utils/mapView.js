@@ -5,6 +5,11 @@
  * GeoLocations stay thin and the rules can be tested on their own.
  */
 
+// The tile rules down to resolveBaseTiles (presets, the CARTO key check, the
+// credit lines) are copied in configurator/src/admin/themeEditor/
+// mapConfigRules.ts, so the Map Configuration preview matches the citizen map.
+// The two apps share no code: change both copies together.
+
 const CARTO_ATTRIBUTION =
   '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>';
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';

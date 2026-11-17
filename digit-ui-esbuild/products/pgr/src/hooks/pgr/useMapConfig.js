@@ -37,6 +37,19 @@ const asZoom = (v) => {
   return inRange(z, 0, 22) ? Math.round(z) : undefined;
 };
 
+// The hook runs in several components at once (GeoLocations, its boundaries
+// hook, ComplaintLocationMap), so the keyless-CARTO warning is logged once per
+// page load, not once per caller and render.
+let warnedKeylessCarto = false;
+const warnKeylessCartoOnce = () => {
+  if (warnedKeylessCarto) return;
+  warnedKeylessCarto = true;
+  console.warn(
+    "MapConfig asks for CARTO tiles without an API key, and CARTO only serves \"API KEY REQUIRED\" tiles " +
+      "without one, so the map uses OpenStreetMap. To use CARTO, put a keyed URL in RAINMAKER-PGR.MapConfig tileUrl."
+  );
+};
+
 const asNonEmptyString = (v) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
 
 // Nominatim only honours `viewbox` alongside `bounded=1`, which DISCARDS every
@@ -136,12 +149,7 @@ const useMapConfig = () => {
     // OpenStreetMap. CARTO without a key only serves watermarks, so it falls
     // back to OpenStreetMap; say so in the console for whoever debugs the map.
     const { tileUrl, tileAttribution, keylessCartoFallback } = resolveBaseTiles(cfg);
-    if (keylessCartoFallback) {
-      console.warn(
-        "MapConfig asks for CARTO tiles without an API key, and CARTO only serves \"API KEY REQUIRED\" tiles " +
-          "without one, so the map uses OpenStreetMap. To use CARTO, put a keyed URL in RAINMAKER-PGR.MapConfig tileUrl."
-      );
-    }
+    if (keylessCartoFallback) warnKeylessCartoOnce();
 
     // The tenant's own centre and zoom, kept apart from the fallbacks so the
     // map can prefer the tenant's boundary outline over a deployment-wide

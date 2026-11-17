@@ -1,12 +1,14 @@
 /**
  * Base-map and starting-position rules for the Map Configuration editor (#2804).
- *
- * The tile rules mirror digit-ui-esbuild products/pgr/src/utils/mapView.js, so
- * the preview shows the basemap citizens will actually get.
  */
 
 type Obj = Record<string, unknown>;
 
+// The tile rules down to resolveTileAttribution (presets, the CARTO key check,
+// the credit lines) are copied from digit-ui-esbuild
+// products/pgr/src/utils/mapView.js, so the preview shows the basemap and
+// credit citizens will actually get. The two apps share no code: change both
+// copies together.
 const CARTO_ATTRIBUTION =
   '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>';
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
