@@ -111,6 +111,8 @@ public class WorkspaceGateway {
             default: throw new IllegalArgumentException(step);
         }
     }
+    /** HRMS rows per search. Every page is read, so an employee past the first page is still checked (#2797). */
+    static final int HRMS_PAGE=1000;
     /** Dependency reads shared by the probes of one call, so EMPLOYEES and COMPLAINT_TYPES read HRMS once. */
     private final class Reads {
         final String tenant,founder; private JsonNode employees; private RuntimeException employeesFailure;
@@ -118,8 +120,15 @@ public class WorkspaceGateway {
         JsonNode employees() {
             if(employeesFailure!=null)throw employeesFailure;
             if(employees==null) try {
-                JsonNode rows=client.read("hrms","/egov-hrms/employees/_search?tenantId="+tenant+"&offset=0&limit=1000",Map.of()).path("Employees");
-                requireArray(rows); employees=rows;
+                var rows=mapper.createArrayNode();
+                // The bound only stops an HRMS that ignores offset: a full page there fails rather than reads as everyone.
+                for(int offset=0;;offset+=HRMS_PAGE) {
+                    if(offset>=100*HRMS_PAGE)throw new OnboardingFailure("WORKSPACE_INVALID_DEPENDENCY_RESPONSE",true);
+                    JsonNode page=client.read("hrms","/egov-hrms/employees/_search?tenantId="+tenant+"&offset="+offset+"&limit="+HRMS_PAGE,Map.of()).path("Employees");
+                    requireArray(page); page.forEach(rows::add);
+                    if(page.size()<HRMS_PAGE)break;
+                }
+                employees=rows;
             } catch(RuntimeException e){employeesFailure=e;throw e;}
             return employees;
         }

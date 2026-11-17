@@ -184,6 +184,21 @@ public class WorkspaceRouteTest {
         hrms(gro("EMP_1","WATER",true,"example"),gro("E002","ROADS",true,"example"));
         assertTrue(gateway.probe("example","COMPLAINT_TYPES",null));
     }
+    /** #2797 review: an employee on a removed department past the first HRMS page still refuses Finish. */
+    @Test public void complaintTypesReadEveryHrmsPage() throws Exception {
+        String removedRoads="{\"tenantId\":\"example\",\"isActive\":false,\"data\":{\"code\":\"ROADS\",\"active\":true}}";
+        mdms("common-masters.Department","["+WATER+","+removedRoads+"]");
+        mdms("RAINMAKER-PGR.ComplaintHierarchy","[{\"tenantId\":\"example\",\"data\":{\"code\":\"Leak\",\"department\":\"WATER\",\"slaHours\":24}}]");
+        List<String> full=new ArrayList<>();
+        for(int i=0;i<WorkspaceGateway.HRMS_PAGE;i++)full.add(gro("EMP_"+i,"WATER",true,"example"));
+        String page="/egov-hrms/employees/_search?tenantId=example&offset=%d&limit="+WorkspaceGateway.HRMS_PAGE;
+        when(client.read(eq("hrms"),eq(String.format(page,0)),any())).thenReturn(mapper.readTree("{\"Employees\":["+String.join(",",full)+"]}"));
+        when(client.read(eq("hrms"),eq(String.format(page,WorkspaceGateway.HRMS_PAGE)),any()))
+                .thenReturn(mapper.readTree("{\"Employees\":["+gro("E1001","ROADS",true,"example")+"]}"));
+        assertFalse(gateway.probe("example","COMPLAINT_TYPES",null));
+        when(client.read(eq("hrms"),eq(String.format(page,WorkspaceGateway.HRMS_PAGE)),any())).thenReturn(mapper.readTree("{\"Employees\":[]}"));
+        assertTrue(gateway.probe("example","COMPLAINT_TYPES",null));
+    }
     @Test public void geographyNeedsTwoLevelsInTheTenantsOwnHierarchy() throws Exception {
         when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
         when(client.read(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"TenantBoundary\":[{\"boundary\":[{\"code\":\"COUNTY\",\"children\":[{\"code\":\"WARD_1\"}]}]}]}"));
