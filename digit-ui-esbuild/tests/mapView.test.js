@@ -25,6 +25,7 @@ const {
   resolveOpeningView,
   CITY_ZOOM,
   nextOpeningView,
+  createTileFailureTracker,
 } = require(OUT);
 
 const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -152,4 +153,37 @@ test("nothing moves the map once the citizen has, or while there is a pin", () =
     assert.equal(step({ view: CONFIG_VIEW, ...over }), null);
     assert.equal(step({ view: OUTLINE_VIEW, boundariesDone: true, applied: "fallback", ...over }), null);
   }
+});
+
+const trackerAt = (clock) => createTileFailureTracker({ threshold: 3, windowMs: 1000, now: () => clock.t });
+
+test("one failed tile is not an outage; several with none loading are", () => {
+  const clock = { t: 0 };
+  const tiles = trackerAt(clock);
+  assert.equal(tiles.failed(), false);
+  assert.equal(tiles.failed(), false);
+  assert.equal(tiles.failed(), true);
+});
+
+test("a tile that loads starts the count again, so a later outage still shows", () => {
+  const clock = { t: 0 };
+  const tiles = trackerAt(clock);
+  tiles.failed();
+  tiles.failed();
+  tiles.loaded();
+  assert.equal(tiles.failed(), false);
+  assert.equal(tiles.failed(), false);
+  assert.equal(tiles.failed(), true);
+});
+
+test("failures spread out past the window don't add up", () => {
+  const clock = { t: 0 };
+  const tiles = trackerAt(clock);
+  tiles.failed();
+  clock.t = 600;
+  tiles.failed();
+  clock.t = 1300; // the first failure has aged out
+  assert.equal(tiles.failed(), false);
+  clock.t = 1400;
+  assert.equal(tiles.failed(), true);
 });

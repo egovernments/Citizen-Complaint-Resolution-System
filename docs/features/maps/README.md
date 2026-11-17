@@ -68,8 +68,10 @@ loads, for at most 3 seconds. Then it opens on the wards loaded so far, else on
 (3). If more wards arrive later, the map moves to them, but only until the
 citizen pans, zooms, searches, uses locate-me or drops a pin.
 
-If the tiles fail to load, the map shows "Map couldn't load. You can still pick
-the location by typing the address/area." (`CS_MAP_TILES_FAILED`).
+If tiles keep failing (3 failures within 10 seconds with no tile loading in
+between), the map shows "Map couldn't load. You can still pick the location by
+typing the address/area." (`CS_MAP_TILES_FAILED`). A tile that loads hides it
+again, and it comes back if the connection drops later.
 
 The boundary **hierarchy** is deliberately *not* here — it is a boundary
 construct, not a map one, and stays on the `HIERARCHY_TYPE` globalConfigs key

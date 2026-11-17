@@ -1,4 +1,4 @@
-// The citizen complaint map's opening view (#2804), with the
+// The citizen complaint map's opening view and tile notice (#2804), with the
 // real GeoLocations, useMapConfig and useTenantBoundaries. Leaflet is replaced
 // by a recording fake map; boundary-service by calls the test answers (or
 // leaves hanging) one at a time.
@@ -322,4 +322,21 @@ test("a pin restored from the form keeps the map on it", async () => {
   await waitOut();
   assert.deepEqual(map.moves, [["view", [-1.25, 36.85], 13]]);
   assert.equal(loading(view), false);
+});
+
+test("the tile notice: not for one failed tile, yes when tiles keep failing, gone when one loads, back on a later outage", async () => {
+  relationships = Promise.resolve(tree(2));
+  chunks = [geometryFor];
+  const view = await render();
+  const tiles = () => globalThis.__tileLayer.eventHandlers;
+  await step(() => tiles().tileerror());
+  assert.equal(notice(view), false, "one failed tile");
+  await step(() => { tiles().tileerror(); tiles().tileerror(); });
+  assert.equal(notice(view), true, "three failed tiles and none loaded");
+  await step(() => tiles().tileload());
+  assert.equal(notice(view), false, "a tile loaded");
+  await step(() => { tiles().tileerror(); tiles().tileerror(); });
+  assert.equal(notice(view), false, "two failures since the last load");
+  await step(() => tiles().tileerror());
+  assert.equal(notice(view), true, "the connection dropped after tiles had loaded");
 });

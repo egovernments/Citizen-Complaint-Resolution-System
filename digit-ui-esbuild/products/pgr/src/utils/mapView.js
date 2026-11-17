@@ -183,3 +183,35 @@ export const nextOpeningView = ({ ready, view, boundariesDone, waitedOut, applie
   const key = openingViewKey(view, boundariesDone);
   return key === applied ? null : key;
 };
+
+// Tile-failure notice (#2804): failures needed, with no tile loading in
+// between, and how recent they must be.
+export const TILE_FAILURES_FOR_NOTICE = 3;
+export const TILE_FAILURE_WINDOW_MS = 10000;
+
+/**
+ * Decides when the citizen map says its tiles couldn't load.
+ *
+ * One failed tile is normal (a blip, a tile missing at the edge of the world),
+ * so `failed()` only says yes after several failures in a short window with no
+ * tile loading in between. `loaded()` starts the count again, so the notice
+ * goes away once tiles load, and comes back if the connection drops later.
+ */
+export const createTileFailureTracker = ({
+  threshold = TILE_FAILURES_FOR_NOTICE,
+  windowMs = TILE_FAILURE_WINDOW_MS,
+  now = () => Date.now(),
+} = {}) => {
+  let failures = [];
+  return {
+    loaded() {
+      failures = [];
+    },
+    failed() {
+      const at = now();
+      failures = failures.filter((t) => at - t < windowMs);
+      failures.push(at);
+      return failures.length >= threshold;
+    },
+  };
+};

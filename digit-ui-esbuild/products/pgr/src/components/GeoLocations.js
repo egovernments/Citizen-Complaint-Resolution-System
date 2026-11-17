@@ -13,6 +13,7 @@ import { hasUsableGeoLocation } from "../utils/geoLocation";
 import { translateOr } from "../utils/selectPlaceholder";
 import {
   boundsOfFeatures,
+  createTileFailureTracker,
   nextOpeningView,
   openingViewKey,
   OPENING_VIEW_WAIT_MS,
@@ -219,21 +220,23 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const markUserMoved = useCallback(() => setUserMoved(true), []);
 
   // Tiles that never load leave a blank grey box. Say so, and point at the
-  // search box, which works without tiles. Any loaded tile clears the notice.
+  // search box, which works without tiles. Several failures with no tile
+  // loading in between show the notice; a tile that loads hides it again.
   const [tilesFailed, setTilesFailed] = useState(false);
-  const tileLoaded = useRef(false);
+  const tileFailures = useRef(null);
+  if (!tileFailures.current) tileFailures.current = createTileFailureTracker();
   useEffect(() => {
-    tileLoaded.current = false;
+    tileFailures.current = createTileFailureTracker();
     setTilesFailed(false);
   }, [tileUrl]);
   const tileEvents = useMemo(
     () => ({
       tileload: () => {
-        tileLoaded.current = true;
+        tileFailures.current.loaded();
         setTilesFailed(false);
       },
       tileerror: () => {
-        if (!tileLoaded.current) setTilesFailed(true);
+        if (tileFailures.current.failed()) setTilesFailed(true);
       },
     }),
     []
