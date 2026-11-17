@@ -7,6 +7,10 @@
 
 type Obj = Record<string, unknown>;
 
+const CARTO_ATTRIBUTION =
+  '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>';
+const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
 // Base-tile presets. CARTO (voyager, light, dark) needs an API key; without one
 // every tile is an "API KEY REQUIRED" watermark, so the citizen map uses
 // OpenStreetMap instead. A keyed CARTO URL goes in the custom tile URL.
@@ -19,7 +23,22 @@ export const BASE_MAP_THEMES: Record<string, { tileUrl: string; label: string }>
 export const DEFAULT_THEME = 'osm';
 
 const CARTO_TILE_HOST = /^(?:https?:)?\/\/(?:[^/?#]*\.)?basemaps\.cartocdn\.com\//i;
+const OSM_TILE_HOST = /^(?:https?:)?\/\/(?:[^/?#]*\.)?tile\.openstreetmap\.org\//i;
 const KEY_PARAM = /[?&](?:api_?key|key)=[^&#]+/i;
+
+const escapeHtml = (text: string) =>
+  text.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] as string);
+
+/** Credit for a custom tile URL that came without one: its host, never a preset's. */
+export function genericTileCredit(url: string): string {
+  const match = /^(?:https?:)?\/\/([^/?#]+)/i.exec(url);
+  if (!match) return '';
+  const host = match[1]
+    .replace(/^.*@/, '')
+    .replace(/:\d*$/, '')
+    .replace(/^(?:\{[^}]*\}\.)+/, '');
+  return host ? `&copy; ${escapeHtml(host)}` : '';
+}
 
 /** A CARTO basemap URL with no API key: CARTO answers it with watermark tiles only. */
 export const isKeylessCartoUrl = (url: string): boolean => CARTO_TILE_HOST.test(url.trim()) && !KEY_PARAM.test(url);
@@ -34,6 +53,23 @@ export function resolveTileUrl(theme: unknown, tileUrl: unknown): { url: string;
   const url = custom || BASE_MAP_THEMES[name].tileUrl;
   if (isKeylessCartoUrl(url)) return { url: BASE_MAP_THEMES.osm.tileUrl, keylessCarto: true };
   return { url, keylessCarto: false };
+}
+
+/**
+ * The credit line citizens see for this theme / custom URL: the custom
+ * attribution if set, else the credit of whoever serves the tiles.
+ */
+export function resolveTileAttribution(theme: unknown, tileUrl: unknown, tileAttribution: unknown): string {
+  const { url, keylessCarto } = resolveTileUrl(theme, tileUrl);
+  const custom = typeof tileUrl === 'string' ? tileUrl.trim() : '';
+  const credit = typeof tileAttribution === 'string' ? tileAttribution.trim() : '';
+  if (custom && !keylessCarto) {
+    if (credit) return credit;
+    if (CARTO_TILE_HOST.test(url)) return CARTO_ATTRIBUTION;
+    if (OSM_TILE_HOST.test(url)) return OSM_ATTRIBUTION;
+    return genericTileCredit(url);
+  }
+  return CARTO_TILE_HOST.test(url) ? CARTO_ATTRIBUTION : OSM_ATTRIBUTION;
 }
 
 export const KEYLESS_CARTO_NOTE =

@@ -45,7 +45,27 @@ export const DEFAULT_BASE_MAP_THEME = "osm";
 export const CITY_ZOOM = 12;
 
 const CARTO_TILE_HOST = /^(?:https?:)?\/\/(?:[^/?#]*\.)?basemaps\.cartocdn\.com\//i;
+const OSM_TILE_HOST = /^(?:https?:)?\/\/(?:[^/?#]*\.)?tile\.openstreetmap\.org\//i;
 const KEY_PARAM = /[?&](?:api_?key|key)=[^&#]+/i;
+
+const escapeHtml = (text) =>
+  text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+
+/**
+ * Credit line for a custom tile URL that came without one: the tile server's
+ * own host ("© tiles.example.org"), never a preset's credit for tiles that
+ * preset doesn't serve. Credentials, the port and {s}. placeholders are left
+ * out; a relative URL gets no credit.
+ */
+export const genericTileCredit = (url) => {
+  const match = /^(?:https?:)?\/\/([^/?#]+)/i.exec(url);
+  if (!match) return "";
+  const host = match[1]
+    .replace(/^.*@/, "")
+    .replace(/:\d*$/, "")
+    .replace(/^(?:\{[^}]*\}\.)+/, "");
+  return host ? `&copy; ${escapeHtml(host)}` : "";
+};
 
 /**
  * True for a CARTO basemap URL that carries no API key. CARTO answers those with
@@ -77,9 +97,12 @@ export const resolveBaseTiles = (cfg) => {
     if (isKeylessCartoUrl(rawUrl)) {
       return { tileUrl: osm.tileUrl, tileAttribution: osm.tileAttribution, keylessCartoFallback: true };
     }
-    // A raw URL without its own credit line: CARTO's for a CARTO URL, otherwise
-    // the named theme's (the previous behaviour).
-    const fallbackAttr = CARTO_TILE_HOST.test(rawUrl) ? CARTO_ATTRIBUTION : BASE_MAP_THEMES[themeKey].tileAttribution;
+    // A raw URL without its own credit line: CARTO's or OpenStreetMap's for
+    // their own tile servers, otherwise the URL's host. Never the named theme's:
+    // those tiles don't come from it.
+    let fallbackAttr = genericTileCredit(rawUrl);
+    if (CARTO_TILE_HOST.test(rawUrl)) fallbackAttr = CARTO_ATTRIBUTION;
+    else if (OSM_TILE_HOST.test(rawUrl)) fallbackAttr = OSM_ATTRIBUTION;
     return { tileUrl: rawUrl, tileAttribution: rawAttr || fallbackAttr, keylessCartoFallback: false };
   }
 

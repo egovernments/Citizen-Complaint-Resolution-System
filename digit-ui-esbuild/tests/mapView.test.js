@@ -68,6 +68,25 @@ test("any other custom tile URL wins, with its own credit line", () => {
   assert.deepEqual(tiles, { tileUrl: "https://tiles.example.org/{z}/{x}/{y}.png", tileAttribution: "Example", keylessCartoFallback: false });
 });
 
+test("a custom tile URL without a credit line gets its own host's, not the theme's", () => {
+  const tiles = resolveBaseTiles({ baseMapTheme: "voyager", tileUrl: "https://tiles.example.org/{z}/{x}/{y}.png" });
+  assert.equal(tiles.tileAttribution, "&copy; tiles.example.org");
+  assert.doesNotMatch(tiles.tileAttribution, /CARTO/);
+  // No credentials, port or {s}. placeholder in the credit, and nothing to inject.
+  assert.equal(
+    resolveBaseTiles({ tileUrl: "https://user:secret@{s}.maps.example.org:8443/{z}/{x}/{y}.png" }).tileAttribution,
+    "&copy; maps.example.org"
+  );
+  assert.equal(resolveBaseTiles({ tileUrl: "https://<b>x</b>/{z}/{x}/{y}.png" }).tileAttribution, "&copy; &lt;b&gt;x&lt;");
+  // A same-site relative URL names no one.
+  assert.equal(resolveBaseTiles({ tileUrl: "/tiles/{z}/{x}/{y}.png" }).tileAttribution, "");
+});
+
+test("a custom OpenStreetMap tile URL without a credit line still credits OpenStreetMap", () => {
+  const tiles = resolveBaseTiles({ baseMapTheme: "dark", tileUrl: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" });
+  assert.match(tiles.tileAttribution, /OpenStreetMap<\/a> contributors/);
+});
+
 test("an explicit osm theme stays OpenStreetMap", () => {
   assert.equal(resolveBaseTiles({ baseMapTheme: "osm" }).tileUrl, OSM_URL);
 });

@@ -55,6 +55,11 @@ OpenStreetMap instead (and logs a console warning). To use CARTO, put the keyed
 URL (`...{r}.png?key=<key>`) in `tileUrl`; a CARTO `tileUrl` without a key also
 falls back to OpenStreetMap.
 
+A `tileUrl` without a `tileAttribution` is credited to its own host
+(`© tiles.example.org`), or to CARTO / OpenStreetMap for their tile servers; it
+never borrows the `baseMapTheme` preset's credit. The Map Configuration preview
+shows the same credit line as the citizen map.
+
 ## Where the citizen map opens
 
 Before a location is picked (and after Clear), the complaint map opens at:

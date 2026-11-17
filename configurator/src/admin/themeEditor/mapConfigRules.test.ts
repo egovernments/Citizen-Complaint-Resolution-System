@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveTileUrl, mapConfigProblem, BASE_MAP_THEMES } from './mapConfigRules';
+import { resolveTileUrl, resolveTileAttribution, mapConfigProblem, BASE_MAP_THEMES } from './mapConfigRules';
 
 const OSM = BASE_MAP_THEMES.osm.tileUrl;
 
@@ -22,6 +22,26 @@ describe('resolveTileUrl (#2804)', () => {
     expect(resolveTileUrl('voyager', ' https://tiles.example.org/{z}/{x}/{y}.png ')).toEqual({
       url: 'https://tiles.example.org/{z}/{x}/{y}.png', keylessCarto: false,
     });
+  });
+});
+
+describe('resolveTileAttribution (#2804)', () => {
+  it('credits OpenStreetMap by default and when a keyless CARTO choice falls back to it', () => {
+    expect(resolveTileAttribution(undefined, undefined, undefined)).toMatch(/OpenStreetMap<\/a> contributors/);
+    expect(resolveTileAttribution('voyager', undefined, 'Ignored')).toMatch(/OpenStreetMap<\/a> contributors/);
+    expect(resolveTileAttribution('osm', 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', 'Ignored')).toMatch(/OpenStreetMap<\/a> contributors/);
+  });
+
+  it('uses the custom credit line with a custom URL, else the credit of whoever serves it', () => {
+    expect(resolveTileAttribution('osm', 'https://tiles.example.org/{z}/{x}/{y}.png', ' Example tiles ')).toBe('Example tiles');
+    expect(resolveTileAttribution('osm', 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=k', '')).toMatch(/CARTO/);
+    expect(resolveTileAttribution('dark', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', undefined)).toMatch(/OpenStreetMap<\/a> contributors/);
+  });
+
+  it('gives a custom URL without a credit line its own host, not the theme\'s', () => {
+    expect(resolveTileAttribution('voyager', 'https://tiles.example.org/{z}/{x}/{y}.png', undefined)).toBe('&copy; tiles.example.org');
+    expect(resolveTileAttribution('osm', 'https://u:p@{s}.maps.example.org:8443/{z}/{x}/{y}.png', '')).toBe('&copy; maps.example.org');
+    expect(resolveTileAttribution('osm', '/tiles/{z}/{x}/{y}.png', '')).toBe('');
   });
 });
 
