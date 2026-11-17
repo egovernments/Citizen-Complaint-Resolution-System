@@ -24,7 +24,14 @@ describe('BulkMastersUpload', () => {
   it('names a designation row linked to a missing department and leaves it out of the import (#2807)', async () => {
     const onDone = vi.fn();
     const { container } = render(
-      <BulkMastersUpload tenantId="acme" existingDepartments={new Set(['WATER'])} existingDesignations={new Set()} onDone={onDone} onCancel={vi.fn()} />,
+      <BulkMastersUpload
+        tenantId="acme"
+        existingDepartments={new Set(['WATER'])}
+        existingDesignations={new Set()}
+        linkableDepartments={new Set(['WATER'])}
+        onDone={onDone}
+        onCancel={vi.fn()}
+      />,
     );
     const file = sheetFile(
       [{ code: 'ROADS', name: 'Roads' }],

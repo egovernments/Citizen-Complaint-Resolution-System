@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import { parseDepartmentExcel, parseDesignationExcel } from '@/utils/excelParser';
-import { checkSheet } from './sheetCheck';
+import { checkSheet, type SheetContext } from './sheetCheck';
 
 function workbook(departments: Record<string, unknown>[], designations: Record<string, unknown>[]): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
@@ -10,8 +10,16 @@ function workbook(departments: Record<string, unknown>[], designations: Record<s
   return wb;
 }
 
-const check = (wb: XLSX.WorkBook, existing: string[] = []) =>
-  checkSheet(parseDepartmentExcel(wb).data, parseDesignationExcel(wb).data, new Set(existing));
+const check = (wb: XLSX.WorkBook, workspace: Partial<Record<keyof SheetContext, string[]>> = {}) =>
+  checkSheet(
+    parseDepartmentExcel(wb).data,
+    parseDesignationExcel(wb).data,
+    {
+      departments: new Set(workspace.departments),
+      designations: new Set(workspace.designations),
+      linkable: new Set(workspace.linkable),
+    },
+  );
 
 describe('checkSheet', () => {
   it('names a designation linked to a department that does not exist, and leaves it out (#2807)', () => {
@@ -30,11 +38,24 @@ describe('checkSheet', () => {
 
   it('counts departments on the sheet and in the workspace as known', () => {
     const wb = workbook([{ code: 'ROADS', name: 'Roads' }], [{ code: 'ENG', name: 'Engineer', department: 'ROADS, WATER' }]);
-    expect(check(wb, ['WATER'])).toEqual({
+    expect(check(wb, { departments: ['WATER'], linkable: ['WATER'] })).toEqual({
       departments: [{ code: 'ROADS', name: 'Roads' }],
       designations: [{ code: 'ENG', name: 'Engineer', departments: ['ROADS', 'WATER'] }],
       problems: [],
     });
+  });
+
+  it('counts the departments the city inherits from the state, and the system ones, as known', () => {
+    const wb = workbook(
+      [],
+      [
+        { code: 'ENG', name: 'Engineer', department: 'DEPT_1' },
+        { code: 'ADMIN_ASST', name: 'Admin assistant', department: 'ONBOARDING_ADMIN' },
+      ],
+    );
+    const result = check(wb, { linkable: ['DEPT_1', 'ONBOARDING_ADMIN'] });
+    expect(result.problems).toEqual([]);
+    expect(result.designations.map((row) => row.code)).toEqual(['ENG', 'ADMIN_ASST']);
   });
 
   it('lists every missing department on the row', () => {
@@ -72,5 +93,22 @@ describe('checkSheet', () => {
   it('keeps a designation with no departments', () => {
     const wb = workbook([], [{ code: 'CLERK', name: 'Clerk' }]);
     expect(check(wb).designations).toEqual([{ code: 'CLERK', name: 'Clerk', departments: [] }]);
+  });
+
+  it('passes rows whose code the workspace has without checking them: the import skips them', () => {
+    const wb = workbook(
+      [{ code: 'roads', name: 'Roads' }],
+      [
+        { code: 'OLD', name: 'Old post', department: 'GONE' },
+        { code: 'old_clerk', name: 'Old clerk' },
+      ],
+    );
+    const result = check(wb, { departments: ['roads'], designations: ['OLD', 'old_clerk'] });
+    expect(result.problems).toEqual([]);
+    expect(result.departments).toEqual([{ code: 'roads', name: 'Roads' }]);
+    expect(result.designations).toEqual([
+      { code: 'OLD', name: 'Old post', departments: ['GONE'] },
+      { code: 'old_clerk', name: 'Old clerk', departments: [] },
+    ]);
   });
 });

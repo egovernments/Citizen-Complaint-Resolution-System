@@ -31,12 +31,15 @@ export function BulkMastersUpload({
   tenantId,
   existingDepartments,
   existingDesignations,
+  linkableDepartments,
   onDone,
   onCancel,
 }: {
   tenantId: string;
   existingDepartments: Set<string>;
   existingDesignations: Set<string>;
+  /** Every department a designation on the sheet can be linked to, the inherited and system ones included. */
+  linkableDepartments: Set<string>;
   onDone: (summary: BulkImportSummary) => void;
   onCancel: () => void;
 }) {
@@ -63,7 +66,12 @@ export function BulkMastersUpload({
         return;
       }
       // Rows with a bad code, or a designation linked to a department that doesn't exist, are named and left out.
-      const checked = checkSheet(departments.data, designations.data, existingDepartments, t);
+      const checked = checkSheet(
+        departments.data,
+        designations.data,
+        { departments: existingDepartments, designations: existingDesignations, linkable: linkableDepartments },
+        t,
+      );
       setParsed({
         fileName: file.name,
         departments: checked.departments,
