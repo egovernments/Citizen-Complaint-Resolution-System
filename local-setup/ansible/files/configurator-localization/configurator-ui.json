@@ -8856,6 +8856,24 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.common.retry",
+    "message": "पुनः प्रयास करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.common.retry",
+    "message": "Réessayer",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.common.retry",
+    "message": "Tentar novamente",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.common.try_again",
     "message": "पुनः प्रयास करें",
     "module": "configurator-ui",
@@ -16182,6 +16200,24 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.geography.list.retry_first",
+    "message": "कुछ क्षेत्र सहेजे नहीं गए। पहले उन्हें फिर से सहेजने का प्रयास करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.list.retry_first",
+    "message": "Certaines zones n’ont pas été enregistrées. Réessayez d’abord de les enregistrer.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.list.retry_first",
+    "message": "Algumas áreas não foram salvas. Tente salvá-las novamente primeiro.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.geography.list.saved_already",
     "message": "आपकी सीमाएं सहेजी जा चुकी हैं, इसलिए अब और नहीं जोड़ी जा सकतीं।",
     "module": "configurator-ui",
@@ -16272,24 +16308,6 @@
     "locale": "pt_BR"
   },
   {
-    "code": "app.onboarding.geography.not_saved_above",
-    "message": "वे अभी भी ऊपर की सूची में हैं: उन्हें “संपादित करें” से ठीक करें, या फिर से कोशिश करने के लिए “सहेजें और जारी रखें” दबाएं।",
-    "module": "configurator-ui",
-    "locale": "hi_IN"
-  },
-  {
-    "code": "app.onboarding.geography.not_saved_above",
-    "message": "Elles figurent toujours dans la liste ci-dessus : corrigez-les avec « Modifier », ou cliquez sur « Enregistrer et continuer » pour réessayer.",
-    "module": "configurator-ui",
-    "locale": "fr_FR"
-  },
-  {
-    "code": "app.onboarding.geography.not_saved_above",
-    "message": "Elas ainda estão na lista acima: corrija-as com Editar ou clique em Salvar e continuar para tentar de novo.",
-    "module": "configurator-ui",
-    "locale": "pt_BR"
-  },
-  {
     "code": "app.onboarding.geography.not_saved_more",
     "message": "और %{count} अन्य",
     "module": "configurator-ui",
@@ -16308,38 +16326,38 @@
     "locale": "pt_BR"
   },
   {
-    "code": "app.onboarding.geography.not_saved_one",
-    "message": "1 क्षेत्र सहेजा नहीं गया, इसलिए यह चरण अभी पूरा नहीं हुआ है।",
+    "code": "app.onboarding.geography.not_saved_retry_one",
+    "message": "1 क्षेत्र सहेजा नहीं गया। यह ऊपर की सूची में है: इसे फिर से सहेजने के लिए “पुनः प्रयास करें” चुनें।",
     "module": "configurator-ui",
     "locale": "hi_IN"
   },
   {
-    "code": "app.onboarding.geography.not_saved_one",
-    "message": "1 zone n’a pas été enregistrée : cette étape n’est donc pas encore terminée.",
+    "code": "app.onboarding.geography.not_saved_retry_one",
+    "message": "1 zone n’a pas été enregistrée. Elle figure dans la liste ci-dessus : sélectionnez « Réessayer » pour tenter de l’enregistrer à nouveau.",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
   {
-    "code": "app.onboarding.geography.not_saved_one",
-    "message": "1 área não foi salva, então esta etapa ainda não está concluída.",
+    "code": "app.onboarding.geography.not_saved_retry_one",
+    "message": "1 área não foi salva. Ela está na lista acima: selecione Tentar novamente para tentar salvá-la de novo.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
   {
-    "code": "app.onboarding.geography.not_saved_other",
-    "message": "%{count} क्षेत्र सहेजे नहीं गए, इसलिए यह चरण अभी पूरा नहीं हुआ है।",
+    "code": "app.onboarding.geography.not_saved_retry_other",
+    "message": "%{count} क्षेत्र सहेजे नहीं गए। वे ऊपर की सूची में हैं: उन्हें फिर से सहेजने के लिए “पुनः प्रयास करें” चुनें।",
     "module": "configurator-ui",
     "locale": "hi_IN"
   },
   {
-    "code": "app.onboarding.geography.not_saved_other",
-    "message": "%{count} zones n’ont pas été enregistrées : cette étape n’est donc pas encore terminée.",
+    "code": "app.onboarding.geography.not_saved_retry_other",
+    "message": "%{count} zones n’ont pas été enregistrées. Elles figurent dans la liste ci-dessus : sélectionnez « Réessayer » pour tenter de les enregistrer à nouveau.",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
   {
-    "code": "app.onboarding.geography.not_saved_other",
-    "message": "%{count} áreas não foram salvas, então esta etapa ainda não está concluída.",
+    "code": "app.onboarding.geography.not_saved_retry_other",
+    "message": "%{count} áreas não foram salvas. Elas estão na lista acima: selecione Tentar novamente para tentar salvá-las de novo.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -16794,6 +16812,42 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.geography.retry_saved",
+    "message": "आपकी सभी सीमाएं सहेज ली गई हैं।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.retry_saved",
+    "message": "Toutes vos limites sont enregistrées.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.retry_saved",
+    "message": "Todos os seus limites foram salvos.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.retry_to_continue",
+    "message": "जारी रखने के लिए, जो क्षेत्र सहेजे नहीं गए उन्हें फिर से सहेजने का प्रयास करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.retry_to_continue",
+    "message": "Pour continuer, réessayez d’enregistrer les zones qui ne l’ont pas été.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.retry_to_continue",
+    "message": "Para continuar, tente salvar novamente as áreas que não foram salvas.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.geography.review.explain",
     "message": "बिना नाम वाले फ़ीचर और वे फ़ीचर जिनका केंद्रबिंदु किसी मूल सीमा में नहीं आता, अनुमान लगाने के बजाय बाहर रखे जाते हैं। यदि ये महत्वपूर्ण हैं, तो इन्हें OpenStreetMap में ठीक करें (या Excel विकल्प का उपयोग करें) और फिर से खोजें। शेष %{count} सीमाओं के साथ निर्माण जारी रहेगा।",
     "module": "configurator-ui",
@@ -16916,24 +16970,6 @@
   {
     "code": "app.onboarding.geography.save_retry",
     "message": "Eles ainda estão na lista abaixo: Salvar e continuar tenta novamente.",
-    "module": "configurator-ui",
-    "locale": "pt_BR"
-  },
-  {
-    "code": "app.onboarding.geography.save_retry_above",
-    "message": "वे अभी भी ऊपर की सूची में हैं: “सहेजें और जारी रखें” उन्हें फिर से आज़माता है।",
-    "module": "configurator-ui",
-    "locale": "hi_IN"
-  },
-  {
-    "code": "app.onboarding.geography.save_retry_above",
-    "message": "Elles figurent toujours dans la liste ci-dessus : « Enregistrer et continuer » les traitera à nouveau.",
-    "module": "configurator-ui",
-    "locale": "fr_FR"
-  },
-  {
-    "code": "app.onboarding.geography.save_retry_above",
-    "message": "Eles ainda estão na lista acima: Salvar e continuar tenta novamente.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -22104,6 +22140,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.common.retry",
+    "message": "Retry",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.common.try_again",
     "message": "Try again",
     "module": "configurator-ui",
@@ -24540,6 +24582,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.list.retry_first",
+    "message": "Some areas weren’t saved. Retry them first.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.list.saved_already",
     "message": "Your boundaries are saved, so no more can be added.",
     "module": "configurator-ui",
@@ -24570,26 +24618,20 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.geography.not_saved_above",
-    "message": "They’re still in the list above: fix them with Edit, or press Save and continue to try them again.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
     "code": "app.onboarding.geography.not_saved_more",
     "message": "and %{count} more",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.geography.not_saved_one",
-    "message": "1 area wasn’t saved, so this step isn’t complete yet.",
+    "code": "app.onboarding.geography.not_saved_retry_one",
+    "message": "1 area wasn’t saved. It’s in the list above: select Retry to try it again.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.geography.not_saved_other",
-    "message": "%{count} areas weren’t saved, so this step isn’t complete yet.",
+    "code": "app.onboarding.geography.not_saved_retry_other",
+    "message": "%{count} areas weren’t saved. They’re in the list above: select Retry to try them again.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -24744,6 +24786,18 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.retry_saved",
+    "message": "All your boundaries are saved.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.retry_to_continue",
+    "message": "Retry the areas that weren’t saved to continue.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.review.explain",
     "message": "Unnamed features and features whose centroid falls in no parent boundary are excluded rather than guessed. If these matter, fix them in OpenStreetMap (or use the Excel path) and re-run the search. Creation proceeds with the remaining %{count} boundaries.",
     "module": "configurator-ui",
@@ -24782,12 +24836,6 @@
   {
     "code": "app.onboarding.geography.save_retry",
     "message": "They are still in the list below: Save and continue tries them again.",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
-    "code": "app.onboarding.geography.save_retry_above",
-    "message": "They are still in the list above: Save and continue tries them again.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

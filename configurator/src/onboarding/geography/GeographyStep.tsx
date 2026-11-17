@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, MapPin } from 'lucide-react';
+import { Download, MapPin, RotateCw } from 'lucide-react';
 import { useApp } from '../../App';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -16,7 +16,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { boundaryService, mdmsService, ApiClientError } from '@/api';
-import type { BoundaryCreateFailure } from '@/api/services/boundary';
 import { toast } from '@/hooks/use-toast';
 import { StepHeader } from '../StepHeader';
 import { EmptyState, OptionCard, StepActions } from '../StepParts';
@@ -31,6 +30,7 @@ import BoundaryImport, { type BoundarySource } from './BoundaryImport';
 import { BoundaryList } from './BoundaryList';
 import {
   addSelection,
+  draftBoundaries,
   keepUnsaved,
   listHierarchy,
   removeSelection,
@@ -40,6 +40,7 @@ import {
   useBoundarySave,
   usePendingHierarchyRecord,
   useBoundaryDraft,
+  useSaveLeftovers,
   type BoundaryDraft,
   type BoundarySelection,
 } from './boundaryDraft';
@@ -113,15 +114,13 @@ function summaryLine(hierarchy: HierarchySummary, t: OnboardingT): string {
   return parts.length ? parts.join(' · ') : t('geography.nothing_in_it_yet', 'Nothing in it yet');
 }
 
-/** Says how many areas a save left out, and that they wait in the list (above this message) to be fixed or tried again. */
+/** Says how many areas a save left out, and that they wait in the list (above this message) for Retry. */
 function notSavedMessage(count: number, t: OnboardingT): string {
-  return `${
-    count === 1
-      ? t('geography.not_saved_one', '1 area wasn’t saved, so this step isn’t complete yet.')
-      : t('geography.not_saved_other', '%{count} areas weren’t saved, so this step isn’t complete yet.', {
-          count: count.toLocaleString('en-US'),
-        })
-  } ${t('geography.not_saved_above', 'They’re still in the list above: fix them with Edit, or press Save and continue to try them again.')}`;
+  return count === 1
+    ? t('geography.not_saved_retry_one', '1 area wasn’t saved. It’s in the list above: select Retry to try it again.')
+    : t('geography.not_saved_retry_other', '%{count} areas weren’t saved. They’re in the list above: select Retry to try them again.', {
+        count: count.toLocaleString('en-US'),
+      });
 }
 
 /** One unsaved selection, summarised like a saved hierarchy. */
@@ -161,6 +160,11 @@ export default function GeographyStep() {
   const saving = saveProgress !== null;
   // A save left the hierarchy record unwritten: Save and continue writes it.
   const pendingRecord = usePendingHierarchyRecord(tenant);
+  // The list is what a save left out, with the server's reasons (#2795). Its hierarchy is on the
+  // server, so the list can't change and nothing can be added: Retry writes only these areas, and
+  // Save and continue goes on without them, leaving them here for Retry.
+  const leftovers = useSaveLeftovers(tenant);
+  const awaitingRetry = leftovers !== null;
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -169,8 +173,6 @@ export default function GeographyStep() {
     };
   }, []);
   const [saveError, setSaveError] = useState<string | null>(null);
-  // The areas the last save didn't write, each with the server's reason, shown under saveError.
-  const [saveFailures, setSaveFailures] = useState<BoundaryCreateFailure[]>([]);
   // Save and continue asks first when it would save new boundaries: they can't be changed after.
   const [confirmSave, setConfirmSave] = useState(false);
   // Set once this visit saves: the server's check that follows reads as part of saving.
@@ -185,11 +187,7 @@ export default function GeographyStep() {
         setRecorded(recordedType);
         setLoadError(null);
         // After a reload, the areas a save left out come back to the list, with its reasons (#2795).
-        const restored = restoreLeftovers(tenant, loaded.map((hierarchy) => hierarchy.hierarchyType));
-        if (restored?.length) {
-          setSaveFailures(restored);
-          setSaveError(notSavedMessage(restored.length, t));
-        }
+        restoreLeftovers(tenant, loaded.map((hierarchy) => hierarchy.hierarchyType));
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
@@ -197,7 +195,6 @@ export default function GeographyStep() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- a new language doesn't reload the boundaries
   }, [tenant, reloadKey]);
 
   const reload = () => {
@@ -215,7 +212,9 @@ export default function GeographyStep() {
   // the list's reason comes before "saved" (#2795).
   const listFullReason = saving
     ? t('geography.saving', 'Saving your boundaries…')
-    : GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED
+    : awaitingRetry
+      ? t('geography.list.retry_first', 'Some areas weren’t saved. Retry them first.')
+      : GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED
       ? undefined
       : !hierarchies
         ? t('geography.list.checking_saved', 'Checking your saved boundaries…')
@@ -233,54 +232,39 @@ export default function GeographyStep() {
     (hierarchies ?? []).map((hierarchy) => `${hierarchy.hierarchyType}:${hierarchy.total}`).join(','),
   );
   // With unsaved boundaries, or a hierarchy record still to write, Save and continue
-  // writes them first, so the server's check can't pass yet.
-  const gate = draft || pendingRecord
+  // writes them first, so the server's check can't pass yet. Areas a save left out
+  // wait for Retry: Save and continue goes on with what's saved, once that passes.
+  const gate = (draft && !awaitingRetry) || pendingRecord
     ? { disabled: saving, hint: undefined, canRecheck: false }
     : probeGate(
         'GEOGRAPHY',
         {
           ready: hasBoundaries,
-          hint: hierarchies && !hasBoundaries ? t('geography.gate_hint', 'Bring in a boundary hierarchy to continue.') : undefined,
+          hint:
+            hierarchies && !hasBoundaries
+              ? awaitingRetry
+                ? t('geography.retry_to_continue', 'Retry the areas that weren’t saved to continue.')
+                : t('geography.gate_hint', 'Bring in a boundary hierarchy to continue.')
+              : undefined,
         },
         probe,
       );
 
-  /** Writes the unsaved list. True when everything landed; otherwise the reason stays on screen. */
+  /**
+   * Writes the unsaved list, or (Retry) what a save left out. True when everything landed. Whatever
+   * didn't stays in the list, locked, with the server's reasons, for Retry (#2795).
+   */
   const saveDraft = async (toSave: BoundaryDraft): Promise<boolean> => {
     setSaveError(null);
-    setSaveFailures([]);
     try {
       const result = await saveBoundaryDraft(tenant, toSave, t, hasBoundaries);
-      // Whatever didn't land stays in the list for another try; the hierarchy is fixed now either way.
+      // Whatever didn't land stays in the list for Retry; the hierarchy is fixed now either way.
       keepUnsaved(tenant, result.created, result.failed);
       setJustSaved(true);
       reload();
-      // Which areas didn't land and why, so they can be fixed (Edit) or tried again (#2795).
-      setSaveFailures(result.failed);
-      const notSaved = result.failed.length > 0 ? notSavedMessage(result.failed.length, t) : null;
-      const wanted = toSave.selections.reduce((count, selection) => count + selection.boundaries.length, 0);
-      if (wanted > 0 && result.created.length === 0) {
-        setSaveError(
-          notSaved ??
-            `${t('geography.osm.create_failed', 'Failed to create boundaries.')} ${t(
-              'geography.save_retry_above',
-              'They are still in the list above: Save and continue tries them again.',
-            )}`,
-        );
-        return false;
-      }
       if (result.created.length) addUndo('create_boundaries', `Created ${result.created.length} boundaries`);
-      const failures = [
-        notSaved,
-        result.schemaError
-          ? `${result.schemaError} ${t('geography.schema_retry', 'Save and continue tries it again.')}`
-          : null,
-      ].filter(Boolean);
-      if (failures.length) {
-        setSaveError(failures.join(' '));
-        return false;
-      }
-      return true;
+      if (result.schemaError) setSaveError(`${result.schemaError} ${t('geography.schema_retry', 'Save and continue tries it again.')}`);
+      return result.failed.length === 0 && !result.schemaError;
     } catch (err) {
       console.error(err);
       reportStepError('geography', 'save_boundaries', err, tenant);
@@ -343,7 +327,6 @@ export default function GeographyStep() {
             if (added.error) return added.error;
             close();
             setSaveError(null);
-            setSaveFailures([]);
             if (added.duplicates > 0) {
               toast({
                 title:
@@ -375,7 +358,8 @@ export default function GeographyStep() {
     <BoundaryList
       draft={draft}
       summarize={(selection) => summaryLine(selectionSummary(selection), t)}
-      disabled={saving}
+      // While it's being saved, and once a save has fixed its hierarchy: only Retry writes it then.
+      disabled={saving || awaitingRetry}
       // With the flag off and boundaries saved, a removed leftover can't be brought back.
       removeBody={
         !GEOGRAPHY_MULTIPLE_SELECTIONS_ENABLED && hasBoundaries && !unfinished
@@ -392,11 +376,6 @@ export default function GeographyStep() {
       }}
       onRemove={(selection) => {
         removeSelection(tenant, selection.id);
-        // The not-saved message is about what's in the list: once the list is empty it's out of date.
-        if (saveFailures.length > 0 && (draft?.selections.length ?? 0) <= 1) {
-          setSaveFailures([]);
-          setSaveError(null);
-        }
       }}
     />
   );
@@ -532,13 +511,13 @@ export default function GeographyStep() {
         </div>
       )}
 
-      {saveError && (
+      {(saveError || (awaitingRetry && !saving)) && (
         <Alert variant="destructive">
           <AlertDescription>
-            {saveError}
-            {saveFailures.length > 0 && (
+            {[awaitingRetry && !saving && draft ? notSavedMessage(draftBoundaries(draft).length, t) : null, saveError].filter(Boolean).join(' ')}
+            {awaitingRetry && !saving && leftovers.length > 0 && (
               <ul className="mt-2 space-y-1" data-testid="geography-save-failures">
-                {saveFailures.slice(0, MAX_FAILURES_SHOWN).map(({ boundary, error, code }) => (
+                {leftovers.slice(0, MAX_FAILURES_SHOWN).map(({ boundary, error, code }) => (
                   <li key={boundary.code}>
                     <span className="font-medium">
                       {boundary.name && boundary.name !== boundary.code ? `${boundary.name} (${boundary.code})` : boundary.code}
@@ -549,10 +528,10 @@ export default function GeographyStep() {
                     {code && <span className="ml-1 text-xs opacity-70">({code})</span>}
                   </li>
                 ))}
-                {saveFailures.length > MAX_FAILURES_SHOWN && (
+                {leftovers.length > MAX_FAILURES_SHOWN && (
                   <li>
                     {t('geography.not_saved_more', 'and %{count} more', {
-                      count: (saveFailures.length - MAX_FAILURES_SHOWN).toLocaleString('en-US'),
+                      count: (leftovers.length - MAX_FAILURES_SHOWN).toLocaleString('en-US'),
                     })}
                   </li>
                 )}
@@ -565,14 +544,31 @@ export default function GeographyStep() {
       <div className="flex flex-wrap items-center gap-3">
         <StepActions
           onBack={previous && !saving ? () => navigate(previous.path) : undefined}
+          secondary={
+            // While a save runs, its progress shows instead.
+            awaitingRetry && !saving && (
+              <Button
+                variant="outline"
+                className="h-10 gap-2 px-4"
+                onClick={async () => {
+                  if (draft && (await saveDraft(draft)) && mounted.current) {
+                    toast({ title: t('geography.retry_saved', 'All your boundaries are saved.') });
+                  }
+                }}
+              >
+                <RotateCw className="w-4 h-4" />
+                {t('common.retry', 'Retry')}
+              </Button>
+            )
+          }
           onContinue={async () => {
-            if (draft) {
+            // Areas a save left out don't hold the step up: they wait in the list for Retry.
+            if (draft && !awaitingRetry) {
               setConfirmSave(true);
               return;
             }
             if (pendingRecord) {
               setSaveError(null);
-              setSaveFailures([]);
               const failed = await retryHierarchyRecord(tenant, t);
               if (failed) {
                 setSaveError(failed);

@@ -250,6 +250,19 @@ export function useBoundaryDraft(tenantId: string): BoundaryDraft | null {
   return useSyncExternalStore(subscribe, () => drafts.get(tenantId) ?? null);
 }
 
+const NO_FAILURES: BoundaryCreateFailure[] = [];
+
+/**
+ * Why the last save left out the areas in the list, while the list is what a save left out;
+ * null for a list nothing has been saved from. Its hierarchy is on the server now, with its
+ * level names fixed, so this list can't change: only Retry writes it.
+ */
+export function useSaveLeftovers(tenantId: string): BoundaryCreateFailure[] | null {
+  return useSyncExternalStore(subscribe, () =>
+    drafts.has(tenantId) && leftovers.has(tenantId) ? (leftoverFailures.get(tenantId) ?? NO_FAILURES) : null,
+  );
+}
+
 /** How far a running save has got (0–100), or null when none is running. */
 export function saveProgressOf(tenantId: string): number | null {
   return saves.get(tenantId) ?? null;
@@ -437,13 +450,14 @@ export function addSelection(
 }
 
 /**
- * What's left after a save: the areas that didn't land, kept so Save and
- * continue can try them again. Read from the list as it is now (it may have
- * changed while the save ran). The save fixed the hierarchy on the server, so
- * they're marked as going into an existing one, with its levels. Names were
- * uploaded with it. They and the save's reasons (`failed`) survive a reload.
+ * What's left after a save: the areas that didn't land, kept for Retry to try
+ * again. Read from the list as it is now. The save fixed the hierarchy on the
+ * server, so they're marked as going into an existing one, with its levels, and
+ * the list can't change any more (useSaveLeftovers). Names were uploaded with
+ * it, unless the save stopped before (`namesUploaded`). They and the save's
+ * reasons (`failed`) survive a reload.
  */
-export function keepUnsaved(tenantId: string, created: Boundary[], failed: BoundaryCreateFailure[] = []) {
+export function keepUnsaved(tenantId: string, created: Boundary[], failed: BoundaryCreateFailure[] = [], namesUploaded = true) {
   const draft = drafts.get(tenantId);
   if (!draft) return;
   const hierarchy = listHierarchy(draft);
@@ -457,10 +471,10 @@ export function keepUnsaved(tenantId: string, created: Boundary[], failed: Bound
         ...s,
         hierarchyExists: true,
         levels: levels ?? s.levels,
-        unnamed: [],
+        unnamed: namesUploaded ? [] : s.unnamed,
         boundaries: s.boundaries.filter((b) => !saved.has(b.code)),
       }))
-      .filter((s) => s.boundaries.length > 0),
+      .filter((s) => s.boundaries.length > 0 || s.unnamed.length > 0),
   });
 }
 
@@ -629,8 +643,10 @@ export interface DraftSaveResult {
 
 /**
  * Writes the list: the hierarchy, its areas, then what the rest of the platform
- * reads alongside them. Throws when nothing could be written (the list is still
- * good to edit and retry); a partial save comes back with its failures.
+ * reads alongside them. A partial save comes back with its failures. Throws when
+ * it stops partway: before the hierarchy is defined the list is still good to
+ * edit; after, the whole list waits for Retry (which skips areas already saved),
+ * since the hierarchy's level names can't change now (#2795).
  * While it runs, useBoundarySave has its progress (0–100); the areas' writes are most of it.
  */
 export async function saveBoundaryDraft(
@@ -649,6 +665,11 @@ export async function saveBoundaryDraft(
   progress(0);
   try {
     if (!hierarchy.hierarchyExists) await ensureHierarchy(tenantId, hierarchy.hierarchyType, hierarchy.levels);
+    // The hierarchy is on the server now, its level names fixed, and the areas are next. From here the
+    // whole list is kept as what this save leaves out, in this browser too: a save that stops partway
+    // (an error, a closed tab) leaves it locked for Retry, never to be edited into other levels (#2795).
+    // The end of the save narrows it to the areas that didn't land.
+    keepUnsaved(tenantId, [], [], false);
     progress(2);
     const result = await boundaryService.createBoundaries(draftBoundaries(draft), (done, total) =>
       progress(2 + Math.floor((done / total) * 88)),
