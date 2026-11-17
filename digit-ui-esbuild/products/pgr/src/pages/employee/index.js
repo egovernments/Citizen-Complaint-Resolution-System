@@ -74,7 +74,8 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
                 show: location.pathname.includes("inbox"),
               },
               {
-                internalLink: `/${window?.contextPath}/employee/pgr/complaint-details`,
+                // No link: it shows only on a complaint's page, as the last
+                // crumb, and complaint-details without an ID has no page.
                 content: t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS"),
                 show: location.pathname.includes("complaint-details"),
               }

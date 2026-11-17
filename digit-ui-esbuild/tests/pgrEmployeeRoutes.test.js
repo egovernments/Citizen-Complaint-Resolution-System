@@ -70,6 +70,8 @@ process.on("exit", () => fs.rmSync(OUT, { force: true }));
 
 // Each page counts its mounts, to tell a re-render from a remount.
 let mounts;
+// The crumbs the app last handed to the breadcrumb.
+let crumbs;
 const page = (name) => () => {
   React.useEffect(() => { mounts[name] = (mounts[name] || 0) + 1; }, []);
   return React.createElement("main", null, name);
@@ -79,7 +81,7 @@ const SCREENS = {
   PGRComplaintDetails: page("details"),
   PGRSearchInbox: page("inbox"),
   PGRResponse: page("response"),
-  PGRBreadCrumbs: () => null,
+  PGRBreadCrumbs: (props) => { crumbs = props.crumbs; return null; },
 };
 const APP = "/digit-ui/employee/pgr";
 const LIST = `${APP}/inbox-v2`;
@@ -202,6 +204,23 @@ test("the old UI's complaint and new-complaint addresses open the pages that rep
   const { history, warnings } = await visit(`${APP}/complaint/details`);
   assert.equal(history.location.pathname, LIST);
   assert.equal(warnings.length, 1);
+});
+
+test("every breadcrumb link inside the app opens a page, not the complaints list fallback", async () => {
+  const links = new Set();
+  for (const url of [`${APP}/create-complaint`, `${APP}/complaint-details/PG-PGR-2026-01-01-000001`, LIST]) {
+    await visit(url);
+    for (const crumb of crumbs) if (crumb.internalLink?.startsWith(`${APP}/`)) links.add(crumb.internalLink);
+  }
+  assert.ok(links.size > 0);
+  for (const link of links) {
+    const { history, warnings } = await visit(link);
+    assert.equal(history.location.pathname, link, link);
+    assert.deepEqual(warnings, [], link);
+  }
+  // The Complaint Details crumb still shows on a complaint's page.
+  await visit(`${APP}/complaint-details/PG-PGR-2026-01-01-000001`);
+  assert.ok(crumbs.some((crumb) => crumb.content === "CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS" && crumb.show));
 });
 
 test("under the no-top-bar mount, the complaints list it opens is the no-top-bar one", async () => {
