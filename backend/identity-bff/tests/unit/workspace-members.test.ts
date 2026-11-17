@@ -373,12 +373,21 @@ describe("admin resend of the activation email", () => {
       config.keycloakEmployeeClientSecret = savedSecret;
     }
   });
-  it("sends the invite's and the resend's password link without a slug: the Configurator theme has no tenant branding", async () => {
-    vi.mocked(sendPasswordSetupEmail).mockClear();
-    await linkWorkspaceMember(input);
-    await linkWorkspaceMember(resend);
-    const redirects = vi.mocked(sendPasswordSetupEmail).mock.calls.map(([email]) => email.redirectUri);
-    expect(redirects).toEqual([expect.stringMatching(/\/password\/setup-complete\/[^/]+$/), expect.stringMatching(/\/password\/setup-complete\/[^/]+$/)]);
+  it("without an employee client, sends the invite's and the resend's password link through the Configurator, without a slug (#2801)", async () => {
+    const savedSecret = config.keycloakEmployeeClientSecret;
+    config.keycloakEmployeeClientSecret = "";
+    try {
+      vi.mocked(sendPasswordSetupEmail).mockClear();
+      vi.mocked(liveRouteForTenant).mockClear();
+      await linkWorkspaceMember(input);
+      await linkWorkspaceMember(resend);
+      const calls = vi.mocked(sendPasswordSetupEmail).mock.calls.map(([email]) => email);
+      expect(calls.map((email) => email.clientId)).toEqual([config.keycloakBffClientId, config.keycloakBffClientId]);
+      expect(calls.map((email) => email.redirectUri)).toEqual([expect.stringMatching(/\/password\/setup-complete\/[^/]+$/), expect.stringMatching(/\/password\/setup-complete\/[^/]+$/)]);
+      expect(liveRouteForTenant).not.toHaveBeenCalled();
+    } finally {
+      config.keycloakEmployeeClientSecret = savedSecret;
+    }
   });
   it("sends the verify email to an unverified invitee who already has a password", async () => {
     f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: false, attributes: {} });
