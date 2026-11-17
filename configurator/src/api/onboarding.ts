@@ -715,6 +715,14 @@ export function isValidUrlSlug(slug: string): boolean {
 }
 
 /**
+ * The DIGIT tenant id pgr-services makes from a URL: its letters alone, so `bomet-1` is `bomet`
+ * (OnboardingIdentifierService.tenantIdForSlug).
+ */
+export function tenantIdForSlug(slug: string): string {
+  return slug.replace(/[^a-z]/g, '');
+}
+
+/**
  * The account code rule, the client's one copy of pgr-services'
  * OnboardingIdentifierService.ACCOUNT_CODE: 2–32 of A-Z, 0-9 and hyphen,
  * starting with a letter or digit (#2802).

@@ -1,4 +1,4 @@
-import { OnboardingError, type Operation } from '@/api/onboarding';
+import { OnboardingError, type IdentifierType, type Operation } from '@/api/onboarding';
 import { ApiClientError } from '@/api';
 import { describeWorkspaceError } from '../errors';
 import { englishT, MessageError, type OnboardingT } from '../i18n';
@@ -73,6 +73,11 @@ export interface SignupProblem {
   message: string;
   /** Set when the problem belongs under a field rather than in the page's banner. */
   field?: SignupField;
+  /**
+   * For a taken name, code or URL, which identifier was taken. The URL field has three: the URL
+   * itself, and the tenant id and organization alias made from it.
+   */
+  identifier?: IdentifierType;
   /** An error code nothing here explains, kept for support and shown in small print, never as the message. */
   reference?: string;
 }
@@ -88,17 +93,30 @@ interface Context {
 
 const FIELD_REFUSAL = /^Signup\.([\w.]+) is (required|invalid|not supported)$/;
 
+/** The field each identifier is answered under. TENANT_ID and ORGANIZATION_ALIAS are both made from the URL. */
+const TAKEN_FIELD: Record<IdentifierType, Exclude<SignupField, 'mobile'>> = {
+  ORGANIZATION_NAME: 'accountName',
+  ACCOUNT_CODE: 'accountCode',
+  URL_SLUG: 'urlSlug',
+  TENANT_ID: 'urlSlug',
+  ORGANIZATION_ALIAS: 'urlSlug',
+};
+
+const isIdentifierType = (value: unknown): value is IdentifierType =>
+  typeof value === 'string' && Object.hasOwn(TAKEN_FIELD, value);
+
 /**
- * Which field a taken identifier is, from pgr-services' message: "<TYPE> is already in use" (the
- * submit checks) or "<TYPE> is already reserved" / "Organization name is already reserved" (the
- * reservation). TENANT_ID and ORGANIZATION_ALIAS are both made from the URL.
+ * Which identifier an ONBOARDING_IDENTIFIER_TAKEN refusal is about. pgr-services names it as
+ * `identifierType` beside the code (#2775). One from before that names it only in its message,
+ * "<TYPE> is already in use" or "<TYPE> is already reserved", and a taken name once as "Organization
+ * name is already reserved", so the message is read when the type isn't there.
  */
-export function takenField(message: string | undefined): Exclude<SignupField, 'mobile'> | undefined {
-  if (!message) return undefined;
-  if (/organization[_ ]name/i.test(message)) return 'accountName';
-  if (/ACCOUNT_CODE/.test(message)) return 'accountCode';
-  if (/URL_SLUG|ORGANIZATION_ALIAS|TENANT_ID/.test(message)) return 'urlSlug';
-  return undefined;
+export function takenIdentifier(err: OnboardingError): IdentifierType | undefined {
+  const errors = err.details?.Errors;
+  const named = Array.isArray(errors) ? (errors[0] as Record<string, unknown> | undefined)?.identifierType : undefined;
+  if (isIdentifierType(named)) return named;
+  if (/organization[_ ]name/i.test(err.message)) return 'ORGANIZATION_NAME';
+  return (Object.keys(TAKEN_FIELD) as IdentifierType[]).find((type) => err.message.includes(type));
 }
 
 /** What an account code must be: the server's rule (ACCOUNT_CODE_PATTERN), in words. */
@@ -166,16 +184,17 @@ export function describeSignupError(err: unknown, t: OnboardingT = englishT, con
     if (field && SIGNUP_FIELD_ERRORS[field]) return { message: t(signupFieldKey(field), SIGNUP_FIELD_ERRORS[field]) };
     return { message: t('signup.details_invalid', 'Some of your details aren’t valid. Check them and try again.') };
   }
-  // One code for every identifier; the message names which ("ACCOUNT_CODE is already in use"), and
-  // each goes under its own field. One it doesn't name is never blamed on the URL (#2775).
+  // One code for every identifier; the refusal names which, and each goes under its own field. One
+  // it doesn't name is never blamed on the URL (#2775).
   if (code === 'ONBOARDING_IDENTIFIER_TAKEN') {
-    switch (takenField(message)) {
+    const identifier = takenIdentifier(err);
+    switch (identifier && TAKEN_FIELD[identifier]) {
       case 'accountName':
-        return { field: 'accountName', message: accountNameTaken(context.accountName ?? '', t) };
+        return { field: 'accountName', identifier, message: accountNameTaken(context.accountName ?? '', t) };
       case 'accountCode':
-        return { field: 'accountCode', message: accountCodeInUse(t) };
+        return { field: 'accountCode', identifier, message: accountCodeInUse(t) };
       case 'urlSlug':
-        return { field: 'urlSlug', message: accountUrlTaken(t) };
+        return { field: 'urlSlug', identifier, message: accountUrlTaken(t) };
       default:
         return {
           message: t('signup.identifier_taken', 'One of your details (account name, account code or account URL) is already used by another workspace. Change it and try again.'),

@@ -20,6 +20,7 @@ import {
   session,
   slugifyAccountName,
   submitSignup,
+  tenantIdForSlug,
 } from './onboarding';
 
 type Call = { url: string; init: RequestInit };
@@ -95,6 +96,16 @@ describe('transport', () => {
     expect(caught).toBeInstanceOf(OnboardingError);
     expect((caught as OnboardingError).code).toBe('ONBOARDING_IDENTIFIER_TAKEN');
     expect((caught as OnboardingError).status).toBe(409);
+  });
+
+  it('keeps which identifier a refused submit names, for the field it belongs under (#2775)', async () => {
+    stubFetch(() => ({
+      status: 400,
+      body: { Errors: [{ code: 'ONBOARDING_IDENTIFIER_TAKEN', message: 'TENANT_ID is already reserved', identifierType: 'TENANT_ID' }] },
+    }));
+    const caught = await submitSignup('signup-1', 'k').catch((e) => e) as OnboardingError;
+    expect(caught.code).toBe('ONBOARDING_IDENTIFIER_TAKEN');
+    expect((caught.details?.Errors as Record<string, unknown>[])[0].identifierType).toBe('TENANT_ID');
   });
 });
 
@@ -186,6 +197,16 @@ describe('validation mirrors the server rules', () => {
     expect(isValidAccountCode('H')).toBe(false);
     expect(isValidAccountCode('H'.repeat(32))).toBe(true);
     expect(isValidAccountCode('H'.repeat(33))).toBe(false);
+  });
+});
+
+describe('tenantIdForSlug', () => {
+  it('keeps only the letters, as pgr-services does (#2775)', () => {
+    const javaRule = /String tenantId = slug\.replaceAll\("([^"]+)", ""\)/.exec(readFileSync(resolve(process.cwd(),
+      '../backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingIdentifierService.java'), 'utf8'));
+    expect(javaRule?.[1]).toBe('[^a-z]');
+    expect(tenantIdForSlug('bomet-1')).toBe('bomet');
+    expect(tenantIdForSlug('bomet-county-2')).toBe('bometcounty');
   });
 });
 
