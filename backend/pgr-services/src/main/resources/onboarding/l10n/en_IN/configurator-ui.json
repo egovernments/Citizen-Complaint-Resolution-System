@@ -487,6 +487,7 @@
 {"code": "app.onboarding.departments.bulk_body", "message": "Upload a list and we will bring them in.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.departments.bulk.bad_department_code", "message": "department code “%{code}” can only use capital letters, digits and underscores.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.departments.bulk.bad_designation_code", "message": "designation code “%{code}” can only use capital letters, digits and underscores.", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.departments.bulk.department_not_added", "message": "Linked to %{codes}, which couldn’t be added.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.departments.bulk.found", "message": "%{file} has %{departments} and %{designations}.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.departments.bulk.intro", "message": "Choose the filled-in spreadsheet. It has one sheet for departments and one for designations.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.departments.bulk.none_found", "message": "No departments or designations found. Use the template’s Department and Designation sheets.", "module": "configurator-ui", "locale": "en_IN"},

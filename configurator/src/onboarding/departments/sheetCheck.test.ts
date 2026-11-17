@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import { parseDepartmentExcel, parseDesignationExcel } from '@/utils/excelParser';
-import { checkSheet, type SheetContext } from './sheetCheck';
+import { checkSheet, holdBack, type SheetContext } from './sheetCheck';
 
 function workbook(departments: Record<string, unknown>[], designations: Record<string, unknown>[]): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
@@ -120,5 +120,26 @@ describe('checkSheet', () => {
       'Designation row 2: Designation code is required',
       'Designation row 3: department WATER doesn’t exist. Add it to the Department sheet, or use one you already have.',
     ]);
+  });
+});
+
+describe('holdBack', () => {
+  it('holds back a designation linked to a department that failed to save, and reports it', () => {
+    const result = holdBack(
+      [
+        { code: 'ENG', name: 'Engineer', departments: ['ROADS', 'WATER'] },
+        { code: 'CLERK', name: 'Clerk', departments: ['WATER'] },
+        { code: 'TYPIST', name: 'Typist', departments: [] },
+      ],
+      [{ code: 'ROADS', error: 'Schema validation failed' }],
+      new Set(),
+    );
+    expect(result.held).toEqual([{ code: 'ENG', error: 'Linked to ROADS, which couldn’t be added.' }]);
+    expect(result.ready.map((designation) => designation.code)).toEqual(['CLERK', 'TYPIST']);
+  });
+
+  it('lets a designation the workspace already has through: the import skips it', () => {
+    const result = holdBack([{ code: 'ENG', name: 'Engineer', departments: ['ROADS'] }], [{ code: 'ROADS', error: 'x' }], new Set(['ENG']));
+    expect(result).toEqual({ ready: [{ code: 'ENG', name: 'Engineer', departments: ['ROADS'] }], held: [] });
   });
 });

@@ -489,6 +489,7 @@
 {"code": "app.onboarding.departments.bulk_body", "message": "Téléversez une liste et nous l’importerons.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.departments.bulk.bad_department_code", "message": "le code de service « %{code} » ne peut contenir que des lettres majuscules, des chiffres et des traits de soulignement.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.departments.bulk.bad_designation_code", "message": "le code de fonction « %{code} » ne peut contenir que des lettres majuscules, des chiffres et des traits de soulignement.", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.departments.bulk.department_not_added", "message": "Liée à %{codes}, dont l’ajout a échoué.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.departments.bulk.found", "message": "%{file} contient %{departments} et %{designations}.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.departments.bulk.intro", "message": "Choisissez la feuille de calcul remplie. Elle comporte un onglet pour les services et un pour les fonctions.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.departments.bulk.none_found", "message": "Aucun service ni aucune fonction trouvés. Utilisez les onglets Department et Designation du modèle.", "module": "configurator-ui", "locale": "fr_FR"},

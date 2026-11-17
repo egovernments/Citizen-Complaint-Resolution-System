@@ -8,7 +8,7 @@ import { describeSaveError } from '../errors';
 import { reportStepError, trackTemplateDownload, trackUploadRefused } from '../telemetry';
 import { useOnboardingT } from '../i18n';
 import { importMasters, type ImportResult, type MasterInput } from './mastersApi';
-import { checkSheet } from './sheetCheck';
+import { checkSheet, holdBack } from './sheetCheck';
 
 interface Parsed {
   fileName: string;
@@ -86,8 +86,10 @@ export function BulkMastersUpload({
     setError(null);
     try {
       const departments = await importMasters(tenantId, 'department', parsed.departments, existingDepartments);
-      const designations = await importMasters(tenantId, 'designation', parsed.designations, existingDesignations);
-      onDone({ departments, designations });
+      // Designations linked to a department that just failed to save wait for the next upload.
+      const { ready, held } = holdBack(parsed.designations, departments.failed, existingDesignations, t);
+      const designations = await importMasters(tenantId, 'designation', ready, existingDesignations);
+      onDone({ departments, designations: { ...designations, failed: [...held, ...designations.failed] } });
     } catch (err) {
       reportStepError('departments', 'import_bulk', err, tenantId);
       setError(describeSaveError(err, t('common.import_failed', 'Importing failed. Try again.'), t));

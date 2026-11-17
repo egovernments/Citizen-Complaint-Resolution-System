@@ -1,6 +1,6 @@
 import type { DepartmentExcelRow, DesignationExcelRow, ValidationResult } from '@/api/types';
 import { englishT, type OnboardingT } from '../i18n';
-import { CODE_PATTERN, type MasterInput } from './mastersApi';
+import { CODE_PATTERN, type ImportResult, type MasterInput } from './mastersApi';
 
 /** The template's two tabs, by the names the operator sees on them. */
 export type SheetName = 'Department' | 'Designation';
@@ -90,4 +90,33 @@ export function checkSheet(
     designations.push({ code: row.code, name: row.name, departments: linked });
   }
   return { departments, designations, problems };
+}
+
+/**
+ * The designations to save once the sheet's departments are in. One linked to a
+ * department that couldn't be saved would point at nothing (#2807), so it is
+ * left out and reported with the failures. One the workspace already has is
+ * skipped on import anyway, so it goes through.
+ */
+export function holdBack(
+  designations: MasterInput[],
+  failedDepartments: ImportResult['failed'],
+  existingDesignations: Set<string>,
+  t: OnboardingT = englishT,
+): { ready: MasterInput[]; held: ImportResult['failed'] } {
+  const failed = new Set(failedDepartments.map((department) => department.code));
+  const ready: MasterInput[] = [];
+  const held: ImportResult['failed'] = [];
+  for (const designation of designations) {
+    const missing = existingDesignations.has(designation.code) ? [] : (designation.departments ?? []).filter((code) => failed.has(code));
+    if (missing.length) {
+      held.push({
+        code: designation.code,
+        error: t('departments.bulk.department_not_added', 'Linked to %{codes}, which couldn’t be added.', { codes: missing.join(', ') }),
+      });
+    } else {
+      ready.push(designation);
+    }
+  }
+  return { ready, held };
 }

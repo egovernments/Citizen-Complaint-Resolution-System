@@ -49,4 +49,49 @@ describe('BulkMastersUpload', () => {
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     expect(bringIn).toHaveBeenCalledWith('acme', 'designation', [{ code: 'ENG', name: 'Engineer', departments: ['ROADS', 'WATER'] }], new Set());
   });
+
+  it('leaves out, and reports, a designation whose department on the sheet failed to save (#2807)', async () => {
+    bringIn.mockImplementation(async (_tenant, kind, rows) =>
+      kind === 'department'
+        ? { created: 0, skipped: 0, failed: [{ code: 'ROADS', error: 'Schema validation failed' }] }
+        : { created: rows.length - 1, skipped: 1, failed: [] },
+    );
+    const onDone = vi.fn();
+    const { container } = render(
+      <BulkMastersUpload
+        tenantId="acme"
+        existingDepartments={new Set()}
+        existingDesignations={new Set(['OLD'])}
+        linkableDepartments={new Set(['WATER'])}
+        onDone={onDone}
+        onCancel={vi.fn()}
+      />,
+    );
+    const file = sheetFile(
+      [{ code: 'ROADS', name: 'Roads' }],
+      [
+        { code: 'ENG', name: 'Engineer', department: 'ROADS' },
+        { code: 'CLERK', name: 'Clerk', department: 'WATER' },
+        { code: 'OLD', name: 'Old post', department: 'ROADS' },
+      ],
+    );
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Bring them in' }));
+
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(bringIn).toHaveBeenLastCalledWith(
+      'acme',
+      'designation',
+      [
+        { code: 'CLERK', name: 'Clerk', departments: ['WATER'] },
+        { code: 'OLD', name: 'Old post', departments: ['ROADS'] },
+      ],
+      new Set(['OLD']),
+    );
+    expect(onDone.mock.calls[0][0].designations).toEqual({
+      created: 1,
+      skipped: 1,
+      failed: [{ code: 'ENG', error: 'Linked to ROADS, which couldn’t be added.' }],
+    });
+  });
 });

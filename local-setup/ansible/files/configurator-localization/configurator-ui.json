@@ -10092,6 +10092,12 @@
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.departments.bulk.department_not_added",
+    "message": "%{codes} से जुड़ा है, जिसे जोड़ा नहीं जा सका।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.departments.bulk.found",
     "message": "%{file} में %{departments} और %{designations} हैं।",
     "module": "configurator-ui",
@@ -10110,6 +10116,12 @@
     "locale": "fr_FR"
   },
   {
+    "code": "app.onboarding.departments.bulk.department_not_added",
+    "message": "Liée à %{codes}, dont l’ajout a échoué.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.departments.bulk.found",
     "message": "%{file} contient %{departments} et %{designations}.",
     "module": "configurator-ui",
@@ -10124,6 +10136,12 @@
   {
     "code": "app.onboarding.departments.bulk.bad_designation_code",
     "message": "o código de cargo “%{code}” só pode usar letras maiúsculas, dígitos e sublinhados.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.department_not_added",
+    "message": "Vinculado a %{codes}, que não pôde ser adicionado.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -22322,6 +22340,12 @@
   {
     "code": "app.onboarding.departments.bulk.bad_designation_code",
     "message": "designation code “%{code}” can only use capital letters, digits and underscores.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.department_not_added",
+    "message": "Linked to %{codes}, which couldn’t be added.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
