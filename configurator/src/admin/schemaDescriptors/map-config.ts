@@ -59,7 +59,7 @@ export const mapConfigDescriptor: SchemaDescriptor = {
       help: 'Fill and outline colour of the ward the citizen has pinned. Defaults to orange (#FFA74F).' },
 
     { path: 'center.lat', widget: 'number', label: 'Start latitude', min: -90, max: 90, hidden: 'create',
-      help: 'Derived from your boundaries during Boundary Setup — the centre of the area you onboarded. Override only if the map should open somewhere other than the middle of your service area. Fill in both latitude and longitude, or leave both blank to open on your boundary outline.' },
+      help: 'Derived from your boundaries during Boundary Setup — the centre of the area you onboarded. Override only if the map should open somewhere other than the middle of your service area. Fill in both latitude and longitude, or leave both blank to open on your boundary outline, if your boundaries include map shapes; otherwise on the deployment default.' },
     { path: 'center.lng', widget: 'number', label: 'Start longitude', min: -180, max: 180, hidden: 'create',
       help: 'Longitude of the starting point. Derived alongside the latitude.' },
     { path: 'defaultZoom', widget: 'integer', label: 'Start zoom', min: 0, max: 22, hidden: 'create',
