@@ -69,6 +69,27 @@ describe('Excel boolean coalescing (active column)', () => {
   });
 });
 
+describe('Department and designation sheet rows (#2807)', () => {
+  const withBlankRow = (sheetName: string) => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([['code', 'name'], ['ROADS', 'Roads'], [], ['WATER', 'Water'], ['', 'No code']]);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    return wb;
+  };
+
+  it('Department: numbers rows as the sheet does, blank rows included', () => {
+    const { data, validation } = parseDepartmentExcel(withBlankRow('Department'));
+    expect(data.map((r) => r.row)).toEqual([2, 4]);
+    expect(validation.errors.map((e) => e.row)).toEqual([5]);
+  });
+
+  it('Designation: numbers rows as the sheet does, blank rows included', () => {
+    const { data, validation } = parseDesignationExcel(withBlankRow('Designation'));
+    expect(data.map((r) => r.row)).toEqual([2, 4]);
+    expect(validation.errors.map((e) => e.row)).toEqual([5]);
+  });
+});
+
 describe('Boundary coordinate parsing', () => {
   it('keeps 0.0 latitude / longitude as 0 (not undefined)', () => {
     // `parseFloat(...) || undefined` would coerce a legitimate 0 to
