@@ -1,25 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGetList } from 'ra-core';
 import { Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
-import { BulkImportPanel, triggerDownload, type BulkRow, type BulkColumn } from '@/admin/bulk/BulkImportPanel';
-import { parseEmployeeExcel } from '@/utils/excelParser';
+import { BulkImportPanel, triggerDownload, type BulkRow, type BulkColumn, type ParsedSheet } from '@/admin/bulk/BulkImportPanel';
+import { parseEmployeeExcel, type ParsedEmployeeRow } from '@/utils/excelParser';
 import { useOnboardingT } from '@/onboarding/i18n';
 import { buildEmployeeTemplate, employeeTemplateFilename } from '@/utils/templateBuilder';
 import { hrmsService, mdmsService, boundaryService } from '@/api';
 import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
 import type {
-  EmployeeExcelRow,
   Employee,
   Department,
   Designation,
   Boundary,
 } from '@/api/types';
-import { codeProblem, employeesByCode, withEmployeeCodes, type EmployeeRecord } from '@/onboarding/employees/employeesApi';
+import { alreadyAdded, codeProblem, employeesByCode, withEmployeeCodes, type EmployeeRecord } from '@/onboarding/employees/employeesApi';
+import { describeSheetProblem } from '@/onboarding/employees/bulkResults';
 import { useApp } from '../../App';
 
-type EmployeeBulkRow = EmployeeExcelRow & BulkRow;
+type EmployeeBulkRow = ParsedEmployeeRow & BulkRow;
 
 export function EmployeeBulkImport() {
   const { state } = useApp();
@@ -37,7 +37,8 @@ export function EmployeeBulkImport() {
     pattern: string;
     errorMessage: string;
   } | null>(null);
-  const [existingEmployees, setExistingEmployees] = useState<Map<string, EmployeeRecord>>(new Map());
+  // The employees HRMS held when the sheet was uploaded: what its codes are checked against.
+  const existingEmployees = useRef<Map<string, EmployeeRecord>>(new Map());
   const [refsLoading, setRefsLoading] = useState(false);
   const [createdEmployees, setCreatedEmployees] = useState<Employee[]>([]);
 
@@ -56,14 +57,12 @@ export function EmployeeBulkImport() {
           boundaryService.searchBoundaries(tenantId, hierarchyType ? { hierarchyType } : undefined),
         );
 
-        const [depts, desigs, bounds, fetchedRoles, mobile, employees] = await Promise.all([
+        const [depts, desigs, bounds, fetchedRoles, mobile] = await Promise.all([
           mdmsService.getDepartments(tenantId),
           mdmsService.getDesignations(tenantId),
           boundariesInDefaultHierarchy,
           mdmsService.getRoles(tenantId).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(tenantId).catch(() => null),
-          // The code check is advisory: creating still refuses a code that's taken.
-          employeesByCode(tenantId).catch(() => new Map<string, EmployeeRecord>()),
         ]);
         if (cancelled) return;
         setDepartments(depts);
@@ -71,7 +70,6 @@ export function EmployeeBulkImport() {
         setBoundaries(bounds);
         setRoles(fetchedRoles);
         setMobileRules(mobile);
-        setExistingEmployees(employees);
       } finally {
         if (!cancelled) setRefsLoading(false);
       }
@@ -100,10 +98,34 @@ export function EmployeeBulkImport() {
     return Array.from(byCode.values());
   }, [boundaries, aggregatedBoundaries]);
 
-  const parseWorkbook = useCallback((wb: XLSX.WorkBook) => {
+  // As onboarding's upload does (#2798, #2799, #2800): every sheet row comes back,
+  // the ones the parser refused as errors with their reasons, and rows HRMS
+  // already has as the sheet describes them as already added.
+  const parseWorkbook = useCallback(async (wb: XLSX.WorkBook): Promise<ParsedSheet<EmployeeBulkRow>> => {
     const result = parseEmployeeExcel(wb);
-    return { data: withEmployeeCodes<EmployeeExcelRow>(result.data, existingEmployees) as EmployeeBulkRow[] };
-  }, [existingEmployees]);
+    if (result.data.length === 0 && result.rejected.length === 0) return { data: [] };
+    // Checked against the employees HRMS holds now. Without that list a row for
+    // someone already added would pass and be counted as created while nothing
+    // changed (#2798), so the upload stops.
+    let existing: Map<string, EmployeeRecord>;
+    try {
+      existing = await employeesByCode(tenantId);
+    } catch (err) {
+      console.error('Failed to list existing employees:', err);
+      return { data: [], parseError: 'Couldn’t check which employees you’ve already added, so the sheet wasn’t checked. Upload it again in a moment.' };
+    }
+    existingEmployees.current = existing;
+    // A refused row's code stays taken: the fixed re-upload still asks for it.
+    const rows = withEmployeeCodes(result.data, existing, result.rejected.map((row) => row.employeeCode));
+    const sheet = [...rows, ...result.rejected];
+    const kept = rows.map((row) => (alreadyAdded(row, sheet, existing) ? { ...row, status: 'skipped' } : row));
+    const refused = result.rejected.map(({ problems, ...row }) => ({
+      ...row,
+      status: 'error',
+      error: problems.map((problem) => describeSheetProblem(problem)).join('; '),
+    }));
+    return { data: ([...kept, ...refused] as EmployeeBulkRow[]).sort((a, b) => a.row - b.row) };
+  }, [tenantId]);
 
   const validateRow = useCallback(
     (row: EmployeeBulkRow, rows: EmployeeBulkRow[]): string[] => {
@@ -119,9 +141,10 @@ export function EmployeeBulkImport() {
 
       const errors: string[] = [];
       if (!row.emailId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.emailId)) errors.push('A valid email is required to invite an employee.');
-      const clash = codeProblem(row, rows, existingEmployees);
-      // An existing employee's code is refused even for the same person: an upload
-      // never changes an employee, so the row would do nothing (#2798).
+      const clash = codeProblem(row, rows, existingEmployees.current);
+      // An existing employee the row describes differently is refused: an upload
+      // never changes an employee, so the row would do nothing (#2798). One the
+      // row describes as HRMS has them was skipped as already added.
       if (clash) {
         errors.push('repeated' in clash
           ? `${row.employeeCode} is on more than one row`
@@ -171,7 +194,7 @@ export function EmployeeBulkImport() {
       }
       return errors;
     },
-    [departments, designations, templateBoundaries, roles, mobileRules, existingEmployees],
+    [departments, designations, templateBoundaries, roles, mobileRules],
   );
 
   const createOne = useCallback(
@@ -268,6 +291,7 @@ export function EmployeeBulkImport() {
       parseWorkbook={parseWorkbook}
       validateRow={validateRow}
       columns={columns}
+      rowLabel={(row) => (row.name ? `Row ${row.row} (${row.name})` : `Row ${row.row}`)}
       createOne={createOne}
       entityLabel={{ singular: 'employee', plural: 'employees' }}
       completionExtras={(createdCount) =>
