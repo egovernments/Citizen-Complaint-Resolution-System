@@ -457,6 +457,20 @@ describe('a spreadsheet hierarchy that has to go (#2806)', () => {
     );
   });
 
+  it('stops, creating nothing, when the definition search fails', async () => {
+    search.mockImplementation(async (_tenant, schema) => {
+      if (schema === DEFINITION) throw new Error('upstream timed out');
+      return [];
+    });
+    const definitionData = { hierarchyType: 'PGR', active: true, levels: [] };
+
+    await expect(writeSheetHierarchy('acme', 'PGR', definitionData, [{ code: 'A', data: { code: 'A' } }])).rejects.toThrow('upstream timed out');
+    await expect(saveComplaints('acme', { editable: true, draft, records: [], hasDefinition: false }, draft)).rejects.toThrow(
+      'upstream timed out',
+    );
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('a sheet uploaded again restores what was removed, creates what is new and leaves the same alone', async () => {
     const removedDefinition = definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'], { isActive: false });
     const removedLeaf = row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', department: 'NA' }, { isActive: false });

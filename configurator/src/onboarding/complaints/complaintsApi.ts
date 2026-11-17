@@ -289,10 +289,10 @@ async function sync(
   // Re-read before creating: a save whose step update then failed has already created the definition, and the page
   // still holds the stale `hasDefinition` from when it loaded, so a blind create fails as a duplicate on the retry.
   // A removed one (a spreadsheet's, after "Remove and upload again") keeps its key taken, so it is restored
-  // with these levels instead.
+  // with these levels instead. A failed search fails the save: read as "none", it would create a duplicate.
   const definition = hasDefinition
     ? undefined
-    : (await mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA).catch(() => [] as MdmsRecord[])).find(
+    : (await mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA)).find(
         (record) => record.tenantId === tenantId && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE,
       );
   const definitionData = {
@@ -372,8 +372,9 @@ export async function writeSheetHierarchy(
   definition: Record<string, unknown>,
   rows: { code: string; data: Record<string, unknown> }[],
 ): Promise<void> {
+  // A failed search fails the write: read as "none", it would create a definition that may exist (removed or not).
   const [definitions, existing] = await Promise.all([
-    mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA).catch(() => [] as MdmsRecord[]),
+    mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA),
     mdmsService.searchRecords(tenantId, HIERARCHY_SCHEMA, { limit: 5000 }),
   ]);
   const own = (record: MdmsRecord) => record.tenantId === tenantId && text(dataOf(record).hierarchyType) === hierarchyType;
