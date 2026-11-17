@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { hrmsService, mdmsService } from '@/api';
+import { ApiClientError, hrmsService, mdmsService } from '@/api';
 import type { Employee, MdmsRecord } from '@/api/types';
 import {
   categoryRoutes,
@@ -12,13 +12,24 @@ import {
 } from './departmentUsage';
 import { EMPLOYEE_PAGE } from '../employees/employeesApi';
 import { describeSaveError } from '../errors';
+import { reportStepError } from '../telemetry';
 
 vi.mock('@/api', () => ({
   MDMS_SCHEMAS: { DEPARTMENT: 'common-masters.Department', DESIGNATION: 'common-masters.Designation' },
   mdmsService: { searchRecords: vi.fn() },
   hrmsService: { searchEmployees: vi.fn() },
   localizationService: {},
+  ApiClientError: class extends Error {
+    errors: { code: string; message: string }[];
+    statusCode: number;
+    constructor(errors: { code: string; message: string }[], statusCode: number) {
+      super(errors.map((error) => error.message).join(', '));
+      this.errors = errors;
+      this.statusCode = statusCode;
+    }
+  },
 }));
+vi.mock('../telemetry', () => ({ reportStepError: vi.fn() }));
 
 const search = vi.mocked(mdmsService.searchRecords);
 const employeesSearch = vi.mocked(hrmsService.searchEmployees);
@@ -167,5 +178,26 @@ describe('checkRemovable', () => {
     search.mockRejectedValue(new Error('MDMS down'));
     const err = await checkRemovable('acme', 'ROADS', 'Roads').catch((error: unknown) => error);
     expect(describeSaveError(err, 'fallback')).toBe('Couldn’t check what uses Roads, so it wasn’t removed. Try again.');
+    expect(reportStepError).toHaveBeenCalledWith('departments', 'check_department_use', expect.any(Error), 'acme');
+  });
+
+  it('says a refusal as it is, not "Try again", and reports it', async () => {
+    const denied = new ApiClientError([{ code: 'AccessDenied', message: 'Not allowed' }], 403);
+    employeesSearch.mockRejectedValue(denied);
+    search.mockResolvedValue([]);
+    const err = await checkRemovable('acme', 'ROADS', 'Roads').catch((error: unknown) => error);
+    expect(err).toBe(denied);
+    expect(describeSaveError(err, 'fallback')).toBe('Your account doesn’t have permission to change this workspace yet, so nothing was saved.');
+    expect(reportStepError).toHaveBeenCalledWith('departments', 'check_department_use', denied, 'acme');
+  });
+
+  it('still says "Try again" for a server error or a rate limit', async () => {
+    for (const status of [503, 429]) {
+      employeesSearch.mockRejectedValue(new ApiClientError([{ code: 'BUSY', message: 'Busy' }], status));
+      search.mockResolvedValue([]);
+      const err = await checkRemovable('acme', 'ROADS', 'Roads').catch((error: unknown) => error);
+      expect(describeSaveError(err, 'fallback')).toBe('Couldn’t check what uses Roads, so it wasn’t removed. Try again.');
+    }
   });
 });
+

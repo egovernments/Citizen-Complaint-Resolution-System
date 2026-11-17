@@ -1,6 +1,8 @@
 import { mdmsService } from '@/api';
 import type { Employee, MdmsRecord } from '@/api/types';
+import { isRefusal } from '../errors';
 import { englishT, MessageError, type OnboardingT } from '../i18n';
+import { reportStepError } from '../telemetry';
 import { listEmployees } from '../employees/employeesApi';
 import { listMasters, recordDepartments, recordName } from './mastersApi';
 
@@ -120,7 +122,10 @@ export async function checkRemovable(tenantId: string, code: string, name: strin
   let uses: DepartmentUses;
   try {
     uses = await loadDepartmentUses(tenantId, code);
-  } catch {
+  } catch (err) {
+    reportStepError('departments', 'check_department_use', err, tenantId);
+    // No permission or a missing schema fails the same way every time: said as it is, not as "Try again".
+    if (isRefusal(err)) throw err;
     throw new MessageError('departments.in_use_check_failed', 'Couldn’t check what uses %{name}, so it wasn’t removed. Try again.', { name });
   }
   if (hasUses(uses)) throw new Error(inUseMessage(name, uses, t));

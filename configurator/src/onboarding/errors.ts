@@ -17,6 +17,17 @@ export function describeSaveError(err: unknown, fallback: string, t: OnboardingT
   return message || fallback;
 }
 
+/**
+ * A refusal the server gives every time: no permission, a schema the workspace lacks, a request it
+ * rejects. "Try again" won't help with these; a timeout, a rate limit or a server error may pass.
+ */
+export function isRefusal(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : '';
+  if (/AccessDenied|not authori[sz]ed|forbidden|SCHEMA_DEFINITION_NOT_FOUND|Schema definition .*not found/i.test(message)) return true;
+  const status = err instanceof ApiClientError ? err.statusCode : 0;
+  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
 /** What each step's server check (pgr-services WorkspaceGateway) looks for, for when it refuses DONE. */
 export const STEP_REQUIREMENT: Record<string, string> = {
   BRANDING: 'Branding finishes once the workspace has a saved logo. Save again, or choose Continue anyway.',
