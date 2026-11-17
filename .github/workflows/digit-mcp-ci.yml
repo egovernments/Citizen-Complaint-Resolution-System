@@ -6,12 +6,16 @@ on:
     paths:
       - 'digit-mcp/**'
       - 'backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json'
+      # test:level-names checks digit-mcp's copy of the level-name rules against this one (#2803).
+      - 'configurator/packages/data-provider/src/levelNames.ts'
       - '.github/workflows/digit-mcp-ci.yml'
   pull_request:
     branches: [master, develop, main]
     paths:
       - 'digit-mcp/**'
       - 'backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json'
+      # test:level-names checks digit-mcp's copy of the level-name rules against this one (#2803).
+      - 'configurator/packages/data-provider/src/levelNames.ts'
       - '.github/workflows/digit-mcp-ci.yml'
   workflow_dispatch:
 

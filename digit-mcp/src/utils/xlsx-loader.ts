@@ -15,7 +15,7 @@ import {
 import { digitApi } from '../services/digit-api.js';
 import type ExcelJS from 'exceljs';
 import { coerceForBoundaryService, largestPartCentroid } from './boundary-geometry.js';
-import { levelNamesError } from './level-names.js';
+import { levelNameKey, levelNamesError, normalizeLevelName, shortLevelName, tooLongForLevel } from './level-names.js';
 
 // ── Types ──
 
@@ -324,16 +324,28 @@ async function runBoundaryPhase(
     };
   }
 
-  // boundary-service answers 200 for any level name, then its persister can't store one over 64
-  // characters (and holds up every tenant retrying it); repeated levels corrupt the hierarchy (#2803).
-  const levelError = levelNamesError(fileLevels);
-  if (levelError) {
-    return {
-      status: 'failed',
-      error: `The boundaryType column can't be used as hierarchy levels. ${levelError} Fix the sheet and upload it again.`,
-      fileLevels,
-    };
-  }
+  // boundary-service answers 200 for any level name or hierarchy type, then its persister can't
+  // store one over 64 characters (and holds up every tenant retrying it); repeated levels corrupt
+  // the hierarchy (#2803). The sheet's levels are tidied as they are read. What the database can't
+  // store is refused whatever the hierarchy; blank or repeated levels only for a hierarchy this
+  // phase creates, as configurator does.
+  const sheetError = (error: string) => ({
+    status: 'failed' as const,
+    error: `The boundaryType column can't be used as hierarchy levels. ${error} Fix the sheet and upload it again.`,
+    fileLevels,
+  });
+  const typeError = (type: string) => {
+    const tooLong = tooLongForLevel(type);
+    return tooLong
+      ? {
+          status: 'failed' as const,
+          error: `The hierarchy type "${shortLevelName(type)}" is ${tooLong.length} characters long; the database can store at most ${tooLong.max}. Nothing was written.`,
+          fileLevels,
+        }
+      : null;
+  };
+  const unstorable = levelNamesError(fileLevels, { saved: true });
+  if (unstorable) return sheetError(unstorable);
 
   // Resolve hierarchy: caller override → existing match (at city) → auto-create.
   // Hierarchies do NOT inherit across tenants in egov-bndry-mgmnt, so we only
@@ -341,16 +353,37 @@ async function runBoundaryPhase(
   // configurator does.
   let hierarchyType = hierarchyTypeOverride;
   let hierarchyAction: 'used' | 'created' = 'used';
+  // The levels as the hierarchy spells them, in the sheet's order: boundary-service matches each
+  // area's level exactly, and an existing hierarchy keeps the spelling it was saved with.
+  let levels = fileLevels;
 
-  if (!hierarchyType) {
+  if (hierarchyType) {
+    const overrideError = typeError(hierarchyType);
+    if (overrideError) return overrideError;
+  } else {
     const cityHierarchies = await digitApi.boundaryHierarchySearch(tenantId).catch(() => []);
     const match = (cityHierarchies as Record<string, unknown>[])
       .find((h) => hierarchyMatchesLevels(h, fileLevels));
     if (match) {
       hierarchyType = match.hierarchyType as string;
+      levels = (match.boundaryHierarchy as Array<{ boundaryType: string }>).map((l) => l.boundaryType);
+      // Checked as sent: a saved name the database can't store gets no areas.
+      const saved = levels.map((name) => [name, tooLongForLevel(name)] as const).find(([, tooLong]) => tooLong);
+      if (saved) {
+        return {
+          status: 'failed',
+          error: `The "${hierarchyType}" hierarchy has a level name ("${shortLevelName(saved[0])}") ${saved[1]!.length} characters long; ` +
+            `the database can store at most ${saved[1]!.max}, so no boundaries were written.`,
+          fileLevels,
+        };
+      }
     } else {
+      const levelError = levelNamesError(fileLevels);
+      if (levelError) return sheetError(levelError);
       const cityCode = tenantId.includes('.') ? tenantId.split('.').slice(1).join('-') : tenantId;
       hierarchyType = `${cityCode.toUpperCase().replace(/[^A-Z0-9_]/g, '_')}_ADMIN`;
+      const generatedError = typeError(hierarchyType);
+      if (generatedError) return generatedError;
       const hierarchyDef = fileLevels.map((level, idx) => ({
         boundaryType: level,
         parentBoundaryType: idx === 0 ? null : fileLevels[idx - 1],
@@ -369,6 +402,9 @@ async function runBoundaryPhase(
       }
     }
   }
+
+  const levelOf = new Map(fileLevels.map((level, idx) => [level, levels[idx] ?? level]));
+  const sentLevel = (level: string) => levelOf.get(level) ?? level;
 
   // Group rows by level, processing parents before children (boundary
   // service requires parent boundary entity + relationship to exist before
@@ -515,7 +551,7 @@ async function runBoundaryPhase(
       for (const b of pending) {
         try {
           await digitApi.boundaryRelationshipCreate(
-            tenantId, b.code, hierarchyType, b.boundaryType, b.parentCode ?? null,
+            tenantId, b.code, hierarchyType, sentLevel(b.boundaryType), b.parentCode ?? null,
           );
           relStats.created++;
         } catch (err) {
@@ -539,8 +575,8 @@ async function runBoundaryPhase(
   const context: BoundaryContext = {
     hierarchyType,
     rootBoundaryCode: rootRow.code,
-    rootBoundaryType: rootRow.boundaryType,
-    levels: fileLevels,
+    rootBoundaryType: sentLevel(rootRow.boundaryType),
+    levels,
   };
 
   // ── Phase D: seed localization ──
@@ -556,7 +592,7 @@ async function runBoundaryPhase(
     const boundaryMessages = rows.flatMap((r) =>
       buildBoundaryLocalizations(tenantId, r.code, r.name, hierarchyType),
     );
-    const levelMessages = buildHierarchyLevelLocalizations(hierarchyType, fileLevels);
+    const levelMessages = buildHierarchyLevelLocalizations(hierarchyType, levels);
     const seenCodes = new Set<string>();
     const localizationMessages = [...boundaryMessages, ...levelMessages].filter((m) => {
       if (seenCodes.has(m.code)) return false;
@@ -596,7 +632,7 @@ async function runBoundaryPhase(
         : ''),
     hierarchyType,
     hierarchyAction,
-    levels: fileLevels,
+    levels,
     counts: { entities: entityStats, relationships: relStats, total_rows: rows.length, entity_gate: entityGate },
     entity_failures: entityFailures,
     relationship_failures: relFailures,
@@ -652,7 +688,8 @@ async function extractBoundaryFile(buf: Buffer): Promise<{ levels: string[]; row
   sheet.eachRow({ includeEmpty: false }, (row, rowNum) => {
     if (rowNum === 1) return;
     const code = String(row.getCell(codeCol).text || '').trim();
-    const t = String(row.getCell(typeCol).text || '').trim();
+    // The level as configurator saves it: tidied, so two spellings of one level are one level (#2803).
+    const t = normalizeLevelName(String(row.getCell(typeCol).text || ''));
     if (!code || !t) return;
     const pc = parentCodeCol ? String(row.getCell(parentCodeCol).text || '').trim() : '';
     const name = nameCol ? String(row.getCell(nameCol).text || '').trim() : code;
@@ -706,8 +743,9 @@ function hierarchyMatchesLevels(
   const levels = hierarchy.boundaryHierarchy as Array<{ boundaryType: string }> | undefined;
   if (!Array.isArray(levels)) return false;
   if (levels.length !== fileLevels.length) return false;
-  const lower = (s: string) => s.trim().toLowerCase();
-  return levels.every((l, i) => lower(l.boundaryType) === lower(fileLevels[i]));
+  // Both sides through the key (case, spaces and joiners aside): a hierarchy saved before names
+  // were tidied still matches; its own spelling is what gets sent (#2803).
+  return levels.every((l, i) => levelNameKey(l.boundaryType) === levelNameKey(fileLevels[i]));
 }
 
 async function runMastersPhase(
