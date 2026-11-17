@@ -90,6 +90,25 @@ describe('ComplaintHierarchySetup: ingesting a sheet', () => {
   });
 });
 
+describe('ComplaintHierarchySetup: the hierarchy type (#2806)', () => {
+  it('is fixed to PGR, the one the Complaints step can show and remove', async () => {
+    const onDone = vi.fn();
+    render(<ComplaintHierarchySetup targetTenant="mz.maputo" stateTenant="mz.maputo" onDone={onDone} />);
+    const field = screen.getByTestId('ch-hierarchy-type') as HTMLInputElement;
+    expect(field).toBeDisabled();
+    fireEvent.change(field, { target: { value: 'PGR_CITY' } });
+
+    fireEvent.click(screen.getByTestId('ch-next-template'));
+    fireEvent.change(document.getElementById('ch-file-upload')!, { target: { files: [new File(['x'], 'hierarchy.xlsx')] } });
+    await waitFor(() => expect(screen.getByTestId('complaint-hierarchy-setup').dataset.step).toBe('verify'));
+    fireEvent.click(screen.getByTestId('ch-create'));
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+
+    expect(vi.mocked(parseComplaintHierarchyExcel).mock.calls[0][1]).toBe('PGR');
+    expect(create).toHaveBeenCalledWith('mz.maputo', 'RAINMAKER-PGR.ComplaintHierarchyDefinition', 'PGR', expect.objectContaining({ hierarchyType: 'PGR' }));
+  });
+});
+
 describe('ComplaintHierarchySetup: a sheet with rows to fix (#2806)', () => {
   it('lists the problems in the preview and creates nothing', async () => {
     vi.mocked(parseComplaintHierarchyExcel).mockReturnValue({

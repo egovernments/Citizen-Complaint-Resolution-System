@@ -19,7 +19,7 @@ import {
 import { downloadComplaintHierarchyTemplate } from '@/utils/templateBuilder';
 import { labelLocales } from '@/onboarding/labelLocales';
 import { useOnboardingT } from '@/onboarding/i18n';
-import { writeSheetHierarchy } from '@/onboarding/complaints/complaintsApi';
+import { HIERARCHY_TYPE, writeSheetHierarchy } from '@/onboarding/complaints/complaintsApi';
 import { departmentLabel, type DepartmentChoice } from '@/onboarding/complaints/sheetDepartments';
 
 type Step = 'define' | 'template' | 'verify';
@@ -60,7 +60,9 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [hierarchyType, setHierarchyType] = useState('PGR');
+  // Fixed: the Complaints step loads, checks and removes only the PGR hierarchy, so a sheet written
+  // under another type could be neither seen nor removed there (#2806).
+  const hierarchyType = HIERARCHY_TYPE;
   const [levels, setLevels] = useState<string[]>(['AUTHORITY_TYPE', 'MAIN_CATEGORY', 'SECTOR', 'SUB_TYPE']);
 
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -98,7 +100,6 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
     }));
 
   const handleDefine = () => {
-    if (!hierarchyType.trim()) return fail('Hierarchy type is required');
     if (validLevels().length < 2) {
       return fail('Add at least 2 levels. The last one is the complaint subcategory people report.');
     }
@@ -261,7 +262,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
             <LabelFieldPair>
               <CardLabel required>Hierarchy Type</CardLabel>
               <Field>
-                <Input value={hierarchyType} onChange={(e) => setHierarchyType(e.target.value)} placeholder="PGR" className="border-input-border focus:border-primary" />
+                <Input value={hierarchyType} disabled readOnly data-testid="ch-hierarchy-type" className="border-input-border focus:border-primary" />
                 <p className="text-xs text-muted-foreground mt-1">Short uppercase id, one per tenant. e.g. PGR</p>
               </Field>
             </LabelFieldPair>
