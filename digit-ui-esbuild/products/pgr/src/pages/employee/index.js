@@ -82,34 +82,37 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
           />
         </React.Fragment>
 
-        {/* One page per address; an unknown one goes to the last route. */}
+        {/* One page per address; an unknown one goes to the last route. Each
+            page is passed as itself, not wrapped in a new function on every
+            render, so a re-render here (a change of address, say) does not
+            remount it and lose its state. */}
         <Switch>
           {/* Route for Create Complaint Form */}
           <PrivateRoute
             path={`${path}/create-complaint`}
-            component={() => <PGRCreateComplaint />}
+            component={PGRCreateComplaint}
           />
 
           {/* Routes for Complaint submission success/failure response */}
           <PrivateRoute
             path={`${path}/complaint-success`}
-            component={() => <PGRResponse />}
+            component={PGRResponse}
           />
           <PrivateRoute
             path={`${path}/complaint-failed`}
-            component={() => <PGRResponse />}
+            component={PGRResponse}
           />
 
           {/* Route for Complaint Details view by complaint ID */}
           <PrivateRoute
             path={`${path}/complaint-details/:id`}
-            component={() => <PGRComplaintDetails />}
+            component={PGRComplaintDetails}
           />
 
           {/* Route for Complaint Search Inbox */}
           <PrivateRoute
             path={`${path}/inbox-v2`}
-            component={() => <PGRSearchInbox />}
+            component={PGRSearchInbox}
           />
 
           {/* The old UI's addresses for a complaint and for a new one, still in

@@ -68,7 +68,12 @@ before(async () => {
 });
 process.on("exit", () => fs.rmSync(OUT, { force: true }));
 
-const page = (name) => () => React.createElement("main", null, name);
+// Each page counts its mounts, to tell a re-render from a remount.
+let mounts;
+const page = (name) => () => {
+  React.useEffect(() => { mounts[name] = (mounts[name] || 0) + 1; }, []);
+  return React.createElement("main", null, name);
+};
 const SCREENS = {
   PGRCreateComplaint: page("create"),
   PGRComplaintDetails: page("details"),
@@ -102,6 +107,7 @@ const visit = async (entry, mount = APP) => {
   global.Digit = { ComponentRegistryService: { getComponent: (name) => SCREENS[name] } };
   const warnings = [];
   console.warn = (...args) => warnings.push(args.join(" "));
+  mounts = {};
   const history = createMemoryHistory({ initialEntries: [entry] });
   const app = () => React.createElement(Router, { history }, React.createElement(EmployeeApp, { path: mount }));
   let view;
@@ -152,6 +158,22 @@ test("the known pages still render, one each", async () => {
     assert.equal(history.location.pathname, url, url);
     assert.equal(html(), `<div><main>${name}</main></div>`, url);
     assert.deepEqual(warnings, [], url);
+  }
+});
+
+test("a page stays mounted while the app re-renders around it, so it keeps its state", async () => {
+  for (const [url, name] of [
+    [`${APP}/create-complaint`, "create"],
+    [`${APP}/complaint-details/PG-PGR-2026-01-01-000001`, "details"],
+    [`${APP}/complaint-success`, "response"],
+    [`${APP}/complaint-failed`, "response"],
+    [LIST, "inbox"],
+  ]) {
+    const { html, go, rerender } = await visit(url);
+    await go(`${url}?page=2`); // the address changes, the page does not
+    await rerender(); // a parent re-renders
+    assert.equal(html(), `<div><main>${name}</main></div>`, url);
+    assert.deepEqual(mounts, { [name]: 1 }, url);
   }
 });
 
