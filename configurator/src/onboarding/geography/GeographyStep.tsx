@@ -233,8 +233,9 @@ export default function GeographyStep() {
   );
   // With unsaved boundaries, or a hierarchy record still to write, Save and continue
   // writes them first, so the server's check can't pass yet. Areas a save left out
-  // wait for Retry: Save and continue goes on with what's saved, once that passes.
-  const gate = (draft && !awaitingRetry) || pendingRecord
+  // wait for Retry: Save and continue goes on with what's saved, once that passes. While a
+  // save runs, it waits for that.
+  const gate = saving || (draft && !awaitingRetry) || pendingRecord
     ? { disabled: saving, hint: undefined, canRecheck: false }
     : probeGate(
         'GEOGRAPHY',

@@ -180,6 +180,7 @@ describe('GeographyStep', () => {
     expect(button('Remove Nairobi — County').disabled).toBe(true);
     expect(screen.getAllByText('Saving your boundaries…').length).toBeGreaterThan(1);
     expect(button('Save and continue').disabled).toBe(true);
+    expect(screen.queryByText('Retry the areas that weren’t saved to continue.')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
     // The hierarchy is on the server now: a tab closed here comes back to the list, locked for Retry.
