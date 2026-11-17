@@ -8,7 +8,10 @@ import {
   findUses,
   hasUses,
   inUseMessage,
+  isFounder,
+  isLiveDepartment,
   loadDepartmentUses,
+  strandedUses,
 } from './departmentUsage';
 import { EMPLOYEE_PAGE } from '../employees/employeesApi';
 import { describeSaveError } from '../errors';
@@ -201,3 +204,39 @@ describe('checkRemovable', () => {
   });
 });
 
+describe('strandedUses, the server Finish check’s rules (#2797)', () => {
+  const department = (code: string, over: Partial<MdmsRecord> = {}, data: Record<string, unknown> = {}) =>
+    record('common-masters.Department', code, { code, name: code, active: true, ...data }, over);
+  const potholes = [{ name: 'Potholes', department: 'ROADS' }];
+
+  it('counts a department live only when its record and its own active flag are on', () => {
+    expect(isLiveDepartment(department('ROADS'))).toBe(true);
+    expect(isLiveDepartment(department('ROADS', { isActive: false }))).toBe(false);
+    expect(isLiveDepartment(department('ROADS', {}, { active: false }))).toBe(false);
+    // A record off by its own flag, as a sheet with active=false leaves it, is as removed as a removed record.
+    expect(strandedUses([department('ROADS', {}, { active: false })], { employees: [], categories: potholes })).toEqual({
+      employees: [],
+      designations: [],
+      categories: ['Potholes'],
+      departments: ['ROADS'],
+    });
+  });
+
+  it('takes an inherited live department, and finds nothing when all are live', () => {
+    expect(strandedUses([department('ROADS', { tenantId: 'ke' })], { employees: [], categories: potholes })).toBeNull();
+  });
+
+  it('skips the founder, as the server does', () => {
+    const founder = employee('EMP_0001', 'Founder', [['ROADS', true]]);
+    founder.assignments[0].designation = 'ONBOARDING_FOUNDER';
+    const legacy = employee('FOUNDER_abc', 'Old founder', [['ROADS', true]]);
+    expect(isFounder(founder)).toBe(true);
+    expect(isFounder(legacy)).toBe(true);
+    expect(strandedUses([department('ROADS', { isActive: false })], { employees: [founder, legacy], categories: [] })).toBeNull();
+    // Anyone else on the removed department still counts.
+    expect(
+      strandedUses([department('ROADS', { isActive: false })], { employees: [founder, employee('E002', 'Amina', [['ROADS', false]])], categories: [] })
+        ?.employees,
+    ).toEqual(['Amina']);
+  });
+});

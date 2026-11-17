@@ -72,8 +72,7 @@ export type LoadedComplaints =
       editable: false;
       leafCount: number;
       levels: string[];
-      departments: string[];
-      /** Each leaf by name and the department it goes to, to name those whose department was removed (#2797). */
+      /** Each leaf by name and the department its complaints go to (#2797). */
       routes: { name: string; department: string }[];
     };
 
@@ -114,8 +113,7 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
     const routes = active
       .filter((record) => !parents.has(codeOf(record)) && text(dataOf(record).department))
       .map((record) => ({ name: text(dataOf(record).name) || codeOf(record), department: text(dataOf(record).department) }));
-    const departments = routes.map((route) => route.department);
-    return { editable: false, leafCount, levels: definedLevels, departments: Array.from(new Set(departments)), routes };
+    return { editable: false, leafCount, levels: definedLevels, routes };
   }
 
   const byOrder = (a: MdmsRecord, b: MdmsRecord) => Number(dataOf(a).order ?? 0) - Number(dataOf(b).order ?? 0);

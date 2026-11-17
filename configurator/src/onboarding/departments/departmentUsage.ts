@@ -1,5 +1,6 @@
 import { mdmsService } from '@/api';
 import type { Employee, MdmsRecord } from '@/api/types';
+import { SYSTEM_DESIGNATION } from '@/lib/systemRecords';
 import { isRefusal } from '../errors';
 import { englishT, MessageError, type OnboardingT } from '../i18n';
 import { reportStepError } from '../telemetry';
@@ -67,6 +68,44 @@ export function categoryRoutes(records: MdmsRecord[], tenantId: string): UsageSo
       name: (typeof data.name === 'string' && data.name) || (typeof data.code === 'string' ? data.code : ''),
       department: data.department as string,
     }));
+}
+
+/**
+ * A department the platform still takes: its record active and its own `active` flag not off. The rule of
+ * the server's Finish check (pgr-services WorkspaceGateway.liveDepartments), so the page and it agree.
+ */
+export function isLiveDepartment(record: MdmsRecord): boolean {
+  return record.isActive !== false && (record.data as { active?: unknown }).active !== false;
+}
+
+/**
+ * The founder's own row, which the server's Finish check skips. The server knows the founder by uuid; the
+ * page knows them by what provisioning gave them: the old FOUNDER_ code, or the founder designation, which
+ * no one else can be given.
+ */
+export function isFounder(employee: Employee): boolean {
+  return (
+    (employee.code ?? '').startsWith('FOUNDER_') ||
+    (employee.assignments ?? []).some((assignment) => assignment.designation === SYSTEM_DESIGNATION)
+  );
+}
+
+/**
+ * What still names a department that isn't live, by the server's Finish check (COMPLAINT_TYPES): complaint
+ * categories, and every assignment of an active employee other than the founder. `departments` holds every
+ * record the search returned, removed ones included. Null when nothing does.
+ */
+export function strandedUses(
+  departments: MdmsRecord[],
+  from: { employees: Employee[]; categories: UsageSources['categories'] },
+): (DepartmentUses & { departments: string[] }) | null {
+  const live = new Set(departments.filter(isLiveDepartment).map((record) => record.uniqueIdentifier));
+  const found = findUses((department) => !live.has(department), {
+    employees: from.employees.filter((employee) => !isFounder(employee)),
+    designations: [],
+    categories: from.categories,
+  });
+  return hasUses(found) ? found : null;
 }
 
 /** What uses one department now, read fresh. Throws when any of it can't be read. */

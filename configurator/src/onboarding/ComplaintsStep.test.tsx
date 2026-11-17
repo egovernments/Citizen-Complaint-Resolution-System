@@ -23,13 +23,14 @@ vi.mock('./employees/employeesApi', async (importOriginal) => ({
   listEmployees: vi.fn(),
 }));
 
-const department = (code: string, name: string): MdmsRecord => ({
+const department = (code: string, name: string, over: Partial<MdmsRecord> = {}, data: Record<string, unknown> = {}): MdmsRecord => ({
   id: code,
   tenantId: 'acme',
   schemaCode: 'common-masters.Department',
   uniqueIdentifier: code,
-  data: { code, name, active: true },
+  data: { code, name, active: true, ...data },
   isActive: true,
+  ...over,
 });
 
 /** E002, a GRO whose one assignment is in ROADS. */
@@ -66,11 +67,63 @@ describe('ComplaintsStep with a removed department (#2797)', () => {
     vi.mocked(listMasters).mockResolvedValue([department('WATER', 'Water')]);
     page();
     expect(
-      await screen.findByText(/Setup can’t finish yet\. A department that was removed \(ROADS\) is still used by 1 employee \(E002\) and 1 complaint category \(Potholes\)\./),
+      await screen.findByText(/Setup can’t finish yet\. A department that was removed, ROADS, is still used by 1 employee \(E002\) and 1 complaint category \(Potholes\)\./),
     ).toBeTruthy();
     expect(screen.getByText(/add it again in Departments with the same code/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Finish setup' })).toHaveProperty('disabled', true);
     expect(screen.getByText('Fix the removed department above to finish.')).toBeTruthy();
+  });
+
+  it('names a removed department by its name, with the code adding it back needs', async () => {
+    vi.mocked(listMasters).mockResolvedValue([department('WATER', 'Water'), department('ROADS', 'Roads and Highways', { isActive: false })]);
+    page();
+    expect(await screen.findByText(/A department that was removed, Roads and Highways \(ROADS\), is still used by/)).toBeTruthy();
+    expect(screen.getByText('Handled by Roads and Highways')).toBeTruthy();
+    expect(listMasters).toHaveBeenCalledWith('acme', 'department', { includeRemoved: true });
+  });
+
+  it('counts a department off by its own active flag as removed, as the server does', async () => {
+    vi.mocked(listMasters).mockResolvedValue([department('ROADS', 'Roads', {}, { active: false })]);
+    page();
+    expect(await screen.findByText(/A department that was removed, Roads \(ROADS\), is still used by/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Finish setup' })).toHaveProperty('disabled', true);
+  });
+
+  it('shows only the removed-department notice, not a GRO notice it would contradict', async () => {
+    vi.mocked(listMasters).mockResolvedValue([department('WATER', 'Water'), department('ROADS', 'Roads', { isActive: false })]);
+    vi.mocked(listEmployees).mockResolvedValue({ active: [], codes: [] });
+    page();
+    expect(await screen.findByText(/A department that was removed, Roads \(ROADS\), is still used by 1 complaint category \(Potholes\)\./)).toBeTruthy();
+    expect(screen.queryByText(/No one can assign complaints for/)).toBeNull();
+  });
+
+  it('skips the founder, as the server does', async () => {
+    const founder = {
+      ...e002,
+      code: 'EMP_0001',
+      assignments: [{ department: 'ONBOARDING_ADMIN', designation: 'ONBOARDING_FOUNDER', isCurrentAssignment: true }],
+    } as unknown as Employee;
+    vi.mocked(listMasters).mockResolvedValue([department('ROADS', 'Roads'), department('ONBOARDING_ADMIN', 'Administration', { isActive: false })]);
+    vi.mocked(listEmployees).mockResolvedValue({ active: [e002, founder], codes: ['E002', 'EMP_0001'] });
+    page();
+    expect(await screen.findByText('Handled by Roads')).toBeTruthy();
+    expect(screen.queryByText(/A department that was removed/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Finish setup' })).toHaveProperty('disabled', false);
+  });
+
+  it('points a spreadsheet setup at Departments, not at categories on this page', async () => {
+    vi.mocked(loadComplaints).mockResolvedValue({
+      editable: false,
+      leafCount: 1,
+      levels: ['MAIN', 'SUB'],
+      routes: [{ name: 'Potholes', department: 'ROADS' }],
+    });
+    vi.mocked(listMasters).mockResolvedValue([department('ROADS', 'Roads', { isActive: false })]);
+    page();
+    expect(await screen.findByText(/A department that was removed, Roads \(ROADS\), is still used by/)).toBeTruthy();
+    expect(screen.getByText(/Employees can instead be moved to another department in Employees\./)).toBeTruthy();
+    expect(screen.queryByText(/categories on this page/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Finish setup' })).toHaveProperty('disabled', true);
   });
 
   it('finishes normally once the department is back', async () => {

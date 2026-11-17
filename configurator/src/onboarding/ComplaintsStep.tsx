@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { ComplaintHierarchySetup } from '@/components/ComplaintHierarchySetup';
 import { toast } from '@/hooks/use-toast';
-import type { Employee } from '@/api/types';
+import type { Employee, MdmsRecord } from '@/api/types';
 import { StepHeader } from './StepHeader';
 import { EmptyState, OptionCard, StepActions } from './StepParts';
 import { adjacentSteps, stepById } from './steps';
@@ -19,7 +19,7 @@ import { listMasters, recordName } from './departments/mastersApi';
 import { TypeDialog } from './complaints/TypeDialog';
 import { formatHours, RESOLUTION_CHOICES } from './complaints/resolution';
 import { departmentsWithoutGro } from './complaints/groCoverage';
-import { describeUses, findUses, hasUses } from './departments/departmentUsage';
+import { describeUses, isLiveDepartment, strandedUses } from './departments/departmentUsage';
 import { listEmployees } from './employees/employeesApi';
 import { pickerChoices } from '@/lib/systemRecords';
 import {
@@ -80,7 +80,8 @@ export default function ComplaintsStep() {
   const done = state.completedPhases.includes(STEP.number);
 
   const [loaded, setLoaded] = useState<LoadedComplaints | null>(null);
-  const [departments, setDepartments] = useState<{ code: string; name: string }[]>([]);
+  // Every department record, removed ones included, so a removed department is named by its name (#2797).
+  const [departmentRecords, setDepartmentRecords] = useState<MdmsRecord[]>([]);
   // null until read, or when HRMS can't be read: the server still checks on finish.
   const [employees, setEmployees] = useState<Employee[] | null>(null);
   const [draft, setDraft] = useState<ComplaintDraft | null>(null);
@@ -97,13 +98,13 @@ export default function ComplaintsStep() {
     let cancelled = false;
     Promise.all([
       loadComplaints(tenant),
-      listMasters(tenant, 'department'),
+      listMasters(tenant, 'department', { includeRemoved: true }),
       listEmployees(tenant).then((list) => list.active).catch(() => null),
     ])
       .then(([result, departmentRecords, employeeRecords]) => {
         if (cancelled) return;
         setLoaded(result);
-        setDepartments(departmentRecords.map((record) => ({ code: record.uniqueIdentifier, name: recordName(record) })));
+        setDepartmentRecords(departmentRecords);
         setEmployees(employeeRecords);
         const basis = result.editable ? rowsFingerprint(result.records) : '';
         const saved = result.editable ? readDraft(tenant) : null;
@@ -138,9 +139,43 @@ export default function ComplaintsStep() {
     if (loaded?.editable) writeDraft(tenant, { draft: next, basis: rowsFingerprint(loaded.records) });
   };
 
-  const departmentName = useMemo(() => new Map(departments.map((choice) => [choice.code, choice.name])), [departments]);
+  // What a category can go to: departments live by the server's rule (record and its own `active` flag on).
+  const departments = useMemo(
+    () => departmentRecords.filter(isLiveDepartment).map((record) => ({ code: record.uniqueIdentifier, name: recordName(record) })),
+    [departmentRecords],
+  );
+  // Every department's name, a removed one's too; a live record's wins.
+  const departmentName = useMemo(
+    () =>
+      new Map(
+        [...departmentRecords.filter((record) => !isLiveDepartment(record)), ...departmentRecords.filter(isLiveDepartment)].map((record) => [
+          record.uniqueIdentifier,
+          recordName(record),
+        ]),
+      ),
+    [departmentRecords],
+  );
 
-  const routedDepartments = !loaded ? [] : loaded.editable ? (draft?.types ?? []).map((type) => type.department) : loaded.departments;
+  // Each category people file against and the department it goes to.
+  const routes = useMemo(
+    () =>
+      !loaded
+        ? []
+        : loaded.editable
+          ? (draft?.types ?? []).filter((type) => type.department).map((type) => ({ name: type.name, department: type.department }))
+          : loaded.routes,
+    [loaded, draft],
+  );
+
+  // Categories and employees still on a removed department (#2797): their complaints reach no one who can
+  // be added, and HRMS refuses every later save of those employees. Checked as the server's Finish check does.
+  const stranded = useMemo(
+    () => (loaded ? strandedUses(departmentRecords, { employees: employees ?? [], categories: routes }) : null),
+    [loaded, departmentRecords, employees, routes],
+  );
+
+  // A removed department is named by the notice below, which says how to fix it; adding a GRO can't.
+  const routedDepartments = routes.map((route) => route.department).filter((code) => !stranded?.departments.includes(code));
   const withoutGro = employees ? departmentsWithoutGro(routedDepartments, employees, tenant) : [];
   const groHint = withoutGro.length > 0 ? t('complaints.gro_hint', 'Each department needs a GRO before you can finish.') : undefined;
   const groNotice = withoutGro.length > 0 && (
@@ -163,31 +198,32 @@ export default function ComplaintsStep() {
     </Alert>
   );
 
-  // Categories and employees still on a removed department (#2797): their complaints reach no one who can
-  // be added, and HRMS refuses every later save of those employees. Fixed first, as the server's check is.
-  const stranded = useMemo(() => {
-    if (!loaded) return null;
-    const live = new Set(departments.map((choice) => choice.code));
-    const categories = loaded.editable
-      ? (draft?.types ?? []).filter((type) => type.department).map((type) => ({ name: type.name, department: type.department }))
-      : loaded.routes;
-    const found = findUses((department) => !live.has(department), { employees: employees ?? [], designations: [], categories });
-    return hasUses(found) ? found : null;
-  }, [loaded, departments, draft, employees]);
   const strandedHint = stranded ? t('complaints.removed_department_hint', 'Fix the removed department above to finish.') : undefined;
   const strandedNotice = stranded && (
     <Alert>
       <AlertTriangle className="h-4 w-4" />
       <AlertDescription className="space-y-3">
         <p>
-          {t('complaints.removed_department', 'Setup can’t finish yet. A department that was removed (%{departments}) is still used by %{uses}.', {
-            departments: stranded.departments.join(', '),
+          {t('complaints.removed_department', 'Setup can’t finish yet. A department that was removed, %{departments}, is still used by %{uses}.', {
+            // Its name to recognise it by, and its code, which adding it back needs.
+            departments: stranded.departments
+              .map((code) => {
+                const name = departmentName.get(code);
+                return name && name !== code ? `${name} (${code})` : code;
+              })
+              .join(', '),
             uses: describeUses(stranded, t),
           })}{' '}
-          {t(
-            'complaints.removed_department_fix',
-            'To bring it back, add it again in Departments with the same code. Or move them to another department: categories on this page, employees in Employees.',
-          )}
+          {loaded?.editable
+            ? t(
+                'complaints.removed_department_fix',
+                'To bring it back, add it again in Departments with the same code. Or move them to another department: categories on this page, employees in Employees.',
+              )
+            : // A spreadsheet's categories aren't changed on this page.
+              t(
+                'complaints.removed_department_fix_sheet',
+                'To bring it back, add it again in Departments with the same code. Employees can instead be moved to another department in Employees.',
+              )}
         </p>
         <Button variant="outline" size="sm" onClick={() => navigate(DEPARTMENTS_STEP.path)}>
           {t('complaints.open_departments', 'Go to Departments')}
