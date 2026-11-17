@@ -13,6 +13,7 @@ import {
   addEmployee,
   applyEmployeeChanges,
   codeProblem,
+  employeesByCode,
   listEmployees,
   matchesSheetRow,
   removeEmployee,
@@ -165,6 +166,29 @@ describe('listEmployees', () => {
     expect(list.codes).toEqual(['EMP_0001', 'EMP_0003']);
     // Removing the highest (EMP_0003) doesn't hand its code out again.
     expect(suggestEmployeeCode(list.codes)).toBe('EMP_0004');
+  });
+});
+
+describe('employeesByCode: every page, not the first 500 (#2798)', () => {
+  const pageOf = (from: number, count: number) => Array.from({ length: count }, (_, i) => employee(`EMP_${String(from + i).padStart(4, '0')}`));
+  // clearAllMocks keeps queued Once values; a page left unread mustn't leak into the next test.
+  beforeEach(() => hrms.searchEmployees.mockReset());
+
+  it('reads page after page until a short one', async () => {
+    hrms.searchEmployees.mockResolvedValueOnce(pageOf(1, 500)).mockResolvedValueOnce(pageOf(501, 500)).mockResolvedValueOnce(pageOf(1001, 3));
+    const byCode = await employeesByCode('acme');
+    expect(byCode.size).toBe(1003);
+    expect(byCode.get('EMP_1003')?.code).toBe('EMP_1003');
+    expect(hrms.searchEmployees.mock.calls.map(([, criteria]) => criteria)).toEqual([
+      { limit: 500, offset: 0 },
+      { limit: 500, offset: 500 },
+      { limit: 500, offset: 1000 },
+    ]);
+  });
+
+  it('fails rather than return part of the list when a later page fails', async () => {
+    hrms.searchEmployees.mockResolvedValueOnce(pageOf(1, 500)).mockRejectedValueOnce(new Error('rate limited'));
+    await expect(employeesByCode('acme')).rejects.toThrow('rate limited');
   });
 });
 

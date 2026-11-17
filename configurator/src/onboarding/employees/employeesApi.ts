@@ -165,10 +165,27 @@ export function withEmployeeCodes<T extends { employeeCode: string }>(rows: T[],
   return rows.map((row, index) => ({ ...row, employeeCode: codes[index] }));
 }
 
-/** Every employee HRMS holds, removed ones included, by code: what a bulk upload's codes are checked against. */
+/** HRMS search page size for employeesByCode, and the most pages it reads before giving up. */
+const EMPLOYEE_PAGE = 500;
+const EMPLOYEE_MAX_PAGES = 100;
+
+/**
+ * Every employee HRMS holds, removed ones included, by code: what a bulk upload's
+ * codes are checked against. Read page by page to the end: with only the first
+ * page, anyone past it looked new, was counted as created again, and left their
+ * code free for a blank row (#2798). A list that doesn't end is an error, never a
+ * partial map.
+ */
 export async function employeesByCode(tenantId: string): Promise<Map<string, EmployeeRecord>> {
-  const employees = (await hrmsService.searchEmployees(tenantId, { limit: 500 })) as EmployeeRecord[];
-  return new Map(employees.filter((employee) => employee.code).map((employee): [string, EmployeeRecord] => [employee.code, employee]));
+  const employees: EmployeeRecord[] = [];
+  for (let page = 0; page < EMPLOYEE_MAX_PAGES; page++) {
+    const rows = (await hrmsService.searchEmployees(tenantId, { limit: EMPLOYEE_PAGE, offset: page * EMPLOYEE_PAGE })) as EmployeeRecord[];
+    employees.push(...rows);
+    if (rows.length < EMPLOYEE_PAGE) {
+      return new Map(employees.filter((employee) => employee.code).map((employee): [string, EmployeeRecord] => [employee.code, employee]));
+    }
+  }
+  throw new Error(`HRMS employee search still had rows after ${EMPLOYEE_MAX_PAGES} pages; refusing a partial list`);
 }
 
 /**
