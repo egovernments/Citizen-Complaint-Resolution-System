@@ -14,6 +14,7 @@
 //     fallback was parentLvl.features[0]) silently corrupts the hierarchy.
 import { coerceForBoundaryService, largestPart } from './boundaryGeoJson';
 import type { Boundary } from '@/api/types';
+import { normalizeLevelName } from '@digit-mcp/data-provider';
 
 export interface OsmAdminLevel {
   /** Admin level as the source numbers it (higher = more specific) */
@@ -328,7 +329,8 @@ export function buildOsmBoundaries(
 
   for (let i = 0; i < sortedLevels.length; i++) {
     const lvl = sortedLevels[i];
-    const bType = lvl.mappedName.trim();
+    // The level name as it is saved (#2803): the same tidying as the hierarchy's own names.
+    const bType = normalizeLevelName(lvl.mappedName);
     const included: { feature: any; code: string; area: number }[] = [];
 
     // Stable code-suffix assignment: which of two same-named areas becomes

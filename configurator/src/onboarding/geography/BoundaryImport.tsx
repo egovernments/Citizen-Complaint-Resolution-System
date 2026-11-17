@@ -1036,8 +1036,8 @@ export default function BoundaryImport({
     const existing = serverHierarchyTypes.has(OSM_HIERARCHY_TYPE)
       ? existingHierarchies.find(h => h.hierarchyType === OSM_HIERARCHY_TYPE)
       : undefined;
-    const mismatch = existing
-      && levelsMismatch(boundaryTenant, OSM_HIERARCHY_TYPE, (existing.boundaryHierarchy ?? []).map(l => l.boundaryType), levelNames);
+    const existingLevels = (existing?.boundaryHierarchy ?? []).map(l => l.boundaryType);
+    const mismatch = existing && levelsMismatch(boundaryTenant, OSM_HIERARCHY_TYPE, existingLevels, levelNames);
     if (mismatch) {
       setError(t(mismatch.key, mismatch.english, mismatch.params));
       setStep('map-levels');
@@ -1068,7 +1068,8 @@ export default function BoundaryImport({
       source: 'osm',
       method,
       hierarchyType: OSM_HIERARCHY_TYPE,
-      levels: levelNames,
+      // A saved hierarchy's names as it spells them: its areas must match them exactly (#2803).
+      levels: existing ? existingLevels : levelNames,
       hierarchyExists: !!existing,
       boundaries: boundariesToCreate,
       unnamed: [],

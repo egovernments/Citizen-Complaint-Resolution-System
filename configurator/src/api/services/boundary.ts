@@ -3,6 +3,7 @@ import { apiClient } from '../client';
 import { ENDPOINTS, BOUNDARY_SEARCH_LIMIT } from '../config';
 import type { Boundary, BoundaryHierarchy, BoundaryLevel } from '../types';
 import { localizationService } from './localization';
+import { levelNameIn, levelNamesError, normalizeLevelName, shortLevelName, tooLongForLevel } from '@digit-mcp/data-provider';
 
 /** Reserved by the platform baseline for the founder's root jurisdiction. */
 export const WORKSPACE_HIERARCHY_TYPE = 'WORKSPACE';
@@ -122,15 +123,24 @@ export const boundaryService = {
     return raw as BoundaryHierarchy;
   },
 
-  // Helper to create hierarchy from level names
+  // Helper to create hierarchy from level names. The names are saved tidied (NFC, single-spaced,
+  // trimmed), and checked as they are sent: boundary-service answers 200 for any name, then
+  // egov-persister can't store one over 64 characters and holds up every tenant retrying it (#2803).
   async createHierarchyFromLevels(
     tenantId: string,
     hierarchyType: string,
     levelNames: string[]
   ): Promise<BoundaryHierarchy> {
-    const levels: BoundaryLevel[] = levelNames.map((name, index) => ({
+    const typeTooLong = tooLongForLevel(hierarchyType);
+    if (typeTooLong) {
+      throw new Error(`The hierarchy type is ${typeTooLong.length} characters long. Use ${typeTooLong.max} characters or fewer.`);
+    }
+    const names = levelNames.map(normalizeLevelName);
+    const levelError = levelNamesError(names);
+    if (levelError) throw new Error(levelError);
+    const levels: BoundaryLevel[] = names.map((name, index) => ({
       boundaryType: name,
-      parentBoundaryType: index > 0 ? levelNames[index - 1] : undefined,
+      parentBoundaryType: index > 0 ? names[index - 1] : undefined,
       active: true,
     }));
 
@@ -496,25 +506,40 @@ export const boundaryService = {
   // heal-boundary-relationships.py existed. Separating the passes, gating on
   // entity visibility, and retrying the residual lag closes that race.
   async createBoundaries(
-    boundaries: Boundary[],
+    input: Boundary[],
     // Writes done of all the writes: an entity and a relationship per boundary.
-    onProgress?: (done: number, total: number) => void
+    onProgress?: (done: number, total: number) => void,
+    // The hierarchy's level names as it stores them, broadest first.
+    levels: readonly string[] = [],
   ): Promise<{
     success: Boundary[];
     failed: { boundary: Boundary; error: string }[];
   }> {
     const success: Boundary[] = [];
     const failed: { boundary: Boundary; error: string }[] = [];
-    const total = boundaries.length;
+    const total = input.length;
     if (total === 0) return { success, failed };
 
     // One code is one boundary: a batch that repeats a code would fold two rows into one
     // boundary, with whichever name was written last. Refuse before writing anything (#2456).
     const seen = new Set<string>();
     const repeated = new Set<string>();
-    for (const { code } of boundaries) (seen.has(code) ? repeated : seen).add(code);
+    for (const { code } of input) (seen.has(code) ? repeated : seen).add(code);
     if (repeated.size > 0) {
       throw new Error(`Each boundary needs its own code. Used more than once: ${[...repeated].join(', ')}`);
+    }
+
+    // Each area goes under its level spelled as the hierarchy spells it (boundary-service matches
+    // it exactly), tidied when the hierarchy is new. boundary-service answers 200 for a level the
+    // persister can't store, which then holds up every tenant: refuse before writing anything (#2803).
+    const boundaries = input.map((b) => (b.boundaryType ? { ...b, boundaryType: levelNameIn(levels, b.boundaryType) } : b));
+    for (const b of boundaries) {
+      const tooLong = b.boundaryType ? tooLongForLevel(b.boundaryType) : null;
+      if (tooLong) {
+        throw new Error(
+          `Nothing was saved. ${b.code} goes under the level "${shortLevelName(b.boundaryType)}", which is ${tooLong.length} characters long; a level name can have at most ${tooLong.max}.`,
+        );
+      }
     }
 
     const tenantId = boundaries[0].tenantId;

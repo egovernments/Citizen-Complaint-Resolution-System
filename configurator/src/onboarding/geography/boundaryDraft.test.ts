@@ -6,6 +6,7 @@ import {
   addSelection,
   areasInside,
   keepUnsaved,
+  levelsMismatch,
   listHierarchy,
   retryHierarchyRecord,
   saveProgressOf,
@@ -279,6 +280,22 @@ describe('the unsaved list', () => {
     expect(current().selections[0].boundaries.map((b) => b.boundaryType)).toEqual(['Sub county', sixtyFour]);
   });
 
+  it('spells each area\'s level as a saved hierarchy does, so parents still go first', () => {
+    // Saved before names were tidied, with two spaces: boundary-service matches an area's level exactly.
+    const saved = { levels: ['County', 'Sub  County'], hierarchyExists: true };
+    act(() => {
+      addSelection(TENANT, selection([area('NBI', 'County')], saved));
+      // A second "NBI" is another area: it is renamed, and its child, listed first and typed tidied,
+      // must follow it. Sorted by a level the list doesn't spell, it would go first and keep "NBI".
+      const other = { ...area('NBI', 'County'), name: 'Other' };
+      addSelection(TENANT, selection([area('NBI_S1', 'Sub County', 'NBI'), other], saved));
+    });
+    expect(current().selections[1].boundaries.map(({ code, boundaryType, parent }) => ({ code, boundaryType, parent }))).toEqual([
+      { code: 'NBI_2', boundaryType: 'County', parent: undefined },
+      { code: 'NBI_S1', boundaryType: 'Sub  County', parent: 'NBI_2' },
+    ]);
+  });
+
   it("removes a whole selection, unless another selection's areas sit inside it", () => {
     act(() => {
       addSelection(TENANT, selection(NAIROBI));
@@ -311,7 +328,7 @@ describe('saveBoundaryDraft', () => {
     const result = await saveBoundaryDraft(TENANT, twoCounties());
     expect(createHierarchy).toHaveBeenCalledOnce();
     expect(createHierarchy).toHaveBeenCalledWith(TENANT, 'ADMIN', ['County', 'Ward']);
-    expect(createBoundaries).toHaveBeenCalledWith([...NAIROBI, ...MOMBASA], expect.any(Function));
+    expect(createBoundaries).toHaveBeenCalledWith([...NAIROBI, ...MOMBASA], expect.any(Function), ['County', 'Ward']);
     expect(ensureSchema).toHaveBeenCalledWith(TENANT, { hierarchy: 'ADMIN', highestHierarchy: 'County', lowestHierarchy: 'Ward' });
     expect(boundaryLabels.mock.calls[0][1].map((b) => b.code)).toEqual(['NBI', 'NBI_W1', 'NBI_W2', 'MSA', 'MSA_W1', 'OLD']);
     expect(result).toEqual({ created: [...NAIROBI, ...MOMBASA], failed: [], schemaError: null });
@@ -377,6 +394,25 @@ describe('saveBoundaryDraft', () => {
     ]);
     await saveBoundaryDraft(TENANT, twoCounties());
     expect(createBoundaries).toHaveBeenCalledOnce();
+  });
+
+  it('matches a hierarchy saved before names were tidied, and writes its areas as it spells them', async () => {
+    createHierarchy.mockRejectedValue(new Error('Hierarchy definition already exists'));
+    getHierarchies.mockResolvedValue([
+      { tenantId: TENANT, hierarchyType: 'ADMIN', boundaryHierarchy: [{ boundaryType: 'County', active: true }, { boundaryType: 'Sub  Ward', active: true }] },
+    ]);
+    const draft: BoundaryDraft = {
+      selections: [{ ...selection([area('NBI', 'County'), area('NBI_W1', 'Sub Ward', 'NBI')], { levels: ['County', 'Sub Ward'] }), id: 's1' }],
+    };
+    await saveBoundaryDraft(TENANT, draft);
+    expect(createBoundaries).toHaveBeenCalledWith(draft.selections[0].boundaries, expect.any(Function), ['County', 'Sub  Ward']);
+    expect(ensureSchema).toHaveBeenCalledWith(TENANT, { hierarchy: 'ADMIN', highestHierarchy: 'County', lowestHierarchy: 'Sub  Ward' });
+  });
+
+  it('compares level names tidied: spacing and composed accents aside, not case', () => {
+    expect(levelsMismatch(TENANT, 'ADMIN', ['County', 'Sub  County', 'Munici\u0301pio'], ['County', 'Sub County', 'Munic\u00edpio'])).toBeNull();
+    expect(levelsMismatch(TENANT, 'ADMIN', ['County', 'Ward'], ['County', 'ward'])).not.toBeNull();
+    expect(levelsMismatch(TENANT, 'ADMIN', ['County', 'Ward'], ['County'])).not.toBeNull();
   });
 
   it('writes no area when the hierarchy already there has other levels', async () => {

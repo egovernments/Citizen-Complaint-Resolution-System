@@ -12,7 +12,7 @@ import type { OfficialSet } from '@/utils/officialBoundaries';
 import type { Boundary, BoundaryExcelRow, BoundaryHierarchy } from '@/api/types';
 import type { BoundarySource } from './BoundaryImport';
 import { levelNamesProblem } from './levelNameMessages';
-import { normalizeLevelName } from '@digit-mcp/data-provider';
+import { levelNameIn, normalizeLevelName } from '@digit-mcp/data-provider';
 
 /** What the import screen needs to reopen where the operator left it. */
 export type ImportResume =
@@ -213,8 +213,8 @@ export function addSelection(
   replaces?: string,
   saved: SavedArea[] = [],
 ): AddResult {
-  // Levels of a hierarchy not yet on the server are saved as typed, tidied: trimmed and single-spaced,
-  // with each area's level to match. One that can't be saved is refused here, before the list (#2803).
+  // Levels of a hierarchy not yet on the server are saved as typed, tidied: trimmed and single-spaced.
+  // One that can't be saved is refused here, before the list (#2803).
   if (!selection.hierarchyExists) {
     const problem = levelNamesProblem(selection.levels, t);
     if (problem) {
@@ -225,12 +225,12 @@ export function addSelection(
         error: t('geography.level_name.change_and_retry', '%{problem} Change the level name, then try again.', { problem }),
       };
     }
-    selection = {
-      ...selection,
-      levels: selection.levels.map(normalizeLevelName),
-      boundaries: selection.boundaries.map((b) => ({ ...b, boundaryType: normalizeLevelName(b.boundaryType) })),
-    };
+    selection = { ...selection, levels: selection.levels.map(normalizeLevelName) };
   }
+  // Each area's level is spelled as the selection's levels spell it (a saved hierarchy keeps the
+  // spelling it was saved with), so it sorts by level and matches the hierarchy exactly (#2803).
+  const levels = selection.levels;
+  selection = { ...selection, boundaries: selection.boundaries.map((b) => ({ ...b, boundaryType: levelNameIn(levels, b.boundaryType) })) };
   const draft = drafts.get(tenantId) ?? { selections: [] };
   const error = selectionMismatch(listHierarchy(draft, replaces), selection, t);
   if (error) return { added: 0, alreadySaved: 0, duplicates: 0, error };
@@ -355,7 +355,10 @@ export function removeSelection(tenantId: string, id: string): boolean {
  * (validation retries) with a misleading error, so it stops before that.
  */
 export function levelsMismatch(tenantId: string, hierarchyType: string, existing: string[], mapped: string[]): MessageError | null {
-  if (existing.length === mapped.length && existing.every((name, idx) => name === mapped[idx])) return null;
+  // Both sides tidied: a hierarchy saved before names were tidied (#2803) still matches the same
+  // names typed again.
+  const same = (a: string, b: string) => normalizeLevelName(a) === normalizeLevelName(b);
+  if (existing.length === mapped.length && existing.every((name, idx) => same(name, mapped[idx]))) return null;
   return new MessageError(
     'geography.osm.levels_mismatch',
     'A "%{type}" hierarchy already exists on %{tenant} with levels [%{existing}], which do not match your mapped levels [%{mapped}]. Boundaries cannot be created against mismatched level names. Either rename your mapped levels to match the existing hierarchy, or use the Excel path\'s "use existing hierarchy" option.',
@@ -363,16 +366,22 @@ export function levelsMismatch(tenantId: string, hierarchyType: string, existing
   );
 }
 
-/** Defines the hierarchy, or uses the one already there when its levels match. */
-async function ensureHierarchy(tenantId: string, hierarchyType: string, levelNames: string[]) {
+/**
+ * Defines the hierarchy, or uses the one already there when its levels match. Returns the level
+ * names as the hierarchy on the server spells them, which the areas must use.
+ */
+async function ensureHierarchy(tenantId: string, hierarchyType: string, levelNames: string[]): Promise<string[]> {
   try {
     await boundaryService.createHierarchyFromLevels(tenantId, hierarchyType, levelNames);
+    return levelNames.map(normalizeLevelName);
   } catch (e) {
     const msg = String((e as Error)?.message || e);
     if (!msg.toLowerCase().includes('already exist') && !msg.includes('DUPLICATE')) throw e;
     const existing = (await boundaryService.getHierarchies(tenantId)).find((h) => h.hierarchyType === hierarchyType);
-    const mismatch = levelsMismatch(tenantId, hierarchyType, (existing?.boundaryHierarchy ?? []).map((l) => l.boundaryType), levelNames);
+    const saved = (existing?.boundaryHierarchy ?? []).map((l) => l.boundaryType);
+    const mismatch = levelsMismatch(tenantId, hierarchyType, saved, levelNames);
     if (mismatch) throw mismatch;
+    return saved;
   }
 }
 
@@ -541,10 +550,12 @@ export async function saveBoundaryDraft(
   };
   progress(0);
   try {
-    if (!hierarchy.hierarchyExists) await ensureHierarchy(tenantId, hierarchy.hierarchyType, hierarchy.levels);
+    const levels = hierarchy.hierarchyExists ? hierarchy.levels : await ensureHierarchy(tenantId, hierarchy.hierarchyType, hierarchy.levels);
     progress(2);
-    const result = await boundaryService.createBoundaries(draftBoundaries(draft), (done, total) =>
-      progress(2 + Math.floor((done / total) * 88)),
+    const result = await boundaryService.createBoundaries(
+      draftBoundaries(draft),
+      (done, total) => progress(2 + Math.floor((done / total) * 88)),
+      levels,
     );
     progress(92);
     const unnamed = draft.selections.flatMap((selection) => selection.unnamed);
@@ -553,7 +564,7 @@ export async function saveBoundaryDraft(
           tenantId,
           result.success,
           hierarchy.hierarchyType,
-          hierarchy.levels.map((boundaryType) => ({ boundaryType })),
+          levels.map((boundaryType) => ({ boundaryType })),
           t,
           unnamed,
           hadSavedAreas,
@@ -562,8 +573,8 @@ export async function saveBoundaryDraft(
     if (schemaError) {
       pendingRecords.set(tenantId, {
         hierarchy: hierarchy.hierarchyType,
-        highestHierarchy: hierarchy.levels[0],
-        lowestHierarchy: hierarchy.levels[hierarchy.levels.length - 1],
+        highestHierarchy: levels[0],
+        lowestHierarchy: levels[levels.length - 1],
       });
     } else if (result.success.length || unnamed.length) {
       pendingRecords.delete(tenantId);
