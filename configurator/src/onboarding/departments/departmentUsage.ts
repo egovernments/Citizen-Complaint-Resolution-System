@@ -1,6 +1,7 @@
-import { hrmsService, mdmsService } from '@/api';
+import { mdmsService } from '@/api';
 import type { Employee, MdmsRecord } from '@/api/types';
 import { englishT, MessageError, type OnboardingT } from '../i18n';
+import { listEmployees } from '../employees/employeesApi';
 import { listMasters, recordDepartments, recordName } from './mastersApi';
 
 /**
@@ -20,6 +21,7 @@ export interface DepartmentUses {
 }
 
 export interface UsageSources {
+  /** Active employees only (listEmployees' `active`): a removed employee is never saved again. */
   employees: Employee[];
   designations: { name: string; departments: string[] }[];
   /** The complaint categories people file against, and the department each goes to. */
@@ -28,10 +30,7 @@ export interface UsageSources {
 
 export const hasUses = (uses: DepartmentUses) => uses.employees.length + uses.designations.length + uses.categories.length > 0;
 
-/**
- * Everything in `from` that names a department `matches` picks, and the
- * departments it named. Removed employees don't count: nobody edits them.
- */
+/** Everything in `from` that names a department `matches` picks, and the departments it named. */
 export function findUses(matches: (department: string) => boolean, from: UsageSources): DepartmentUses & { departments: string[] } {
   const departments = new Set<string>();
   const hit = (department: string | undefined) => {
@@ -41,7 +40,6 @@ export function findUses(matches: (department: string) => boolean, from: UsageSo
   };
   const distinct = (names: string[]) => Array.from(new Set(names));
   const employees = from.employees
-    .filter((employee) => employee.isActive !== false)
     // Every assignment, not only the current one: each is checked again on the next save.
     .filter((employee) => (employee.assignments ?? []).map((assignment) => hit(assignment.department)).some(Boolean))
     .map((employee) => employee.user?.name || employee.code || '');
@@ -72,7 +70,7 @@ export function categoryRoutes(records: MdmsRecord[], tenantId: string): UsageSo
 /** What uses one department now, read fresh. Throws when any of it can't be read. */
 export async function loadDepartmentUses(tenantId: string, code: string): Promise<DepartmentUses> {
   const [employees, designations, hierarchy] = await Promise.all([
-    hrmsService.searchEmployees(tenantId, { limit: 500 }),
+    listEmployees(tenantId).then((list) => list.active),
     listMasters(tenantId, 'designation', { ownOnly: true }),
     mdmsService.searchRecords(tenantId, HIERARCHY_SCHEMA, { limit: 5000 }),
   ]);

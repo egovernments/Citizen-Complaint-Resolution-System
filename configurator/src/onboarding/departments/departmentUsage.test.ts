@@ -1,7 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { hrmsService, mdmsService } from '@/api';
 import type { Employee, MdmsRecord } from '@/api/types';
-import { categoryRoutes, checkRemovable, describeUses, findUses, hasUses, inUseMessage, loadDepartmentUses } from './departmentUsage';
+import {
+  categoryRoutes,
+  checkRemovable,
+  describeUses,
+  findUses,
+  hasUses,
+  inUseMessage,
+  loadDepartmentUses,
+} from './departmentUsage';
+import { EMPLOYEE_PAGE } from '../employees/employeesApi';
 import { describeSaveError } from '../errors';
 
 vi.mock('@/api', () => ({
@@ -39,7 +48,6 @@ describe('findUses', () => {
       employee('E002', 'Amina', [['ROADS', true]]),
       employee('E003', 'Brian', [['WATER', true], ['ROADS', false]]),
       employee('E004', 'Chen', [['WATER', true]]),
-      employee('E005', 'Gone', [['ROADS', true]], { isActive: false }),
     ],
     designations: [
       { name: 'Engineer', departments: ['ROADS', 'WATER'] },
@@ -53,7 +61,7 @@ describe('findUses', () => {
 
   it('names every employee, designation and category on the department', () => {
     const uses = findUses((department) => department === 'ROADS', sources);
-    // Brian's past assignment counts: HRMS checks it on each save. Removed employees don't.
+    // Brian's past assignment counts: HRMS checks it on each save.
     expect(uses).toEqual({ employees: ['Amina', 'Brian'], designations: ['Engineer'], categories: ['Potholes'], departments: ['ROADS'] });
     expect(hasUses(uses)).toBe(true);
   });
@@ -115,6 +123,17 @@ describe('loadDepartmentUses', () => {
     );
     expect(await loadDepartmentUses('acme', 'ROADS')).toEqual({ employees: ['Amina'], designations: ['Engineer'], categories: ['Potholes'] });
     expect(search).toHaveBeenCalledWith('acme', 'RAINMAKER-PGR.ComplaintHierarchy', { limit: 5000 });
+  });
+
+  it('reads every HRMS page through listEmployees, and leaves removed employees out (#2797)', async () => {
+    const full = Array.from({ length: EMPLOYEE_PAGE }, (_, index) => employee(`E${index}`, `Clerk ${index}`, [['WATER', true]]));
+    employeesSearch.mockImplementation(async (_tenant, options) =>
+      options?.offset === 0
+        ? full
+        : [employee('E550', 'Amina', [['ROADS', true]]), employee('E551', 'Gone', [['ROADS', true]], { isActive: false })],
+    );
+    search.mockResolvedValue([]);
+    expect(await loadDepartmentUses('acme', 'ROADS')).toEqual({ employees: ['Amina'], designations: [], categories: [] });
   });
 
   it('fails when any of it cannot be read, so nothing is removed unchecked', async () => {
