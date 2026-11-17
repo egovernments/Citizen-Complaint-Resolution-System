@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { initCache, closeCache, getRedis } from "../../src/infrastructure/redis.js";
-import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
+import { personLeaseKey, withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import { indexBindingTenants } from "../../src/modules/bindings/store.js";
 import { config } from "../../src/infrastructure/config.js";
 import type { UserRepresentation } from "../../src/modules/sync/keycloak-writer.js";
@@ -49,12 +49,17 @@ vi.mock("../../src/modules/organizations/organization-service.js", () => {
     readTenantMappingForTenant: vi.fn(async (tenantId: string) => ({ urlSlug: `${tenantId}-slug`, tenantId })),
   };
 });
-vi.mock("../../src/modules/workspace-members/authority.js", async (importOriginal) => ({
-  mayManageRoles: (await importOriginal<typeof import("../../src/modules/workspace-members/authority.js")>()).mayManageRoles,
-  validateBinding: vi.fn(async () => {}), requireAccountAdmin: vi.fn(async () => ({ roles: f.callerRoles })),
-  requireWorkspace: vi.fn(async (tenantId: string) => ({ id: tenantId, alias: tenantId, name: tenantId, lifecycle: "ACTIVE", enabled: true })),
-  readDigitAccount: vi.fn(async (tenantId: string, uuid: string) => ({ tenantId, uuid, active: true, userName: "employee", name: "Employee", roles: f.targetRoles })),
-}));
+vi.mock("../../src/modules/workspace-members/authority.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../src/modules/workspace-members/authority.js")>();
+  const account = (tenantId: string, uuid: string) => ({ tenantId, uuid, type: "EMPLOYEE", active: true, userName: "employee", name: "Employee", roles: f.targetRoles });
+  return {
+    mayManageRoles: original.mayManageRoles,
+    validateBinding: vi.fn(async ({ tenantId, uuid }: { tenantId: string; uuid: string }) => account(tenantId, uuid)),
+    requireAccountAdmin: vi.fn(async () => ({ roles: f.callerRoles })),
+    requireWorkspace: vi.fn(async (tenantId: string) => ({ id: tenantId, alias: tenantId, name: tenantId, lifecycle: "ACTIVE", enabled: true })),
+    readDigitAccount: vi.fn(async (tenantId: string, uuid: string) => account(tenantId, uuid)),
+  };
+});
 vi.mock("../../src/modules/onboarding/organization-reader.js", () => ({
   readOnboardingOrganizations: vi.fn(async () => ["pg", "other"].map((id) => ({ id, alias: id, name: id, enabled: false, attributes: { "digit.rootTenantId": [id] } }))),
 }));
@@ -75,7 +80,7 @@ vi.mock("../../src/modules/revocation/index.js", () => ({ revokeAccount: vi.fn(a
 vi.mock("../../src/modules/citizen-otp/audit.js", () => ({ audit: vi.fn(async () => {}) }));
 import { acceptWorkspaceInvitation, declineWorkspaceInvitation, linkWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberEmail } from "../../src/modules/workspace-members/service.js";
 import { readOnboardingOrganizations } from "../../src/modules/onboarding/organization-reader.js";
-import { isOrganizationMember, request, sendPasswordSetupEmail } from "../../src/modules/organizations/organization-service.js";
+import { isOrganizationMember, readTenantMappingForTenant, request, sendPasswordSetupEmail } from "../../src/modules/organizations/organization-service.js";
 import { readDigitAccount, requireWorkspace } from "../../src/modules/workspace-members/authority.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { audit } from "../../src/modules/citizen-otp/audit.js";
@@ -428,6 +433,68 @@ describe("admin resend of the activation email", () => {
     f.crash = "email";
     await expect(linkWorkspaceMember(resend)).rejects.toThrow("crash:email");
     await expect(linkWorkspaceMember(resend)).resolves.toMatchObject({ activationEmail: "password_setup" });
+  });
+});
+
+describe("working out the invitee's password landing (#2801)", () => {
+  const resend = { ...input, resend: true };
+  const windowKey = () => `${config.cachePrefix}:identity:member-resend:pg:${uuid}`;
+  const pgRoute = { urlSlug: "pg-slug", tenantId: "pg" } as Awaited<ReturnType<typeof readTenantMappingForTenant>>;
+  const savedSecret = config.keycloakEmployeeClientSecret;
+  let warn: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    config.keycloakEmployeeClientSecret = "employee-secret";
+    vi.mocked(sendPasswordSetupEmail).mockClear();
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => { config.keycloakEmployeeClientSecret = savedSecret; warn.mockRestore(); });
+  const sent = () => vi.mocked(sendPasswordSetupEmail).mock.calls.map(([email]) => email);
+
+  it("on invite: before membership and activation, from the account validateBinding read", async () => {
+    let seen: object | undefined;
+    vi.mocked(readTenantMappingForTenant).mockImplementationOnce(async () => {
+      seen = { member: f.members.has("pg:new-1"), bindings: bindingDoc(f.users.get("new-1")!).bindings.length, activations: f.activations };
+      return pgRoute;
+    });
+    vi.mocked(readDigitAccount).mockClear();
+    await linkWorkspaceMember(input);
+    expect(seen).toEqual({ member: false, bindings: 0, activations: 0 });
+    expect(readDigitAccount).toHaveBeenCalledTimes(1); // activation's own read; the landing reads nothing more
+    expect(sent().map((email) => email.clientId)).toEqual([config.keycloakEmployeeClientId]);
+  });
+
+  it("on invite: a failed route lookup still sends the email, through the Configurator, and finishes the link", async () => {
+    vi.mocked(readTenantMappingForTenant).mockImplementationOnce(async () => { throw new Error("Keycloak Admin unavailable"); });
+    await expect(linkWorkspaceMember(input)).resolves.toMatchObject({ activationEmailSent: true, binding: { state: "active" } });
+    expect(sent().map((email) => email.clientId)).toEqual([config.keycloakBffClientId]);
+    expect(sent()[0].redirectUri).toMatch(/\/password\/setup-complete\/[^/]+$/);
+    expect(f.users.get("new-1")?.attributes?.["digit.linkPending"]).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Configurator"), expect.objectContaining({ tenantId: "pg", error: "Keycloak Admin unavailable" }));
+  });
+
+  it("on resend: before the person lease and the resend window, without another DIGIT read", async () => {
+    await linkWorkspaceMember(input);
+    vi.mocked(sendPasswordSetupEmail).mockClear();
+    let held: number[] = [];
+    vi.mocked(readTenantMappingForTenant).mockImplementationOnce(async () => {
+      held = [await getRedis().exists(personLeaseKey("new-1")), await getRedis().exists(windowKey())];
+      return pgRoute;
+    });
+    vi.mocked(readDigitAccount).mockClear();
+    await expect(linkWorkspaceMember(resend)).resolves.toMatchObject({ activationEmail: "password_setup" });
+    expect(held).toEqual([0, 0]);
+    expect(readDigitAccount).not.toHaveBeenCalled();
+    expect(sent().map((email) => email.clientId)).toEqual([config.keycloakEmployeeClientId]);
+  });
+
+  it("on resend: a failed route lookup still sends the email, through the Configurator, and keeps the cooldown", async () => {
+    await linkWorkspaceMember(input);
+    vi.mocked(sendPasswordSetupEmail).mockClear();
+    vi.mocked(readTenantMappingForTenant).mockImplementationOnce(async () => { throw new Error("DIGIT unavailable"); });
+    await expect(linkWorkspaceMember(resend)).resolves.toMatchObject({ activationEmailSent: true, activationEmail: "password_setup" });
+    expect(sent().map((email) => email.clientId)).toEqual([config.keycloakBffClientId]);
+    expect(await getRedis().exists(windowKey())).toBe(1);
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "RESEND_TOO_SOON" });
   });
 });
 

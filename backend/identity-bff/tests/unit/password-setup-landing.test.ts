@@ -49,6 +49,17 @@ describe("passwordSetupLanding", () => {
     expect(await passwordSetupLanding("ke", [{ code: "GRO", tenantId: "ke" }])).toEqual(configurator);
   });
 
+  it("falls back to the Configurator, with a warning, when the route lookup fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(readTenantMappingForTenant).mockRejectedValue(new Error("Keycloak Admin unavailable"));
+    try {
+      expect(await passwordSetupLanding("ke", [{ code: "GRO", tenantId: "ke" }])).toEqual(configurator);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Configurator"), expect.objectContaining({ tenantId: "ke" }));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("falls back to the Configurator when the employee client isn't configured", async () => {
     config.keycloakEmployeeClientSecret = "";
     expect(await passwordSetupLanding("ke", [{ code: "GRO", tenantId: "ke" }])).toEqual(configurator);

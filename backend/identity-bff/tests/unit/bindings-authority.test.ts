@@ -21,9 +21,9 @@ beforeEach(() => { f.accounts = [target()]; f.access = true; f.org = true; });
 
 describe("binding actor validation", () => {
   it("converts an existing inactive employee so HRMS reactivation needs no BFF rebind", async () => {
-    await expect(validateBinding(input())).resolves.toBeUndefined();
+    await expect(validateBinding(input())).resolves.toMatchObject({ uuid: "employee-uuid" });
     f.accounts[0].active = true;
-    await expect(validateBinding(input())).resolves.toBeUndefined();
+    await expect(validateBinding(input())).resolves.toMatchObject({ uuid: "employee-uuid" });
   });
   it.each(["missing", "wrong-type", "wrong-tenant", "managed"])("rejects %s targets even for migration", async (caseName) => {
     if (caseName === "missing") f.accounts = [];
@@ -49,16 +49,16 @@ describe("binding actor validation", () => {
     const admin: DigitAccount = { ...target(), uuid: "admin-uuid", active: true, roles: [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }] };
     f.accounts.push(admin);
     const call = () => validateBinding({ ...input(), actor: { kind: "browser" as const, subject: "admin", requestId: "request" } });
-    await expect(call()).resolves.toBeUndefined();                       // operational roles need no matching caller role
+    await expect(call()).resolves.toMatchObject({ uuid: "employee-uuid" });                       // operational roles need no matching caller role
     f.accounts[0].roles.push({ code: "HRMS_ADMIN", tenantId: "pg" });
     await expect(call()).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
     admin.roles.push({ code: "HRMS_ADMIN", tenantId: "pg" });
-    await expect(call()).resolves.toBeUndefined();
+    await expect(call()).resolves.toMatchObject({ uuid: "employee-uuid" });
     // A workspace role never covers a role held at another root.
     f.accounts[0].roles.push({ code: "SUPERUSER", tenantId: "other" });
     await expect(call()).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
     admin.roles.push({ code: "SUPERUSER", tenantId: "other" });
-    await expect(call()).resolves.toBeUndefined();
+    await expect(call()).resolves.toMatchObject({ uuid: "employee-uuid" });
     f.accounts[0].roles.push({ code: "SUPERUSER", tenantId: "pgx" });
     await expect(call()).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
     f.accounts[0].roles.pop();
@@ -78,7 +78,7 @@ describe("binding actor validation", () => {
       await expect(linkAs([], [{ code, tenantId: "pg" }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
     });
   it.each(["EMPLOYEE", "GRO", "CSR", "PGR_LME", "SUPERVISOR"])("does not guard the operational role %s", async (code) => {
-    await expect(linkAs([], [{ code, tenantId: "pg.citya" }])).resolves.toBeUndefined();
+    await expect(linkAs([], [{ code, tenantId: "pg.citya" }])).resolves.toMatchObject({ uuid: "employee-uuid" });
   });
   it("checks administrative roles at sub-tenants: a sibling tenant does not cover pg.citya", async () => {
     await expect(linkAs([], [{ code: "SUPERUSER", tenantId: "pg.citya" }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
@@ -88,14 +88,14 @@ describe("binding actor validation", () => {
   it("a sub-tenant role covers only its own subtree, not a tenant sharing its name prefix", async () => {
     await expect(linkAs([{ code: "HRMS_ADMIN", tenantId: "pg.city" }], [{ code: "HRMS_ADMIN", tenantId: "pg.citya" }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
     f.accounts.pop();
-    await expect(linkAs([{ code: "HRMS_ADMIN", tenantId: "pg.city" }], [{ code: "HRMS_ADMIN", tenantId: "pg.city.ward1" }])).resolves.toBeUndefined();
+    await expect(linkAs([{ code: "HRMS_ADMIN", tenantId: "pg.city" }], [{ code: "HRMS_ADMIN", tenantId: "pg.city.ward1" }])).resolves.toMatchObject({ uuid: "employee-uuid" });
   });
   it("a sub-tenant role does not cover its parent", async () => {
     await expect(linkAs([{ code: "HRMS_ADMIN", tenantId: "pg.citya" }], [{ code: "HRMS_ADMIN", tenantId: "pg" }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
   });
   describe("the founder (SUPERUSER at the workspace) may grant any role within the workspace", () => {
     it.each([["HRMS_ADMIN", "pg.citya"], ["INTERNAL_MICROSERVICE_ROLE", "pg"], ["SYSTEM", "pg.citya.ward1"]])("links %s@%s", async (code, tenantId) => {
-      await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg" }], [{ code, tenantId }])).resolves.toBeUndefined();
+      await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg" }], [{ code, tenantId }])).resolves.toMatchObject({ uuid: "employee-uuid" });
     });
     it("a SUPERUSER at a sibling sub-tenant is not the founder", async () => {
       await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg.cityb" }], [{ code: "HRMS_ADMIN", tenantId: "pg.citya" }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
@@ -116,7 +116,7 @@ describe("binding actor validation", () => {
       f.accounts.pop();
       await expect(linkAs([{ code: "GRO", tenantId: "pg" }], [{ code: "GRO", tenantId }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
       f.accounts.pop();
-      await expect(linkAs([{ code: "GRO", tenantId: tenantId.split(".")[0] }], [{ code: "GRO", tenantId }])).resolves.toBeUndefined();
+      await expect(linkAs([{ code: "GRO", tenantId: tenantId.split(".")[0] }], [{ code: "GRO", tenantId }])).resolves.toMatchObject({ uuid: "employee-uuid" });
     });
   });
 });
