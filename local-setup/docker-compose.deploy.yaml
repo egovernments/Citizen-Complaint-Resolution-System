@@ -138,9 +138,17 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+    # The credentials reach the script through the container environment and
+    # are quoted there (`$$` is compose's literal `$`): spliced into the sh -c
+    # string at compose time, a password with a space, `;` or `$` split the
+    # arguments or ran a stray command, the alias was never set, and the
+    # bucket was never created (review of #2788).
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set in ./.env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in ./.env}
     entrypoint: >
       /bin/sh -c "
-      mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
+      mc alias set myminio http://minio:9000 \"$${MINIO_ROOT_USER}\" \"$${MINIO_ROOT_PASSWORD}\";
       mc mb --ignore-existing myminio/egov-rainmaker;
       mc anonymous set download myminio/egov-rainmaker;
       exit 0;

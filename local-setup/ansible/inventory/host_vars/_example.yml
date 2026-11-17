@@ -943,6 +943,11 @@ pgr_onboarding_baseline_upgrade_enabled: true
 # takes down everything else using it (issue #2783). A dedicated name is safe.
 identity_digit_admin_username: "IDENTITY_BFF"
 identity_digit_admin_tenant_id: "pg"
+# The account's mobile number must satisfy the MobileNumberValidation rule of
+# its tenant's ROOT. The deploy knows that rule for state_root / the root of
+# state_tenant_id (core_mobile_configs) and for pg (the dump's India default).
+# On any other root set the regex explicitly:
+# identity_digit_admin_mobile_regex: "^8[0-9]{8}$"
 # Roles that may sign in to the Configurator (#2599). Unset = the founder's admin
 # roles (SUPERUSER, ACCOUNT_ADMIN, MDMS_ADMIN, LOC_ADMIN, HRMS_ADMIN, WORKFLOW_ADMIN);
 # operational staff use the employee app. A list, or one comma-separated string.
@@ -1018,6 +1023,13 @@ db_fast_path_ack_data_wipe: false
 # is deliberately NOT db_fast_path_ack_data_wipe: that flag asserts the box has
 # no such data, so it cannot also mean "it does, proceed anyway".
 pg_allow_data_loss: false
+# A new tenant in a fresh digit_dir on a host that still carries an OLDER
+# stack's anonymous Postgres volume (pre-#2085) is refused by the same check:
+# with no container left, nothing proves whose that volume is. Once you have
+# confirmed it is another stack's (`docker volume inspect <id>`; with that
+# stack stopped, `docker run --rm -v <id>:/d:ro alpine ls /d`), list its id
+# here and the check ignores it — and only it — without pg_allow_data_loss.
+# pg_guard_foreign_volumes: ["<64-hex volume id>"]
 
 # ── Host paths ──
 # Everything host nginx serves from disk lives under www_root (default
@@ -1033,13 +1045,18 @@ pg_allow_data_loss: false
 # individual volumes on a dedicated disk instead, map volume name → absolute
 # host path; the deploy creates the directory and layers a compose overlay
 # that binds the volume to it. Only for volumes this stack has not created
-# yet — Docker does not re-point an existing named volume, so a live database
-# is a migration (stop, copy, then set this). Postgres and MinIO fix up
-# ownership themselves; a container that runs unprivileged (Elasticsearch,
-# Grafana, Loki, Prometheus, ...) needs its directory chowned to its uid first.
+# yet — Docker does not re-point an existing named volume, so the deploy
+# refuses when the volume already exists elsewhere: a live database is a
+# migration (stop, copy, remove the old volume, then set this). The deploy
+# chowns each directory to the uid its image runs as (group_vars
+# data_volume_default_owners: Elasticsearch 1000, Grafana 472, Loki/Tempo
+# 10001, Prometheus 65534, OpenBao 100, Mongo/MariaDB 999; Postgres and MinIO
+# fix ownership themselves); override per volume if you run another image.
 # data_volume_host_paths:
 #   postgres_data: /data/postgres
 #   minio_data: /data/minio
+# data_volume_host_owners:
+#   es_data: "1000:0"
 
 # Run the post-deploy CI suite (XLSX dataloader + Playwright). Requires
 # a sibling `digit-ui-fix/` clone next to this repo on the controller.

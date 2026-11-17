@@ -190,6 +190,12 @@
         db_fast_path: true
         probe: "SAFE foreign-anon-volume:9c2f1ab (project:otherstack)"
         expect: PROCEED
+      - name: "an anonymous volume the operator attested is another stack's"
+        base: base-fixed.yaml
+        overlay: overlay-with.yml
+        db_fast_path: true
+        probe: "SAFE attested-foreign-volume:9c2f1ab"
+        expect: PROCEED
       - name: "docker-postgres belongs to another compose project"
         reason: "another compose project"
         base: base-fixed.yaml

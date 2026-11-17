@@ -365,6 +365,31 @@ def r_identity_admin_password_conflict(cfg):
                "creates it with identity_digit_admin_password).")
 
 
+@rule(
+    "identity-admin-tenant-root",
+    "egov-user validates the Identity BFF account's mobile number against the "
+    "rule of the tenant it is created on. The deploy knows that rule for the "
+    "root this host_vars describes (core_mobile_configs) and for pg (the "
+    "dump's India default); on any other root it cannot derive a valid number "
+    "and the create fails with INVALID_MOBILE_NUMBER unless "
+    "identity_digit_admin_mobile_regex says what the rule is.",
+)
+def r_identity_admin_tenant_root(cfg):
+    tenant = get(cfg, "identity_digit_admin_tenant_id") or get(cfg, "state_tenant_id")
+    if not tenant or "{{" in str(tenant):
+        return
+    root = str(tenant).split(".")[0]
+    own = {str(get(cfg, "state_root") or "pg"),
+           str(get(cfg, "state_tenant_id") or get(cfg, "state_root") or "pg").split(".")[0], "pg"}
+    if root in own or get(cfg, "identity_digit_admin_mobile_regex"):
+        return
+    yield (FAIL,
+           f"identity_digit_admin_tenant_id '{tenant}' is on root '{root}', which is neither pg nor "
+           "the root this file describes, so the deploy cannot derive a mobile number egov-user "
+           "accepts there. Set identity_digit_admin_mobile_regex to that root's "
+           "MobileNumberValidation regex, or put the account on the state root or pg.")
+
+
 SECRETS_PATH_RE = re.compile(r"^kv/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
 
 
@@ -690,7 +715,7 @@ SELF_TEST_CASES = [
       "bootstrap_secrets": {"identity_digit_admin_password": "eGov@123"}},
      set()),
     ("BFF on ADMIN of a non-pg tenant is the deploy's own account, clean",
-     {"bootstrap_user": "OPS", "bootstrap_password": "Ops@12345",
+     {"bootstrap_user": "OPS", "bootstrap_password": "Ops@12345", "state_root": "ke",
       "identity_digit_admin_username": "ADMIN", "identity_digit_admin_tenant_id": "ke",
       "bootstrap_secrets": {"identity_digit_admin_password": "Other@123"}},
      set()),
@@ -723,6 +748,20 @@ SELF_TEST_CASES = [
      set()),
     ("internal_user_password is held to egov-user's rule",
      {"internal_user_password": "system123"}, {"egov-user-password-policy"}),
+    # ── BFF account on a third root ──
+    ("BFF account on a root the file does not describe fires",
+     {"state_root": "ke", "state_tenant_id": "ke.mycity", "identity_digit_admin_tenant_id": "mz"},
+     {"identity-admin-tenant-root"}),
+    ("BFF account on a third root with its mobile rule given is clean",
+     {"state_root": "ke", "state_tenant_id": "ke.mycity", "identity_digit_admin_tenant_id": "mz",
+      "identity_digit_admin_mobile_regex": "^8[0-9]{8}$"},
+     set()),
+    ("BFF account on pg while the state is ke is clean (the dump's rule)",
+     {"state_root": "ke", "state_tenant_id": "ke.mycity", "identity_digit_admin_tenant_id": "pg"},
+     set()),
+    ("BFF account on the maputo-style state tenant root is clean",
+     {"state_root": "pg", "state_tenant_id": "mz.maputo", "identity_digit_admin_tenant_id": "mz"},
+     set()),
     # ── secrets_path ──
     ("secrets_path outside kv/ fires", {"secrets_path": "secret/digit/ke"}, {"secrets-path-format"}),
     ("secrets_path with a leading slash fires", {"secrets_path": "/kv/digit/ke"}, {"secrets-path-format"}),

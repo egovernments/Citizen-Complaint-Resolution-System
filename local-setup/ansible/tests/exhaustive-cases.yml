@@ -57,6 +57,8 @@
       # an anonymous cluster whose compose label names another project, so it
       # is not ours (issue #2783 gap 6): reads as no data
       - {key: foreign-anon,  probe: "SAFE foreign-anon-volume:9c2f1ab (project:otherstack)", rc: 0}
+      # an anonymous cluster listed in pg_guard_foreign_volumes: not ours
+      - {key: attested,      probe: "SAFE attested-foreign-volume:9c2f1ab", rc: 0}
       # docker-postgres belongs to another compose project: always a refusal
       - {key: foreign,       probe: "FOREIGN container-project:otherstack (this deploy would be digit)", rc: 0}
       - {key: unknown,       probe: "UNKNOWN mountpoints-not-readable", rc: 0}

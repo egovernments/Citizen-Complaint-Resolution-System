@@ -106,6 +106,7 @@
       probed=0
       migrated=""
       anon=""
+      attested=""
       for v in $(docker volume ls -q 2>/dev/null); do
         mp=$(docker volume inspect -f '{{ .Mountpoint }}' "$v" 2>/dev/null) || continue
         [ -n "$mp" ] && [ -d "$mp" ] || continue
@@ -119,8 +120,16 @@
           else
             case "$v" in
               # Still not OUR anonymous cluster if it is another project's
-              # named volume; only an unnamed one (64 hex) can be.
-              [0-9a-f]*) [ ${#v} -eq 64 ] && anon="$v" ;;
+              # named volume; only an unnamed one (64 hex) can be. An id the
+              # operator listed in pg_guard_foreign_volumes is another
+              # stack's by attestation and does not count as ours.
+              [0-9a-f]*)
+                if [ ${#v} -eq 64 ]; then
+                  case " $PG_GUARD_FOREIGN_VOLUMES " in
+                    *" $v "*) attested="$v" ;;
+                    *)        anon="$v" ;;
+                  esac
+                fi ;;
             esac
           fi
         fi
@@ -140,21 +149,27 @@
       fi
       if [ -n "$anon" ]; then
         # An anonymous volume is another stack's — not ours, not stranded by
-        # this deploy — only when it SAYS so: compose labels the volumes it
-        # creates with com.docker.compose.project, and a label naming another
-        # project is another compose project on this host (a different
-        # digit_dir, issue #2783 gap 6). Anything else refuses, as before: no
-        # label, or this project's. The first cut classified on "this digit_dir
-        # has no compose file yet", which is exactly the state of a live stack
-        # whose operator ran `compose down` and then moved digit_dir — the
-        # deploy would have brought up an empty database next to the real one
-        # (review of #2788).
+        # this deploy — only when something SAYS so. A com.docker.compose.project
+        # label naming another project does (a different digit_dir on this
+        # host, issue #2783 gap 6); so does the operator listing the volume id
+        # in pg_guard_foreign_volumes (handled in the loop above). The volume
+        # the engine creates for the image's VOLUME instruction — the pre-#2085
+        # case — most likely carries no compose label at all, so on such a host
+        # a new tenant in a fresh digit_dir needs that attestation; the refusal
+        # below says how. Anything else refuses, as before this PR. The first
+        # cut classified on "this digit_dir has no compose file yet", which is
+        # exactly the state of a live stack whose operator ran `compose down`
+        # and then moved digit_dir (review of #2788).
         anon_proj=$(docker volume inspect -f '{{ index .Labels "com.docker.compose.project" }}' "$anon" 2>/dev/null || true)
         if [ -n "$anon_proj" ] && [ "$anon_proj" != "$this_proj" ]; then
           echo "SAFE foreign-anon-volume:$anon (project:$anon_proj)"
         else
           echo "ANON dangling-volume:$anon"
         fi
+        exit 0
+      fi
+      if [ -n "$attested" ]; then
+        echo "SAFE attested-foreign-volume:$attested"
         exit 0
       fi
 
@@ -170,6 +185,8 @@
     # Fallback source for the compose project name when no container exists.
   environment:
     DIGIT_DIR: "{{ digit_dir | default('') }}"
+    # anonymous volume ids the operator attests belong to another stack
+    PG_GUARD_FOREIGN_VOLUMES: "{{ pg_guard_foreign_volumes | default([]) | join(' ') }}"
   register: pg_cluster_probe
   changed_when: false
   failed_when: false
@@ -367,9 +384,16 @@
       in that volume. Do NOT run `docker compose down -v`, `docker volume rm`
       or `docker system prune` on this box — that is what would destroy it.
 
-      If this box has never run DIGIT, that volume may belong to something
-      else entirely — a stray `docker run postgres`, or another stack. Check
-      before assuming it is yours.
+      If this box has never run DIGIT from {{ digit_dir }}, that volume may
+      belong to something else entirely — an older stack in another directory,
+      or a stray `docker run postgres`. Check before assuming it is yours:
+      `docker volume inspect <id>` (CreatedAt, labels) and, with the stack that
+      owns it stopped, `docker run --rm -v <id>:/d:ro alpine ls /d`. Once you
+      are sure it is NOT this tenant's, list the id in host_vars:
+
+        pg_guard_foreign_volumes: ["<64-hex id>"]
+
+      and re-run; the check then ignores that volume, and only that volume.
 
       Otherwise migrate the data onto the named volume and re-run:
         docs/releases/2.12/operations/postgres-volume-migration.md
