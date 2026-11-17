@@ -46,14 +46,13 @@ export type PasswordSetupOutcome =
     | { status: "failed" }
     | { status: "limited"; by: "email" | "network"; minutes: number };
 
+/** A 429 from the BFF's email limits; any other 429 (a proxy's own limit, say) has no known wait and is a failure. */
 async function limitedOutcome(response: Response): Promise<PasswordSetupOutcome> {
     const body = (await response.json().catch(() => null)) as { code?: unknown; retryAfter?: unknown } | null;
+    const by = body?.code === "EMAIL_RATE_LIMITED" ? "email" : body?.code === "NETWORK_RATE_LIMITED" ? "network" : null;
+    if (!by) return { status: "failed" };
     const seconds = Number(body?.retryAfter ?? response.headers.get("Retry-After"));
-    return {
-        status: "limited",
-        by: body?.code === "EMAIL_RATE_LIMITED" ? "email" : "network",
-        minutes: Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds / 60) : 1
-    };
+    return { status: "limited", by, minutes: Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds / 60) : 1 };
 }
 
 export async function requestPasswordSetup(params: {

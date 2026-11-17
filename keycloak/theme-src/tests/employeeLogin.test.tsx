@@ -115,6 +115,13 @@ describe("digit-employee forgot password (#2700)", () => {
         await waitFor(() => expect(page.getByRole("alert")).toHaveTextContent("Too many requests from this network. Try again in 15 minutes."));
         expect(page.queryByText(/we've sent it a link/i)).toBeNull();
         expect(page.getByLabelText(/^Email/)).toHaveValue("gro@example.org");
+
+        // Go back clears the wait: reopening the form shows no stale toast.
+        fireEvent.click(page.getByRole("button", { name: /go back/i }));
+        await waitFor(() => expect(container.querySelector("#kc-form-login")).not.toBeNull());
+        fireEvent.click(container.querySelector("#kc-forgot-password")!);
+        await waitFor(() => expect(container.querySelector("#kc-reset-password-form")).not.toBeNull());
+        expect(page.queryByRole("alert")).toBeNull();
     });
 
     it("does not raise the last sign-in error again after Go back", async () => {

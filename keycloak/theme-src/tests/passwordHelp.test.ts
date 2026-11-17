@@ -52,6 +52,13 @@ describe("requestPasswordSetup over a request limit (#2805)", () => {
     it("treats any other refusal as a failure", async () => {
         expect(await requestPasswordSetup({ email: "gro@example.org", fetchImpl: answer(503) })).toEqual({ status: "failed" });
     });
+
+    it("treats a 429 that is not one of the BFF's email limits as a failure, not a made-up wait", async () => {
+        // Kong's rate-limiting plugin: no code, no Retry-After.
+        const kong = answer(429, { message: "API rate limit exceeded" });
+        expect(await requestPasswordSetup({ email: "gro@example.org", fetchImpl: kong })).toEqual({ status: "failed" });
+        expect(await requestPasswordSetup({ email: "gro@example.org", fetchImpl: answer(429) })).toEqual({ status: "failed" });
+    });
 });
 
 describe("employeeSignInUrl", () => {
