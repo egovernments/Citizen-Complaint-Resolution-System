@@ -480,6 +480,7 @@
 {"code": "app.onboarding.complaints.remove_sheet_confirm", "message": "Remover as categorias de reclamação da planilha?", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.complaints.remove_sheet_effect", "message": "Tudo o que a planilha criou é removido: seus níveis e suas categorias de reclamação. Depois você pode enviar uma planilha corrigida ou adicionar as categorias manualmente.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.complaints.remove_sheet_failed", "message": "Não foi possível remover as categorias de reclamação. Tente novamente.", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.onboarding.complaints.remove_sheet_shared", "message": "Estas categorias de reclamação não podem ser removidas aqui: as cidades deste espaço de trabalho (%{cities}) também as usam, e as reclamações lá deixariam de funcionar.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.complaints.resolution_time", "message": "Tempo de resolução", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.complaints.resolve_within", "message": "Resolver em até %{time}", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.complaints.resolve_within_default", "message": "Resolver em até %{time} (padrão)", "module": "configurator-ui", "locale": "pt_BR"},

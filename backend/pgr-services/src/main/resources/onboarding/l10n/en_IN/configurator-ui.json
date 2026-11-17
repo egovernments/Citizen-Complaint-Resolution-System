@@ -478,6 +478,7 @@
 {"code": "app.onboarding.complaints.remove_sheet_confirm", "message": "Remove the complaint categories from the spreadsheet?", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.complaints.remove_sheet_effect", "message": "Everything the spreadsheet set up is removed: its levels and its complaint categories. You can then upload a corrected sheet, or add categories by hand.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.complaints.remove_sheet_failed", "message": "Removing the complaint categories failed. Try again.", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.complaints.remove_sheet_shared", "message": "These complaint categories can’t be removed here: the cities in this workspace (%{cities}) use them too, and complaints there would stop working.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.complaints.resolution_time", "message": "Resolution time", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.complaints.resolve_within", "message": "Resolve within %{time}", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.complaints.resolve_within_default", "message": "Resolve within %{time} (default)", "module": "configurator-ui", "locale": "en_IN"},

@@ -360,6 +360,42 @@ describe('a spreadsheet hierarchy that has to go (#2806)', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it('refuses at a state root with cities, whose rows those cities file against', async () => {
+    const tenant = (code: string): MdmsRecord => ({ id: code, tenantId: 'ke', schemaCode: 'tenant.tenants', uniqueIdentifier: code, isActive: true, data: { code } });
+    const shared = row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', department: 'SANIT' }, { tenantId: 'ke' });
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === 'tenant.tenants'
+        ? [tenant('ke'), tenant('ke.nairobi'), tenant('ke.bomet')]
+        : schema === DEFINITION
+          ? [definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'], { tenantId: 'ke' })]
+          : [shared],
+    );
+
+    await expect(removeSheetComplaints('ke')).rejects.toThrow(
+      'These complaint categories can’t be removed here: the cities in this workspace (ke.nairobi, ke.bomet) use them too, and complaints there would stop working.',
+    );
+    expect(setActive).not.toHaveBeenCalled();
+  });
+
+  it('removes at a sign-up workspace, a state root with no cities of its own', async () => {
+    const definition = definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE']);
+    const leaf = row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', department: 'SANIT' });
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === 'tenant.tenants'
+        ? [{ id: 'acme', tenantId: 'acme', schemaCode: schema, uniqueIdentifier: 'acme', isActive: true, data: { code: 'acme' } }]
+        : schema === DEFINITION
+          ? [definition]
+          : [leaf],
+    );
+
+    await removeSheetComplaints('acme');
+
+    expect(setActive.mock.calls).toEqual([
+      [leaf, false],
+      [definition, false],
+    ]);
+  });
+
   it('opens the step for editing once removed, even with the state root still holding its copy', async () => {
     search.mockImplementation(async (_tenant, schema) =>
       schema === DEFINITION

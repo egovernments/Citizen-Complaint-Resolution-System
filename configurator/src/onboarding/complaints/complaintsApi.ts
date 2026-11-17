@@ -2,6 +2,8 @@ import { localizationService, mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
 import { KNOWN_LEVEL_LABELS, toPascal } from '@/utils/excelParser';
 import { labelLocales } from '../labelLocales';
+import { MessageError } from '../i18n';
+import { shortList } from './sheetDepartments';
 
 /**
  * Complaint types built from scratch: types, each handled by one department,
@@ -21,6 +23,7 @@ const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
 };
 const DEFINITION_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchyDefinition';
 const HIERARCHY_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchy';
+const TENANT_SCHEMA = 'tenant.tenants';
 export const DEFAULT_SLA_HOURS = 72;
 
 export interface DraftSubtype {
@@ -390,8 +393,24 @@ export async function writeSheetHierarchy(
  * The definition goes last, so a removal that fails part-way still shows the sheet's view and can
  * simply be retried. The state root's copy stays: other cities may file against it, and the
  * workspace's apps and the setup check read only its own rows.
+ *
+ * A state root with cities under it is refused: its rows are what every city without its own files
+ * against (mdms-v2 falls back to them), so switching them off would stop complaints there. A sign-up
+ * workspace is a state root of its own with no cities, so it can remove its sheet.
  */
 export async function removeSheetComplaints(tenantId: string): Promise<void> {
+  if (stateRootOf(tenantId) === tenantId) {
+    const cities = (await mdmsService.searchRecords(tenantId, TENANT_SCHEMA))
+      .map((record) => text(dataOf(record).code))
+      .filter((code) => code.startsWith(`${tenantId}.`));
+    if (cities.length > 0) {
+      throw new MessageError(
+        'complaints.remove_sheet_shared',
+        'These complaint categories can’t be removed here: the cities in this workspace (%{cities}) use them too, and complaints there would stop working.',
+        { cities: shortList(cities) },
+      );
+    }
+  }
   const [definitions, rows] = await Promise.all([
     mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA),
     mdmsService.searchRecords(tenantId, HIERARCHY_SCHEMA, { limit: 5000 }),

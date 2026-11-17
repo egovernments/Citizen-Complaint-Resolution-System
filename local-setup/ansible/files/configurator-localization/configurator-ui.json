@@ -9954,6 +9954,24 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.complaints.remove_sheet_shared",
+    "message": "ये शिकायत प्रकार यहाँ से नहीं हटाए जा सकते: इस वर्कस्पेस के शहर (%{cities}) भी इनका उपयोग करते हैं, और वहाँ शिकायतें काम करना बंद कर देंगी।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_shared",
+    "message": "Ces catégories de réclamation ne peuvent pas être supprimées ici : les villes de cet espace de travail (%{cities}) les utilisent aussi, et les réclamations n’y fonctionneraient plus.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_shared",
+    "message": "Estas categorias de reclamação não podem ser removidas aqui: as cidades deste espaço de trabalho (%{cities}) também as usam, e as reclamações lá deixariam de funcionar.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.complaints.resolution_time",
     "message": "समाधान समय",
     "module": "configurator-ui",
@@ -22484,6 +22502,12 @@
   {
     "code": "app.onboarding.complaints.remove_sheet_failed",
     "message": "Removing the complaint categories failed. Try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.complaints.remove_sheet_shared",
+    "message": "These complaint categories can’t be removed here: the cities in this workspace (%{cities}) use them too, and complaints there would stop working.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

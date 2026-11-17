@@ -480,6 +480,7 @@
 {"code": "app.onboarding.complaints.remove_sheet_confirm", "message": "Supprimer les catégories de réclamation issues de la feuille de calcul ?", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.complaints.remove_sheet_effect", "message": "Tout ce que la feuille de calcul a créé est supprimé : ses niveaux et ses catégories de réclamation. Vous pourrez ensuite téléverser une feuille corrigée ou ajouter les catégories à la main.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.complaints.remove_sheet_failed", "message": "La suppression des catégories de réclamation a échoué. Réessayez.", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.complaints.remove_sheet_shared", "message": "Ces catégories de réclamation ne peuvent pas être supprimées ici : les villes de cet espace de travail (%{cities}) les utilisent aussi, et les réclamations n’y fonctionneraient plus.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.complaints.resolution_time", "message": "Délai de résolution", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.complaints.resolve_within", "message": "À résoudre sous %{time}", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.complaints.resolve_within_default", "message": "À résoudre sous %{time} (par défaut)", "module": "configurator-ui", "locale": "fr_FR"},

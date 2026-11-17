@@ -480,6 +480,7 @@
 {"code": "app.onboarding.complaints.remove_sheet_confirm", "message": "स्प्रेडशीट से बने शिकायत प्रकार हटाएँ?", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.complaints.remove_sheet_effect", "message": "स्प्रेडशीट से बना सब कुछ हटा दिया जाएगा: उसके स्तर और उसके शिकायत प्रकार। इसके बाद आप सुधरी हुई शीट अपलोड कर सकते हैं, या प्रकार खुद जोड़ सकते हैं।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.complaints.remove_sheet_failed", "message": "शिकायत प्रकार हटाए नहीं जा सके। पुनः प्रयास करें।", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.onboarding.complaints.remove_sheet_shared", "message": "ये शिकायत प्रकार यहाँ से नहीं हटाए जा सकते: इस वर्कस्पेस के शहर (%{cities}) भी इनका उपयोग करते हैं, और वहाँ शिकायतें काम करना बंद कर देंगी।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.complaints.resolution_time", "message": "समाधान समय", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.complaints.resolve_within", "message": "%{time} के भीतर हल करें", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.complaints.resolve_within_default", "message": "%{time} के भीतर हल करें (डिफ़ॉल्ट)", "module": "configurator-ui", "locale": "hi_IN"},

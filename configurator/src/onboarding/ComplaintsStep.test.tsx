@@ -6,6 +6,7 @@ import ComplaintsStep from './ComplaintsStep';
 import { loadComplaints, removeSheetComplaints, type LoadedComplaints } from './complaints/complaintsApi';
 import { listMasters } from './departments/mastersApi';
 import { listEmployees } from './employees/employeesApi';
+import { MessageError } from './i18n';
 
 const app = { state: { tenant: 'acme', completedPhases: [] as number[] }, completePhase: vi.fn(async () => true) };
 vi.mock('@/App', () => ({ useApp: () => app }));
@@ -105,6 +106,25 @@ describe('ComplaintsStep: a spreadsheet hierarchy that blocks Finish (#2806)', (
 
     await waitFor(() => expect(removeSheetComplaints).toHaveBeenCalledWith('acme'));
     expect(await screen.findByTestId('complaint-hierarchy-setup')).toBeTruthy();
+  });
+
+  it('says why when the remove is refused, and stays on the sheet', async () => {
+    vi.mocked(removeSheetComplaints).mockRejectedValueOnce(
+      new MessageError(
+        'complaints.remove_sheet_shared',
+        'These complaint categories can’t be removed here: the cities in this workspace (%{cities}) use them too, and complaints there would stop working.',
+        { cities: 'ke.nairobi' },
+      ),
+    );
+    load.mockResolvedValue(stuckSheet);
+    renderStep();
+
+    fireEvent.click(await screen.findByTestId('complaints-remove-sheet'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    expect(await screen.findByText(/the cities in this workspace \(ke\.nairobi\) use them too/)).toBeTruthy();
+    expect(screen.queryByTestId('complaint-hierarchy-setup')).toBeNull();
+    expect(load).toHaveBeenCalledTimes(1);
   });
 
   it('tells a hand-built category with an unknown department to pick one from the list (C-3)', async () => {
