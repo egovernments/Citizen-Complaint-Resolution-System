@@ -46,7 +46,6 @@ const stuckSheet: LoadedComplaints = {
   editable: false,
   leafCount: 1,
   levels: ['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'],
-  departments: ['Sanitation Services'],
   routes: [{ name: 'Uncollected waste', department: 'Sanitation Services' }],
 };
 
@@ -81,7 +80,7 @@ describe('ComplaintsStep: a spreadsheet hierarchy that blocks Finish (#2806)', (
   });
 
   it('names the categories a department without a GRO holds up', async () => {
-    load.mockResolvedValue({ ...stuckSheet, departments: ['ROADS'], routes: [{ name: 'Pothole', department: 'ROADS' }, { name: 'Broken kerb', department: 'ROADS' }] });
+    load.mockResolvedValue({ ...stuckSheet, routes: [{ name: 'Pothole', department: 'ROADS' }, { name: 'Broken kerb', department: 'ROADS' }] });
     renderStep();
 
     const notice = await screen.findByTestId('complaints-no-gro');

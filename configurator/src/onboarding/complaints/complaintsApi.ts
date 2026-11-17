@@ -74,7 +74,7 @@ export type LoadedComplaints =
    * Set up some other way (a spreadsheet with its own levels): shown, not edited, here. `routes` is
    * each leaf's name and department, so a department nobody can take can be named with its categories.
    */
-  | { editable: false; leafCount: number; levels: string[]; departments: string[]; routes: ComplaintRoute[] };
+  | { editable: false; leafCount: number; levels: string[]; routes: ComplaintRoute[] };
 
 /** A complaint category people file against, and the department code it goes to ('' when none). */
 export interface ComplaintRoute {
@@ -126,8 +126,7 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
     const routes = active
       .filter((record) => !parents.has(codeOf(record)))
       .map((record) => ({ name: text(dataOf(record).name) || codeOf(record), department: text(dataOf(record).department) }));
-    const departments = routes.map((route) => route.department).filter(Boolean);
-    return { editable: false, leafCount, levels: definedLevels, departments: Array.from(new Set(departments)), routes };
+    return { editable: false, leafCount, levels: definedLevels, routes };
   }
 
   const byOrder = (a: MdmsRecord, b: MdmsRecord) => Number(dataOf(a).order ?? 0) - Number(dataOf(b).order ?? 0);
