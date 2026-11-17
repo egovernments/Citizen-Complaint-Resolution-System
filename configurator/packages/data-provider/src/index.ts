@@ -25,7 +25,7 @@ export type { MastersCapability } from './providers/accessPolicy.js';
 
 // Boundary hierarchy level-name rules (#2803)
 export {
-  MAX_LEVEL_NAME_LENGTH, normalizeLevelName, levelNameKey,
-  levelNameProblems, levelNameProblemText, levelNamesError,
+  MAX_LEVEL_NAME_LENGTH, normalizeLevelName, levelNameKey, tooLongForLevel, shortLevelName,
+  levelNameProblems, firstLevelNameProblem, levelNameProblemText, levelNamesError, levelNameIn,
 } from './levelNames.js';
-export type { LevelNameProblem } from './levelNames.js';
+export type { LevelNameProblem, LevelNameCheck, FirstLevelNameProblem } from './levelNames.js';
