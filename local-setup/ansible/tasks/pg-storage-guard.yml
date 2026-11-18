@@ -75,7 +75,7 @@
       # host, or this stack before digit_dir was changed (issue #2783 gap 6).
       # container_name is fixed, so `up` from here would collide with it.
       this_proj="${COMPOSE_PROJECT_NAME:-$(basename "${DIGIT_DIR:-$PWD}" \
-                 | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')}"
+                 | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-' | sed 's/^[_-]*//')}"
       if [ -n "$proj" ] && [ "$proj" != "$this_proj" ]; then
         echo "FOREIGN container-project:$proj (this deploy would be $this_proj)"
         exit 0

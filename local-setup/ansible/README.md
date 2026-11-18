@@ -31,7 +31,8 @@ ansible/
 │                              #   per-tenant; real files are gitignored.
 ├── templates/                 # Jinja2 — globalConfigs.js.j2, nginx-site.conf.j2, digit.env.j2
 ├── runbooks/
-│   └── 01-openbao.md          # OpenBao secrets backend
+│   ├── 01-openbao.md          # OpenBao secrets backend
+│   └── 04-playbook-change-checklist.md  # answer before proposing a playbook change
 └── inventory.ini              # Legacy — kept for backwards compat
 ```
 

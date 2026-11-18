@@ -343,8 +343,10 @@ def r_identity_admin_password_conflict(cfg):
     # bootstrap user is someone else. With bootstrap_user ADMIN (the default)
     # user-seed creates ADMIN with bootstrap_password instead (review of
     # #2788). The deploy never rewrites an existing user's password.
+    seed_stock = get(cfg, "seed_stock_users")
+    seed_stock = True if seed_stock is None else as_bool(seed_stock)
     stock_admin = (get(cfg, "db_fast_path") is True
-                   or (get(cfg, "seed_stock_users") is not False and boot_user != "ADMIN"))
+                   or (seed_stock and boot_user != "ADMIN"))
     if bff_user == "ADMIN" and bff_tenant.split(".")[0] == "pg" and stock_admin:
         expected, owner = DUMP_ADMIN_PASSWORD, (
             f"the stock ADMIN on {bff_tenant}, which db/full-dump.sql and user-seed ship "
@@ -718,6 +720,13 @@ SELF_TEST_CASES = [
      {"bootstrap_user": "OPS", "bootstrap_password": "Ops@12345", "state_root": "ke",
       "identity_digit_admin_username": "ADMIN", "identity_digit_admin_tenant_id": "ke",
       "bootstrap_secrets": {"identity_digit_admin_password": "Other@123"}},
+     set()),
+    ("seed_stock_users as the YAML string 'false' reads like Ansible's | bool: no stock ADMIN, "
+     "so the BFF on ADMIN@pg with the bootstrap password is clean",
+     {"db_fast_path": False, "seed_stock_users": "false", "bootstrap_user": "OPS",
+      "bootstrap_password": "Ops@12345", "identity_digit_admin_username": "ADMIN",
+      "identity_digit_admin_tenant_id": "pg",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Ops@12345"}},
      set()),
     ("ADMIN as bootstrap user without the dump: user-seed gives ADMIN bootstrap_password, "
      "so the BFF on ADMIN with that password is clean",

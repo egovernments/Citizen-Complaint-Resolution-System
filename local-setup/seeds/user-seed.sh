@@ -68,22 +68,28 @@ json_escape() {
 }
 
 # POST one create body, retrying a transient failure (no reply, a 5xx while
-# egov-enc-service is still warming up) with backoff before giving up. Final
-# answers — the user in the reply (created), DuplicateUserName, a validation
-# error — return at once. Since this script exits 1 on a failed create and
-# hrms-prereq-gate waits on it, one blip must not fail `docker compose up`
-# (review of #2788).
+# egov-enc-service is still warming up) with backoff before giving up. Any
+# 2xx or 4xx is a final answer — the user in the reply (created),
+# DuplicateUserName, a validation error, any other rejection — and returns at
+# once; retrying those only delayed the inevitable exit 1 by ~50s per create
+# (self-review of #2788). Since this script exits 1 on a failed create and
+# hrms-prereq-gate waits on it, one blip must not fail `docker compose up`.
 POST_ATTEMPTS=5
 post_create() {
-  local BODY=$1 RESPONSE="" attempt
+  local BODY=$1 RESPONSE="" CODE="" OUT attempt
   for attempt in $(seq 1 $POST_ATTEMPTS); do
-    RESPONSE=$(curl -s -X POST "$EGOV_USER_HOST/user/users/_createnovalidate" \
+    OUT=$(curl -s -w '\n%{http_code}' -X POST "$EGOV_USER_HOST/user/users/_createnovalidate" \
       -H 'Content-Type: application/json' -d "$BODY" || true)
+    CODE=$(printf '%s' "$OUT" | tail -n1)
+    RESPONSE=$(printf '%s' "$OUT" | sed '$d')
+    case "$CODE" in
+      2??|4??) break ;;
+    esac
     if echo "$RESPONSE" | grep -qE '"userName"|DuplicateUserName|INVALID_'; then
       break
     fi
     if [ "$attempt" -lt "$POST_ATTEMPTS" ]; then
-      echo "    transient failure (attempt $attempt/$POST_ATTEMPTS): ${RESPONSE:-no response}; retrying in $((attempt * 5))s"
+      echo "    transient failure (attempt $attempt/$POST_ATTEMPTS, HTTP ${CODE:-none}): ${RESPONSE:-no response}; retrying in $((attempt * 5))s"
       sleep $((attempt * 5))
     fi
   done

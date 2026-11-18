@@ -1646,7 +1646,7 @@
     # digit_dir, issue #2783 gap 6) has another prefix.
     - name: "Compose — the project name this deploy's volumes and networks carry"
       ansible.builtin.set_fact:
-        _compose_project: "{{ digit_dir | basename | lower | regex_replace('[^a-z0-9_-]', '') }}"
+        _compose_project: "{{ digit_dir | basename | lower | regex_replace('[^a-z0-9_-]', '') | regex_replace('^[_-]+', '') }}"
 
     # Docker never re-points a named volume that already exists: with the
     # overlay layered, `docker compose up` sees a volume whose definition
@@ -1699,7 +1699,9 @@
     # and MinIO start as root and chown their data directory). Setting 0:0 here
     # on every run put a LIVE Postgres data directory back to root:root on each
     # redeploy, and the postmaster lost its own files (review of #2788,
-    # 4610133435). The mode is still enforced: Postgres accepts 0750.
+    # 4610133435). The mode follows the same rule: the postgres entrypoint
+    # chmods PGDATA to 0700 on every start, so enforcing 0750 here flapped it
+    # on each redeploy (self-review of #2788).
     - name: "Data volumes — create the host directories behind data_volume_host_paths (owned by the service's uid where the image needs it)"
       vars:
         _owners: "{{ data_volume_default_owners | default({}) | combine(data_volume_host_owners | default({})) }}"
@@ -1707,7 +1709,7 @@
       ansible.builtin.file:
         path: "{{ item.value }}"
         state: directory
-        mode: '0750'
+        mode: "{{ '0750' if _owner else omit }}"
         owner: "{{ _owner.split(':')[0] if _owner else omit }}"
         group: "{{ (_owner.split(':')[1] | default(_owner.split(':')[0])) if _owner else omit }}"
       loop: "{{ data_volume_host_paths | default({}) | dict2items }}"
@@ -3384,19 +3386,26 @@
       loop_control:
         label: "{{ item.feature }} / {{ item.var }}"
 
+    # EMPTY counts here too: the Novu, Keycloak and identity values still have
+    # a published fallback in the compose file, so an empty .env value runs the
+    # service on the dev default just as a stored default does (self-review of
+    # #2788; master warned on both). MCP/Search empties are fatal above.
     - name: "Opt-in stacks — WARN (do not abort) when an already-deployed box still runs on a published dev secret"
       ansible.builtin.debug:
         msg: >-
-          WARNING: {{ item.feature }} is enabled but `{{ item.var }}` is still
-          the published default in OpenBao on this already-deployed box. The
-          deploy is CONTINUING so an existing tenant is not bricked, but this
-          credential is public and equivalent to no secret at all — rotate it:
+          WARNING: {{ item.feature }} is enabled but `{{ item.var }}` is empty or
+          still the published default in OpenBao on this already-deployed box, so
+          the service runs on the compose file's dev default. The deploy is
+          CONTINUING so an existing tenant is not bricked, but this credential is
+          public and equivalent to no secret at all — rotate it:
           `bao kv patch {{ secrets_path }} {{ item.var }}=<value>` and rotate the
           live service to match. Fresh deploys fail closed on this.
       when:
         - item.enabled | bool
         - _existing_box | bool
-        - (bao_secrets.json.data.data[item.var] | default('')) == item.bad
+        - >-
+          ((bao_secrets.json.data.data[item.var] | default('')) | length == 0)
+          or ((bao_secrets.json.data.data[item.var] | default('')) == item.bad)
       loop: "{{ _optin_secret_checks }}"
       loop_control:
         label: "{{ item.feature }} / {{ item.var }}"
@@ -4410,7 +4419,7 @@
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/mac-stack-up.sh
         "{{ digit_dir }}"
-        "{{ digit_dir | basename }}_egov-network"
+        "{{ _compose_project }}_egov-network"
         "{{ compose_profiles }}"
         {{ compose_files }}
       register: mac_stack_up
@@ -5196,7 +5205,7 @@
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/mac-stack-up.sh
         "{{ digit_dir }}"
-        "{{ digit_dir | basename }}_egov-network"
+        "{{ _compose_project }}_egov-network"
         "{{ compose_profiles }}"
         {{ compose_files }}
       # SKIP_DOWN: network is already consistent from converge#1 and only
@@ -6848,17 +6857,19 @@
                                       if (_mcp_city_bootstrap_ran | bool) else 'skipped — MCP unreachable' }}.
           See the detailed-failure-entries debug output above. Re-run with
           `tolerate_bootstrap_failures: true` to continue past this; the stack
-          then stays on pg unless an earlier deploy already switched it (and its data is still there).
+          then stays on pg.
       when:
         - state_root != 'pg'
         - not (tolerate_bootstrap_failures | default(false))
         - not ((_mcp_root_bootstrap_ok | bool) and (_mcp_city_bootstrap_ok | bool))
-        # A redeploy of an already-switched box while MCP is down ran nothing
-        # and changes nothing; every other miss is a hard stop.
-        - >-
-          not ((state_root_previously_switched | default(false) | bool)
-               and not (_mcp_root_bootstrap_ran | bool)
-               and not (_mcp_city_bootstrap_ran | bool))
+        # An already-switched box (users under state_root confirmed before the
+        # calls) is never a hard stop here: the compose copy above reset the
+        # file to pg and "Start DIGIT stack" recreated the services on pg, so
+        # aborting now would leave a live tenant locked out of its own root.
+        # Whether the re-bootstrap ran and failed or did not run at all, the
+        # tasks below switch the stack back onto its existing data and the
+        # WARNING after them says what missed (self-review of #2788).
+        - not (state_root_previously_switched | default(false) | bool)
 
     # Only switch the stack onto state_root when its bootstrap actually
     # succeeded (issue #2783 gap 9). With tolerate_bootstrap_failures the play
@@ -6884,6 +6895,22 @@
     - name: "mcp-bootstrap — one gate for every task that acts on state_root"
       ansible.builtin.set_fact:
         state_root_switch: "{{ state_root != 'pg' and (state_root_bootstrap_ok | bool) }}"
+
+    - name: "mcp-bootstrap — WARNING: the re-bootstrap of an already-switched tenant did not succeed (switching back onto its existing data)"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: this stack was already switched onto {{ state_root }} and its users are still there,
+          but this run's MCP bootstrap did not succeed
+          (root: {{ ('HTTP ' ~ (mcp_root_bootstrap.status | default('no response')) ~ ', success=' ~ (mcp_root_bootstrap.json.success | default('n/a')))
+                    if (_mcp_root_bootstrap_ran | default(false) | bool) else 'skipped — MCP unreachable' }};
+          city: {{ ('HTTP ' ~ (mcp_city_bootstrap.status | default('no response')) ~ ', success=' ~ (mcp_city_bootstrap.json.success | default('n/a')))
+                   if (_mcp_city_bootstrap_ran | default(false) | bool) else 'skipped — MCP unreachable' }}).
+          The deploy switches the services back onto {{ state_root }} as before, so nothing this run
+          should have (re)seeded is guaranteed present. See the failure entries above and redeploy once fixed.
+      when:
+        - state_root != 'pg'
+        - state_root_previously_switched | default(false) | bool
+        - not ((_mcp_root_bootstrap_ok | default(false) | bool) and (_mcp_city_bootstrap_ok | default(false) | bool))
 
     - name: "mcp-bootstrap — WARNING: the bootstrap of state_root failed, services stay on pg"
       ansible.builtin.debug:
@@ -7076,7 +7103,7 @@
           for k in $stale_keys; do
             docker exec {{ redis_container | default('digit-redis') }} redis-cli DEL "$k" >/dev/null 2>&1 || true
           done
-          resp=$(docker run --rm --network "{{ digit_dir | basename }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$SEED_BODY")
+          resp=$(docker run --rm --network "{{ _compose_project }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$SEED_BODY")
           code=$(printf '%s' "$resp" | tail -n1)
           content=$(printf '%s' "$resp" | sed '$d')
           if [ "$code" = "200" ] || printf '%s' "$content" | grep -q DuplicateUserName; then
@@ -7140,7 +7167,7 @@
               - {code: ACCOUNT_ADMIN, name: Account Admin, tenantId: "{{ state_root }}"}
       ansible.builtin.shell: |
         for i in $(seq 1 6); do
-          resp=$(docker run --rm --network "{{ digit_dir | basename }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$SEED_BODY")
+          resp=$(docker run --rm --network "{{ _compose_project }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$SEED_BODY")
           code=$(printf '%s' "$resp" | tail -n1)
           content=$(printf '%s' "$resp" | sed '$d')
           if [ "$code" = "200" ]; then echo "CHANGED ADMIN created on {{ state_root }} (attempt $i)"; exit 0; fi
@@ -7171,7 +7198,12 @@
     - name: "Identity BFF — resolve its DIGIT admin account (same expressions as digit.env.j2 and the identity .env block)"
       ansible.builtin.set_fact:
         _bff_admin_user: "{{ identity_digit_admin_username | default(bootstrap_user | default('ADMIN')) }}"
-        _bff_admin_tenant: "{{ identity_digit_admin_tenant_id | default(state_tenant_id) }}"
+        # `default(x, true)` also covers the EMPTY string: group_vars ships
+        # state_tenant_id as "", and the compose file gives identity-bff
+        # `${IDENTITY_DIGIT_ADMIN_TENANT_ID:-pg}` for that empty .env value, so
+        # the account must be created where the BFF will sign in (self-review
+        # of #2788; digit.env.j2 renders the same chain).
+        _bff_admin_tenant: "{{ identity_digit_admin_tenant_id | default(state_tenant_id, true) | default('pg', true) }}"
         _bff_admin_password: "{{ bao_secrets_identity.json.data.data.identity_digit_admin_password | default(bao_secrets_identity.json.data.data.token_exchange_system_password | default('eGov@123')) }}"
       no_log: true
 
@@ -7197,7 +7229,7 @@
     - name: "Identity BFF — its tenant's root, and which mobile rule that root applies"
       vars:
         _root: "{{ _bff_admin_tenant.split('.')[0] }}"
-        _state_tenant_root: "{{ (state_tenant_id | default(state_root)).split('.')[0] }}"
+        _state_tenant_root: "{{ (state_tenant_id | default(state_root, true)).split('.')[0] }}"
         _described_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
       ansible.builtin.set_fact:
         _bff_admin_root: "{{ _root }}"
@@ -7222,7 +7254,7 @@
           mobileNumberRegex (MDMS common-masters.MobileNumberValidation on '{{ _bff_admin_root }}'),
           or put the account on {{ state_root }} or pg.
 
-    - name: "Identity BFF — ensure its DIGIT admin account exists on {{ identity_digit_admin_tenant_id | default(state_tenant_id) }}"
+    - name: "Identity BFF — ensure its DIGIT admin account exists on {{ _bff_admin_tenant }}"
       vars:
         _bff_admin_body:
           RequestInfo: {apiId: digit, ver: "1.0"}
@@ -7244,7 +7276,7 @@
               - {code: EMPLOYEE, name: Employee, tenantId: "{{ _bff_admin_tenant }}"}
       ansible.builtin.shell: |
         for i in $(seq 1 6); do
-          resp=$(docker run --rm --network "{{ digit_dir | basename }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$BFF_ADMIN_BODY")
+          resp=$(docker run --rm --network "{{ _compose_project }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$BFF_ADMIN_BODY")
           code=$(printf '%s' "$resp" | tail -n1)
           content=$(printf '%s' "$resp" | sed '$d')
           if [ "$code" = "200" ]; then echo "CHANGED identity admin created (attempt $i)"; exit 0; fi
@@ -7347,7 +7379,7 @@
               - {code: EMPLOYEE, name: Employee, tenantId: "{{ pgr_provisioner_tenant_id }}"}
       ansible.builtin.shell: |
         for i in $(seq 1 6); do
-          resp=$(docker run --rm --network "{{ digit_dir | basename }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$PROVISIONER_BODY")
+          resp=$(docker run --rm --network "{{ _compose_project }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$PROVISIONER_BODY")
           code=$(printf '%s' "$resp" | tail -n1)
           content=$(printf '%s' "$resp" | sed '$d')
           if [ "$code" = "200" ]; then echo "CHANGED provisioner created (attempt $i)"; exit 0; fi
