@@ -18,21 +18,6 @@ configurator_www_dir: "{{ (www_root ~ '/configurator') if (ansible_system | defa
 # The path nginx itself resolves the configurator alias to. On Linux nginx runs
 # on the host, so it is configurator_www_dir; on macOS nginx is a container that
 # bind-mounts configurator_www_dir at /var/www/configurator (review of #2788).
-# uid:gid each image runs its data directory as, for data_volume_host_paths
-# (a bind mount gets no copy-up, so the deploy chowns the host directory).
-# From the images' Dockerfiles; override per volume with data_volume_host_owners.
-# Volumes not listed stay root-owned: Postgres and MinIO chown their own data
-# directory on start, promtail/gatus/filestore run as root.
-data_volume_default_owners:
-  es_data: "1000:0"            # elasticsearch
-  grafana_data: "472:0"        # grafana
-  loki_data: "10001:10001"     # grafana/loki
-  tempo_data: "10001:10001"    # grafana/tempo
-  prometheus_data: "65534:65534"   # prom/prometheus (nobody)
-  openbao_data: "100:1000"     # openbao
-  novu_mongo_data: "999:999"   # mongo
-  matomo_db_data: "999:999"    # mariadb
-  matomo_data: "33:33"         # matomo (apache www-data)
 configurator_nginx_root: "{{ configurator_www_dir if (ansible_system | default('Linux')) != 'Darwin' else '/var/www/configurator' }}"
 
 # Root of everything host nginx serves from disk (Linux). Each directory below
@@ -57,6 +42,24 @@ digit_ui_src_dir: /opt/digit-ui-esbuild
 #     postgres_data: /data/postgres
 #     minio_data: /data/minio
 data_volume_host_paths: {}
+
+# uid:gid each image runs its data directory as, for data_volume_host_paths
+# (a bind mount gets no copy-up, so the deploy chowns the host directory).
+# From the images' Dockerfiles; override per volume with data_volume_host_owners.
+# A volume not listed in either map gets NO owner from the deploy (created
+# root-owned, then left alone): Postgres and MinIO chown their own data
+# directory on first start and must keep it across redeploys;
+# promtail/gatus/filestore run as root.
+data_volume_default_owners:
+  es_data: "1000:0"            # elasticsearch
+  grafana_data: "472:0"        # grafana
+  loki_data: "10001:10001"     # grafana/loki
+  tempo_data: "10001:10001"    # grafana/tempo
+  prometheus_data: "65534:65534"   # prom/prometheus (nobody)
+  openbao_data: "100:1000"     # openbao
+  novu_mongo_data: "999:999"   # mongo
+  matomo_db_data: "999:999"    # mariadb
+  matomo_data: "33:33"         # matomo (apache www-data)
 
 # Host port the macOS nginx container publishes (maps to its :80). Linux is
 # unaffected (host nginx binds 80/443 directly).

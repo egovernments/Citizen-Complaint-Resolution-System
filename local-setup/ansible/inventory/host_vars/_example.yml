@@ -1050,8 +1050,9 @@ pg_allow_data_loss: false
 # migration (stop, copy, remove the old volume, then set this). The deploy
 # chowns each directory to the uid its image runs as (group_vars
 # data_volume_default_owners: Elasticsearch 1000, Grafana 472, Loki/Tempo
-# 10001, Prometheus 65534, OpenBao 100, Mongo/MariaDB 999; Postgres and MinIO
-# fix ownership themselves); override per volume if you run another image.
+# 10001, Prometheus 65534, OpenBao 100, Mongo/MariaDB 999) and leaves the
+# owner of every other volume alone (Postgres and MinIO take ownership on
+# first start and keep it); override per volume if you run another image.
 # data_volume_host_paths:
 #   postgres_data: /data/postgres
 #   minio_data: /data/minio

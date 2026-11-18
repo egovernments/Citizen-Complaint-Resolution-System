@@ -1,0 +1,46 @@
+---
+# Declare each `new` path equivalent to `orig` for SELinux file contexts, so
+# restorecon and every file created there later get the labels the policy
+# gives `orig` (semanage fcontext -a -e). Shared by the Docker/containerd
+# data-root relocation and the moved web roots (review of #2788, 4610133483).
+#
+# Input: selinux_equivalences — list of {orig, new}. Callers gate on the
+# RedHat family with SELinux enforcing and pass only paths that need their
+# own rule (a path under another listed path inherits that one's rule, and
+# semanage refuses a second rule for it).
+#
+# Outcomes:
+#   rc 0 "ADDED"   — rule written (changed)
+#   rc 0 "present" — the exact equivalence already exists ("already defined"
+#                    on a fresh add, "already exists" once both paths carry
+#                    equivalences): a re-run, not a failure
+#   rc 1           — any other semanage error, including "conflicts with
+#                    equivalency rule" (the path sits under a DIFFERENT
+#                    equivalence, e.g. a web root inside docker_data_root,
+#                    and would inherit that label)
+#   rc 127         — semanage missing. The "SELinux — ensure policy tooling is
+#                    present" task installs policycoreutils-python-utils
+#                    early; without it the paths keep default_t and nginx
+#                    (or Docker) is denied, so this is fatal, not tolerated.
+- name: "SELinux — label {{ item.new }} like {{ item.orig }}"
+  ansible.builtin.shell: |
+    command -v semanage >/dev/null 2>&1 || {
+      echo "semanage is not installed (policycoreutils-python-utils): cannot label {{ item.new }} like {{ item.orig }};" >&2
+      echo "with SELinux enforcing the files there keep default_t and are denied" >&2
+      exit 127
+    }
+    out=$(semanage fcontext -a -e {{ item.orig | quote }} {{ item.new | quote }} 2>&1) && { echo "ADDED"; exit 0; }
+    case "$out" in
+      *"already defined"*|*"already exists"*) echo "present"; exit 0 ;;
+      *"conflicts with equivalency rule"*)
+        echo "$out" >&2
+        echo "{{ item.new }} lies under a path that already has its own equivalence rule and would inherit THAT label," >&2
+        echo "not {{ item.orig }}'s; move it or declare the parent instead" >&2
+        exit 1 ;;
+      *) echo "$out" >&2; exit 1 ;;
+    esac
+  loop: "{{ selinux_equivalences }}"
+  loop_control:
+    label: "{{ item.new }} -> {{ item.orig }}"
+  register: _selinux_equivalence
+  changed_when: "'ADDED' in (_selinux_equivalence.stdout | default(''))"
