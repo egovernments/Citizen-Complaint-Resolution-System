@@ -67,12 +67,12 @@ json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
-# POST one create body, retrying a transient failure (no reply, a 5xx while
-# egov-enc-service is still warming up) with backoff before giving up. Any
-# 2xx or 4xx is a final answer — the user in the reply (created),
-# DuplicateUserName, a validation error, any other rejection — and returns at
-# once; retrying those only delayed the inevitable exit 1 by ~50s per create
-# (self-review of #2788). Since this script exits 1 on a failed create and
+# POST one create body, retrying a transient failure with backoff before
+# giving up. Final answers: any 2xx (the user in the reply), and a 4xx whose
+# body is a KNOWN validation answer (DuplicateUserName, INVALID_*). Anything
+# else — no reply, a 5xx, or a 4xx we do not recognise (egov-user wraps an
+# enc-service warm-up error in a CustomException 400) — is retried (review of
+# #2788, 4613068969). Since this script exits 1 on a failed create and
 # hrms-prereq-gate waits on it, one blip must not fail `docker compose up`.
 POST_ATTEMPTS=5
 post_create() {
@@ -83,7 +83,7 @@ post_create() {
     CODE=$(printf '%s' "$OUT" | tail -n1)
     RESPONSE=$(printf '%s' "$OUT" | sed '$d')
     case "$CODE" in
-      2??|4??) break ;;
+      2??) break ;;
     esac
     if echo "$RESPONSE" | grep -qE '"userName"|DuplicateUserName|INVALID_'; then
       break

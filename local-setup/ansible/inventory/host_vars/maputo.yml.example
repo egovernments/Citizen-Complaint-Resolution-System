@@ -30,7 +30,12 @@ state_root: pg                 # state-tier STATE_LEVEL_TENANT_ID
 tenant_id: pg.citya            # city-tier STATE_LEVEL (workflow + enc-service)
 boot_tenant: pg                # citizen-current-tenant default (CI dataloader only)
 # ONBOARD TARGET + UI BINDING (layered on via MCP, served at request time)
-state_tenant_id: mz            # MCP root target (bootstrap seeds mz + mz.maputo)
+state_tenant_id: mz            # the MCP root target, bootstrapped BY HAND after the deploy
+                               # (POST /v1/tenant/bootstrap target_tenant=mz; the deploy itself
+                               # bootstraps only state_root). The Identity BFF account defaults
+                               # to this tenant, so the deploy warns that it cannot create or
+                               # verify it here; create it once mz exists, or set
+                               # identity_digit_admin_tenant_id: pg.
 city_tenant: mz.maputo         # MCP city target (decoupled from .citya)
 # UI binds to the CITY tenant: the configurator stores boundaries at the city
 # (targetTenant) and reads them there, and citizen/employee/PGR must read the

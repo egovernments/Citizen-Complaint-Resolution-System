@@ -31,7 +31,17 @@
     }
     out=$(semanage fcontext -a -e {{ item.orig | quote }} {{ item.new | quote }} 2>&1) && { echo "ADDED"; exit 0; }
     case "$out" in
-      *"already defined"*|*"already exists"*) echo "present"; exit 0 ;;
+      *"already defined"*|*"already exists"*)
+        # "Equivalence class for X already exists" fires when X has ANY
+        # equivalence, not only to orig; confirm the exact pair before calling
+        # it present (review of #2788, 4613068954). `semanage fcontext -l` lists
+        # equivalences as "new = orig".
+        if semanage fcontext -l 2>/dev/null | grep -qxF {{ (item.new ~ ' = ' ~ item.orig) | quote }}; then
+          echo "present"; exit 0
+        fi
+        echo "$out" >&2
+        echo "{{ item.new }} already has an equivalence rule, but to another path than {{ item.orig }} (see semanage fcontext -l); files there would keep that label" >&2
+        exit 1 ;;
       *"conflicts with equivalency rule"*)
         echo "$out" >&2
         echo "{{ item.new }} lies under a path that already has its own equivalence rule and would inherit THAT label," >&2

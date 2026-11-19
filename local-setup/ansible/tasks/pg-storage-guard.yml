@@ -105,7 +105,7 @@
       # root is the definitive marker of a Postgres data directory.
       probed=0
       migrated=""
-      anon=""
+      anons=""
       attested=""
       for v in $(docker volume ls -q 2>/dev/null); do
         mp=$(docker volume inspect -f '{{ .Mountpoint }}' "$v" 2>/dev/null) || continue
@@ -127,7 +127,7 @@
                 if [ ${#v} -eq 64 ]; then
                   case " $PG_GUARD_FOREIGN_VOLUMES " in
                     *" $v "*) attested="$v" ;;
-                    *)        anon="$v" ;;
+                    *)        anons="$anons $v" ;;
                   esac
                 fi ;;
             esac
@@ -147,7 +147,7 @@
         echo "SAFE migrated-volume:$migrated"
         exit 0
       fi
-      if [ -n "$anon" ]; then
+      if [ -n "$anons" ]; then
         # An anonymous volume is another stack's — not ours, not stranded by
         # this deploy — only when something SAYS so. A com.docker.compose.project
         # label naming another project does (a different digit_dir on this
@@ -160,12 +160,22 @@
         # cut classified on "this digit_dir has no compose file yet", which is
         # exactly the state of a live stack whose operator ran `compose down`
         # and then moved digit_dir (review of #2788).
-        anon_proj=$(docker volume inspect -f '{{ index .Labels "com.docker.compose.project" }}' "$anon" 2>/dev/null || true)
-        if [ -n "$anon_proj" ] && [ "$anon_proj" != "$this_proj" ]; then
-          echo "SAFE foreign-anon-volume:$anon (project:$anon_proj)"
-        else
-          echo "ANON dangling-volume:$anon"
-        fi
+        #
+        # EVERY anonymous cluster must be another stack's; one that is not is
+        # ours. Keeping only the last one seen let a labelled foreign volume that
+        # sorted after our unlabelled pre-#2085 cluster hide it (review of
+        # #2788, 4613068913).
+        foreign=""
+        for anon in $anons; do
+          anon_proj=$(docker volume inspect -f '{{ index .Labels "com.docker.compose.project" }}' "$anon" 2>/dev/null || true)
+          if [ -n "$anon_proj" ] && [ "$anon_proj" != "$this_proj" ]; then
+            foreign="${foreign:+$foreign; }$anon (project:$anon_proj)"
+          else
+            echo "ANON dangling-volume:$anon"
+            exit 0
+          fi
+        done
+        echo "SAFE foreign-anon-volume:$foreign"
         exit 0
       fi
       if [ -n "$attested" ]; then

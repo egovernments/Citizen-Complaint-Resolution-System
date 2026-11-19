@@ -309,14 +309,17 @@ def r_egov_user_password_policy(cfg):
                    f"{path} contains a quote, backslash or backtick. The deploy writes it into "
                    ".env and into JSON request bodies, where those characters change the value "
                    "or break the request. Use @, # or % as the special character.")
-        elif re.search(r"\$[A-Za-z_{]", val):
+        elif "$" in val:
             # BOOTSTRAP_PASSWORD, EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD and
             # IDENTITY_DIGIT_ADMIN_PASSWORD are rendered into the compose .env, and
-            # compose interpolates `$name` / `${name}` there.
-            yield (WARN,
-                   f"{path} contains `$` followed by a letter — compose interpolates that in "
-                   ".env, so the running stack would see a different value. Use @, # or % "
-                   "as the special character instead.")
+            # compose rewrites `$name`, `${name}` AND `$$` there (`Abc$xDe1` reaches
+            # the container as `Abc`, `Abc$$1De` as `Abc$1De`), so user-seed creates
+            # the user with a different password from the one the deploy's auth
+            # probe sends: a certain failure, not a risk (review of #2788).
+            yield (FAIL,
+                   f"{path} contains `$`. compose interpolates `$name`, `${{name}}` and `$$` in "
+                   ".env, so the running stack would see a different password and the deploy's "
+                   "own sign-in would fail. Use @, # or % as the special character instead.")
 
 
 @rule(
@@ -336,8 +339,12 @@ def r_identity_admin_password_conflict(cfg):
     boot_pw = str(get(cfg, "bootstrap_password") or DUMP_ADMIN_PASSWORD)
     if bff_pw in (None, "", "CHANGE_ME") or "{{" in str(bff_pw) or "{{" in boot_pw:
         return
-    bff_tenant = str(get(cfg, "identity_digit_admin_tenant_id") or get(cfg, "state_tenant_id")
-                     or get(cfg, "tenant_id") or "pg")
+    # The same chain as the deploy and digit.env.j2: identity_digit_admin_tenant_id,
+    # else state_tenant_id, else pg (compose's ${IDENTITY_DIGIT_ADMIN_TENANT_ID:-pg}).
+    # group_vars ships state_tenant_id as "", and tenant_id is NOT in the chain:
+    # falling back to it hid the ADMIN@pg conflict on a ke.kericho box (review
+    # of #2788, 4613068884).
+    bff_tenant = str(get(cfg, "identity_digit_admin_tenant_id") or get(cfg, "state_tenant_id") or "pg")
     # The stock ADMIN on pg* holds eGov@123 when the dump is loaded, or when
     # user-seed creates it as a STOCK user — which it does only while the
     # bootstrap user is someone else. With bootstrap_user ADMIN (the default)
@@ -381,8 +388,21 @@ def r_identity_admin_tenant_root(cfg):
     if not tenant or "{{" in str(tenant):
         return
     root = str(tenant).split(".")[0]
-    own = {str(get(cfg, "state_root") or "pg"),
-           str(get(cfg, "state_tenant_id") or get(cfg, "state_root") or "pg").split(".")[0], "pg"}
+    state_root = str(get(cfg, "state_root") or "pg")
+    state_tenant_root = str(get(cfg, "state_tenant_id") or state_root).split(".")[0]
+    if root not in ("pg", state_root) and root == state_tenant_root:
+        # The maputo shape: state_root pg, state_tenant_id mz. The deploy
+        # bootstraps only state_root (and tenant_id under it); mz is bootstrapped
+        # by hand later, so the BFF account there is neither created nor its
+        # login verified by the deploy (review of #2788, 4613068818).
+        yield (WARN,
+               f"identity_digit_admin_tenant_id '{tenant}' is on root '{root}', which this deploy does "
+               f"not bootstrap (state_root is '{state_root}'). The deploy will not create the BFF "
+               "account there or verify its login, and identity-bff cannot sign in until that root is "
+               "bootstrapped and the account exists. Put the account on pg, or bootstrap "
+               f"'{root}' and create the account by hand after the deploy.")
+        return
+    own = {state_root, state_tenant_root, "pg"}
     if root in own or get(cfg, "identity_digit_admin_mobile_regex"):
         return
     yield (FAIL,
@@ -390,6 +410,36 @@ def r_identity_admin_tenant_root(cfg):
            "the root this file describes, so the deploy cannot derive a mobile number egov-user "
            "accepts there. Set identity_digit_admin_mobile_regex to that root's "
            "MobileNumberValidation regex, or put the account on the state root or pg.")
+
+
+# Values this repo has published as example secrets. A fresh box refuses
+# them at deploy time too (the playbook's dev-secret checks); here so the
+# operator hears it before the deploy starts.
+PUBLIC_EXAMPLE_SECRETS = {"Change-me@123", "change-me-strong"}
+PUBLIC_EXAMPLE_SECRET_FIELDS = (
+    "bootstrap_secrets.identity_digit_admin_password",
+)
+
+
+@rule(
+    "identity-admin-password-public",
+    "quickstart.yml.example shipped `Change-me@123` for the Identity BFF's DIGIT "
+    "password: it satisfies egov-user's rule, so a quickstart copied as-is created "
+    "an ACCOUNT_ADMIN whose password is in this public repository (review of "
+    "#2788). Every value an example file has shipped for that password is refused "
+    "(the other placeholders are not valid egov-user passwords, or are the "
+    "CHANGE_ME the seed and the deploy already refuse).",
+)
+def r_identity_admin_password_public(cfg):
+    for path in PUBLIC_EXAMPLE_SECRET_FIELDS:
+        val = get(cfg, path)
+        if val in (None, "") or "{{" in str(val) or str(val) == "CHANGE_ME":
+            continue  # unset; a vault reference; or the placeholder other rules already handle
+        if str(val) in PUBLIC_EXAMPLE_SECRETS:
+            yield (FAIL,
+                   f"{path} is `{val}`, a value this repository publishes in an example file, so "
+                   "it is no secret: anyone could sign in as the BFF's ACCOUNT_ADMIN. A fresh "
+                   "deploy refuses it; choose a real value.")
 
 
 SECRETS_PATH_RE = re.compile(r"^kv/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
@@ -638,11 +688,11 @@ SELF_TEST_CASES = [
      {"core_mobile_configs": {"countryCode": "+254", "mobileNumberRegex": "^0?[17][0-9]{8}$"}},
      set()),
     ("boot tenant outside state root fires",
-     {"boot_tenant": "mz.maputo", "state_tenant_id": "ke"},
+     {"boot_tenant": "mz.maputo", "state_tenant_id": "ke", "identity_digit_admin_tenant_id": "pg"},
      {"boot-tenant-prefix"}),
     ("maputo-style cross-root bootstrap is clean (boot_tenant == state_root, "
      "differs from state_tenant_id)",
-     {"boot_tenant": "pg", "state_root": "pg", "state_tenant_id": "mz"},
+     {"boot_tenant": "pg", "state_root": "pg", "state_tenant_id": "mz", "identity_digit_admin_tenant_id": "pg"},
      set()),
     ("ci tests without boot tenant fires", {"run_ci_tests": True},
      {"ci-tests-need-boot-tenant"}),
@@ -673,7 +723,11 @@ SELF_TEST_CASES = [
      {"egov-user-password-policy"}),
     ("password with whitespace fires", {"bootstrap_password": "Abc def1@"},
      {"egov-user-password-policy"}),
-    ("password with $ before a letter warns", {"bootstrap_password": "Abcdef1$x"},
+    ("password with $ before a letter fails", {"bootstrap_password": "Abcdef1$x"},
+     {"egov-user-password-policy"}),
+    ("password with $$ fails (compose collapses it)", {"bootstrap_password": "Abc$$1De"},
+     {"egov-user-password-policy"}),
+    ("password ending in $ fails", {"bootstrap_password": "Abcdefg1$"},
      {"egov-user-password-policy"}),
     ("stock-shaped password is clean", {"bootstrap_password": "eGov@123"}, set()),
     ("15-char password is clean", {"bootstrap_password": "Abcdefghijkl1@%"}, set()),
@@ -768,9 +822,24 @@ SELF_TEST_CASES = [
     ("BFF account on pg while the state is ke is clean (the dump's rule)",
      {"state_root": "ke", "state_tenant_id": "ke.mycity", "identity_digit_admin_tenant_id": "pg"},
      set()),
-    ("BFF account on the maputo-style state tenant root is clean",
+    ("BFF account on the maputo-style state tenant root warns: the deploy does not bootstrap it",
      {"state_root": "pg", "state_tenant_id": "mz.maputo", "identity_digit_admin_tenant_id": "mz"},
-     set()),
+     {"identity-admin-tenant-root"}),
+    ("group_vars' empty state_tenant_id with a city tenant_id: the BFF is on pg (compose fallback), "
+     "so ADMIN with a non-dump password conflicts with the dump's ADMIN",
+     {"state_tenant_id": "", "tenant_id": "ke.kericho", "db_fast_path": True, "db_fast_path_ack_data_wipe": True,
+      "bootstrap_password": "Ops@12345",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Ops@12345",
+                            "elasticsearch_master_password": "asd@#$@$!132123"}},
+     {"identity-admin-password-conflict"}),
+    ("a public example value as the BFF password fires",
+     {"identity_digit_admin_username": "IDENTITY_BFF",
+      "bootstrap_secrets": {"identity_digit_admin_password": "Change-me@123"}},
+     {"identity-admin-password-public"}),
+    ("master's quickstart BFF password (invalid for egov-user AND public) fires both",
+     {"identity_digit_admin_username": "IDENTITY_BFF",
+      "bootstrap_secrets": {"identity_digit_admin_password": "change-me-strong"}},
+     {"identity-admin-password-public", "egov-user-password-policy"}),
     # ── secrets_path ──
     ("secrets_path outside kv/ fires", {"secrets_path": "secret/digit/ke"}, {"secrets-path-format"}),
     ("secrets_path with a leading slash fires", {"secrets_path": "/kv/digit/ke"}, {"secrets-path-format"}),

@@ -263,7 +263,7 @@ bootstrap_secrets:
   egov_hrms_default_password: "eGov@123"             # HRMS dev-mode default for employees created without a password; not Configurator/signup ones
   keycloak_admin_password: change-me-strong          # Keycloak master-realm admin
   keycloak_db_password: change-me-strong             # Keycloak's own Postgres
-  identity_digit_admin_password: Change-me@123       # the Identity BFF's DIGIT admin login: 8-15 chars, digit + lower + upper + one of @#$%
+  identity_digit_admin_password: CHANGE_ME           # the Identity BFF's DIGIT admin login: REPLACE (8-15 chars, digit + lower + upper + one of @#%); a fresh deploy refuses the placeholder
 
 # The ADMIN account the deploy creates in each tenant, and that you use to
 # log into the configurator. Uncomment to change them — the defaults are

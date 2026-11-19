@@ -2,9 +2,12 @@
 # Standalone compose — all images from the egovio Docker Hub org (plus upstream public registries)
 # Generated from docker-compose.deploy.yaml with registry-prefixed images and build: removed
 #
-# Usage: GF_ADMIN_PASSWORD=<something-strong> docker compose -f docker-compose.egov-digit.yaml up -d
-#        (or put GF_ADMIN_PASSWORD in ./.env). It has no default — see the
-#        grafana service below for why.
+# Usage: docker compose -f docker-compose.egov-digit.yaml up -d
+#        with these in ./.env (no defaults — each is a credential): GF_ADMIN_PASSWORD,
+#        POSTGRES_PASSWORD, MINIO_ROOT_USER, MINIO_ROOT_PASSWORD, BOOTSTRAP_PASSWORD.
+#        Variables a profile-gated service needs (MCP_*, IDENTITY_DIGIT_ADMIN_PASSWORD,
+#        ELASTICSEARCH_PASSWORD, MCP_DB_PASSWORD) default to EMPTY, because compose
+#        interpolates the whole file before profiles apply; the deploy refuses empty values.
 #
 # ==================== BIND_IP: host publication address ====================
 # Every `ports:` entry below publishes through ${BIND_IP:-127.0.0.1}, so the
@@ -1614,7 +1617,7 @@ services:
       # bootstrap_user/bootstrap_password, rendered into .env). Seeding it
       # here — before the playbook's auth validate — is what lets operators
       # move off the well-known ADMIN/eGov@123 defaults on a fresh box.
-      # Standalone compose users get the stock defaults unchanged.
+      # A standalone compose user sets BOOTSTRAP_PASSWORD in ./.env (no default since #2788).
       SEED_ADMIN_USER: ${BOOTSTRAP_USER:-ADMIN}
       SEED_ADMIN_PASSWORD: ${BOOTSTRAP_PASSWORD:?BOOTSTRAP_PASSWORD must be set in ./.env (the deploy renders it from host_vars bootstrap_password)}
       # false = do not seed the stock ADMIN/GRO (eGov@123) next to the bootstrap
@@ -2490,9 +2493,11 @@ services:
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
       # The deploy writes MCP_USERNAME/MCP_PASSWORD to .env from host_vars
       # bootstrap_user/bootstrap_password (issue #2783 gap 4); a standalone
-      # compose user has to set them.
-      CRS_USERNAME: ${MCP_USERNAME:?MCP_USERNAME must be set in ./.env (the deploy renders it from bootstrap_user)}
-      CRS_PASSWORD: ${MCP_PASSWORD:?MCP_PASSWORD must be set in ./.env (the deploy renders it from bootstrap_password)}
+      # compose user has to set them. `:-` not `:?`: compose interpolates the
+      # whole file before profiles apply, so a required variable here aborts
+      # every box with the mcp profile off (review of #2788).
+      CRS_USERNAME: ${MCP_USERNAME:-}
+      CRS_PASSWORD: ${MCP_PASSWORD:-}
       CRS_TENANT_ID: ${MCP_TENANT_ID:-pg}
       SESSION_DB_HOST: mcp-postgres
       SESSION_DB_PORT: "5432"
@@ -2558,9 +2563,11 @@ services:
       CRS_API_URL: http://kong:8000
       # The deploy writes MCP_USERNAME/MCP_PASSWORD to .env from host_vars
       # bootstrap_user/bootstrap_password (issue #2783 gap 4); a standalone
-      # compose user has to set them.
-      CRS_USERNAME: ${MCP_USERNAME:?MCP_USERNAME must be set in ./.env (the deploy renders it from bootstrap_user)}
-      CRS_PASSWORD: ${MCP_PASSWORD:?MCP_PASSWORD must be set in ./.env (the deploy renders it from bootstrap_password)}
+      # compose user has to set them. `:-` not `:?`: compose interpolates the
+      # whole file before profiles apply, so a required variable here aborts
+      # every box with the mcp profile off (review of #2788).
+      CRS_USERNAME: ${MCP_USERNAME:-}
+      CRS_PASSWORD: ${MCP_PASSWORD:-}
       CRS_TENANT_ID: ${MCP_TENANT_ID:-pg}
       SESSION_DB_HOST: mcp-postgres
       SESSION_DB_PORT: "5432"
@@ -3345,7 +3352,9 @@ services:
       DIGIT_USER_LOGOUT_URL: http://egov-user-proxy:8107/user/_logout
       DIGIT_MDMS_SEARCH_URL: http://kong:8000/mdms-v2/v1/_search
       DIGIT_ADMIN_USERNAME: ${IDENTITY_DIGIT_ADMIN_USERNAME:-ADMIN}
-      DIGIT_ADMIN_PASSWORD: ${IDENTITY_DIGIT_ADMIN_PASSWORD:?IDENTITY_DIGIT_ADMIN_PASSWORD must be set in ./.env (the deploy renders it from OpenBao identity_digit_admin_password)}
+      # `:-` not `:?` (profile-gated; compose interpolates before profiles apply). No
+      # published default: the deploy refuses an empty identity_digit_admin_password.
+      DIGIT_ADMIN_PASSWORD: ${IDENTITY_DIGIT_ADMIN_PASSWORD:-}
       DIGIT_ADMIN_TENANT_ID: ${IDENTITY_DIGIT_ADMIN_TENANT_ID:-pg}
       # Roots tenant-routes/_backfill may give an Organization; empty = none. (identity-bff uses the
       # root of DIGIT_ADMIN_TENANT_ID only when the variable is unset, which it never is here.)
