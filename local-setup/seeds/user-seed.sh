@@ -19,7 +19,9 @@ RETRY_INTERVAL=5
 # state-level (pg only) — HRMS looks it up there.
 # Only tenants db/full-dump.sql knows: egov-user encrypts every user through
 # egov-enc-service, which has keys for pg, pg.citest, pg.citya and pg.cityb
-# only, and refuses any other tenant with "Tenant Id not found". `pg.cietee`,
+# only; for any other tenant enc-service logs "Tenant Id not found" and
+# egov-user answers 400 UNKNOWN_ERROR "Unknown error occurred in encryption
+# process" (the text this script matches; review of #2788, 4628123265). `pg.cietee`,
 # the throwaway tenant test_crs_loader_e2e.py logs in to, used to be listed
 # here: every create there was refused, which was silent until this script
 # started exiting 1 on a failed create (then hrms-prereq-gate, which waits on
@@ -78,13 +80,14 @@ json_escape() {
 # POST one create body, retrying a transient failure with backoff before
 # giving up. Final answers: any 2xx (the user in the reply), and a 4xx whose
 # body is a KNOWN validation answer (DuplicateUserName, INVALID_*). Anything
-# else — no reply, a 5xx, or a 4xx we do not recognise (egov-user wraps an
-# enc-service warm-up error in a CustomException 400) — is retried (review of
-# #2788, 4613068969). "Tenant Id not found" is retried too, deliberately:
-# egov-enc-service answers it for EVERY tenant until it has loaded its keys,
-# so a first answer on pg is not proof the key is missing; create_user judges
-# the last one. Since this script exits 1 on a failed create and
-# hrms-prereq-gate waits on it, one blip must not fail `docker compose up`.
+# else — no reply, a 5xx, or a 4xx we do not recognise — is retried (review
+# of #2788, 4613068969). That includes egov-user's 400 UNKNOWN_ERROR "Unknown
+# error occurred in encryption process", deliberately: it is the same answer
+# for a tenant egov-enc-service has no key for AND for every tenant while
+# enc-service is still loading its keys, so a first answer on pg is not proof
+# the key is missing; create_user judges the last one. Since this script exits
+# 1 on a failed create and hrms-prereq-gate waits on it, one blip must not
+# fail `docker compose up`.
 POST_ATTEMPTS="${POST_ATTEMPTS:-5}"
 post_create() {
   local BODY=$1 RESPONSE="" CODE="" OUT attempt
@@ -100,7 +103,8 @@ post_create() {
       break
     fi
     if [ "$attempt" -lt "$POST_ATTEMPTS" ]; then
-      echo "    transient failure (attempt $attempt/$POST_ATTEMPTS, HTTP ${CODE:-none}): ${RESPONSE:-no response}; retrying in $((attempt * 5))s"
+      # stderr: this function's stdout IS the captured response (review of #2788, 4628123277)
+      echo "    transient failure (attempt $attempt/$POST_ATTEMPTS, HTTP ${CODE:-none}): ${RESPONSE:-no response}; retrying in $((attempt * 5))s" >&2
       sleep $((attempt * 5))
     fi
   done
@@ -154,19 +158,22 @@ create_user() {
     echo "    SUCCESS"
   elif echo "$RESPONSE" | grep -q 'DuplicateUserName'; then
     echo "    SKIPPED (already exists)"
-  elif echo "$RESPONSE" | grep -q 'Tenant Id not found'; then
-    # Still no key after every attempt. For any tenant but pg: it is not in
-    # the dump and has not been bootstrapped, so egov-user can create nobody
-    # there — not a failed create; the rest of this tenant is skipped and the
-    # summary warns. pg is the dump's root and always has its key, so there it
-    # is a real failure (egov-enc-service broken, or a dump without keys):
-    # exiting 0 without the bootstrap admin would resurface #2783 gap 1.
+  elif echo "$RESPONSE" | grep -q 'encryption process'; then
+    # egov-user could not encrypt after every attempt: egov-enc-service has no
+    # key for this tenant (its log says "Tenant Id not found"; egov-user wraps
+    # it as UNKNOWN_ERROR "Unknown error occurred in encryption process"). For
+    # any tenant but pg: it is not in the dump and has not been bootstrapped,
+    # so egov-user can create nobody there — not a failed create; the rest of
+    # this tenant is skipped and the summary warns. pg is the dump's root and
+    # always has its key, so there it is a real failure (egov-enc-service
+    # broken, or a dump without keys): exiting 0 without the bootstrap admin
+    # would resurface #2783 gap 1.
     TENANT_UNKNOWN=1
     if [ "$TENANT" = "pg" ]; then
-      echo "    ERROR — egov-enc-service has no key for 'pg' after $POST_ATTEMPTS attempts: $RESPONSE"
+      echo "    ERROR — egov-user could not encrypt for 'pg' after $POST_ATTEMPTS attempts (egov-enc-service has no key for it, or is down): $RESPONSE"
       SEED_FAILED=$((SEED_FAILED + 1))
     else
-      echo "    WARNING: tenant '$TENANT' is unknown to egov-enc-service (no key: not in the dump, not bootstrapped); skipping its users. Bootstrap it, then rerun with SEED_TENANTS including it."
+      echo "    WARNING: egov-user cannot encrypt for tenant '$TENANT' (egov-enc-service has no key for it: not in the dump, not bootstrapped); skipping its users. Bootstrap it, then rerun with SEED_TENANTS including it."
       SEED_SKIPPED_TENANTS="$SEED_SKIPPED_TENANTS $TENANT"
     fi
   else

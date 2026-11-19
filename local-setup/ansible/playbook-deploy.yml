@@ -7467,8 +7467,10 @@
     # failed every attempt and aborted the deploy (review of #2788, 4613068818).
     # Such a tenant is asked, not assumed: egov-user creates a user only where
     # egov-enc-service holds a key for THAT tenant (one per tenant, a root's
-    # does not cover its cities; `_createnovalidate` answers "Tenant Id not
-    # found" otherwise), and bootstrapping the tenant creates the key. Once it
+    # does not cover its cities; otherwise enc-service logs "Tenant Id not
+    # found" and `_createnovalidate` answers 400 UNKNOWN_ERROR "Unknown error
+    # occurred in encryption process"), and bootstrapping the tenant creates
+    # the key. Once it
     # is there the account is created and verified like on pg, so the redeploy
     # the WARNING asks for does it (4626504522). On state_root itself the
     # bootstrap verdict decides, not the key: a half-seeded root has one too.
