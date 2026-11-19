@@ -33,8 +33,9 @@ boot_tenant: pg                # citizen-current-tenant default (CI dataloader o
 state_tenant_id: mz            # the MCP root target, bootstrapped BY HAND after the deploy
                                # (POST /v1/tenant/bootstrap target_tenant=mz; the deploy itself
                                # bootstraps only state_root). The Identity BFF account defaults
-                               # to this tenant, so the deploy warns that it cannot create or
-                               # verify it here; create it once mz exists, or set
+                               # to this tenant: while mz holds no users the deploy warns and
+                               # skips it; once mz is bootstrapped, a redeploy creates and
+                               # verifies the account there. Or set
                                # identity_digit_admin_tenant_id: pg.
 city_tenant: mz.maputo         # MCP city target (decoupled from .citya)
 # UI binds to the CITY tenant: the configurator stores boundaries at the city

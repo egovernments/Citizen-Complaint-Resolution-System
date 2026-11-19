@@ -1178,10 +1178,10 @@ grafana_anonymous_enabled: false
 # egov-user's password rule applies to bootstrap_password (and to
 # egov_hrms_default_password and identity_digit_admin_password below): 8-15
 # characters with a digit, a lower-case and an upper-case letter and one of
-# @#$%, no whitespace. preflight.py refuses anything else, and also quotes,
+# @#%, no whitespace. preflight.py refuses anything else, and also quotes,
 # backslashes and backticks (the deploy writes these values into .env and JSON
-# request bodies); avoid `$` followed by a letter, which compose interpolates
-# in .env.
+# request bodies) and any `$` (compose interpolates `$name`, `${name}` and `$$`
+# in .env, so the seeded password would differ from the one the deploy sends).
 # bootstrap_user: "ADMIN"
 # bootstrap_password: "eGov@123"
 # bootstrap_tenant: "pg"                # tenant those calls authenticate against
@@ -1569,7 +1569,7 @@ bootstrap_secrets:
   # ES login for the opt-in search stack (enable_search_stack). DISTINCT from
   # the master password above — never reuse the PII-encryption master here.
   # elasticsearch_password: "CHANGE_ME"
-  egov_hrms_default_password: "CHANGE_ME"   # 8-15 chars, digit + lower + upper + one of @#$%
+  egov_hrms_default_password: "CHANGE_ME"   # 8-15 chars, digit + lower + upper + one of @#% (no $)
   # Grafana admin login (user `admin`). OPTIONAL — leave it out and the
   # playbook generates a 24-char password on first deploy and stores it here
   # in OpenBao. Read it back with:
@@ -1587,7 +1587,7 @@ bootstrap_secrets:
   # BFF account-management credential (see identity_digit_admin_username
   # above). The legacy key remains a migration fallback; new environments
   # should set identity_digit_admin_password. Same password rule as
-  # bootstrap_password: 8-15 chars, digit + lower + upper + one of @#$%.
+  # bootstrap_password: 8-15 chars, digit + lower + upper + one of @#% (no $).
   identity_digit_admin_password: "CHANGE_ME"
   # Empty = generated on first deploy (an existing identity_digit_provisioner_password
   # wins over generating). Set it only to adopt an existing provisioner account.

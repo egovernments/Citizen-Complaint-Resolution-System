@@ -17,13 +17,20 @@ RETRY_INTERVAL=5
 # Tenants to seed ADMIN/GRO into. Override via env when adding new cities.
 # Each tenant gets its own ADMIN + GRO user (city-scoped). INTERNAL_USER is
 # state-level (pg only) — HRMS looks it up there.
-# `pg.cietee` is the throwaway tenant used by test_crs_loader_e2e.py —
-# the test logs in there with ADMIN, then creates + deletes its own
-# MDMS data. Cleanup nukes MDMS rows on this tenant but NOT eg_user, so
-# ADMIN survives across runs.
-# (Name has no digits because egov-user validates tenantId against
+# Only tenants db/full-dump.sql knows: egov-user encrypts every user through
+# egov-enc-service, which has keys for pg, pg.citest, pg.citya and pg.cityb
+# only, and refuses any other tenant with "Tenant Id not found". `pg.cietee`,
+# the throwaway tenant test_crs_loader_e2e.py logs in to, used to be listed
+# here: every create there was refused, which was silent until this script
+# started exiting 1 on a failed create (then hrms-prereq-gate, which waits on
+# it, failed every fresh `compose up`; review of #2788, 4626504503). Add it
+# to SEED_TENANTS once that tenant is bootstrapped. A listed tenant the
+# platform does not know is skipped with a warning, not counted as a failure
+# — except pg, the dump's root, whose key is always there: no key for pg
+# means egov-enc-service is broken and the bootstrap admin cannot be seeded.
+# (Names have no digits because egov-user validates tenantId against
 # `^[a-zA-Z. ]*$` on create — letters and dots only.)
-SEED_TENANTS="${SEED_TENANTS:-pg pg.citya pg.cityb pg.cietee}"
+SEED_TENANTS="${SEED_TENANTS:-pg pg.citya pg.cityb}"
 
 # The bootstrap admin the deploy authenticates as. The Ansible tier overrides
 # these from host_vars `bootstrap_user`/`bootstrap_password` (rendered into
@@ -55,6 +62,7 @@ INTERNAL_USER_PASSWORD="${INTERNAL_USER_PASSWORD:-System@123}"
 # failure to the playbook's auth validate 20 minutes later, with a message about
 # a password MISMATCH that is wrong for a fresh box (issue #2783).
 SEED_FAILED=0
+SEED_SKIPPED_TENANTS=""
 
 echo "=== DIGIT User Seed ==="
 echo "EGOV_USER_HOST:  $EGOV_USER_HOST"
@@ -72,9 +80,12 @@ json_escape() {
 # body is a KNOWN validation answer (DuplicateUserName, INVALID_*). Anything
 # else — no reply, a 5xx, or a 4xx we do not recognise (egov-user wraps an
 # enc-service warm-up error in a CustomException 400) — is retried (review of
-# #2788, 4613068969). Since this script exits 1 on a failed create and
+# #2788, 4613068969). "Tenant Id not found" is retried too, deliberately:
+# egov-enc-service answers it for EVERY tenant until it has loaded its keys,
+# so a first answer on pg is not proof the key is missing; create_user judges
+# the last one. Since this script exits 1 on a failed create and
 # hrms-prereq-gate waits on it, one blip must not fail `docker compose up`.
-POST_ATTEMPTS=5
+POST_ATTEMPTS="${POST_ATTEMPTS:-5}"
 post_create() {
   local BODY=$1 RESPONSE="" CODE="" OUT attempt
   for attempt in $(seq 1 $POST_ATTEMPTS); do
@@ -143,10 +154,25 @@ create_user() {
     echo "    SUCCESS"
   elif echo "$RESPONSE" | grep -q 'DuplicateUserName'; then
     echo "    SKIPPED (already exists)"
+  elif echo "$RESPONSE" | grep -q 'Tenant Id not found'; then
+    # Still no key after every attempt. For any tenant but pg: it is not in
+    # the dump and has not been bootstrapped, so egov-user can create nobody
+    # there — not a failed create; the rest of this tenant is skipped and the
+    # summary warns. pg is the dump's root and always has its key, so there it
+    # is a real failure (egov-enc-service broken, or a dump without keys):
+    # exiting 0 without the bootstrap admin would resurface #2783 gap 1.
+    TENANT_UNKNOWN=1
+    if [ "$TENANT" = "pg" ]; then
+      echo "    ERROR — egov-enc-service has no key for 'pg' after $POST_ATTEMPTS attempts: $RESPONSE"
+      SEED_FAILED=$((SEED_FAILED + 1))
+    else
+      echo "    WARNING: tenant '$TENANT' is unknown to egov-enc-service (no key: not in the dump, not bootstrapped); skipping its users. Bootstrap it, then rerun with SEED_TENANTS including it."
+      SEED_SKIPPED_TENANTS="$SEED_SKIPPED_TENANTS $TENANT"
+    fi
   else
     echo "    ERROR — Response: $RESPONSE"
     if echo "$RESPONSE" | grep -qE 'INVALID_PWD_LENGTH|INVALID_PASSWORD'; then
-      echo "    egov-user's password rule: 8-15 characters with a digit, a lower-case and an upper-case letter and one of @#\$%."
+      echo "    egov-user's password rule: 8-15 characters with a digit, a lower-case and an upper-case letter and one of @#% (no \$: compose interpolates it in .env)."
     fi
     SEED_FAILED=$((SEED_FAILED + 1))
   fi
@@ -206,8 +232,10 @@ roles_gro() {
 for TENANT in $SEED_TENANTS; do
   echo ""
   echo "── Seeding tenant: $TENANT ──"
+  TENANT_UNKNOWN=0
   if [ "$SEED_ADMIN_USER" != "ADMIN" ]; then
     create_user "$SEED_ADMIN_USER" "Bootstrap Administrator" "9777777777" "bootstrap-admin@digit.org" "$TENANT" "$(roles_admin "$TENANT")" "$SEED_ADMIN_PASSWORD"
+    if [ "$TENANT_UNKNOWN" = 1 ]; then continue; fi
     if [ "$SEED_STOCK_USERS" = "true" ]; then
       create_user "ADMIN" "System Administrator" "9999999999" "admin@digit.org" "$TENANT" "$(roles_admin "$TENANT")"
     else
@@ -215,6 +243,7 @@ for TENANT in $SEED_TENANTS; do
     fi
   else
     create_user "ADMIN" "System Administrator" "9999999999" "admin@digit.org" "$TENANT" "$(roles_admin "$TENANT")" "$SEED_ADMIN_PASSWORD"
+    if [ "$TENANT_UNKNOWN" = 1 ]; then continue; fi
   fi
   if [ "$SEED_STOCK_USERS" = "true" ]; then
     create_user "GRO"   "Grievance Officer"    "9888888888" "gro@digit.org"   "$TENANT" "$(roles_gro "$TENANT")"
@@ -252,6 +281,9 @@ else
 fi
 
 echo ""
+if [ -n "$SEED_SKIPPED_TENANTS" ]; then
+  echo "WARNING: no users were seeded on$SEED_SKIPPED_TENANTS — egov-enc-service has no key for those tenants (see above)."
+fi
 if [ "$SEED_FAILED" -gt 0 ]; then
   echo "=== User seed FAILED: $SEED_FAILED create(s) were rejected (see ERROR lines above) ==="
   exit 1

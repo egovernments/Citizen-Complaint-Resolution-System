@@ -516,9 +516,9 @@ BFF login and stops if it fails. To upgrade such a box:
    verifies the login; `ADMIN` is left alone.
 
 Other secrets host_vars still hold as placeholders are not applied to an
-existing box (the seed never overwrites a stored value, and it withholds keys
-baked into a data store, such as `postgres_password`); the deploy warns and
-names them.
+existing box (the seed never overwrites a stored value, and it withholds a key
+whose data store already exists, such as `elasticsearch_master_password` or
+`keycloak_admin_password`); the deploy warns and names them.
 
 ## Domain & TLS — what the playbook does, what you do
 

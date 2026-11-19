@@ -3166,17 +3166,41 @@
     # Novu/Keycloak dev secrets, the CHANGE_ME tier — then only warned
     # (review of #2788, 5951970378). The exact name also leaves the
     # keycloak/mcp sidecar volumes out.
-    - name: "Box — detect a prior deploy (this project's main postgres data volume exists)"
+    #
+    # The whole list of this project's volumes is kept: the OpenBao seed below
+    # withholds a key only while the data store it is baked into exists
+    # (<project>_es_data, <project>_novu_mongo_data, ...), not for every key on
+    # every existing box (review of #2788, 4626504511).
+    # By the compose project label, not a name prefix: `digit_*` would also
+    # list a sibling project `digit_old`'s volumes. The main volume is matched
+    # by exact name as well, so a hand-created (unlabelled) `<project>_postgres_data`
+    # still classifies the box EXISTING, as before.
+    - name: "Box — list this compose project's data volumes"
       ansible.builtin.shell:
-        cmd: docker volume ls --format '{{ "{{" }}.Name{{ "}}" }}' | grep -qx '{{ _compose_project }}_postgres_data' && echo EXISTING || echo FRESH
+        cmd: >-
+          docker volume ls --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Label "com.docker.compose.project"{{ "}}" }}'
+          | awk -v p='{{ _compose_project }}' '$2 == p || $1 == p "_postgres_data" { print $1 }'
         executable: /bin/bash
-      register: _prior_deploy_check
+      register: _project_volumes_ls
       changed_when: false
       failed_when: false
 
     - name: "Box — classify it (EXISTING: a prior deploy brought the stack up)"
       ansible.builtin.set_fact:
-        _existing_box: "{{ 'EXISTING' in (_prior_deploy_check.stdout | default('')) }}"
+        _project_volumes: "{{ _project_volumes_ls.stdout_lines | default([]) }}"
+        _existing_box: "{{ (_compose_project ~ '_postgres_data') in (_project_volumes_ls.stdout_lines | default([])) }}"
+
+    # So much below follows from this verdict (the seed's withheld keys, the
+    # CHANGE_ME tier, the dev-secret checks) that it belongs in the deploy log
+    # rather than in a probe the operator reruns by hand (review of #2788,
+    # 4626504547).
+    - name: "Box — the verdict the fresh-vs-existing checks below follow"
+      ansible.builtin.debug:
+        msg: >-
+          This box is {{ 'EXISTING' if (_existing_box | bool) else 'FRESH' }}: the volume
+          {{ _compose_project }}_postgres_data is {{ 'present' if (_existing_box | bool) else 'absent' }}.
+          Volumes of compose project {{ _compose_project }} on this host:
+          {{ (_project_volumes | join(', ')) if (_project_volumes | length > 0) else 'none' }}.
 
     # Seed bootstrap_secrets from host_vars, key by key. This used to POST the
     # whole map with cas:0, which OpenBao rejects as soon as ANY version exists —
@@ -3207,33 +3231,41 @@
     # results are JSON strings (a bare `{{ }}` would be, too) and are parsed
     # with from_json where they are used.
     #
-    # On an EXISTING box, a key whose value is baked into a data store at
-    # creation is never auto-added, whether OpenBao lacks it or holds "" (which
-    # master's seed stored verbatim from _example.yml): the service was created
-    # with the compose fallback or the stored empty value, Postgres ignores
-    # POSTGRES_PASSWORD once its data directory exists, and egov-enc-service's
-    # master password protects everything encrypted so far, so writing the
-    # host_vars value would change .env but not the store, and Keycloak / MCP /
-    # Novu could no longer reach their database (review of #2788,
-    # 4613068856). Those keys are listed in the WARNING below instead; rotate
-    # service and OpenBao together.
+    # A key whose value is baked into a data store at creation is never
+    # auto-added once THAT store's volume exists, whether OpenBao lacks it or
+    # holds "" (which master's seed stored verbatim from _example.yml): the
+    # service was created with the compose fallback or the stored empty value,
+    # so writing the host_vars value would change .env but not the store
+    # (review of #2788, 4613068856). Per store, not per box: an existing box
+    # that switches on Novu, Search or MCP has no such volume yet, and its key
+    # must seed as on a fresh box, or the fatal empty-secret check below
+    # refuses the very value the operator just set (4626504511).
+    # keycloak_db_password is not listed: "align keycloak DB-user password"
+    # ALTERs that role BEFORE the main compose-up, so seeding it is a rotation.
+    # postgres_password and mcp_db_password stay listed although the deploy
+    # ALTERs those roles too: both ALTERs run only AFTER "Start DIGIT stack",
+    # and a main compose-up sent a password the role does not hold yet fails
+    # authentication in db-history-normalize / digit-mcp and aborts before
+    # them (the ordering note at the top of this section). The withheld keys
+    # are listed in the WARNING below; rotate service and OpenBao together.
     - name: "OpenBao — split host_vars bootstrap_secrets into keys OpenBao lacks and keys whose value differs"
       vars:
+        # key -> the compose volume whose data was created with it
         _bao_seed_baked_keys:
-          - postgres_password
-          - mcp_db_password
-          - keycloak_db_password
-          - keycloak_admin_password
-          - elasticsearch_password
-          - elasticsearch_master_password
-          - novu_mongo_password
+          postgres_password: postgres_data                   # the egov role; its ALTER runs after the main compose-up
+          mcp_db_password: mcp_postgres_data                 # the mcp role; same
+          keycloak_admin_password: keycloak_postgres_data   # Keycloak's bootstrap admin, baked at first start
+          elasticsearch_password: es_data                    # the elastic user's password
+          elasticsearch_master_password: postgres_data       # egov-enc-service's master key: the eg_enc_* rows in the main database
+          novu_mongo_password: novu_mongo_data               # Mongo's root user
       ansible.builtin.set_fact:
         _bao_seed_missing: >-
           {%- set out = {} -%}
           {%- for k, v in (bootstrap_secrets | default({})).items() -%}
             {%- if v is not none and (v | string) | length > 0 and (v | string) != 'CHANGE_ME'
                    and (_bao_seed_stored[k] | default('', true) | string) | length == 0
-                   and not ((_existing_box | default(false) | bool) and k in _bao_seed_baked_keys) -%}
+                   and not (k in _bao_seed_baked_keys
+                            and (_compose_project ~ '_' ~ _bao_seed_baked_keys[k]) in (_project_volumes | default([]))) -%}
               {%- set _ = out.update({k: v}) -%}
             {%- endif -%}
           {%- endfor -%}
@@ -3243,7 +3275,8 @@
           {%- for k, v in (bootstrap_secrets | default({})).items() -%}
             {%- if v is not none and (v | string) | length > 0 and (v | string) != 'CHANGE_ME'
                    and (_bao_seed_stored[k] | default('', true) | string) | length == 0
-                   and (_existing_box | default(false) | bool) and k in _bao_seed_baked_keys -%}
+                   and k in _bao_seed_baked_keys
+                   and (_compose_project ~ '_' ~ _bao_seed_baked_keys[k]) in (_project_volumes | default([])) -%}
               {%- set _ = out.append(k) -%}
             {%- endif -%}
           {%- endfor -%}
@@ -3281,17 +3314,20 @@
         - (_bao_seed_missing | from_json) | length > 0
       no_log: true
 
-    - name: "OpenBao — WARNING: this already-deployed box has no stored value for keys its services were created with (not seeded)"
+    - name: "OpenBao — WARNING: no stored value for keys whose data stores already exist on this box (not seeded)"
       ansible.builtin.debug:
         msg: >-
           OpenBao at {{ secrets_path }} holds nothing (or an empty string) for
-          {{ (_bao_seed_withheld | from_json) | join(', ') }}, which host_vars bootstrap_secrets now sets. This box
-          has already been deployed, so the service behind each of those keys was created with the value it had
+          {{ (_bao_seed_withheld | from_json) | join(', ') }}, which host_vars bootstrap_secrets now sets. The data
+          store behind each of those keys already exists on this box, so it was created with the value the key had
           then (the compose fallback, or the empty string master's seed stored), and that value is baked into its
-          data: Postgres ignores POSTGRES_PASSWORD once the data directory exists, elasticsearch_master_password
-          is egov-enc-service's master key. The deploy did NOT seed the host_vars value — doing so would change
-          .env but not the store, and the service could no longer connect. Rotate deliberately: change it in the
-          service, then `bao kv patch {{ secrets_path }} <key>=<value>`, then redeploy.
+          data: Postgres ignores POSTGRES_PASSWORD once its data directory exists (and the ALTER that would sync
+          the egov / mcp role runs only after the main compose-up, which fails authentication first), Keycloak's
+          bootstrap admin, Elasticsearch's elastic user and Mongo's root user keep the password they were created
+          with, and elasticsearch_master_password is egov-enc-service's master key (changing it makes everything
+          encrypted so far unreadable). The deploy did NOT seed the host_vars value — doing so would change .env
+          but not the store. Rotate deliberately: change it in the service, then
+          `bao kv patch {{ secrets_path }} <key>=<value>`, then redeploy.
       when:
         - bootstrap_secrets is defined and bootstrap_secrets | length > 0
         - (_bao_seed_withheld | from_json) | length > 0
@@ -3362,9 +3398,30 @@
           - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_secret_key",            bad: ["dev-novu-secret-key-change-in-production"] }
           - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: ["secret"] }
           - { feature: "Keycloak",                 enabled: true,                                      var: "keycloak_admin_password",    bad: ["admin"] }
-          - { feature: "Identity BFF",             enabled: true,                                      var: "identity_digit_admin_password", bad: ["CHANGE_ME", "Change-me@123", "change-me-strong"], empty_fatal: true }
+          # fallback_var: the legacy key the .env rendering and the BFF login
+          # check fall back to (`default(token_exchange_system_password)`), so a
+          # box that stores only that key passes as it renders (review of
+          # #2788, 4626504516).
+          - { feature: "Identity BFF",             enabled: true,                                      var: "identity_digit_admin_password", fallback_var: "token_exchange_system_password", bad: ["CHANGE_ME", "Change-me@123", "change-me-strong"], empty_fatal: true }
           - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: ["mcp123"], empty_fatal: true }
           - { feature: "Search (enable_search_stack)", enabled: "{{ enable_search_stack | default(false) }}", var: "elasticsearch_password", bad: ["changeme-elastic"], empty_fatal: true }
+
+    # Resolved ONCE for the three checks below: `value` is what the .env line
+    # will carry (the key, else its legacy fallback), `source` the key that
+    # supplied it, so a message names the key that actually tripped the check
+    # (self-review of #2788). A JSON string, parsed with from_json where used.
+    - name: "Opt-in stacks — the stored value each check will see"
+      ansible.builtin.set_fact:
+        _optin_secret_resolved: >-
+          {%- set out = [] -%}
+          {%- for c in _optin_secret_checks -%}
+            {%- set own = bao_secrets.json.data.data[c.var] | default('', true) | string -%}
+            {%- set legacy = (bao_secrets.json.data.data[c.fallback_var] | default('', true) | string) if c.fallback_var is defined else '' -%}
+            {%- set _ = out.append(c | combine({'value': own if own | length > 0 else legacy,
+                                                'source': c.var if (own | length > 0 or legacy | length == 0) else c.fallback_var})) -%}
+          {%- endfor -%}
+          {{ out | to_json }}
+      no_log: true
 
     # The secrets the compose .env renders with no default: postgres_password,
     # minio_root_user, minio_root_password, elasticsearch_master_password,
@@ -3454,9 +3511,10 @@
     - name: "Opt-in stacks — refuse an EMPTY secret that the compose file no longer defaults (every box)"
       ansible.builtin.assert:
         that:
-          - (bao_secrets.json.data.data[item.var] | default('')) | length > 0
+          - item.value | length > 0
         fail_msg: >-
-          {{ item.feature }} is enabled but `{{ item.var }}` is empty in OpenBao,
+          {{ item.feature }} is enabled but `{{ item.var }}`{{ (' (and the legacy `' ~ item.fallback_var ~ '`)')
+          if item.fallback_var is defined else '' }} is empty in OpenBao,
           and docker-compose.egov-digit.yaml no longer falls back to a published
           default for it. On an already-deployed box store the value the live
           service was started with first — for Search that is the legacy
@@ -3466,17 +3524,17 @@
       when:
         - item.enabled | bool
         - item.empty_fatal | default(false) | bool
-      loop: "{{ _optin_secret_checks }}"
+      loop: "{{ _optin_secret_resolved | from_json }}"
       loop_control:
         label: "{{ item.feature }} / {{ item.var }}"
 
     - name: "Opt-in stacks — refuse to deploy on a published dev secret (fresh boxes fail closed)"
       ansible.builtin.assert:
         that:
-          - (bao_secrets.json.data.data[item.var] | default('')) | length > 0
-          - (bao_secrets.json.data.data[item.var] | default('')) not in item.bad
+          - item.value | length > 0
+          - item.value not in item.bad
         fail_msg: >-
-          {{ item.feature }} is enabled but `{{ item.var }}` is unset or still
+          {{ item.feature }} is enabled but `{{ item.source }}` is unset or still
           the published default in OpenBao — the service would run on a
           credential anyone can read in this repository. Set it with
           `bao kv patch {{ secrets_path }} {{ item.var }}=<value>` (or put it in
@@ -3486,7 +3544,7 @@
       when:
         - item.enabled | bool
         - not (_existing_box | bool)
-      loop: "{{ _optin_secret_checks }}"
+      loop: "{{ _optin_secret_resolved | from_json }}"
       loop_control:
         label: "{{ item.feature }} / {{ item.var }}"
 
@@ -3497,7 +3555,7 @@
     - name: "Opt-in stacks — WARN (do not abort) when an already-deployed box still runs on a published dev secret"
       ansible.builtin.debug:
         msg: >-
-          WARNING: {{ item.feature }} is enabled but `{{ item.var }}` is empty or
+          WARNING: {{ item.feature }} is enabled but `{{ item.source }}` is empty or
           still the published default in OpenBao on this already-deployed box, so
           the service runs on the compose file's dev default. The deploy is
           CONTINUING so an existing tenant is not bricked, but this credential is
@@ -3507,10 +3565,8 @@
       when:
         - item.enabled | bool
         - _existing_box | bool
-        - >-
-          ((bao_secrets.json.data.data[item.var] | default('')) | length == 0)
-          or ((bao_secrets.json.data.data[item.var] | default('')) in item.bad)
-      loop: "{{ _optin_secret_checks }}"
+        - (item.value | length == 0) or (item.value in item.bad)
+      loop: "{{ _optin_secret_resolved | from_json }}"
       loop_control:
         label: "{{ item.feature }} / {{ item.var }}"
 
@@ -4141,6 +4197,37 @@
         create: false
         mode: '0600'
       no_log: true
+
+    # On a fresh box the placeholder step ("Secrets prep") appended
+    # POSTGRES_PASSWORD, MCP_DB_PASSWORD, IDENTITY_DIGIT_ADMIN_PASSWORD and the
+    # MinIO pair outside any block, and the TENANT / KEYCLOAK SECRETS blocks
+    # above repeat them. Compose takes the last value, so the stack ran on the
+    # OpenBao value, but .env carried two lines per key until the next deploy's
+    # template regeneration dropped the loose ones, and a first-match reader
+    # (`grep -m1`, a `source`-style parser) got the random one (review of
+    # #2788, 4626504533). Drop the loose lines here, right after the last
+    # block and before anything reads .env; lines inside a marked block stay.
+    - name: "Secrets prep — drop the placeholder lines the OpenBao blocks now define"
+      ansible.builtin.shell: |
+        set -o pipefail
+        umask 077
+        f={{ (digit_dir ~ '/.env') | quote }}
+        before=$(wc -l < "$f")
+        awk -v keys='POSTGRES_PASSWORD MCP_DB_PASSWORD IDENTITY_DIGIT_ADMIN_PASSWORD MINIO_ROOT_USER MINIO_ROOT_PASSWORD' '
+          BEGIN { n = split(keys, a, " "); for (i = 1; i <= n; i++) want[a[i]] = 1 }
+          /^# BEGIN / { inblock = 1 }
+          /^# END /   { inblock = 0; print; next }
+          {
+            if (!inblock) { eq = index($0, "="); if (eq > 1 && (substr($0, 1, eq - 1) in want)) next }
+            print
+          }' "$f" > "$f.dedup"
+        cat "$f.dedup" > "$f"   # same inode: keeps the 0600 mode
+        rm -f "$f.dedup"
+        echo "DROPPED $(( before - $(wc -l < "$f") ))"
+      args:
+        executable: /bin/bash
+      register: _env_dedup
+      changed_when: "(_env_dedup.stdout | default('DROPPED 0') | trim) != 'DROPPED 0'"
 
     # keycloak-postgres is already up (brought up alongside openbao above),
     # so — unlike the main egov/mcp Postgres ALTERs further
@@ -7020,6 +7107,10 @@
           should have (re)seeded is guaranteed present. See the failure entries above and redeploy once fixed.
       when:
         - state_root != 'pg'
+        # With MCP off nothing was meant to re-bootstrap: a restored database
+        # switching back onto its data is the intended state, not a failed run
+        # (review of #2788, 4626504541).
+        - enable_mcp | default(false) | bool
         - state_root_previously_switched | default(false) | bool
         - not ((_mcp_root_bootstrap_ok | default(false) | bool) and (_mcp_city_bootstrap_ok | default(false) | bool))
 
@@ -7370,29 +7461,50 @@
           or put the account on {{ state_root }} or pg.
 
     # This deploy sets up two roots: pg (the dump) and state_root (this run's
-    # bootstrap, when it succeeded). On any other root — the maputo shape,
-    # state_root pg with state_tenant_id mz, where mz is bootstrapped later by
-    # hand (the post-deploy summary says how) — the account can be neither
-    # created nor verified here: _createnovalidate on an unseeded tenant failed
-    # every attempt and aborted the deploy (review of #2788, 4613068818). Skip
-    # with a WARNING instead, as master did implicitly (its BFF login simply
-    # failed until the tenant existed).
+    # bootstrap, when it succeeded). Any other root — the maputo shape,
+    # state_root pg with state_tenant_id mz — is bootstrapped later by hand (the
+    # post-deploy summary says how), and _createnovalidate on an unseeded tenant
+    # failed every attempt and aborted the deploy (review of #2788, 4613068818).
+    # Such a tenant is asked, not assumed: egov-user creates a user only where
+    # egov-enc-service holds a key for THAT tenant (one per tenant, a root's
+    # does not cover its cities; `_createnovalidate` answers "Tenant Id not
+    # found" otherwise), and bootstrapping the tenant creates the key. Once it
+    # is there the account is created and verified like on pg, so the redeploy
+    # the WARNING asks for does it (4626504522). On state_root itself the
+    # bootstrap verdict decides, not the key: a half-seeded root has one too.
+    - name: "Identity BFF — does egov-enc-service have a key for its tenant yet? (a tenant this deploy does not bootstrap)"
+      ansible.builtin.shell:
+        cmd: >-
+          docker exec docker-postgres psql -U egov -d egov -tAc
+          "select count(*) from eg_enc_symmetric_keys where tenant_id = '{{ _bff_admin_tenant }}'"
+        executable: /bin/bash
+      register: _bff_tenant_probe
+      changed_when: false
+      failed_when: false
+      when:
+        - _bff_admin_root != 'pg'
+        - not (_bff_admin_on_state_root | bool)
+
     - name: "Identity BFF — can this deploy create and verify the account on that root?"
       ansible.builtin.set_fact:
         _bff_admin_tenant_ready: >-
           {{ _bff_admin_root == 'pg'
-             or ((_bff_admin_on_state_root | bool) and (state_root_bootstrap_ok | default(false) | bool)) }}
+             or ((_bff_admin_on_state_root | bool) and (state_root_bootstrap_ok | default(false) | bool))
+             or ((not (_bff_admin_on_state_root | bool))
+                 and (_bff_tenant_probe.stdout | default('0') | trim | int) > 0) }}
 
-    - name: "Identity BFF — WARNING: its tenant is not set up by this deploy, so the account is neither created nor verified"
+    - name: "Identity BFF — WARNING: its tenant is not set up yet, so the account is neither created nor verified"
       ansible.builtin.debug:
         msg: >-
           WARNING: identity-bff signs in as {{ _bff_admin_user }} on {{ _bff_admin_tenant }}, but this deploy
-          sets up only pg and {{ state_root }}{{ '' if (state_root_bootstrap_ok | default(false) | bool)
-          else ' (whose bootstrap did not succeed this run)' }}, so the account on root '{{ _bff_admin_root }}'
-          is not created here and its login is not verified. identity-bff keeps failing to sign in until that
-          root is bootstrapped and the account exists with identity_digit_admin_password. Bootstrap
-          '{{ _bff_admin_root }}' (POST /v1/tenant/bootstrap, see the summary at the end), create the account,
-          and redeploy; or set identity_digit_admin_tenant_id to pg.
+          sets up only {{ ['pg', state_root] | unique | join(' and ') }}{{ '' if (state_root_bootstrap_ok | default(false) | bool)
+          else ' (whose bootstrap did not succeed this run)' }}, and
+          {{ ("egov-enc-service has no key for '" ~ _bff_admin_tenant ~ "' yet") if not (_bff_admin_on_state_root | bool)
+             else ("root '" ~ _bff_admin_root ~ "' is not usable yet") }}, so the
+          account is not created here and its login is not verified. identity-bff keeps failing to sign in until
+          that tenant is bootstrapped and the account exists with identity_digit_admin_password. Bootstrap
+          '{{ _bff_admin_tenant }}' (POST /v1/tenant/bootstrap, see the summary at the end) and redeploy: the
+          deploy then creates and verifies the account there. Or set identity_digit_admin_tenant_id to pg.
       when: not (_bff_admin_tenant_ready | bool)
 
     - name: "Identity BFF — ensure its DIGIT admin account exists on {{ _bff_admin_tenant }}"
@@ -10366,10 +10478,12 @@
 
     # CRSLoader end-to-end test — proves the full dataloader flow
     # (bootstrap a tenant from `pg`, load every phase, rollback) works.
-    # Runs against `pg.cietee` — a dedicated throwaway tenant that
-    # user-seed.sh provisions with ADMIN. The test's cleanup nukes MDMS
-    # records on that tenant only; eg_user rows survive so ADMIN is
-    # there for the next run.
+    # Runs against `pg.cietee` — a dedicated throwaway tenant. It is NOT in
+    # user-seed's default SEED_TENANTS: the dump has no egov-enc-service key
+    # for it, so egov-user refuses every create there until the tenant is
+    # bootstrapped (review of #2788, 4626504503); the test's login as ADMIN
+    # on it needs that tenant set up first. The test's cleanup nukes MDMS
+    # records on that tenant only; eg_user rows survive across runs.
     #
     # `ignore_errors: yes` because two of the 10 sub-tests have known
     # environmental issues:

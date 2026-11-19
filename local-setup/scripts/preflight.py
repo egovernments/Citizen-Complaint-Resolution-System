@@ -266,7 +266,9 @@ def r_configurator(cfg):
 # identity-bff.md): 8-15 characters, at least one digit, one lower-case and one
 # upper-case letter, one of @#$%, no whitespace. The server replies
 # INVALID_PWD_LENGTH / INVALID_PASSWORD on `_createnovalidate` as well, so a
-# password outside the rule is never seeded.
+# password outside the rule is never seeded. `$` stays in the class so that a
+# password like `Abc$1234` reaches the dedicated `$` finding below (compose
+# interpolates it in .env) instead of the generic one; the messages say `@#%`.
 EGOV_USER_PASSWORD_RE = re.compile(r"^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])\S{8,15}$")
 EGOV_USER_PASSWORD_FIELDS = (
     "bootstrap_password",
@@ -281,7 +283,8 @@ DUMP_ADMIN_PASSWORD = "eGov@123"
 @rule(
     "egov-user-password-policy",
     "egov-user only accepts 8-15 character passwords with a digit, a lower- and "
-    "an upper-case letter and one of @#$%. A 16-character bootstrap_password "
+    "an upper-case letter and one of @#% (`$` is refused separately: compose "
+    "interpolates it in .env). A 16-character bootstrap_password "
     "was rejected by user-seed with INVALID_PWD_LENGTH, the seed container "
     "still exited 0, and the deploy only died 20 minutes later at 'validate — "
     "auth probe returned an access_token' with a message about a password "
@@ -299,7 +302,8 @@ def r_egov_user_password_policy(cfg):
             yield (FAIL,
                    f"{path} ({len(val)} characters) does not satisfy egov-user's password rule: "
                    "8-15 characters, at least one digit, one lower-case letter, one upper-case "
-                   "letter and one of @#$%, no whitespace. egov-user refuses to create the user, "
+                   "letter and one of @#% (no `$`: compose interpolates it in .env), no whitespace. "
+                   "egov-user refuses to create the user, "
                    "so the deploy cannot sign in as it.")
         elif re.search(r"""['"\\`]""", val):
             # Rendered into the compose .env and into shell commands and JSON
@@ -397,10 +401,10 @@ def r_identity_admin_tenant_root(cfg):
         # login verified by the deploy (review of #2788, 4613068818).
         yield (WARN,
                f"identity_digit_admin_tenant_id '{tenant}' is on root '{root}', which this deploy does "
-               f"not bootstrap (state_root is '{state_root}'). The deploy will not create the BFF "
-               "account there or verify its login, and identity-bff cannot sign in until that root is "
-               "bootstrapped and the account exists. Put the account on pg, or bootstrap "
-               f"'{root}' and create the account by hand after the deploy.")
+               f"not bootstrap (state_root is '{state_root}'). Until that root holds users the deploy "
+               "neither creates the BFF account there nor verifies its login, and identity-bff cannot "
+               f"sign in. Put the account on pg, or bootstrap '{root}' after the deploy and redeploy: "
+               "the deploy then creates and verifies the account on it.")
         return
     own = {state_root, state_tenant_root, "pg"}
     if root in own or get(cfg, "identity_digit_admin_mobile_regex"):
