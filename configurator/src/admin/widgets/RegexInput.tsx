@@ -3,7 +3,7 @@ import { useInput, type InputProps } from 'ra-core';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Check, X } from 'lucide-react';
-import { regexCompiles } from './regexCompiles';
+import { regexCompiles, regexProblem } from './regexCompiles';
 
 interface RegexInputProps extends InputProps {
   label?: string;
@@ -18,13 +18,9 @@ export function RegexInput({ label, help, validate, ...inputProps }: RegexInputP
   const [sample, setSample] = useState('');
   const pattern = typeof field.value === 'string' ? field.value : '';
 
-  let regex: RegExp | null = null;
-  let compileError: string | null = null;
-  try {
-    regex = pattern ? new RegExp(pattern) : null;
-  } catch (e) {
-    compileError = e instanceof Error ? e.message : 'invalid regex';
-  }
+  // The same check Save applies, so a pattern Save refuses always shows why.
+  const compileError = pattern ? regexProblem(pattern) : null;
+  const regex = pattern && !compileError ? new RegExp(pattern) : null;
   const matches = regex && sample ? regex.test(sample) : null;
   const hasError = fieldState.invalid && fieldState.isTouched;
 

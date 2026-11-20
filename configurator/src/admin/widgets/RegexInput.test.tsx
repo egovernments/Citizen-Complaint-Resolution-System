@@ -44,6 +44,17 @@ describe('RegexInput', () => {
     expect(submitted(onSubmit, 0).regex).toBe('^[0-9]{4}$');
   });
 
+  // The browser compiles these, reading the unclosed "{5" / "{8" as literal text, so the rule would match nothing.
+  it.each(['^[0-9]{5', '^[17][0-9]{8'])('refuses %s, which only a lenient browser compiles, and says why', async (bad) => {
+    const onSubmit = vi.fn();
+    renderRule({ fieldType: 'postalCode', regex: '^[0-9]{5}$' }, onSubmit);
+    fireEvent.change(screen.getByLabelText('Regex pattern'), { target: { value: bad } });
+    expect(screen.getByText(/^Regex error: "\{" at position \d+ doesn't start a repetition/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('saves a pattern that compiles', async () => {
     const onSubmit = vi.fn();
     renderRule({ fieldType: 'postalCode', regex: '^[0-9]{5}$' }, onSubmit);
