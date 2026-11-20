@@ -1,0 +1,205 @@
+Impact of changing: field:Service.applicationStatus, wf:state:PENDINGFORASSIGNMENT, wf:state:PENDINGFORREASSIGNMENT, wf:state:PENDINGATLME, wf:state:RESOLVED, wf:state:REJECTED, wf:state:CLOSEDAFTERRESOLUTION, wf:state:CLOSEDAFTERREJECTION, wf:state:CANCELLED, wf:state:PENDINGFORASSIGNMENT_AFTERREOPEN  (depth ≤ 2)
+
+Screens (17)
+  · screen:chatbot/PGRStatusUpdateNotification  ←renders— field:Service.applicationStatus [inferred]   backend/xstate-chatbot/nodejs/src/machine/service/pgr-status-update-events.js:96
+  · screen:configurator/ComplaintEdit  ←reads— field:Service.applicationStatus   configurator/src/resources/complaints/ComplaintEdit.tsx:35
+  · screen:configurator/ComplaintList  ←renders— field:Service.applicationStatus   configurator/src/resources/complaints/ComplaintList.tsx:93
+  · screen:configurator/ComplaintShow  ←renders— field:Service.applicationStatus   configurator/src/resources/complaints/ComplaintShow.tsx:106
+  · screen:configurator/EscalationPolicyEditor  ←uses-state— wf:state:PENDINGATLME   configurator/src/admin/escalation/EscalationPolicyEditor.tsx:47
+  · screen:configurator/WorkflowServiceShow  ←renders— field:Service.applicationStatus   configurator/src/resources/workflow-services/WorkflowServiceShow.tsx:295
+  · screen:digit-ui/ComplaintsList  ←renders— field:Service.applicationStatus   digit-ui-esbuild/products/pgr/src/pages/citizen/ComplaintsList.js:147
+  · screen:digit-ui/PGRDetails  ←renders— field:Service.applicationStatus   digit-ui-esbuild/products/pgr/src/pages/employee/PGRDetails.js:713
+  · screen:digit-ui/PGRSearchInbox  ←renders— field:Service.applicationStatus   digit-ui-esbuild/products/pgr/src/configs/PGRSearchInboxConfig.js:133
+  ·· screen:chatbot/trackComplaint  ←calls— code:backend/xstate-chatbot/nodejs/src/machine/service/egov-pgr.js [inferred]   backend/xstate-chatbot/nodejs/src/machine/service/egov-pgr.js:709
+  ·· screen:configurator/PgrDashboard  ←calls— code:configurator/src/hooks/usePgrDashboardData.ts   configurator/src/pages/PgrDashboard.tsx:177
+  ·· screen:digit-ui/AdminDashboard  ←calls— code:digit-ui-esbuild/products/dashboard/src/config/stackedBarPresentation.js [inferred]   digit-ui-esbuild/products/dashboard/src/components/StackedBarChart.jsx:17
+  ·· screen:digit-ui/ComplaintDetailsPage  ←calls— code:digit-ui-esbuild/packages/libraries/src/hooks/pgr/useComplaintDetails.js   digit-ui-esbuild/products/pgr/src/pages/citizen/ComplaintDetails.js:82
+  ·· screen:digit-ui/CreatePGRFlowV2  ←uses-state— wf:action:APPLY   digit-ui-esbuild/products/pgr/src/pages/citizen/Create/CreatePGRFlowV2.tsx:211
+  ·· screen:digit-ui/ReopenComplaint  ←calls— code:digit-ui-esbuild/packages/libraries/src/hooks/pgr/useComplaintDetails.js   digit-ui-esbuild/products/pgr/src/pages/citizen/ReopenComplaint/index.js:17
+  ·· screen:digit-ui/Response  ←uses-state— wf:action:REOPEN   digit-ui-esbuild/products/pgr/src/pages/citizen/Response.js:30
+  ·· screen:digit-ui/SelectRating  ←calls— code:digit-ui-esbuild/packages/libraries/src/hooks/pgr/useComplaintDetails.js   digit-ui-esbuild/products/pgr/src/pages/citizen/Rating/SelectRating.js:140
+
+First-party APIs (8)
+  ·· api:GET /pgr-services/v2/dashboard  ←handled-by— class:RequestsApiController   backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java:150
+  ·· api:POST /pgr-services/v2/request/_count  ←handled-by— class:RequestsApiController   backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java:117
+  ·· api:POST /pgr-services/v2/request/_create  ←handled-by— class:RequestsApiController   backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java:70
+  ·· api:POST /pgr-services/v2/request/_plainsearch  ←handled-by— class:RequestsApiController   backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java:99
+  ·· api:POST /pgr-services/v2/request/_search  ←handled-by— class:RequestsApiController   backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java:80
+  ·· api:POST /pgr-services/v2/request/_update  ←handled-by— class:RequestsApiController   backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java:108
+  ·· api:POST /pgr-services/v2/request/inbox/_count  ←handled-by— class:RequestsApiController   backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java:142
+  ·· api:POST /pgr-services/v2/request/inbox/_search  ←handled-by— class:RequestsApiController   backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java:134
+
+Java classes (31)
+  · class:DashboardQueryBuilder  ←reads— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/DashboardQueryBuilder.java:56
+  · class:EscalationScheduler  ←reads— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java:257
+  · class:EscalationService  ←reads— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java:213
+  · class:MigrationService  ←writes— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/service/MigrationService.java:211
+  · class:NotificationService  ←reads— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java:135
+  · class:PGRConfiguration  ←uses-state— wf:state:PENDINGFORASSIGNMENT   backend/pgr-services/src/main/java/org/egov/pgr/config/PGRConfiguration.java:289
+  · class:PGRConstants  ←uses-state— wf:state:PENDINGFORASSIGNMENT   backend/pgr-services/src/main/java/org/egov/pgr/util/PGRConstants.java:66
+  · class:PGRQueryBuilder  ←reads— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/PGRQueryBuilder.java:129
+  · class:PGRRowMapper  ←reads— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/repository/rowmapper/PGRRowMapper.java:48
+  · class:PlatformBaseline  ←uses-state— wf:state:PENDINGFORASSIGNMENT   backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json:1180
+  · class:RequestsApiController  ←reads— field:Service.applicationStatus [inferred]   backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/RequestsApiController.java:88
+  · class:ThinEventBuilder  ←reads— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/service/notification/ThinEventBuilder.java:90
+  · class:VisibilityService  ←uses-state— wf:state:PENDINGFORASSIGNMENT [inferred]   backend/pgr-services/src/main/java/org/egov/pgr/service/VisibilityService.java:136
+  · class:WorkflowService  ←writes— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/service/WorkflowService.java:72
+  ·· class:AnalyticsCatalog  ←reads— table:complaint_facts   backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsCatalog.java:59
+  ·· class:AnalyticsPlanner  ←reads— table:complaint_facts   backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsPlanner.java:120
+  ·· class:AnalyticsService  ←reads— table:complaint_facts   backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsService.java:814
+  ·· class:BaselineUpgrader  ←calls— class:PlatformBaseline   backend/pgr-services/src/main/java/org/egov/pgr/onboarding/BaselineUpgrader.java:112
+  ·· class:DashboardRefreshScheduler  ←writes— table:pgr_mv_kpi   backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java:45
+  ·· class:DashboardRepository  ←calls— class:DashboardQueryBuilder   backend/pgr-services/src/main/java/org/egov/pgr/repository/DashboardRepository.java:78
+  ·· class:DomainEventConsumer  ←calls— code:docs/releases/2.20/notifications/contract/thin-event-v1.schema.json [inferred]   docs/releases/2.20/notifications/contract/thin-event-v1.schema.json:5
+  ·· class:LegacyMasterAdapter  ←writes— field:ThinEvent.eventName   backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/digit/LegacyMasterAdapter.java:73
+  ·· class:MigrationConsumer  ←calls— class:MigrationService   backend/pgr-services/src/main/java/org/egov/pgr/consumer/MigrationConsumer.java:44
+  ·· class:MigrationController  ←calls— class:MigrationService   backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/MigrationController.java:36
+  ·· class:NotificationConsumer  ←calls— class:NotificationService   backend/pgr-services/src/main/java/org/egov/pgr/consumer/NotificationConsumer.java:49
+  ·· class:NotificationResolver  ←reads— field:ThinEvent.eventName   backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/NotificationResolver.java:119
+  ·· class:OnboardingSteps  ←calls— class:PlatformBaseline   backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingSteps.java:186
+  ·· class:PGRRepository  ←calls— class:PGRQueryBuilder   backend/pgr-services/src/main/java/org/egov/pgr/repository/PGRRepository.java:140
+  ·· class:PGRService  ←calls— class:WorkflowService   backend/pgr-services/src/main/java/org/egov/pgr/service/PGRService.java:144
+  ·· class:ServiceRequestValidator  ←uses-state— wf:action:REOPEN   backend/pgr-services/src/main/java/org/egov/pgr/validator/ServiceRequestValidator.java:266
+  ·· class:ThinEventValidator  ←reads— field:ThinEvent.eventName   backend/novu-bridge/src/main/java/org/egov/novubridge/service/thin/ThinEventValidator.java:42
+
+Code / config modules (46)
+  · code:backend/xstate-chatbot/nodejs/src/machine/service/egov-pgr.js  ←reads— field:Service.applicationStatus   backend/xstate-chatbot/nodejs/src/machine/service/egov-pgr.js:780
+  · code:backend/xstate-chatbot/nodejs/src/machine/service/pgr-status-update-events.js  ←reads— field:Service.applicationStatus   backend/xstate-chatbot/nodejs/src/machine/service/pgr-status-update-events.js:40
+  · code:configurator/src/admin/fields/StatusChip.tsx  ←uses-state— wf:state:PENDINGFORASSIGNMENT   configurator/src/admin/fields/StatusChip.tsx:4
+  · code:configurator/src/admin/WorkflowActionSelect.tsx  ←uses-state— wf:state:PENDINGFORASSIGNMENT   configurator/src/admin/WorkflowActionSelect.tsx:57
+  · code:configurator/src/hooks/usePgrDashboardData.ts  ←reads— field:Service.applicationStatus [inferred]   configurator/src/hooks/usePgrDashboardData.ts:104
+  · code:configurator/src/hooks/useWeeklyReport.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   configurator/src/hooks/useWeeklyReport.ts:62
+  · code:configurator/src/resources/notification-configure/legacyAdapter.ts  ←reads— field:Service.applicationStatus   configurator/src/resources/notification-configure/legacyAdapter.ts:263
+  · code:configurator/src/resources/notification-configure/notificationSaveGuard.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT [inferred]   configurator/src/resources/notification-configure/notificationSaveGuard.ts:121
+  · code:configurator/src/resources/notification-providers/twilioTemplateMatch.ts  ←uses-state— wf:state:CLOSEDAFTERRESOLUTION [inferred]   configurator/src/resources/notification-providers/twilioTemplateMatch.ts:133
+  · code:digit-mcp/src/cli/formatter.ts  ←uses-state— wf:state:RESOLVED   digit-mcp/src/cli/formatter.ts:213
+  · code:digit-mcp/src/tools/dashboard-catalog-seed.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   digit-mcp/src/tools/dashboard-catalog-seed.ts:1516
+  · code:digit-mcp/src/tools/pgr-workflow.ts  ←reads— field:Service.applicationStatus   digit-mcp/src/tools/pgr-workflow.ts:531
+  · code:digit-ui-esbuild/packages/libraries/src/hooks/pgr/useComplaintDetails.js  ←reads— field:Service.applicationStatus   digit-ui-esbuild/packages/libraries/src/hooks/pgr/useComplaintDetails.js:49
+  · code:digit-ui-esbuild/packages/libraries/src/services/elements/WorkFlow.js  ←reads— field:Service.applicationStatus   digit-ui-esbuild/packages/libraries/src/services/elements/WorkFlow.js:175
+  · code:digit-ui-esbuild/products/dashboard/src/config/complaintsAtRiskPresentation.js  ←uses-state— wf:state:PENDINGFORASSIGNMENT   digit-ui-esbuild/products/dashboard/src/config/complaintsAtRiskPresentation.js:11
+  · code:digit-ui-esbuild/products/dashboard/src/config/stackedBarPresentation.js  ←uses-state— wf:state:PENDINGFORASSIGNMENT   digit-ui-esbuild/products/dashboard/src/config/stackedBarPresentation.js:119
+  · code:digit-ui-esbuild/products/pgr/src/components/TimeLine.js  ←uses-state— wf:state:PENDINGFORASSIGNMENT   digit-ui-esbuild/products/pgr/src/components/TimeLine.js:79
+  · code:digit-ui-esbuild/products/pgr/src/components/timelineInstances/pendingAtLme.js  ←uses-state— wf:state:PENDINGATLME   digit-ui-esbuild/products/pgr/src/components/timelineInstances/pendingAtLme.js:12
+  · code:digit-ui-esbuild/products/pgr/src/components/timelineInstances/rejected.js  ←uses-state— wf:state:REJECTED   digit-ui-esbuild/products/pgr/src/components/timelineInstances/rejected.js:43
+  · code:digit-ui-esbuild/products/pgr/src/configs/UICustomizations.js  ←writes— field:Service.applicationStatus   digit-ui-esbuild/products/pgr/src/configs/UICustomizations.js:1665
+  · code:digit-ui-esbuild/products/pgr/src/hooks/pgr/useBusinessServiceStates.js  ←reads— field:Service.applicationStatus   digit-ui-esbuild/products/pgr/src/hooks/pgr/useBusinessServiceStates.js:21
+  · code:digit-ui-esbuild/products/pgr/src/pages/employee/escalationVisibility.js  ←uses-state— wf:state:PENDINGATLME [inferred]   digit-ui-esbuild/products/pgr/src/pages/employee/escalationVisibility.js:7
+  · code:digit-ui-esbuild/products/pgr/src/utils/citizenComplaints.js  ←uses-state— wf:state:RESOLVED   digit-ui-esbuild/products/pgr/src/utils/citizenComplaints.js:7
+  · code:docs/releases/2.20/notifications/contract/thin-event-v1.schema.json  ←uses-state— wf:state:PENDINGFORASSIGNMENT   docs/releases/2.20/notifications/contract/thin-event-v1.schema.json:64
+  · code:utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.EventCatalogue.json  ←uses-state— wf:state:PENDINGFORASSIGNMENT   utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.EventCatalogue.json:4
+  · code:utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Routing.json  ←uses-state— wf:state:PENDINGFORASSIGNMENT   utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Routing.json:4
+  · code:utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Template.json  ←uses-state— wf:state:PENDINGFORASSIGNMENT   utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Template.json:4
+  ·· code:backend/xstate-chatbot/nodejs/src/machine/pgr-machine.js  ←calls— code:backend/xstate-chatbot/nodejs/src/machine/service/egov-pgr.js   backend/xstate-chatbot/nodejs/src/machine/pgr-machine.js:26
+  ·· code:backend/xstate-chatbot/nodejs/src/machine/service/service-loader.js  ←calls— code:backend/xstate-chatbot/nodejs/src/machine/service/pgr-status-update-events.js   backend/xstate-chatbot/nodejs/src/machine/service/service-loader.js:9
+  ·· code:configurator/packages/data-provider/src/client/DigitApiClient.ts  ←uses-state— wf:action:APPLY   configurator/packages/data-provider/src/client/DigitApiClient.ts:636
+  ·· code:configurator/packages/data-provider/src/providers/dataProvider.ts  ←uses-state— wf:action:REJECT   configurator/packages/data-provider/src/providers/dataProvider.ts:2005
+  ·· code:digit-mcp/src/api/pgr-dashboard.ts  ←reads— table:pgr_mv_kpi   digit-mcp/src/api/pgr-dashboard.ts:97
+  ·· code:digit-mcp/src/services/digit-api.ts  ←uses-state— wf:action:APPLY   digit-mcp/src/services/digit-api.ts:862
+  ·· code:digit-ui-esbuild/packages/libraries/src/hooks/workflow.js  ←calls— code:digit-ui-esbuild/packages/libraries/src/services/elements/WorkFlow.js   digit-ui-esbuild/packages/libraries/src/hooks/workflow.js:10
+  ·· code:digit-ui-esbuild/packages/libraries/src/services/elements/Complaint.js  ←uses-state— wf:action:APPLY [inferred]   digit-ui-esbuild/packages/libraries/src/services/elements/Complaint.js:41
+  ·· code:digit-ui-esbuild/products/pgr/src/components/timelineInstances/resolved.js  ←uses-state— wf:action:COMMENT   digit-ui-esbuild/products/pgr/src/components/timelineInstances/resolved.js:49
+  ·· code:digit-ui-esbuild/products/pgr/src/components/TimeLineWrapper.js  ←uses-state— wf:action:APPLY   digit-ui-esbuild/products/pgr/src/components/TimeLineWrapper.js:74
+  ·· code:digit-ui-esbuild/products/pgr/src/hooks/pgr/usePGRInboxSearch.js  ←calls— code:digit-ui-esbuild/packages/libraries/src/services/elements/WorkFlow.js   digit-ui-esbuild/products/pgr/src/hooks/pgr/usePGRInboxSearch.js:102
+  ·· code:digit-ui-esbuild/products/pgr/src/hooks/pgr/useReopenWindow.js  ←uses-state— wf:action:REOPEN   digit-ui-esbuild/products/pgr/src/hooks/pgr/useReopenWindow.js:38
+  ·· code:digit-ui-esbuild/products/pgr/src/pages/employee/CreateComplaint/createComplaintForm.js  ←uses-state— wf:action:APPLY [inferred]   digit-ui-esbuild/products/pgr/src/utils/fetchDataAndSetParams.js:196
+  ·· code:digit-ui-esbuild/products/pgr/src/pages/employee/workflowUpdate.js  ←uses-state— wf:action:REJECT   digit-ui-esbuild/products/pgr/src/pages/employee/workflowUpdate.js:34
+  ·· code:digit-ui-esbuild/products/pgr/src/utils/index.js  ←uses-state— wf:action:APPLY   digit-ui-esbuild/products/pgr/src/utils/index.js:214
+  ·· code:local-setup/scripts/generate_event_catalogue.py  ←calls— code:utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.EventCatalogue.json   local-setup/scripts/generate_event_catalogue.py:288
+  ·· code:local-setup/scripts/notifications_convert.py  ←writes— field:ThinEvent.eventName [inferred]   local-setup/scripts/notifications_convert.py:24
+  ·· code:local-setup/scripts/seed-notifications.py  ←calls— code:utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Routing.json [inferred]   local-setup/scripts/seed-notifications.py:47
+  ·· code:utilities/default-data-handler/src/main/resources/schema/NOTIFICATIONS.json  ←uses-state— wf:action:ASSIGN [inferred]   utilities/default-data-handler/src/main/resources/schema/NOTIFICATIONS.json:26
+
+Tables / views (8)
+  · table:complaint_facts  ←uses-state— wf:state:RESOLVED   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:259
+  · table:eg_pgr_service_v2  ←derives-from— field:Service.applicationStatus   configs/egov-persister/pgr-services-persister.yml:139
+  · table:pgr_mv_dimension  ←derives-from— field:Service.applicationStatus   backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql:55
+  · table:pgr_mv_kpi  ←derives-from— field:Service.applicationStatus   backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql:8
+  ·· table:complaint_events  ←derives-from— table:eg_pgr_service_v2   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:14
+  ·· table:complaint_open_state_daily  ←derives-from— table:complaint_facts   backend/pgr-services/src/main/java/org/egov/pgr/service/DashboardRefreshScheduler.java:71
+  ·· table:pgr_mv_monthly  ←derives-from— table:eg_pgr_service_v2   backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql:21
+  ·· table:pgr_mv_monthly_source  ←derives-from— table:eg_pgr_service_v2   backend/pgr-services/src/main/resources/db/migration/main/V20260422000000__create_dashboard_mvs.sql:37
+
+Fields (11)
+  · field:complaint_events.status  ←derives-from— field:Service.applicationStatus [inferred]   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:149
+  · field:ThinEvent.data.status  ←derives-from— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/service/notification/ThinEventBuilder.java:184
+  · field:ThinEvent.eventName  ←derives-from— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/service/notification/ThinEventBuilder.java:104
+  · field:ThinEvent.localized.status  ←derives-from— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/service/notification/ThinEventBuilder.java:222
+  · field:ThinEvent.payload.status  ←derives-from— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/service/notification/ThinEventBuilder.java:243
+  · field:ThinEvent.payload.toState  ←derives-from— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/service/notification/ThinEventBuilder.java:90
+  · field:ThinEvent.transactionSeed  ←derives-from— field:Service.applicationStatus   backend/pgr-services/src/main/java/org/egov/pgr/service/notification/ThinEventBuilder.java:121
+  ·· field:complaint_facts.application_status  ←derives-from— field:complaint_events.status   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:268
+  ·· field:complaint_facts.is_open  ←derives-from— field:complaint_events.status   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:269
+  ·· field:complaint_facts.resolved_at  ←derives-from— field:complaint_events.status   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:259
+  ·· field:complaint_facts.was_rejected  ←derives-from— field:complaint_events.status   backend/pgr-services/src/main/resources/db/migration/main/V20260915000000__cumulative_escalation_ladder_facts.sql:257
+
+Workflow states / actions (9)
+  · wf:action:APPLY  ←transitions-to— wf:state:PENDINGFORASSIGNMENT   local-setup/dataloader/templates/PgrWorkflowConfig.json:51
+  · wf:action:ASSIGN  ←transitions-to— wf:state:PENDINGATLME   local-setup/dataloader/templates/PgrWorkflowConfig.json:84
+  · wf:action:COMMENT  ←transitions-to— wf:state:PENDINGFORASSIGNMENT   local-setup/dataloader/templates/PgrWorkflowConfig.json:74
+  · wf:action:ESCALATE  ←transitions-to— wf:state:PENDINGATLME   local-setup/dataloader/templates/PgrWorkflowConfig.json:194
+  · wf:action:RATE  ←transitions-to— wf:state:CLOSEDAFTERRESOLUTION   local-setup/dataloader/templates/PgrWorkflowConfig.json:264
+  · wf:action:REASSIGN  ←transitions-to— wf:state:PENDINGFORREASSIGNMENT   local-setup/dataloader/templates/PgrWorkflowConfig.json:162
+  · wf:action:REJECT  ←transitions-to— wf:state:REJECTED   local-setup/dataloader/templates/PgrWorkflowConfig.json:95
+  · wf:action:REOPEN  ←transitions-to— wf:state:PENDINGFORASSIGNMENT   local-setup/dataloader/templates/PgrWorkflowConfig.json:228
+  · wf:action:RESOLVE  ←transitions-to— wf:state:RESOLVED   local-setup/dataloader/templates/PgrWorkflowConfig.json:183
+
+Deploy / CI artefacts (5)
+  · infra:configs/egov-indexer/pgr-inbox-indexer.yml  ←reads— field:Service.applicationStatus [inferred]   configs/egov-indexer/pgr-inbox-indexer.yml:16
+  · infra:configs/egov-persister/pgr-migration-batch.yml  ←maps— field:Service.applicationStatus   configs/egov-persister/pgr-migration-batch.yml:29
+  · infra:configs/egov-persister/pgr-services-persister.yml  ←maps— field:Service.applicationStatus   configs/egov-persister/pgr-services-persister.yml:39
+  ·· infra:helm:egov-indexer  ←uses-config— infra:configs/egov-indexer/pgr-inbox-indexer.yml   devops/deploy-as-code/charts/environments/env.yaml:206
+  ·· infra:helm:egov-persister  ←uses-config— infra:configs/egov-persister/pgr-services-persister.yml   devops/deploy-as-code/charts/environments/env.yaml:213
+
+Tests (48)
+  · test:backend/pgr-services/src/test/java/org/egov/pgr/onboarding/NotificationDefaultsStepTest.java  ←uses-state— wf:state:PENDINGFORASSIGNMENT   backend/pgr-services/src/test/java/org/egov/pgr/onboarding/NotificationDefaultsStepTest.java:120
+  · test:backend/pgr-services/src/test/java/org/egov/pgr/onboarding/OnboardingStepsTest.java  ←uses-state— wf:state:PENDINGFORASSIGNMENT   backend/pgr-services/src/test/java/org/egov/pgr/onboarding/OnboardingStepsTest.java:210
+  · test:backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationLadderPrecedenceTest.java  ←uses-state— wf:state:PENDINGATLME   backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationLadderPrecedenceTest.java:24
+  · test:backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationSchedulerTenantDiscoveryTest.java  ←uses-state— wf:state:PENDINGATLME   backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationSchedulerTenantDiscoveryTest.java:34
+  · test:backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationSchedulerTracingTest.java  ←uses-state— wf:state:PENDINGATLME   backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationSchedulerTracingTest.java:35
+  · test:backend/pgr-services/src/test/java/org/egov/pgr/service/notification/ThinEventBuilderTest.java  ←uses-state— wf:state:PENDINGFORASSIGNMENT   backend/pgr-services/src/test/java/org/egov/pgr/service/notification/ThinEventBuilderTest.java:65
+  · test:backend/pgr-services/src/test/java/org/egov/pgr/service/NotificationServiceTest.java  ←uses-state— wf:state:PENDINGFORASSIGNMENT   backend/pgr-services/src/test/java/org/egov/pgr/service/NotificationServiceTest.java:179
+  · test:backend/pgr-services/src/test/java/org/egov/pgr/service/PGRServiceTest.java  ←uses-state— wf:state:PENDINGATLME   backend/pgr-services/src/test/java/org/egov/pgr/service/PGRServiceTest.java:146
+  · test:configurator/packages/data-provider/src/client/DigitApiClient.test.ts  ←uses-state— wf:state:PENDINGATLME   configurator/packages/data-provider/src/client/DigitApiClient.test.ts:109
+  · test:configurator/src/admin/escalation/EscalationPolicyEditor.test.tsx  ←uses-state— wf:state:PENDINGATLME   configurator/src/admin/escalation/EscalationPolicyEditor.test.tsx:29
+  · test:configurator/src/admin/escalation/escalationPolicyUtils.test.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   configurator/src/admin/escalation/escalationPolicyUtils.test.ts:181
+  · test:configurator/src/resources/notification-configure/notificationSaveGuard.test.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   configurator/src/resources/notification-configure/notificationSaveGuard.test.ts:9
+  · test:configurator/src/resources/workflow-services/validateNotifications.test.ts  ←uses-state— wf:state:PENDINGATLME   configurator/src/resources/workflow-services/validateNotifications.test.ts:19
+  · test:digit-ui-esbuild/tests/citizenComplaints.test.js  ←uses-state— wf:state:PENDINGFORASSIGNMENT   digit-ui-esbuild/tests/citizenComplaints.test.js:31
+  · test:digit-ui-esbuild/tests/localizationPacks.test.js  ←uses-state— wf:state:PENDINGFORASSIGNMENT   digit-ui-esbuild/tests/localizationPacks.test.js:53
+  · test:digit-ui-esbuild/tests/pgr.escalate-visibility.test.js  ←uses-state— wf:state:PENDINGATLME   digit-ui-esbuild/tests/pgr.escalate-visibility.test.js:11
+  · test:tests/integration-tests/tests/admin/complaints.spec.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   tests/integration-tests/tests/admin/complaints.spec.ts:1061
+  · test:tests/integration-tests/tests/admin/recently-shipped-fixes.spec.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   tests/integration-tests/tests/admin/recently-shipped-fixes.spec.ts:156
+  · test:tests/integration-tests/tests/admin/workflow-action-select-521.spec.ts  ←uses-state— wf:state:PENDINGATLME   tests/integration-tests/tests/admin/workflow-action-select-521.spec.ts:37
+  · test:tests/integration-tests/tests/api/api-helpers.spec.ts  ←uses-state— wf:state:CLOSEDAFTERRESOLUTION   tests/integration-tests/tests/api/api-helpers.spec.ts:76
+  · test:tests/integration-tests/tests/api/pgr-escalation.spec.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   tests/integration-tests/tests/api/pgr-escalation.spec.ts:188
+  · test:tests/integration-tests/tests/api/pgr-lifecycle.spec.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   tests/integration-tests/tests/api/pgr-lifecycle.spec.ts:178
+  · test:tests/integration-tests/tests/citizen/complaint-timeline-and-rating-display.spec.ts  ←uses-state— wf:state:CLOSEDAFTERRESOLUTION   tests/integration-tests/tests/citizen/complaint-timeline-and-rating-display.spec.ts:31
+  · test:tests/integration-tests/tests/citizen/full-complaint-lifecycle-ui.spec.ts  ←uses-state— wf:state:PENDINGATLME   tests/integration-tests/tests/citizen/full-complaint-lifecycle-ui.spec.ts:320
+  · test:tests/integration-tests/tests/citizen/rate-resolved-complaint.spec.ts  ←uses-state— wf:state:RESOLVED   tests/integration-tests/tests/citizen/rate-resolved-complaint.spec.ts:6
+  · test:tests/integration-tests/tests/citizen/reopen-closed-complaint.spec.ts  ←uses-state— wf:state:RESOLVED   tests/integration-tests/tests/citizen/reopen-closed-complaint.spec.ts:5
+  · test:tests/integration-tests/tests/citizen/reopen-window-1252.spec.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   tests/integration-tests/tests/citizen/reopen-window-1252.spec.ts:93
+  · test:tests/integration-tests/tests/employee/escalate-action-521.spec.ts  ←uses-state— wf:state:PENDINGATLME   tests/integration-tests/tests/employee/escalate-action-521.spec.ts:38
+  · test:tests/integration-tests/tests/employee/inbox-filters.spec.ts  ←uses-state— wf:state:REJECTED   tests/integration-tests/tests/employee/inbox-filters.spec.ts:148
+  · test:tests/integration-tests/tests/employee/pgr-fixes-2026-04-29.spec.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   tests/integration-tests/tests/employee/pgr-fixes-2026-04-29.spec.ts:24
+  · test:tests/integration-tests/tests/employee/reopen-limit-925.spec.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   tests/integration-tests/tests/employee/reopen-limit-925.spec.ts:91
+  · test:tests/integration-tests/tests/employee/workflow-lifecycle-ui.spec.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   tests/integration-tests/tests/employee/workflow-lifecycle-ui.spec.ts:71
+  · test:tests/integration-tests/tests/employee/workflow-reject-ui.spec.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   tests/integration-tests/tests/employee/workflow-reject-ui.spec.ts:91
+  · test:tests/integration-tests/tests/fixtures/lifecycle.setup.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   tests/integration-tests/tests/fixtures/lifecycle.setup.ts:79
+  · test:tests/integration-tests/tests/lifecycle/pgr-sla-auto-escalate.spec.ts  ←uses-state— wf:state:PENDINGATLME   tests/integration-tests/tests/lifecycle/pgr-sla-auto-escalate.spec.ts:142
+  · test:tests/integration-tests/tests/onboarding-real/workspace-lifecycle.spec.ts  ←uses-state— wf:state:PENDINGFORASSIGNMENT   tests/integration-tests/tests/onboarding-real/workspace-lifecycle.spec.ts:168
+  · test:tests/integration-tests/tests/utils/manage/teardown.ts  ←uses-state— wf:state:REJECTED   tests/integration-tests/tests/utils/manage/teardown.ts:79
+  · test:tests/integration-tests/tests/utils/seed.ts  ←uses-state— wf:state:PENDINGATLME   tests/integration-tests/tests/utils/seed.ts:155
+  ·· test:backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationReopenTest.java  ←uses-state— wf:action:REOPEN   backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationReopenTest.java:41
+  ·· test:backend/pgr-services/src/test/java/org/egov/pgr/validator/ServiceRequestValidatorTest.java  ←uses-state— wf:action:APPLY   backend/pgr-services/src/test/java/org/egov/pgr/validator/ServiceRequestValidatorTest.java:164
+  ·· test:digit-ui-esbuild/tests/pgr.workflow-update.test.js  ←tests— screen:digit-ui/PGRDetails   digit-ui-esbuild/tests/pgr.workflow-update.test.js:20
+  ·· test:tests/integration-tests/tests/citizen/track-my-complaint.spec.ts  ←tests— screen:digit-ui/ComplaintsList   tests/integration-tests/tests/citizen/track-my-complaint.spec.ts:15
+  ·· test:tests/integration-tests/tests/employee/inbox-search.spec.ts  ←tests— screen:digit-ui/PGRSearchInbox   tests/integration-tests/tests/employee/inbox-search.spec.ts:24
+  ·· test:tests/integration-tests/tests/employee/pgr-details.spec.ts  ←tests— screen:digit-ui/PGRDetails   tests/integration-tests/tests/employee/pgr-details.spec.ts:129
+  ·· test:tests/integration-tests/tests/employee/pgr-inbox-sort-922.spec.ts  ←tests— screen:digit-ui/PGRSearchInbox   tests/integration-tests/tests/employee/pgr-inbox-sort-922.spec.ts:51
+  ·· test:tests/integration-tests/tests/utils/capabilities.ts  ←uses-state— wf:action:ESCALATE   tests/integration-tests/tests/utils/capabilities.ts:148
+  ·· test:tests/integration-tests/tests/utils/employee-ui.ts  ←uses-state— wf:action:REJECT   tests/integration-tests/tests/utils/employee-ui.ts:107
+  ·· test:tests/integration-tests/tests/utils/probes.ts  ←uses-state— wf:action:ESCALATE   tests/integration-tests/tests/utils/probes.ts:282
+
+Total affected: 183 nodes via 578 edges.
+Mermaid written to 1-complaint-status-model.mmd

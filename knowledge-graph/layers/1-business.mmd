@@ -1,0 +1,107 @@
+%% Layer 1 · Business — concepts, the PGR workflow, and the business rules the code enforces.
+%% Snapshot master @ 64d5abe92. Small grey text = impact-graph node id (query with impact/impact.mjs <id>).
+%% Workflow: local-setup/dataloader/templates/PgrWorkflowConfig.json (business service PGR, businessServiceSla 432000000 ms).
+%% Solid = confirmed in source, dotted = inferred.
+flowchart LR
+
+  subgraph CONCEPTS["Business concepts"]
+    direction TB
+    Citizen(["Citizen<br/><small>biz:Citizen</small>"])
+    Employee(["Employee: GRO, LME, CSR<br/><small>biz:Employee</small>"])
+    Workspace(["Workspace (tenant)<br/><small>biz:Workspace</small>"])
+    Complaint["Complaint<br/><small>biz:Complaint</small>"]
+    Type["Complaint type<br/><small>master:RAINMAKER-PGR.ComplaintHierarchy</small>"]
+    Dept["Department<br/><small>biz:Department</small>"]
+    Juris["Jurisdiction<br/><small>biz:Jurisdiction</small>"]
+    Status["Complaint status<br/><small>biz:ComplaintStatus</small>"]
+    Assign["Assignment<br/><small>biz:Assignment</small>"]
+    SLA["SLA<br/><small>biz:SLA</small>"]
+    Esc["Escalation<br/><small>biz:Escalation</small>"]
+    Reopen["Reopen<br/><small>biz:Reopen</small>"]
+    Rating["Rating<br/><small>biz:Rating</small>"]
+    Notif["Notification<br/><small>biz:Notification</small>"]
+  end
+
+  Citizen -->|files| Complaint
+  Complaint -->|classified as| Type
+  Type -->|owned by| Dept
+  Type -->|sets| SLA
+  Complaint -->|has| Status
+  Complaint -->|located in| Juris
+  Complaint -->|routed by| Assign
+  Assign -->|to| Employee
+  Employee -->|belongs to| Dept
+  Employee -->|covers| Juris
+  SLA -->|breach drives| Esc
+  Esc -->|moves Assignment to reportingTo| Assign
+  Citizen -->|may| Reopen
+  Citizen -->|gives| Rating
+  Status -->|change triggers| Notif
+  Workspace -->|contains| Complaint
+
+  subgraph WF["PGR workflow state machine  <small>wf:bs:PGR</small>"]
+    direction LR
+    S0((start))
+    PFA["PENDINGFORASSIGNMENT"]
+    PFR["PENDINGFORREASSIGNMENT"]
+    LME["PENDINGATLME"]
+    RES["RESOLVED"]
+    REJ["REJECTED"]
+    CAR(["CLOSEDAFTERRESOLUTION"])
+    CAJ(["CLOSEDAFTERREJECTION"])
+    CAN(["CANCELLED · unreachable"])
+    UIX["PENDINGFORASSIGNMENT_AFTERREOPEN<br/><small>UI timeline label only, not in workflow</small>"]
+    S0 -->|"APPLY · CITIZEN, CSR"| PFA
+    PFA -->|"ASSIGN · GRO, PGR_VIEWER"| LME
+    PFA -->|"REJECT · GRO, PGR_VIEWER"| REJ
+    PFR -->|"ASSIGN"| LME
+    PFR -->|"REJECT"| REJ
+    LME -->|"REASSIGN · PGR_LME, PGR_VIEWER"| PFR
+    LME -->|"RESOLVE · PGR_LME, PGR_VIEWER"| RES
+    LME -->|"ESCALATE · PGR_LME, PGR_VIEWER, SYSTEM"| LME
+    RES -->|"RATE · CFC, CITIZEN"| CAR
+    REJ -->|"RATE · CFC, CITIZEN"| CAJ
+    RES -->|"REOPEN · CFC, CITIZEN, CSR, PGR_VIEWER"| PFA
+    REJ -->|"REOPEN"| PFA
+    PFA -.- UIX
+  end
+
+  subgraph RULES["Business rules enforced in code"]
+    direction TB
+    R1["Reopen window: now − lastModifiedTime ≤ REOPENSLA (72 h fallback)<br/>citizen must own the complaint<br/><small>ServiceRequestValidator#validateReOpen</small>"]
+    R2["Complaint-type SLA = ComplaintHierarchy leaf slaHours<br/>fallback pgr.business.level.sla = 5 days<br/><small>MDMSUtils#getServiceCodeToSlaMillis</small>"]
+    R3["Escalation ladder: EscalationConfig % of SLA per level,<br/>clock from createdTime, max depth 3, PENDINGATLME only<br/><small>EscalationConfigurationService#resolve</small>"]
+    R4["Assignee must be in the complaint type's department<br/><small>ServiceRequestValidator#validateDepartment</small>"]
+    R5["Who sees what: citizen = own; employee = tenant, department,<br/>jurisdiction scope + own assigned<br/><small>SearchAccessPolicyService</small>"]
+    R6["Rating 1–5 only; no ownership check for RATE / COMMENT<br/><small>Service.java @Min/@Max</small>"]
+  end
+
+  Reopen --- R1
+  SLA --- R2
+  Esc --- R3
+  Assign --- R4
+  Juris --- R5
+  Rating --- R6
+  Status ===|realised as| WF
+
+  subgraph LINKS["Connections to other layers"]
+    direction TB
+    L2["2 · Application: 375 uses-state references<br/>PGRService, validators, ThinEventBuilder, novu-bridge routing,<br/>12 screens, 30+ tests<br/><small>2-application.mmd</small>"]
+    L3["3 · Data: Service.applicationStatus, rating,<br/>ComplaintHierarchy.slaHours, EscalationConfig, UIConstants,<br/>MV columns is_open / sla_breached<br/><small>3-data.mmd</small>"]
+    L4["4 · Integration: egov-workflow-v2 _transition owns the state;<br/>event name COMPLAINTS.WORKFLOW.&lt;ACTION&gt;.&lt;STATE&gt;<br/><small>4-integration.mmd</small>"]
+  end
+
+  WF -.-> L2
+  WF -.-> L4
+  RULES -.-> L3
+
+  classDef biz fill:#fff4dd,stroke:#a8741a,color:#3d2a06
+  classDef state fill:#f1e8ff,stroke:#6a3fa3,color:#2b1450
+  classDef closed fill:#eceff2,stroke:#56606b,color:#1d242b
+  classDef rule fill:#fdecc8,stroke:#a8741a,color:#3d2a06
+  classDef link fill:#ffffff,stroke:#9aa0a6,color:#3c4043,stroke-dasharray:4 3
+  class Citizen,Employee,Workspace,Complaint,Type,Dept,Juris,Status,Assign,SLA,Esc,Reopen,Rating,Notif biz
+  class PFA,PFR,LME,RES,REJ state
+  class S0,CAR,CAJ,CAN,UIX closed
+  class R1,R2,R3,R4,R5,R6 rule
+  class L2,L3,L4 link
