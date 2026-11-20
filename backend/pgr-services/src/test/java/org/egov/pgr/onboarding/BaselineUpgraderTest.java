@@ -114,6 +114,36 @@ public class BaselineUpgraderTest {
 
     private void upgrade() { upgrader.upgrade("walkone", 1, new LinkedHashMap<>(), UUID.randomUUID()); }
 
+    private static final String POSTAL = "walkone|common-masters.FormValidations|postalCode";
+    private static final String POSTAL_CREATE = "create:common-masters.FormValidations:postalCode";
+
+    /** v18 (#2787): a workspace made before it uses the deployment's postal pattern until it gets its country's rule. */
+    @Test public void workspaceFromBeforeV18GetsItsCountryPostalRule() {
+        upgrader.upgrade("walkone", 17, new LinkedHashMap<>(), UUID.randomUUID());
+        assertEquals(mapper.valueToTree(Map.of("fieldType", "postalCode", "regex", "^[0-9]{5}$")), rows.get(POSTAL).path("data"));
+        assertTrue(rows.get(POSTAL).path("isActive").asBoolean());
+        assertEquals(List.of(), finished.get("kept")); assertEquals(seed.version(), finished.get("to"));
+    }
+
+    @Test public void aPostalRuleTheAdminChangedIsLeftAsIs() {
+        put("common-masters.FormValidations", "postalCode", Map.of("fieldType", "postalCode", "regex", "^[0-9]{5}(-[0-9]{4})?$"));
+        upgrader.upgrade("walkone", 17, new LinkedHashMap<>(), UUID.randomUUID());
+        assertEquals("^[0-9]{5}(-[0-9]{4})?$", rows.get(POSTAL).path("data").path("regex").asText());
+        assertFalse(writes.toString(), writes.stream().anyMatch(w -> w.contains("common-masters.FormValidations")));
+        verify(workspaces).finishUpgrade(eq("walkone"), any(), eq(seed.version()), any(), anyLong());
+    }
+
+    /** An admin who switched the rule off (back to the deployment's pattern) keeps it off, and the upgrade still finishes. */
+    @Test public void aPostalRuleTheAdminSwitchedOffStaysOffAndTheUpgradeFinishes() {
+        put("common-masters.FormValidations", "postalCode", Map.of("fieldType", "postalCode", "regex", "^[0-9]{5}$"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) rows.get(POSTAL)).put("isActive", false);
+        upgrader.upgrade("walkone", 17, new LinkedHashMap<>(), UUID.randomUUID());
+        assertFalse(rows.get(POSTAL).path("isActive").asBoolean(true));
+        assertFalse(writes.toString(), writes.stream().anyMatch(w -> w.contains("common-masters.FormValidations")));
+        assertEquals(List.of("inactive:common-masters.FormValidations:postalCode"), finished.get("kept"));
+        verify(workspaces).finishUpgrade(eq("walkone"), any(), eq(seed.version()), any(), anyLong());
+    }
+
     @Test public void v1WorkspaceReceivesTheV2RecordsLanguagesAndNameKeys() {
         upgrade();
         assertTrue(writes.contains("create:ACCESSCONTROL-ACTIONS-TEST.actions-test:4560"));
@@ -124,7 +154,9 @@ public class BaselineUpgraderTest {
         assertEquals("Walk One", messages.get("walkone|en_IN|rainmaker-common|TENANT_TENANTS_WALKONE"));
         assertTrue(writes.contains("localization:/localization/messages/cache-bust"));
         assertFalse("existing pack messages are not rewritten", writes.stream().anyMatch(w -> w.startsWith("upsert:en_IN:") && !w.endsWith("TENANT_TENANTS_WALKONE")));
-        assertFalse("existing records are not rewritten", writes.stream().anyMatch(w -> w.startsWith("create:") && !w.contains("4560")));
+        // v18 adds the workspace's postal rule, the one record besides the 4560 grants a v1 workspace lacks (#2787).
+        assertTrue(writes.contains(POSTAL_CREATE));
+        assertFalse("existing records are not rewritten", writes.stream().anyMatch(w -> w.startsWith("create:") && !w.contains("4560") && !w.equals(POSTAL_CREATE)));
         assertEquals(List.of(), finished.get("kept")); assertEquals("1", finished.get("from")); assertEquals(seed.version(), finished.get("to"));
         verify(workspaces).finishUpgrade(eq("walkone"), any(), eq(seed.version()), any(), anyLong());
     }
@@ -198,9 +230,9 @@ public class BaselineUpgraderTest {
         for (String schema : catalog) assertTrue(schema, writes.contains("schema:" + schema));
         long expected = 0; for (JsonNode row : seed.records()) if (catalog.contains(row.path("schemaCode").asText())) expected++;
         assertEquals(expected, writes.stream().filter(w -> catalog.stream().anyMatch(c -> w.startsWith("create:" + c + ":"))).count());
-        // The fixture's workspace also predates the 4560 grants (v2), which the same pass creates.
+        // The fixture's workspace also predates the 4560 grants (v2) and the postal rule (v18), which the same pass creates.
         assertFalse("existing records are not rewritten", writes.stream().anyMatch(w -> w.startsWith("create:") && !w.contains("4560")
-                && catalog.stream().noneMatch(c -> w.startsWith("create:" + c + ":"))));
+                && !w.equals(POSTAL_CREATE) && catalog.stream().noneMatch(c -> w.startsWith("create:" + c + ":"))));
         assertEquals("15", finished.get("from")); assertEquals(seed.version(), finished.get("to"));
         DashboardCatalogProbe.assertPublicDashboardServed(rows, "walkone", mapper);
     }

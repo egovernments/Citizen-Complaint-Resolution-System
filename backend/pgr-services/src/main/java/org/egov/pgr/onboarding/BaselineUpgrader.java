@@ -128,6 +128,13 @@ public class BaselineUpgrader {
         for (JsonNode workflow : seed.workflows()) steps.ensureWorkflow(scope, tenant, workflow);
         steps.ensureIdFormat(scope, signup);
         steps.ensureMobileRule(scope, signup);
+        // v18 (#2787): workspaces made earlier have no postal rule and use the deployment's pattern. A rule the admin
+        // already has is left as it is, and one they switched off stays off.
+        try { steps.ensurePostalRule(scope, signup); }
+        catch (OnboardingFailure failure) {
+            if (!"BASELINE_RECORD_INACTIVE".equals(failure.getCode())) throw failure;
+            kept.add("inactive:" + OnboardingSteps.FORM_VALIDATIONS + ":postalCode");
+        }
         steps.ensureDashboardConfig(scope, signup);
     }
 
