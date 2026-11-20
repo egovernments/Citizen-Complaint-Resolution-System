@@ -17,7 +17,7 @@ const app = { state: { tenant: 'ke', targetTenant: 'ke', completedPhases: [] as 
 vi.mock('@/App', () => ({ useApp: () => app }));
 
 // What the server holds: hierarchies, and the areas in them.
-const server = vi.hoisted(() => ({ hierarchies: [] as object[], areas: [] as object[] }));
+const server = vi.hoisted(() => ({ hierarchies: [] as object[], areas: [] as object[], recorded: undefined as string | undefined }));
 vi.mock('@/api', () => ({
   ApiClientError: class ApiClientError extends Error {},
   apiClient: { getAuth: () => ({ token: null }) },
@@ -32,6 +32,7 @@ vi.mock('@/api', () => ({
     ensureHierarchySchema: vi.fn(async () => null),
     upsertMapConfig: vi.fn(async () => undefined),
     searchRecords: vi.fn(async () => []),
+    getRecordedHierarchyType: vi.fn(async () => server.recorded),
   },
   localizationService: {
     uploadBoundaryLocalizations: vi.fn(async () => ({ success: 1, failed: 0 })),
@@ -56,6 +57,7 @@ vi.mock('@/hooks/usePreconfiguredBoundaries', async () => {
 });
 
 const createBoundaries = vi.mocked(boundaryService.createBoundaries);
+const createHierarchy = vi.mocked(boundaryService.createHierarchyFromLevels);
 const ensureSchema = vi.mocked(mdmsService.ensureHierarchySchema);
 
 const area = (code: string, boundaryType: string, parent?: string): Boundary => ({
@@ -108,18 +110,27 @@ const saveAndConfirm = async () => {
   const dialog = await screen.findByRole('alertdialog');
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save and continue' }));
 };
+const button = (name: string) => screen.getByRole('button', { name }) as HTMLButtonElement;
+/** Edit and Remove on a list item, and the sources: what changes the list. */
+const expectListLocked = (item: string) => {
+  expect(button(`Edit ${item}`).disabled).toBe(true);
+  expect(button(`Remove ${item}`).disabled).toBe(true);
+  expect(screen.getAllByText('Some areas weren’t saved. Retry them first.')).toHaveLength(3);
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
   flags.multiple = false;
   server.hierarchies = [];
   server.areas = [];
+  server.recorded = undefined;
   vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
   createBoundaries.mockImplementation(async (boundaries) => {
     landed(boundaries);
     return { success: boundaries, failed: [] };
   });
   act(() => setBoundaryDraft('ke', null));
+  window.localStorage.clear();
 });
 
 afterEach(async () => {
@@ -150,17 +161,289 @@ describe('GeographyStep', () => {
     expect(screen.queryByTestId('boundary-list-item')).toBeNull();
   });
 
-  it('keeps the areas a partial save missed, for Save and continue to try again', async () => {
-    createBoundaries.mockImplementation(async (boundaries) => {
+  it('locks the list, the sources and Save and continue while it saves, and keeps the list for a reload from the start', async () => {
+    let finish = () => {};
+    createBoundaries.mockImplementation(
+      (boundaries) =>
+        new Promise((resolve) => {
+          finish = () => {
+            landed(boundaries);
+            resolve({ success: boundaries, failed: [] });
+          };
+        }),
+    );
+    act(() => void addSelection('ke', selection(NAIROBI)));
+    renderStep();
+    await saveAndConfirm();
+    await screen.findByTestId('geography-saving');
+    expect(button('Edit Nairobi — County').disabled).toBe(true);
+    expect(button('Remove Nairobi — County').disabled).toBe(true);
+    expect(screen.getAllByText('Saving your boundaries…').length).toBeGreaterThan(1);
+    expect(button('Save and continue').disabled).toBe(true);
+    expect(screen.queryByText('Retry the areas that weren’t saved to continue.')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    // The hierarchy is on the server now: a tab closed here comes back to the list, locked for Retry.
+    expect(Object.keys(window.localStorage)).toEqual(['ccrs-geography-unsaved:ke:ADMIN']);
+    await act(async () => finish());
+    await waitFor(() => expect(app.completePhase).toHaveBeenCalled());
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it('keeps the areas a partial save missed, locked, for Retry; Save and continue goes on without them (#2795)', async () => {
+    createBoundaries.mockImplementationOnce(async (boundaries) => {
       landed(boundaries.slice(0, 2));
       return { success: boundaries.slice(0, 2), failed: [{ boundary: boundaries[2], error: 'refused' }] };
     });
     act(() => void addSelection('ke', selection(NAIROBI)));
     renderStep();
     await saveAndConfirm();
-    expect(await screen.findByText(/They are still in the list below/)).toBeTruthy();
+    // The message sits under the list, so it points up to it.
+    expect(await screen.findByText('1 area wasn’t saved. It’s in the list above: select Retry to try it again.')).toBeTruthy();
     expect(app.completePhase).not.toHaveBeenCalled();
     expect(screen.getByTestId('boundary-list-item').textContent).toContain('1 ward');
+    expectListLocked('Nairobi — County');
+    expect(button('Retry').disabled).toBe(false);
+
+    // What landed passes the step's check, so Save and continue goes on, without asking to save again.
+    await waitFor(() => expect(button('Save and continue').disabled).toBe(false));
+    fireEvent.click(button('Save and continue'));
+    await waitFor(() => expect(app.completePhase).toHaveBeenCalled());
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(createBoundaries).toHaveBeenCalledTimes(1);
+  });
+
+  it('when nothing landed, Retry writes the areas into the hierarchy the save defined, and Save and continue waits for it', async () => {
+    createBoundaries.mockImplementationOnce(async (boundaries) => {
+      landed([]);
+      return { success: [], failed: boundaries.map((boundary) => ({ boundary, error: 'Request failed with status code 500' })) };
+    });
+    act(() => void addSelection('ke', selection(NAIROBI)));
+    renderStep();
+    await saveAndConfirm();
+    expect(await screen.findByText('3 areas weren’t saved. They’re in the list above: select Retry to try them again.')).toBeTruthy();
+    expect(await screen.findByText('Retry the areas that weren’t saved to continue.')).toBeTruthy();
+    expect(button('Save and continue').disabled).toBe(true);
+    expectListLocked('Nairobi — County');
+
+    fireEvent.click(button('Retry'));
+    await waitFor(() => expect(screen.queryByTestId('boundary-list-item')).toBeNull());
+    expect(createBoundaries).toHaveBeenCalledTimes(2);
+    expect(createBoundaries).toHaveBeenLastCalledWith(NAIROBI, expect.any(Function));
+    // The hierarchy is defined once; Retry doesn't try again (it would refuse other level names).
+    expect(createHierarchy).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/weren’t saved/)).toBeNull();
+    // Retry only saves: the step completes on Save and continue.
+    expect(app.completePhase).not.toHaveBeenCalled();
+    await waitFor(() => expect(button('Save and continue').disabled).toBe(false));
+    fireEvent.click(button('Save and continue'));
+    await waitFor(() => expect(app.completePhase).toHaveBeenCalled());
+  });
+
+  it('a save that stops partway after defining the hierarchy leaves the whole list locked for Retry', async () => {
+    createBoundaries.mockRejectedValueOnce(new Error('Network Error'));
+    act(() => void addSelection('ke', selection(NAIROBI)));
+    renderStep();
+    await saveAndConfirm();
+    expect(await screen.findByText('3 areas weren’t saved. They’re in the list above: select Retry to try them again. Network Error')).toBeTruthy();
+    expectListLocked('Nairobi — County');
+    fireEvent.click(button('Retry'));
+    await waitFor(() => expect(screen.queryByTestId('boundary-list-item')).toBeNull());
+    expect(createHierarchy).toHaveBeenCalledTimes(1);
+  });
+
+  it('says to Retry before closing the page when this browser can’t keep the areas a save missed', async () => {
+    createBoundaries.mockImplementationOnce(async (boundaries) => {
+      landed(boundaries.slice(0, 2));
+      return { success: boundaries.slice(0, 2), failed: [{ boundary: boundaries[2], error: 'refused' }] };
+    });
+    const full = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+    try {
+      act(() => void addSelection('ke', selection(NAIROBI)));
+      renderStep();
+      await saveAndConfirm();
+      expect(
+        await screen.findByText(
+          '1 area wasn’t saved. It’s in the list above: select Retry to try it again. This browser couldn’t keep a full copy of these areas. Select Retry before you close or reload this page.',
+        ),
+      ).toBeTruthy();
+    } finally {
+      full.mockRestore();
+    }
+  });
+
+  it('a save that fails before defining the hierarchy leaves the list as it was', async () => {
+    createHierarchy.mockRejectedValueOnce(new Error('Network Error'));
+    act(() => void addSelection('ke', selection(NAIROBI)));
+    renderStep();
+    await saveAndConfirm();
+    expect(await screen.findByText('Network Error')).toBeTruthy();
+    expect(button('Edit Nairobi — County').disabled).toBe(false);
+    expect(button('Remove Nairobi — County').disabled).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(window.localStorage.length).toBe(0);
+    // Removing from the list clears the error about it, as adding does.
+    fireEvent.click(button('Remove Nairobi — County'));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(screen.queryByTestId('boundary-list-item')).toBeNull());
+    expect(screen.queryByText('Network Error')).toBeNull();
+  });
+
+  it('G-9: names each area a save missed, with the server’s reason, and leaves the step open (#2795)', async () => {
+    createBoundaries.mockImplementation(async (boundaries) => {
+      landed(boundaries.slice(0, 1));
+      return {
+        success: boundaries.slice(0, 1),
+        failed: [
+          { boundary: boundaries[1], error: 'Boundary type is not in the hierarchy', code: 'BOUNDARY_TYPE_ERROR' },
+          { boundary: boundaries[2], error: 'Relationship still absent after verify retries', unconfirmed: true },
+        ],
+      };
+    });
+    act(() => void addSelection('ke', selection(NAIROBI)));
+    renderStep();
+    await saveAndConfirm();
+    expect(await screen.findByText(/2 areas weren’t saved. They’re in the list above: select Retry/)).toBeTruthy();
+    const failures = screen.getByTestId('geography-save-failures').querySelectorAll('li');
+    expect([...failures].map((li) => li.textContent)).toEqual([
+      'NBI_W1: Boundary type is not in the hierarchy(BOUNDARY_TYPE_ERROR)',
+      // No server reason: plain words, not the internal one.
+      'NBI_W2: The server didn’t confirm it was saved.',
+    ]);
+    expect(app.completePhase).not.toHaveBeenCalled();
+    // Still in the list for Retry, and the sources stay closed while it is.
+    expect(screen.getByTestId('boundary-list-item').textContent).toContain('2 wards');
+    expectListLocked('Nairobi — County');
+  });
+
+  it('shows a reason that came without a server code, like a network error', async () => {
+    createBoundaries.mockImplementation(async (boundaries) => {
+      landed(boundaries.slice(0, 1));
+      return {
+        success: boundaries.slice(0, 1),
+        failed: [
+          { boundary: boundaries[1], error: 'Failed to fetch' },
+          // An error with no words at all reads as unconfirmed.
+          { boundary: boundaries[2], error: ' ' },
+        ],
+      };
+    });
+    act(() => void addSelection('ke', selection(NAIROBI)));
+    renderStep();
+    await saveAndConfirm();
+    await screen.findByTestId('geography-save-failures');
+    expect([...screen.getByTestId('geography-save-failures').querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      'NBI_W1: Failed to fetch',
+      'NBI_W2: The server didn’t confirm it was saved.',
+    ]);
+  });
+
+  describe('after a reload, the areas a save missed (#2795)', () => {
+    // The browser test: an Excel sheet, County → Ward, where only PW2 is refused.
+    const PAGE = [area('PC1', 'County'), area('PW1', 'Ward', 'PC1'), area('PW2', 'Ward', 'PC1')];
+    const sheet: NewSelection = {
+      ...selection(PAGE),
+      source: 'excel',
+      method: 'excel',
+      sourceText: 'your Excel upload',
+      resume: {
+        kind: 'excel',
+        hierarchy: { tenantId: 'ke', hierarchyType: 'ADMIN', boundaryHierarchy: [{ boundaryType: 'County', active: true }, { boundaryType: 'Ward', active: true }] },
+        file: new File(['rows'], 'wards.xlsx'),
+        parsed: [],
+        valid: [],
+        invalid: [],
+        polygonFile: null,
+        polygonSidecar: null,
+      },
+    };
+    const NOT_SAVED = '1 area wasn’t saved. It’s in the list above: select Retry to try it again.';
+    /** Saves the sheet with PW2 refused, then reloads: this tab's memory goes, the browser's storage stays. */
+    const saveThenReload = async () => {
+      createBoundaries.mockImplementationOnce(async (boundaries) => {
+        landed(boundaries.slice(0, 2));
+        return {
+          success: boundaries.slice(0, 2),
+          failed: [{ boundary: boundaries[2], error: 'Boundary type is not in the hierarchy', code: 'BOUNDARY_TYPE_ERROR' }],
+        };
+      });
+      server.recorded = 'ADMIN';
+      act(() => void addSelection('ke', sheet));
+      const page = renderStep();
+      await saveAndConfirm();
+      expect(await screen.findByText(NOT_SAVED)).toBeTruthy();
+      page.unmount();
+      const kept = Array.from({ length: window.localStorage.length }, (_, i) => window.localStorage.key(i) as string).map(
+        (key) => [key, window.localStorage.getItem(key) as string] as const,
+      );
+      act(() => setBoundaryDraft('ke', null));
+      for (const [key, value] of kept) window.localStorage.setItem(key, value);
+      return renderStep();
+    };
+
+    it('come back locked with the server’s reason, and Retry writes only them', async () => {
+      await saveThenReload();
+      const item = await screen.findByTestId('boundary-list-item');
+      expect(item.textContent).toContain('wards.xlsx');
+      expect(item.textContent).toContain('1 ward');
+      expect(screen.getByText(NOT_SAVED)).toBeTruthy();
+      expect([...screen.getByTestId('geography-save-failures').querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+        'PW2: Boundary type is not in the hierarchy(BOUNDARY_TYPE_ERROR)',
+      ]);
+      // PW2 is still to be added, so the sources don't say nothing more can be, and nothing else can be added.
+      expect(screen.queryByText('Your boundaries are saved, so no more can be added.')).toBeNull();
+      expectListLocked('wards.xlsx');
+      expect(app.completePhase).not.toHaveBeenCalled();
+
+      fireEvent.click(button('Retry'));
+      await waitFor(() => expect(screen.queryByTestId('boundary-list-item')).toBeNull());
+      expect(createBoundaries).toHaveBeenLastCalledWith([expect.objectContaining({ code: 'PW2', parent: 'PC1' })], expect.any(Function));
+      expect(screen.queryByText(NOT_SAVED)).toBeNull();
+      // All saved: nothing is kept for the next reload.
+      expect(window.localStorage.length).toBe(0);
+      expect(app.completePhase).not.toHaveBeenCalled();
+    });
+
+    it('don’t hold the step up: Save and continue goes on, and they wait for Retry', async () => {
+      await saveThenReload();
+      await screen.findByTestId('boundary-list-item');
+      await waitFor(() => expect(button('Save and continue').disabled).toBe(false));
+      fireEvent.click(button('Save and continue'));
+      await waitFor(() => expect(app.completePhase).toHaveBeenCalled());
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+      expect(createBoundaries).toHaveBeenCalledTimes(1);
+      // Still there for Retry when the step is opened again.
+      expect(window.localStorage.length).toBe(1);
+      expect(screen.getByTestId('boundary-list-item').textContent).toContain('1 ward');
+    });
+  });
+
+  it('reopens Upload from Excel, and only it, for a saved hierarchy with one level (#2795)', async () => {
+    // A partly refused save, after a reload: the county landed, its wards didn't.
+    landed([area('C1', 'County')]);
+    server.recorded = 'ADMIN';
+    renderStep();
+    const notice = await screen.findByTestId('geography-unfinished');
+    expect(notice.textContent).toBe(
+      'Your boundaries were only partly saved. ADMIN has 1 county but nothing on the level below, so this step can’t be completed yet. Use Upload from Excel to add the missing areas.',
+    );
+    expect(screen.queryByText('Your boundaries are saved, so no more can be added.')).toBeNull();
+    // Fetch and Preconfigured would write into another hierarchy, which never completes the step.
+    expect(screen.getAllByText('To finish your saved boundaries, use Upload from Excel.')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: /Upload a file/ }));
+    // Straight to the saved hierarchy, with no way to start another.
+    expect(await screen.findByText(/Your saved boundaries are in ADMIN, so the missing areas go there too/)).toBeTruthy();
+    expect(screen.queryByText('Create a new hierarchy')).toBeNull();
+  });
+
+  it('keeps the sources closed for a saved hierarchy with two levels', async () => {
+    landed(NAIROBI);
+    server.recorded = 'ADMIN';
+    renderStep();
+    await waitFor(() => expect(screen.getAllByText('Your boundaries are saved, so no more can be added.')).toHaveLength(3));
+    expect(screen.queryByTestId('geography-unfinished')).toBeNull();
   });
 
   it('writes a hierarchy record that failed on the next Save and continue', async () => {

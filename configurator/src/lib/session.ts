@@ -1,6 +1,7 @@
 import { apiClient } from '@/api';
 import { digitClient, resetProviders } from '@/providers/bridge';
 import { clearUser } from '@/lib/telemetry';
+import { runSignOutHooks } from '@/lib/signOutHooks';
 import { API_ORIGIN, logout as identityLogout, type DigitContext, type SessionUser } from '@/api/onboarding';
 
 /** The one blob App restores a DIGIT session from. */
@@ -73,6 +74,8 @@ export function clearSignOutIncomplete(): void {
  */
 export async function signOutThisDevice(scope: 'current' | 'all' = 'current'): Promise<boolean> {
   clearLocalSession();
+  // Not on a session expiry (clearLocalSession alone): the same person signs back in and carries on.
+  runSignOutHooks();
   let confirmed = false;
   try {
     await identityLogout(scope);

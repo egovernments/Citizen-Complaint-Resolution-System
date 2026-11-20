@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { boundaryService, localizationService, mdmsService } from '@/api';
+import { apiClient, boundaryService, localizationService, mdmsService } from '@/api';
+import { runSignOutHooks } from '@/lib/signOutHooks';
 import type { Boundary } from '@/api/types';
 import {
   addSelection,
@@ -11,16 +12,19 @@ import {
   saveProgressOf,
   usePendingHierarchyRecord,
   removeSelection,
+  restoreLeftovers,
   saveBoundaryDraft,
   setBoundaryDraft,
   useBoundaryDraft,
+  useLeftoversNotKept,
+  useSaveLeftovers,
   type BoundaryDraft,
   type NewSelection,
 } from './boundaryDraft';
 
 vi.mock('@/api', () => ({
   ApiClientError: class ApiClientError extends Error {},
-  apiClient: { getAuth: () => ({ token: null }) },
+  apiClient: { getAuth: vi.fn(() => ({ token: null })) },
   boundaryService: {
     createHierarchyFromLevels: vi.fn(),
     getHierarchies: vi.fn(),
@@ -90,6 +94,7 @@ const codes = () => current().selections.flatMap((s) => s.boundaries.map((b) => 
 beforeEach(() => {
   vi.clearAllMocks();
   act(() => setBoundaryDraft(TENANT, null));
+  window.localStorage.clear();
   vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
   createHierarchy.mockResolvedValue({ tenantId: TENANT, hierarchyType: 'ADMIN', boundaryHierarchy: [] });
   createBoundaries.mockImplementation(async (boundaries) => ({ success: boundaries, failed: [] }));
@@ -271,6 +276,222 @@ describe('the unsaved list', () => {
       expect(removeSelection(TENANT, nairobi.id)).toBe(true);
     });
     expect(renderHook(() => useBoundaryDraft(TENANT)).result.current).toBeNull();
+  });
+});
+
+describe('what a save left unsaved, across a reload (#2795)', () => {
+  const refused = { boundary: NAIROBI[2], error: 'Boundary type is not in the hierarchy', code: 'BOUNDARY_TYPE_ERROR' };
+  const sheet = (boundaries: Boundary[]) =>
+    selection(boundaries, {
+      source: 'excel',
+      method: 'excel',
+      resume: {
+        kind: 'excel',
+        hierarchy: { tenantId: TENANT, hierarchyType: 'ADMIN', boundaryHierarchy: [{ boundaryType: 'County', active: true }, { boundaryType: 'Ward', active: true }] },
+        file: new File(['rows'], 'wards.xlsx'),
+        parsed: [],
+        valid: [],
+        invalid: [],
+        polygonFile: null,
+        polygonSidecar: null,
+      },
+    });
+  /** A reload: this tab's memory goes, the browser's storage stays. */
+  const reload = () => {
+    const kept = Array.from({ length: window.localStorage.length }, (_, i) => window.localStorage.key(i) as string).map(
+      (key) => [key, window.localStorage.getItem(key) as string] as const,
+    );
+    act(() => setBoundaryDraft(TENANT, null));
+    for (const [key, value] of kept) window.localStorage.setItem(key, value);
+  };
+  const restore = (hierarchyTypes = ['ADMIN']) => {
+    let failures: ReturnType<typeof restoreLeftovers> = null;
+    act(() => {
+      failures = restoreLeftovers(TENANT, hierarchyTypes);
+    });
+    return failures;
+  };
+
+  it('brings them back with the save’s reasons, into the hierarchy the server has', () => {
+    act(() => void addSelection(TENANT, sheet(NAIROBI)));
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    reload();
+    expect(renderHook(() => useBoundaryDraft(TENANT)).result.current).toBeNull();
+    expect(restore(['OTHER'])).toBeNull();
+    expect(restore()).toEqual([refused]);
+    expect(codes()).toEqual(['NBI_W2']);
+    const [back] = current().selections;
+    expect(back.hierarchyExists).toBe(true);
+    // The upload is named as before; only its name was kept.
+    expect(back.resume.kind === 'excel' && back.resume.file?.name).toBe('wards.xlsx');
+    // A list already there is left alone.
+    expect(restore()).toBeNull();
+  });
+
+  it('reads them back without writing them again', () => {
+    act(() => void addSelection(TENANT, sheet(NAIROBI)));
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    reload();
+    const writes = vi.spyOn(Storage.prototype, 'setItem');
+    try {
+      expect(restore()).toEqual([refused]);
+      expect(writes).not.toHaveBeenCalled();
+    } finally {
+      writes.mockRestore();
+    }
+    // The next change is still written.
+    act(() => keepUnsaved(TENANT, [NAIROBI[2]]));
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it('forgets them once they are all saved, or removed', () => {
+    act(() => void addSelection(TENANT, selection(NAIROBI)));
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    act(() => keepUnsaved(TENANT, [NAIROBI[2]]));
+    reload();
+    expect(restore()).toBeNull();
+
+    act(() => void addSelection(TENANT, selection(NAIROBI)));
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    const { id } = current().selections[0];
+    act(() => void removeSelection(TENANT, id));
+    reload();
+    expect(restore()).toBeNull();
+  });
+
+  it('remembers which areas the server never confirmed, rather than refused', () => {
+    const unconfirmed = { boundary: NAIROBI[2], error: 'Relationship still absent after verify retries', unconfirmed: true };
+    act(() => void addSelection(TENANT, sheet(NAIROBI)));
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [unconfirmed]));
+    reload();
+    expect(restore()).toEqual([unconfirmed]);
+  });
+
+  it('keeps an edited list, without the reasons the page no longer shows', () => {
+    act(() => void addSelection(TENANT, sheet(NAIROBI)));
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    const { id } = current().selections[0];
+    act(() => void addSelection(TENANT, sheet([area('NBI_W2', 'Ward', 'NBI')]), undefined, id));
+    reload();
+    expect(restore()).toEqual([]);
+    expect(codes()).toEqual(['NBI_W2']);
+  });
+
+  it('keeps a list nothing was saved from in this tab only', () => {
+    act(() => void addSelection(TENANT, selection(NAIROBI)));
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it('stores the areas without a fetch’s outlines when the whole list doesn’t fit', () => {
+    const fetched = selection(NAIROBI);
+    if (fetched.resume.kind === 'osm') fetched.resume.adminLevels = [{ level: 6, features: [{}], examples: [], mappedName: 'Ward', selected: true }];
+    act(() => void addSelection(TENANT, fetched));
+    const full = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    full.mockRestore();
+    reload();
+    expect(restore()).toEqual([refused]);
+    expect(codes()).toEqual(['NBI_W2']);
+    const { resume } = current().selections[0];
+    expect(resume.kind === 'osm' && resume.adminLevels).toEqual([]);
+  });
+
+  describe('on a browser more than one admin signs in to', () => {
+    const signedIn = (uuid: string) =>
+      vi.mocked(apiClient.getAuth).mockReturnValue({ token: 't', user: { uuid, userName: uuid, name: uuid, tenantId: TENANT }, tenantId: TENANT });
+    afterEach(() => {
+      vi.mocked(apiClient.getAuth).mockReturnValue({ token: null } as never);
+    });
+
+    it('keeps what a save left out for the admin whose save it was', () => {
+      signedIn('admin-a');
+      act(() => void addSelection(TENANT, sheet(NAIROBI)));
+      act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+      expect(Object.keys(window.localStorage)).toEqual([`ccrs-geography-unsaved:${TENANT}:ADMIN:admin-a`]);
+      reload();
+      signedIn('admin-b');
+      expect(restore()).toBeNull();
+      signedIn('admin-a');
+      expect(restore()).toEqual([refused]);
+    });
+
+    it('forgets this tab’s list on sign-out, and leaves the stored one to its admin', () => {
+      signedIn('admin-a');
+      act(() => void addSelection(TENANT, sheet(NAIROBI)));
+      act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+      act(() => runSignOutHooks());
+      expect(renderHook(() => useBoundaryDraft(TENANT)).result.current).toBeNull();
+      expect(renderHook(() => useSaveLeftovers(TENANT)).result.current).toBeNull();
+      expect(Object.keys(window.localStorage)).toEqual([`ccrs-geography-unsaved:${TENANT}:ADMIN:admin-a`]);
+    });
+  });
+
+  describe('a list too big for this site’s storage', () => {
+    const OUTLINE = { type: 'Polygon' as const, coordinates: [[[36.8, -1.3], [36.9, -1.3], [36.9, -1.2], [36.8, -1.3]]] };
+    const outlined = NAIROBI.map((b) => ({ ...b, geometry: OUTLINE }));
+    const bigSheet = () => {
+      const s = sheet(outlined);
+      if (s.resume.kind === 'excel') s.resume.parsed = s.resume.valid = outlined.map((b, i) => ({ row: i + 2, code: b.code, name: b.name, boundaryType: b.boundaryType, parentCode: b.parent }));
+      return s;
+    };
+    const stored = () => JSON.parse(window.localStorage.getItem(`ccrs-geography-unsaved:${TENANT}:ADMIN`) as string);
+    const notKept = () => renderHook(() => useLeftoversNotKept(TENANT)).result.current;
+
+    it('never stores what only Edit reads: Edit is off for a save’s leftovers', () => {
+      act(() => void addSelection(TENANT, bigSheet()));
+      act(() => keepUnsaved(TENANT, outlined.slice(0, 2), [refused]));
+      const [kept] = stored().selections;
+      expect(kept.resume.parsed).toEqual([]);
+      expect(kept.resume.valid).toEqual([]);
+      // Retry writes each area's outline, so that stays.
+      expect(kept.boundaries[0].geometry).toEqual(OUTLINE);
+      expect(notKept()).toBe(false);
+    });
+
+    it('keeps the areas without their outlines when even that doesn’t fit, and says so', () => {
+      act(() => void addSelection(TENANT, bigSheet()));
+      const full = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+        throw new DOMException('full', 'QuotaExceededError');
+      });
+      act(() => keepUnsaved(TENANT, outlined.slice(0, 2), [refused]));
+      full.mockRestore();
+      // NBI_W2 as listed, with no outline.
+      expect(stored().selections[0].boundaries).toEqual([NAIROBI[2]]);
+      expect(notKept()).toBe(true);
+      reload();
+      expect(restore()).toEqual([refused]);
+      expect(codes()).toEqual(['NBI_W2']);
+    });
+
+    it('says so when nothing could be kept', () => {
+      act(() => void addSelection(TENANT, bigSheet()));
+      const full = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('full', 'QuotaExceededError');
+      });
+      act(() => keepUnsaved(TENANT, outlined.slice(0, 2), [refused]));
+      full.mockRestore();
+      expect(notKept()).toBe(true);
+      // Once they're saved there's nothing left to warn about.
+      act(() => keepUnsaved(TENANT, [outlined[2]]));
+      expect(notKept()).toBe(false);
+    });
+  });
+
+  it('carries on without storage, and ignores what it can’t read', () => {
+    act(() => void addSelection(TENANT, selection(NAIROBI)));
+    const broken = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    broken.mockRestore();
+    expect(codes()).toEqual(['NBI_W2']);
+    act(() => setBoundaryDraft(TENANT, null));
+    window.localStorage.setItem(`ccrs-geography-unsaved:${TENANT}:ADMIN`, '{not json');
+    expect(restore()).toBeNull();
+    window.localStorage.setItem(`ccrs-geography-unsaved:${TENANT}:ADMIN`, JSON.stringify({ selections: [], failed: [] }));
+    expect(restore()).toBeNull();
   });
 });
 
