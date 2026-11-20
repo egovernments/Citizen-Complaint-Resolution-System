@@ -50,15 +50,16 @@ export function recordDepartments(record: MdmsRecord): string[] {
  * to the state root's rows when a city has none. Those belong to the whole
  * state: a picker offers them (HRMS takes a state department for a city
  * employee), but where records are edited or removed, pass `ownOnly`.
+ * `includeRemoved` keeps removed records too, so a removed one can still be named.
  */
 export async function listMasters(
   tenantId: string,
   kind: MasterKind,
-  { ownOnly = false }: { ownOnly?: boolean } = {},
+  { ownOnly = false, includeRemoved = false }: { ownOnly?: boolean; includeRemoved?: boolean } = {},
 ): Promise<MdmsRecord[]> {
   const records = await mdmsService.searchRecords(tenantId, SCHEMA[kind], { limit: 5000 });
   return records
-    .filter((record) => (!ownOnly || record.tenantId === tenantId) && record.isActive !== false)
+    .filter((record) => (!ownOnly || record.tenantId === tenantId) && (includeRemoved || record.isActive !== false))
     .sort((a, b) => (a.auditDetails?.createdTime ?? 0) - (b.auditDetails?.createdTime ?? 0));
 }
 

@@ -13,6 +13,7 @@ import {
   addEmployee,
   applyEmployeeChanges,
   codeProblem,
+  EMPLOYEE_PAGE,
   listEmployees,
   removeEmployee,
   suggestEmployeeCode,
@@ -116,6 +117,24 @@ describe('listEmployees', () => {
     expect(list.codes).toEqual(['EMP_0001', 'EMP_0003']);
     // Removing the highest (EMP_0003) doesn't hand its code out again.
     expect(suggestEmployeeCode(list.codes)).toBe('EMP_0004');
+  });
+
+  it('reads every page HRMS holds, not only the first (#2797)', async () => {
+    const full = Array.from({ length: EMPLOYEE_PAGE }, (_, index) => employee(`EMP_${index + 1}`));
+    hrms.searchEmployees.mockImplementation(async (_tenant, options) => (options?.offset === 0 ? full : [employee('EMP_LAST')]));
+    const list = await listEmployees('acme');
+    expect(list.active).toHaveLength(EMPLOYEE_PAGE + 1);
+    expect(list.codes.at(-1)).toBe('EMP_LAST');
+    expect(hrms.searchEmployees.mock.calls.map(([, options]) => options)).toEqual([
+      { limit: EMPLOYEE_PAGE, offset: 0 },
+      { limit: EMPLOYEE_PAGE, offset: EMPLOYEE_PAGE },
+    ]);
+  });
+
+  it('fails rather than return a partial list when HRMS ignores offset', async () => {
+    const full = Array.from({ length: EMPLOYEE_PAGE }, (_, index) => employee(`EMP_${index + 1}`));
+    hrms.searchEmployees.mockResolvedValue(full);
+    await expect(listEmployees('acme')).rejects.toThrow(/truncated/);
   });
 });
 

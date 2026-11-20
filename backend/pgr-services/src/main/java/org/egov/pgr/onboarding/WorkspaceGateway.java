@@ -67,7 +67,8 @@ public class WorkspaceGateway {
                 return false;
             }
             case "COMPLAINT_TYPES": {
-                Set<String> departments=departments(tenant), parents=new HashSet<>(); List<JsonNode> rows=new ArrayList<>();
+                JsonNode departmentRows=mdms.records(tenant,"common-masters.Department",null);
+                Set<String> departments=departments(departmentRows,tenant), live=liveDepartments(departmentRows), parents=new HashSet<>(); List<JsonNode> rows=new ArrayList<>();
                 for(JsonNode row:mdms.records(tenant,"RAINMAKER-PGR.ComplaintHierarchy",null)) if(ownedActive(row,tenant)) {rows.add(row);parents.add(row.path("data").path("parentCode").asText(""));}
                 // A leaf is a row nothing else names as its parent; it must route to a live department with an SLA.
                 boolean routable=false; Set<String> routed=new HashSet<>();
@@ -77,6 +78,15 @@ public class WorkspaceGateway {
                     if(departments.contains(department) && row.path("data").path("slaHours").asDouble(0)>0)routable=true;
                 }
                 if(!routable)return false;
+                // Finish refuses while anything still names a removed department (#2797): a category's complaints
+                // would reach no one who can be added, and HRMS refuses every later save of such an employee.
+                for(String department:routed) if(!live.contains(department))return false;
+                for(JsonNode row:reads.employees()) if(!founder(row,reads.founder) && row.path("isActive").asBoolean(true))
+                    for(JsonNode assignment:row.path("assignments")) {
+                        // Every assignment, past ones too: HRMS checks each one's department on every save.
+                        String department=assignment.path("department").asText("");
+                        if(!department.isBlank() && !live.contains(department))return false;
+                    }
                 // GRO ABAC is department OWN: a department with no GRO strands its complaints in PENDINGFORASSIGNMENT.
                 for(JsonNode row:reads.employees()) if(row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true) && hasRole(row,"GRO",tenant))
                     for(JsonNode assignment:row.path("assignments")) if(assignment.path("isCurrentAssignment").asBoolean(false))routed.remove(assignment.path("department").asText(""));
@@ -101,6 +111,8 @@ public class WorkspaceGateway {
             default: throw new IllegalArgumentException(step);
         }
     }
+    /** HRMS rows per search. Every page is read, so an employee past the first page is still checked (#2797). */
+    static final int HRMS_PAGE=1000;
     /** Dependency reads shared by the probes of one call, so EMPLOYEES and COMPLAINT_TYPES read HRMS once. */
     private final class Reads {
         final String tenant,founder; private JsonNode employees; private RuntimeException employeesFailure;
@@ -108,8 +120,15 @@ public class WorkspaceGateway {
         JsonNode employees() {
             if(employeesFailure!=null)throw employeesFailure;
             if(employees==null) try {
-                JsonNode rows=client.read("hrms","/egov-hrms/employees/_search?tenantId="+tenant+"&offset=0&limit=1000",Map.of()).path("Employees");
-                requireArray(rows); employees=rows;
+                var rows=mapper.createArrayNode();
+                // The bound only stops an HRMS that ignores offset: a full page there fails rather than reads as everyone.
+                for(int offset=0;;offset+=HRMS_PAGE) {
+                    if(offset>=100*HRMS_PAGE)throw new OnboardingFailure("WORKSPACE_INVALID_DEPENDENCY_RESPONSE",true);
+                    JsonNode page=client.read("hrms","/egov-hrms/employees/_search?tenantId="+tenant+"&offset="+offset+"&limit="+HRMS_PAGE,Map.of()).path("Employees");
+                    requireArray(page); page.forEach(rows::add);
+                    if(page.size()<HRMS_PAGE)break;
+                }
+                employees=rows;
             } catch(RuntimeException e){employeesFailure=e;throw e;}
             return employees;
         }
@@ -122,9 +141,16 @@ public class WorkspaceGateway {
         for(JsonNode r:employee.path("user").path("roles")) if(role.equals(r.path("code").asText()) && tenant.equals(r.path("tenantId").asText()))return true;
         return false;
     }
-    private Set<String> departments(String tenant) {
+    private Set<String> departments(String tenant){return departments(mdms.records(tenant,"common-masters.Department",null),tenant);}
+    private Set<String> departments(JsonNode rows,String tenant) {
         Set<String> codes=new HashSet<>();
-        for(JsonNode row:mdms.records(tenant,"common-masters.Department",null)) if(ownedActive(row,tenant) && !code(row).isBlank() && !"ONBOARDING_ADMIN".equals(code(row)))codes.add(code(row));
+        for(JsonNode row:rows) if(ownedActive(row,tenant) && !code(row).isBlank() && !"ONBOARDING_ADMIN".equals(code(row)))codes.add(code(row));
+        return codes;
+    }
+    /** Every active department the workspace can name, inherited and provisioned ones included: what HRMS accepts. */
+    private Set<String> liveDepartments(JsonNode rows) {
+        Set<String> codes=new HashSet<>();
+        for(JsonNode row:rows) if(active(row) && !code(row).isBlank())codes.add(code(row));
         return codes;
     }
     private static String code(JsonNode row){return row.path("data").path("code").asText("");}
