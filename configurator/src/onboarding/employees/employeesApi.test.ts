@@ -13,7 +13,9 @@ import {
   addEmployee,
   applyEmployeeChanges,
   codeProblem,
+  employeesByCode,
   listEmployees,
+  matchesSheetRow,
   removeEmployee,
   suggestEmployeeCode,
   updateEmployeeDetails,
@@ -98,13 +100,81 @@ describe('bulk import codes, through the real parser (#2456)', () => {
     ]);
   });
 
-  it('lets the same person through on their own code (email trimmed, any case)', () => {
-    expect(check(sheet([{ employeeCode: 'EMP_0001', emailId: ' anita@example.ORG ' }]))).toEqual([{ code: 'EMP_0001', problem: null }]);
+  it('names the same person on their own code (email trimmed, any case) as existing, never as new (#2798)', () => {
+    expect(check(sheet([{ employeeCode: 'EMP_0001', emailId: ' anita@example.ORG ' }]))).toEqual([
+      { code: 'EMP_0001', problem: { exists: hrms.get('EMP_0001') } },
+    ]);
+  });
+
+  it('gives a code-less row the code of the active employee with its email, so a re-upload finds them (#2799)', () => {
+    expect(check(sheet([{ emailId: ' ANITA@example.org' }, { emailId: 'b@example.org' }]))).toEqual([
+      { code: 'EMP_0001', problem: { exists: hrms.get('EMP_0001') } },
+      { code: 'EMP_0008', problem: null },
+    ]);
+  });
+
+  it('never gives a code-less row a removed employee’s code', () => {
+    const removed = new Map([
+      ...hrms,
+      ['EMP_0007', { ...employee('EMP_0007', { isActive: false }), user: { name: 'Old Hand', emailId: 'old@example.org' } } as unknown as Employee],
+    ]);
+    expect(withEmployeeCodes(sheet([{ emailId: 'old@example.org' }]), removed).map((row) => row.employeeCode)).toEqual(['EMP_0008']);
+  });
+
+  it('keeps the codes refused rows ask for out of the numbering (#2799)', () => {
+    const rows = sheet([{ emailId: 'a@example.org' }]);
+    expect(withEmployeeCodes(rows, hrms, ['EMP_0010', '']).map((row) => row.employeeCode)).toEqual(['EMP_0011']);
   });
 
   it('flags a code on two rows of the sheet', () => {
     expect(check(sheet([{ employeeCode: 'EMP_0020', emailId: 'a@example.org' }, { employeeCode: 'EMP_0020', emailId: 'b@example.org' }]))
       .map((row) => row.problem)).toEqual([{ repeated: true }, { repeated: true }]);
+  });
+});
+
+describe('matchesSheetRow: a re-uploaded row is skipped only when HRMS has it as the row says (#2798, #2799)', () => {
+  const holder = {
+    ...employee('E002'),
+    user: { name: 'Grace  Wanjiru', mobileNumber: '711000002', emailId: 'grace@example.org', roles: [{ code: 'EMPLOYEE' }, { code: 'GRO' }, { code: 'CSR' }] },
+    assignments: [
+      { department: 'ROADS', designation: 'ENGINEER', isCurrentAssignment: true },
+      { department: 'WATER', designation: 'ENGINEER', isCurrentAssignment: false },
+    ],
+    jurisdictions: [
+      { boundary: 'WARD_1', isActive: true },
+      { boundary: 'WARD_9', isActive: false },
+    ],
+  } as unknown as Employee;
+  const row = {
+    name: 'grace wanjiru',
+    mobileNumber: '711000002',
+    department: 'ROADS,WATER',
+    designation: 'ENGINEER',
+    roles: 'EMPLOYEE,GRO',
+    jurisdictions: 'Ward 1',
+  };
+  const boundaryCode = (cell: string) => (cell === 'Ward 1' || cell === 'WARD_1' ? 'WARD_1' : undefined);
+
+  it('matches a row holding what HRMS has (name spacing and case, a jurisdiction by name, roles HRMS added)', () => {
+    expect(matchesSheetRow(row, holder, boundaryCode)).toBe(true);
+  });
+
+  it.each([
+    ['another name (the E-2 case)', { name: 'John Otieno' }],
+    ['another mobile', { mobileNumber: '711000099' }],
+    ['another current department', { department: 'WATER,ROADS' }],
+    ['a department HRMS lacks', { department: 'ROADS,PARKS' }],
+    ['another designation', { designation: 'CLERK' }],
+    ['a role HRMS lacks', { roles: 'EMPLOYEE,PGR_LME' }],
+    ['another jurisdiction', { jurisdictions: 'KANGEMI' }],
+    ['an extra jurisdiction', { jurisdictions: 'WARD_1,WARD_9' }],
+  ])('refuses a row with %s', (_what, change) => {
+    expect(matchesSheetRow({ ...row, ...change }, holder, boundaryCode)).toBe(false);
+  });
+
+  it('can’t compare a masked mobile, so leaves it to the code and email', () => {
+    const masked = { ...holder, user: { ...holder.user, mobileNumber: '******0002' } } as Employee;
+    expect(matchesSheetRow({ ...row, mobileNumber: '711000002' }, masked, boundaryCode)).toBe(true);
   });
 });
 
@@ -116,6 +186,29 @@ describe('listEmployees', () => {
     expect(list.codes).toEqual(['EMP_0001', 'EMP_0003']);
     // Removing the highest (EMP_0003) doesn't hand its code out again.
     expect(suggestEmployeeCode(list.codes)).toBe('EMP_0004');
+  });
+});
+
+describe('employeesByCode: every page, not the first 500 (#2798)', () => {
+  const pageOf = (from: number, count: number) => Array.from({ length: count }, (_, i) => employee(`EMP_${String(from + i).padStart(4, '0')}`));
+  // clearAllMocks keeps queued Once values; a page left unread mustn't leak into the next test.
+  beforeEach(() => hrms.searchEmployees.mockReset());
+
+  it('reads page after page until a short one', async () => {
+    hrms.searchEmployees.mockResolvedValueOnce(pageOf(1, 500)).mockResolvedValueOnce(pageOf(501, 500)).mockResolvedValueOnce(pageOf(1001, 3));
+    const byCode = await employeesByCode('acme');
+    expect(byCode.size).toBe(1003);
+    expect(byCode.get('EMP_1003')?.code).toBe('EMP_1003');
+    expect(hrms.searchEmployees.mock.calls.map(([, criteria]) => criteria)).toEqual([
+      { limit: 500, offset: 0 },
+      { limit: 500, offset: 500 },
+      { limit: 500, offset: 1000 },
+    ]);
+  });
+
+  it('fails rather than return part of the list when a later page fails', async () => {
+    hrms.searchEmployees.mockResolvedValueOnce(pageOf(1, 500)).mockRejectedValueOnce(new Error('rate limited'));
+    await expect(employeesByCode('acme')).rejects.toThrow('rate limited');
   });
 });
 

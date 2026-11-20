@@ -29,8 +29,13 @@ import { DigitCard } from '@/components/digit/DigitCard';
 
 type Step = 'landing' | 'preview' | 'creating' | 'complete';
 
+/**
+ * One uploaded row. `valid` rows are created; `error` rows are skipped with the
+ * reason; `skipped` rows are already there (an employee HRMS holds as the row
+ * describes them, say) and are left alone.
+ */
 export interface BulkRow extends Record<string, unknown> {
-  status: 'valid' | 'error';
+  status: 'valid' | 'error' | 'skipped';
   error?: string;
 }
 
@@ -60,12 +65,19 @@ export interface BulkImportPanelProps<Row extends BulkRow = BulkRow> {
   buildTemplate: () => Blob;
   /** File name of the generated template. */
   templateFilename: string;
-  /** Parses an uploaded workbook into row objects + optional parser-level error. */
-  parseWorkbook: (wb: XLSX.WorkBook) => { data: Row[]; parseError?: string };
+  /**
+   * Parses an uploaded workbook into row objects + optional parser-level error,
+   * now or once it has checked what it needs to. A row that comes back already
+   * `error` (with its reason) or `skipped` keeps that status; every other row
+   * goes through validateRow.
+   */
+  parseWorkbook: (wb: XLSX.WorkBook) => ParsedSheet<Row> | Promise<ParsedSheet<Row>>;
   /** Runs per-row validation against live reference data, with the whole sheet for checks across rows. */
   validateRow: (row: Row, rows: Row[]) => string[];
   /** Columns to render in the preview + completion tables. */
   columns: BulkColumn<Row>[];
+  /** How the preview's list of skipped rows names a row (default: its first text column). */
+  rowLabel?: (row: Row) => string;
   /** Called once per valid row. Throw to mark the row failed. */
   createOne: (row: Row, index: number) => Promise<void>;
   /** Singular / plural noun for labels ("department" → "departments"). */
@@ -90,6 +102,11 @@ export interface BulkImportPanelProps<Row extends BulkRow = BulkRow> {
   canImport?: boolean;
 }
 
+export interface ParsedSheet<Row extends BulkRow = BulkRow> {
+  data: Row[];
+  parseError?: string;
+}
+
 export function BulkImportPanel<Row extends BulkRow>({
   title,
   backTo,
@@ -101,6 +118,7 @@ export function BulkImportPanel<Row extends BulkRow>({
   parseWorkbook,
   validateRow,
   columns,
+  rowLabel = (row) => describeRow(row, columns),
   createOne,
   entityLabel,
   acceptExtensions = '.xlsx,.xls,.csv',
@@ -133,7 +151,7 @@ export function BulkImportPanel<Row extends BulkRow>({
       try {
         const buf = await file.arrayBuffer();
         const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
-        const parsed = parseWorkbook(wb);
+        const parsed = await parseWorkbook(wb);
         if (parsed.parseError) {
           setError(parsed.parseError);
           return;
@@ -143,6 +161,7 @@ export function BulkImportPanel<Row extends BulkRow>({
           return;
         }
         const validated = parsed.data.map((row) => {
+          if (row.status === 'skipped' || (row.status === 'error' && row.error)) return row;
           const errs = validateRow(row, parsed.data);
           return {
             ...row,
@@ -200,7 +219,8 @@ export function BulkImportPanel<Row extends BulkRow>({
   }, [rows, createOne, columns, queryClient]);
 
   const validCount = rows.filter((r) => r.status === 'valid').length;
-  const errorCount = rows.length - validCount;
+  const errorCount = rows.filter((r) => r.status === 'error').length;
+  const skippedCount = rows.filter((r) => r.status === 'skipped').length;
 
   if (!canImport) {
     return (
@@ -335,6 +355,7 @@ export function BulkImportPanel<Row extends BulkRow>({
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground">Total: {rows.length}</span>
                 <Badge className="bg-success text-white">{validCount} valid</Badge>
+                {skippedCount > 0 && <Badge variant="secondary">{skippedCount} already added</Badge>}
                 {errorCount > 0 && (
                   <Badge variant="destructive">{errorCount} with errors</Badge>
                 )}
@@ -360,6 +381,8 @@ export function BulkImportPanel<Row extends BulkRow>({
                             <Badge className="gap-1 bg-success text-white">
                               <Check className="w-3 h-3" /> Valid
                             </Badge>
+                          ) : r.status === 'skipped' ? (
+                            <Badge variant="secondary">Already added</Badge>
                           ) : (
                             <Badge variant="destructive" className="gap-1" title={r.error}>
                               <AlertTriangle className="w-3 h-3" /> Error
@@ -397,7 +420,7 @@ export function BulkImportPanel<Row extends BulkRow>({
                       .slice(0, 5)
                       .map((r, i) => (
                         <li key={i}>
-                          {describeRow(r, columns)}: {r.error}
+                          {rowLabel(r)}: {r.error}
                         </li>
                       ))}
                     {errorCount > 5 && <li>…and {errorCount - 5} more</li>}
@@ -452,6 +475,7 @@ export function BulkImportPanel<Row extends BulkRow>({
                   : `Created ${createdCount}, ${failedCount} failed`}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
+                {skippedCount > 0 && `${skippedCount} row(s) already added, so skipped. `}
                 {errorCount > 0 && `${errorCount} row(s) skipped for validation errors. `}
                 Tenant: <span className="font-mono">{tenantId}</span>
               </p>

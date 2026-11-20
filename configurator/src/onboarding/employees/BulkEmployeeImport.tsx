@@ -35,14 +35,14 @@ import {
   ApiClientError,
 } from '@/api';
 import { loadTenantHierarchies } from '@/api/services/tenantHierarchy';
-import { parseExcelFile, parseEmployeeExcel } from '@/utils/excelParser';
+import { parseExcelFile, parseEmployeeExcel, type ParsedEmployeeRow, type RejectedEmployeeRow } from '@/utils/excelParser';
 import { downloadEmployeeTemplate, employeeTemplateFilename } from '@/utils/templateBuilder';
-import { codeProblem, employeesByCode, withEmployeeCodes, type EmployeeRecord } from './employeesApi';
+import { alreadyAdded, codeProblem, employeesByCode, withEmployeeCodes, type EmployeeRecord } from './employeesApi';
+import { describeImportFailure, describeSheetProblem, rowReason } from './bulkResults';
 import { reportStepError, trackImport, trackTemplateDownload, trackUploadRefused } from '../telemetry';
 import { useOnboardingT } from '../i18n';
 import { allowedEmployeeRoles, pickerChoices } from '@/lib/systemRecords';
 import type {
-  EmployeeExcelRow,
   Employee,
   Department,
   Designation,
@@ -51,9 +51,33 @@ import type {
 
 type Step = 'landing' | 'generate' | 'upload' | 'preview' | 'creating' | 'complete';
 
-interface ParsedEmployee extends EmployeeExcelRow {
-  status: 'valid' | 'error';
+/**
+ * One sheet row in the preview, by its row number: `valid` to create, `skipped`
+ * when HRMS already has that employee as the row describes them (#2799), and
+ * `error` with the reasons otherwise, including rows the parser left out (#2800).
+ */
+interface ParsedEmployee extends ParsedEmployeeRow {
+  status: 'valid' | 'error' | 'skipped';
   error?: string;
+}
+
+/**
+ * The rows HRMS already has just as the sheet describes them: skipped, and where
+ * to change them instead. The preview and the confirm dialog both show it.
+ */
+function AlreadyAddedNote({ count, className }: { count: number; className?: string }) {
+  const t = useOnboardingT();
+  return (
+    <Alert variant="info" className={className}>
+      <AlertDescription className="text-xs sm:text-sm">
+        {t(
+          'bulk_employees.already_added_info',
+          '%{smart_count} row(s) are employees you’ve already added, so they’ll be skipped. To change their details or send their invitation, use their row in the employee list.',
+          { smart_count: count },
+        )}
+      </AlertDescription>
+    </Alert>
+  );
 }
 
 /**
@@ -96,12 +120,14 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
   const [createdCount, setCreatedCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
   const [createdEmployees, setCreatedEmployees] = useState<Employee[]>([]);
+  // Each sheet row's result while creating, by row number.
+  const [outcomes, setOutcomes] = useState<Record<number, 'created' | 'failed'>>({});
   // Per-row failure reasons. The loop below creates employees one at a time and
   // keeps going past a failure, so the enclosing try/catch never sees those
   // errors — without this the complete screen could only say "0 created, 1
   // failed" and the actual API message (e.g. "Unknown error occurred in
   // encryption process") was console-only.
-  const [failures, setFailures] = useState<{ name: string; reason: string }[]>([]);
+  const [failures, setFailures] = useState<{ row: number; name: string; reason: string; code?: string }[]>([]);
 
   useEffect(() => {
     async function fetchReferenceData() {
@@ -178,16 +204,32 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       const workbook = await parseExcelFile(file);
       const result = parseEmployeeExcel(workbook);
 
-      if (result.data.length === 0) {
+      if (result.data.length === 0 && result.rejected.length === 0) {
         setError(t('bulk_employees.no_rows', 'No employee data found in Excel file.'));
         trackUploadRefused('employees', 'employee', 'NOTHING_FOUND');
         return;
       }
 
-      // Number blank codes and check given ones against the codes HRMS holds now.
-      // The code check is advisory: creating still refuses a code that's taken.
-      const existing = await employeesByCode(targetTenant).catch(() => new Map<string, EmployeeRecord>());
-      const validatedEmployees = validateEmployees(withEmployeeCodes(result.data, existing), existing);
+      // Number blank codes and check given ones against the employees HRMS holds
+      // now. Without that list a row for someone already added would pass and be
+      // counted as created while nothing changed (#2798), so the upload stops.
+      let existing: Map<string, EmployeeRecord>;
+      try {
+        existing = await employeesByCode(targetTenant);
+      } catch (err) {
+        console.error('Failed to list existing employees:', err);
+        setError(
+          t('bulk_employees.existing_failed', 'Couldn’t check which employees you’ve already added, so the sheet wasn’t checked. Upload it again in a moment.'),
+        );
+        trackUploadRefused('employees', 'employee', 'EXISTING_UNAVAILABLE');
+        return;
+      }
+      // A refused row's code stays taken: the fixed re-upload still asks for it.
+      const rows = withEmployeeCodes(result.data, existing, result.rejected.map((row) => row.employeeCode));
+      const validatedEmployees = [
+        ...validateEmployees(rows, [...rows, ...result.rejected], existing),
+        ...result.rejected.map(refusedRow),
+      ].sort((a, b) => a.row - b.row);
       setEmployees(validatedEmployees);
       setUploadedFile(file);
       setStep('preview');
@@ -218,19 +260,42 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     return { match: null, reason: byName.length > 1 ? 'ambiguous' : 'not_found' };
   };
 
-  const validateEmployees = (rawEmployees: EmployeeExcelRow[], existing: Map<string, EmployeeRecord>): ParsedEmployee[] => {
+  // A row the parser left out (a required cell blank, a bad date), shown as an
+  // error with every reason rather than dropped from the preview (#2800).
+  const refusedRow = ({ problems, ...row }: RejectedEmployeeRow): ParsedEmployee => ({
+    ...row,
+    status: 'error',
+    error: problems.map((problem) => describeSheetProblem(problem, t)).join('; '),
+  });
+
+  // `sheet` is every row of the upload, the refused ones included, for the codes
+  // checks across rows.
+  const validateEmployees = (
+    rawEmployees: ParsedEmployeeRow[],
+    sheet: { employeeCode: string }[],
+    existing: Map<string, EmployeeRecord>,
+  ): ParsedEmployee[] => {
     const deptCodes = departments.map((d) => d.code);
     const desigCodes = designations.map((d) => d.code);
     const validRoles = roles.map((r) => r.code);
 
     return rawEmployees.map((emp) => {
+      // Added already, just as the row has them (an earlier upload of this
+      // sheet, say): skipped, never counted as created again (#2799).
+      if (alreadyAdded(emp, sheet, existing, (cell) => resolveJurisdiction(cell).match?.code)) {
+        return { ...emp, status: 'skipped' };
+      }
+      const clash = codeProblem(emp, sheet, existing);
       const errors: string[] = [];
       if (!emp.emailId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emp.emailId)) errors.push(t('bulk_employees.email_required', 'A valid email is required to invite an employee.'));
-      const clash = codeProblem(emp, rawEmployees, existing);
       if (clash) {
+        // An upload never changes an employee who exists: refused, so the row
+        // can't report "Created" while changing nothing (#2798).
         errors.push('repeated' in clash
           ? t('bulk_employees.code_repeated', '%{code} is on more than one row', { code: emp.employeeCode })
-          : t('bulk_employees.code_taken', '%{code} is already used by %{name}', { code: emp.employeeCode, name: clash.takenBy }));
+          : 'exists' in clash
+            ? t('bulk_employees.code_exists', '%{code} already exists. Edit them in the employee list, or remove this row.', { code: emp.employeeCode })
+            : t('bulk_employees.code_taken', '%{code} is already used by %{name}', { code: emp.employeeCode, name: clash.takenBy }));
       }
 
       // Validate department(s) — comma-separated list supported; every code
@@ -317,6 +382,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     setFailedCount(0);
     setFailures([]);
     setCreatedEmployees([]);
+    setOutcomes({});
 
     const validEmployees = employees.filter((e) => e.status === 'valid');
     let createdTotal = 0;
@@ -396,26 +462,25 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
           const created = await hrmsService.createEmployee(employee);
           setCreatedEmployees((prev) => [...prev, created]);
           setCreatedCount((prev) => prev + 1);
+          setOutcomes((prev) => ({ ...prev, [emp.row]: 'created' }));
           createdTotal += 1;
         } catch (err) {
           console.error(`Failed to create employee ${emp.name}:`, err);
-          // Surface the reason, don't just count it. ApiClientError.firstError
-          // carries the DIGIT error message ("Unknown error occurred in
-          // encryption process", "INVALID_ROLE", …) — that string is the whole
-          // difference between an operator who can fix the row and one staring
-          // at "1 failed".
-          const reason = err instanceof ApiClientError
-            ? err.firstError
-            : (err instanceof Error ? err.message : String(err));
-          setFailures((prev) => [...prev, { name: emp.name, reason }]);
+          // Surface the reason, don't just count it: the server's reason in
+          // words, by row number, with its code (if any) as small print. That is
+          // the whole difference between an operator who can fix the row and
+          // one staring at "1 failed".
+          const { reason, code } = describeImportFailure(err, emp, t);
+          setFailures((prev) => [...prev, { row: emp.row, name: emp.name, reason, code }]);
           setFailedCount((prev) => prev + 1);
+          setOutcomes((prev) => ({ ...prev, [emp.row]: 'failed' }));
           failedTotal += 1;
         }
 
         setProgress(Math.round(((i + 1) / validEmployees.length) * 100));
       }
 
-      addUndo('create_employees', `Created ${createdCount} employees`);
+      addUndo('create_employees', `Created ${createdTotal} employees`);
       trackImport('employees', 'employee', {
         method: 'bulk',
         count: createdTotal,
@@ -436,6 +501,16 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     } finally {
       setLoading(false);
     }
+  };
+
+  // Nothing on the sheet to create: the results, with no create run behind them.
+  const handleFinishWithoutCreating = () => {
+    setCreatedCount(0);
+    setFailedCount(0);
+    setFailures([]);
+    setCreatedEmployees([]);
+    setOutcomes({});
+    setStep('complete');
   };
 
   const handleDownloadTemplate = () => {
@@ -475,6 +550,18 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
 
   const validCount = employees.filter((e) => e.status === 'valid').length;
   const errorCount = employees.filter((e) => e.status === 'error').length;
+  const skippedCount = employees.filter((e) => e.status === 'skipped').length;
+  const creatingRow = employees.find((e) => e.status === 'valid' && !outcomes[e.row])?.row;
+  // What still needs fixing after a run, by row: the rows the preview refused and
+  // the rows creating failed (#2799).
+  const rowsToFix = [
+    ...employees.filter((e) => e.status === 'error').map((e) => ({ row: e.row, text: rowReason(e.row, e.error ?? '', t), code: undefined as string | undefined })),
+    ...failures.map((f) => ({
+      row: f.row,
+      text: t('bulk_employees.row_named', 'Row %{row} (%{name}): %{reason}', { row: f.row, name: f.name, reason: f.reason }),
+      code: f.code,
+    })),
+  ].sort((a, b) => a.row - b.row);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -695,6 +782,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
+                    <TableHead className="text-xs sm:text-sm font-condensed">#</TableHead>
                     <TableHead className="text-xs sm:text-sm font-condensed">{t('bulk_employees.status', 'Status')}</TableHead>
                     <TableHead className="text-xs sm:text-sm font-condensed">{t('common.name', 'Name')}</TableHead>
                     <TableHead className="text-xs sm:text-sm font-condensed">{t('bulk_employees.mobile', 'Mobile')}</TableHead>
@@ -707,10 +795,15 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                 <TableBody>
                   {employees.slice(0, 15).map((emp, idx) => (
                     <TableRow key={idx} className={emp.status === 'error' ? 'bg-destructive/10' : ''}>
+                      <TableCell className="text-xs sm:text-sm text-muted-foreground">{emp.row}</TableCell>
                       <TableCell>
                         {emp.status === 'valid' ? (
                           <Badge className="gap-1 text-xs bg-success text-white">
                             <Check className="w-3 h-3" /> {t('bulk_employees.valid', 'Valid')}
+                          </Badge>
+                        ) : emp.status === 'skipped' ? (
+                          <Badge variant="secondary" className="gap-1 text-xs">
+                            {t('bulk_employees.already_added', 'Already added')}
                           </Badge>
                         ) : (
                           <Badge variant="destructive" className="gap-1 text-xs">
@@ -743,24 +836,29 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
           <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
             {t('bulk_employees.summary_total', 'Summary: %{smart_count} total', { smart_count: employees.length })} |{' '}
             <span className="text-success">{t('bulk_employees.summary_valid', '%{smart_count} valid', { smart_count: validCount })}</span> |{' '}
+            {skippedCount > 0 && (
+              <>
+                <span>{t('bulk_employees.summary_already_added', '%{smart_count} already added (skipped)', { smart_count: skippedCount })}</span> |{' '}
+              </>
+            )}
             <span className="text-destructive">{t('bulk_employees.summary_errors', '%{smart_count} errors', { smart_count: errorCount })}</span>
           </p>
 
+          {skippedCount > 0 && <AlreadyAddedNote count={skippedCount} className="mb-3 sm:mb-4" />}
+
+          {/* Every refused row, by its row number: nothing is cut off, so one
+              pass over the sheet can fix them all (#2800). */}
           {errorCount > 0 && (
             <Alert variant="warning" className="mb-4 sm:mb-6">
               <AlertCircle className="w-4 h-4" />
               <AlertDescription className="text-xs sm:text-sm">
                 <p className="font-medium mb-1">{t('bulk_employees.errors_found', 'Validation errors found:')}</p>
-                <ul className="list-disc list-inside space-y-1">
+                <ul className="list-disc list-inside space-y-1 max-h-48 overflow-y-auto">
                   {employees
                     .filter((e) => e.status === 'error')
-                    .slice(0, 3)
-                    .map((e, i) => (
-                      <li key={i}>
-                        {e.name}: {e.error}
-                      </li>
+                    .map((e) => (
+                      <li key={e.row}>{rowReason(e.row, e.error ?? '', t)}</li>
                     ))}
-                  {errorCount > 3 && <li>{t('bulk_employees.more_errors', '...and %{smart_count} more errors', { smart_count: errorCount - 3 })}</li>}
                 </ul>
               </AlertDescription>
             </Alert>
@@ -787,12 +885,17 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                   {t('bulk_employees.reupload', 'Re-upload Fixed File')}
                 </Button>
               )}
-              <SubmitBar
-                label={t('bulk_employees.create_count', 'Create %{smart_count} Employees', { smart_count: validCount })}
-                onSubmit={() => setShowConfirmDialog(true)}
-                disabled={validCount === 0}
-                icon={<ChevronRight className="w-4 h-4" />}
-              />
+              {/* Every row already added or refused: nothing to create, so the run
+                  ends here, with its results, rather than on a disabled button. */}
+              {validCount > 0 ? (
+                <SubmitBar
+                  label={t('bulk_employees.create_count', 'Create %{smart_count} Employees', { smart_count: validCount })}
+                  onSubmit={() => setShowConfirmDialog(true)}
+                  icon={<ChevronRight className="w-4 h-4" />}
+                />
+              ) : (
+                <SubmitBar label={t('bulk_employees.done', 'Done')} onSubmit={handleFinishWithoutCreating} icon={<ChevronRight className="w-4 h-4" />} />
+              )}
             </div>
           </div>
         </DigitCard>
@@ -831,22 +934,26 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                 </TableHeader>
                 <TableBody>
                   {employees.slice(0, 10).map((emp, idx) => {
-                    const isCreated = idx < createdCount && emp.status === 'valid';
-                    const isCreating =
-                      idx === createdCount &&
-                      emp.status === 'valid' &&
-                      idx < createdCount + failedCount + 1;
-                    const isSkipped = emp.status === 'error';
+                    // By each row's own outcome: rows the preview skipped or refused
+                    // sit among the valid ones, so a count can't place them.
+                    const outcome = outcomes[emp.row];
+                    const isCreated = outcome === 'created';
+                    const isSkipped = emp.status !== 'valid';
+                    const isCreating = !isSkipped && !outcome && emp.row === creatingRow;
 
                     return (
                       <TableRow key={idx}>
-                        <TableCell className="text-xs sm:text-sm">{idx + 1}</TableCell>
+                        <TableCell className="text-xs sm:text-sm">{emp.row}</TableCell>
                         <TableCell className="font-medium text-xs sm:text-sm">{emp.name}</TableCell>
                         <TableCell className="text-xs sm:text-sm">
                           {isSkipped ? (
-                            <span className="text-muted-foreground">⏭️ {t('bulk_employees.skipped', 'Skipped')}</span>
+                            <span className="text-muted-foreground">
+                              ⏭️ {emp.status === 'skipped' ? t('bulk_employees.already_added', 'Already added') : t('bulk_employees.skipped', 'Skipped')}
+                            </span>
                           ) : isCreated ? (
                             <span className="text-success">✓ {t('bulk_employees.created', 'Created')}</span>
+                          ) : outcome === 'failed' ? (
+                            <span className="text-destructive">✗ {t('bulk_employees.failed', 'Failed')}</span>
                           ) : isCreating ? (
                             <Loader2 className="w-4 h-4 text-primary animate-spin" />
                           ) : (
@@ -877,20 +984,26 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
       {/* Complete */}
       {step === 'complete' && (
         <DigitCard>
+          {/* A success only when no row is left to fix: rows the preview refused
+              count as much as rows that failed to create. Nothing created with
+              nothing to fix means every row was already added (#2799). */}
           <Banner
-            successful={createdCount > 0 && failedCount === 0}
+            successful={rowsToFix.length === 0}
             message={
-              createdCount > 0 && failedCount === 0
-                ? t('bulk_employees.all_created', 'Employees Created Successfully!')
+              rowsToFix.length > 0
+                ? t('bulk_employees.created_to_fix', '%{created} created, %{smart_count} still to fix', {
+                    created: createdCount,
+                    smart_count: rowsToFix.length,
+                  })
                 : createdCount > 0
-                ? t('bulk_employees.some_created', 'Created %{created}, %{failed} failed', { created: createdCount, failed: failedCount })
-                : t('bulk_employees.none_created', 'No employees created — %{failed} failed', { failed: failedCount })
+                ? t('bulk_employees.all_created', 'Employees Created Successfully!')
+                : t('bulk_employees.nothing_new', 'No new employees added')
             }
             info={
-              failedCount > 0
+              rowsToFix.length > 0
                 ? `${t('bulk_employees.tenant', 'Tenant: %{tenant}', { tenant: targetTenant.toUpperCase() })} • ${t(
-                    'bulk_employees.check_failures',
-                    'Check the failure list below and retry the failed rows.',
+                    'bulk_employees.fix_and_upload_again',
+                    'Fix the rows listed below, then upload the sheet again. Employees already added are skipped, so nobody is added twice.',
                   )}`
                 : t('bulk_employees.tenant', 'Tenant: %{tenant}', { tenant: targetTenant.toUpperCase() })
             }
@@ -905,6 +1018,14 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
                     {createdCount}
                   </TableCell>
                 </TableRow>
+                {skippedCount > 0 && (
+                  <TableRow>
+                    <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">⏭️ {t('bulk_employees.already_added_skipped', 'Already added (skipped)')}</TableCell>
+                    <TableCell className="px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm text-muted-foreground">
+                      {skippedCount}
+                    </TableCell>
+                  </TableRow>
+                )}
                 {failedCount > 0 && (
                   <TableRow>
                     <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">✗ {t('bulk_employees.failed', 'Failed')}</TableCell>
@@ -929,19 +1050,20 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
             </Table>
           </div>
 
-          {/* Why each row failed. The Banner above already promises a
-              "failure list below" — this is it. */}
-          {failures.length > 0 && (
+          {/* What still needs fixing, by row: the rows the preview refused and
+              the rows creating failed. The Banner above points here (#2799). */}
+          {rowsToFix.length > 0 && (
             <Alert variant="destructive" className="text-left mt-4 sm:mt-6">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-xs sm:text-sm">
                 <p className="mb-2">
-                  <strong>{t('bulk_employees.failed_rows', 'Failed rows:')}</strong>
+                  <strong>{t('bulk_employees.rows_to_fix', 'Rows still to fix:')}</strong>
                 </p>
-                <ul className="space-y-1">
-                  {failures.map((f, idx) => (
-                    <li key={`${f.name}-${idx}`}>
-                      <span className="font-medium">{f.name}</span>: {f.reason}
+                <ul className="space-y-1 max-h-60 overflow-y-auto">
+                  {rowsToFix.map((item, idx) => (
+                    <li key={`${item.row}-${idx}`}>
+                      {item.text}
+                      {item.code && <span className="ml-2 font-mono text-[10px] opacity-70">{item.code}</span>}
                     </li>
                   ))}
                 </ul>
@@ -1012,6 +1134,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
               </AlertDescription>
             </Alert>
           )}
+          {skippedCount > 0 && <AlreadyAddedNote count={skippedCount} />}
 
           <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
             <Button

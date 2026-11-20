@@ -159,35 +159,126 @@ export function planEmployeeCodes(existing: string[], given: string[]): string[]
   return given.map((code) => code || hrmsService.generateEmployeeCode('EMP', ++next));
 }
 
-/** A bulk sheet's rows with every blank code filled in by planEmployeeCodes. */
-export function withEmployeeCodes<T extends { employeeCode: string }>(rows: T[], existing: Map<string, EmployeeRecord>): T[] {
-  const codes = planEmployeeCodes([...existing.keys()], rows.map((row) => row.employeeCode));
+/** An email as HRMS and the sheet are compared on it: trimmed, any case. */
+const emailKey = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
+/**
+ * A bulk sheet's rows with every blank code filled in. A blank-code row with the
+ * email of someone HRMS holds, active, takes that person's code: the same person
+ * codeProblem names as existing, so a re-upload of a sheet without codes shows
+ * them as already added when matchesSheetRow agrees, and refuses them otherwise,
+ * rather than giving them a new code and adding them again (#2799). Any other
+ * blank code gets planEmployeeCodes' next free EMP_ code, past `reserved` too:
+ * the codes on rows the parser refused, which a fixed re-upload still asks for.
+ */
+export function withEmployeeCodes<T extends { employeeCode: string; emailId?: string }>(
+  rows: T[],
+  existing: Map<string, EmployeeRecord>,
+  reserved: string[] = [],
+): T[] {
+  const byEmail = new Map<string, string>();
+  for (const [code, holder] of existing) {
+    const email = emailKey(holder.user?.emailId);
+    if (holder.isActive !== false && email && !byEmail.has(email)) byEmail.set(email, code);
+  }
+  const given = rows.map((row) => row.employeeCode || byEmail.get(emailKey(row.emailId)) || '');
+  const codes = planEmployeeCodes([...existing.keys(), ...reserved], given);
   return rows.map((row, index) => ({ ...row, employeeCode: codes[index] }));
 }
 
-/** Every employee HRMS holds, removed ones included, by code: what a bulk upload's codes are checked against. */
+/** HRMS search page size for employeesByCode, and the most pages it reads before giving up. */
+const EMPLOYEE_PAGE = 500;
+const EMPLOYEE_MAX_PAGES = 100;
+
+/**
+ * Every employee HRMS holds, removed ones included, by code: what a bulk upload's
+ * codes are checked against. Read page by page to the end: with only the first
+ * page, anyone past it looked new, was counted as created again, and left their
+ * code free for a blank row (#2798). A list that doesn't end is an error, never a
+ * partial map.
+ */
 export async function employeesByCode(tenantId: string): Promise<Map<string, EmployeeRecord>> {
-  const employees = (await hrmsService.searchEmployees(tenantId, { limit: 500 })) as EmployeeRecord[];
-  return new Map(employees.filter((employee) => employee.code).map((employee): [string, EmployeeRecord] => [employee.code, employee]));
+  const employees: EmployeeRecord[] = [];
+  for (let page = 0; page < EMPLOYEE_MAX_PAGES; page++) {
+    const rows = (await hrmsService.searchEmployees(tenantId, { limit: EMPLOYEE_PAGE, offset: page * EMPLOYEE_PAGE })) as EmployeeRecord[];
+    employees.push(...rows);
+    if (rows.length < EMPLOYEE_PAGE) {
+      return new Map(employees.filter((employee) => employee.code).map((employee): [string, EmployeeRecord] => [employee.code, employee]));
+    }
+  }
+  throw new Error(`HRMS employee search still had rows after ${EMPLOYEE_MAX_PAGES} pages; refusing a partial list`);
 }
 
 /**
- * Why a bulk row's code can't be used, or null (#2456). A code HRMS holds is fine
- * for the same active person (same email): createAndLink then finishes their
- * invite. Anyone else's, a removed employee's, or one on two rows fails at create
- * or folds two people into one; the founder holds EMP_0001.
+ * Why a bulk row's code can't be used as a new employee's, or null (#2456). A code
+ * on two rows folds two people into one; anyone else's, or a removed employee's,
+ * fails at create; the founder holds EMP_0001. The same active person's (same
+ * email) is `exists`: a bulk upload never changes an employee, and creating would
+ * leave the record as it is while counting it as created (#2798), so the caller
+ * skips the row when matchesSheetRow says it holds what HRMS has, and refuses it
+ * otherwise. `sheet` is every row of the upload, the ones the parser refused
+ * included: their codes are still asked for, by the fixed re-upload.
  */
 export function codeProblem(
   row: { employeeCode: string; emailId?: string },
   sheet: { employeeCode: string }[],
   existing: Map<string, EmployeeRecord>,
-): { repeated: true } | { takenBy: string } | null {
+): { repeated: true } | { takenBy: string } | { exists: EmployeeRecord } | null {
   if (sheet.filter((other) => other.employeeCode === row.employeeCode).length > 1) return { repeated: true };
   const holder = existing.get(row.employeeCode);
   if (!holder) return null;
-  const email = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
-  const same = holder.isActive !== false && email(row.emailId) !== '' && email(row.emailId) === email(holder.user?.emailId);
-  return same ? null : { takenBy: holder.user?.name || row.employeeCode };
+  const same = holder.isActive !== false && emailKey(row.emailId) !== '' && emailKey(row.emailId) === emailKey(holder.user?.emailId);
+  return same ? { exists: holder } : { takenBy: holder.user?.name || row.employeeCode };
+}
+
+/**
+ * Whether a bulk row holds what HRMS already has for that employee: name, mobile,
+ * departments (the first the current one), designation, every role it lists, and
+ * the same active jurisdictions. Such a row was added already, by an earlier
+ * upload of the same sheet for instance, and is skipped (#2799). `boundaryCode`
+ * turns a jurisdiction cell (a code or a name) into its boundary code. Date of
+ * birth, gender and appointment date aren't compared: the step doesn't show them.
+ */
+export function matchesSheetRow(
+  row: { name: string; mobileNumber: string; department: string; designation: string; roles: string; jurisdictions: string },
+  holder: EmployeeRecord,
+  boundaryCode: (cell: string) => string | undefined,
+): boolean {
+  const text = (value: unknown) => String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+  const list = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
+  const current = currentAssignment(holder);
+  const departments = list(row.department);
+  const held = new Set((holder.user?.roles ?? []).map((role) => role.code));
+  const places = new Set(list(row.jurisdictions).map((cell) => boundaryCode(cell) ?? cell));
+  const heldPlaces = new Set((holder.jurisdictions ?? []).filter((place) => place.isActive !== false).map((place) => place.boundary));
+  const mobile = String(holder.user?.mobileNumber ?? '').trim();
+  return (
+    text(row.name) === text(holder.user?.name) &&
+    // A masked number can't be compared; the code and email already name the person.
+    (mobile.includes('*') || row.mobileNumber.trim() === mobile) &&
+    departments[0] === current?.department &&
+    departments.every((code) => (holder.assignments ?? []).some((assignment) => assignment.department === code)) &&
+    row.designation === current?.designation &&
+    list(row.roles || 'EMPLOYEE').every((code) => held.has(code)) &&
+    places.size === heldPlaces.size &&
+    [...places].every((code) => heldPlaces.has(code))
+  );
+}
+
+/**
+ * Whether a bulk row is someone HRMS already holds, just as the row describes
+ * them: the row is skipped as already added, never counted as created (#2799).
+ * A jurisdiction cell is taken as a boundary code unless `boundaryCode` says
+ * otherwise.
+ */
+export function alreadyAdded(
+  row: Parameters<typeof codeProblem>[0] & Parameters<typeof matchesSheetRow>[0],
+  sheet: { employeeCode: string }[],
+  existing: Map<string, EmployeeRecord>,
+  boundaryCode: (cell: string) => string | undefined = (cell) => cell,
+): boolean {
+  const clash = codeProblem(row, sheet, existing);
+  return !!clash && 'exists' in clash && matchesSheetRow(row, clash.exists, boundaryCode);
 }
 
 export async function addEmployee(tenantId: string, input: NewEmployee, options: EmployeeOptions): Promise<Employee> {
