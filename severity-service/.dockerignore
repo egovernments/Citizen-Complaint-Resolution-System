@@ -1,0 +1,24 @@
+# Runtime image = app/ + model/ + requirements.txt only. Everything below is excluded
+# so the same Dockerfile also works when the full severity-service/ folder is present.
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+tests/
+README.md
+**/*.ipynb
+requirements-dev.txt
+requirements-training.txt
+data/
+labelling/
+training/
+older_severity_model/
+scripts/
+ITERATIONS.md
+PULL_REQUEST_TEMPLATE.md
+**/*.pkl
+**/*.csv
+**/*.xlsx
+**/.env
+**/.env.*
+model/critical_rules.json
+model/metrics.json
