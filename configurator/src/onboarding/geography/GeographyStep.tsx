@@ -379,7 +379,8 @@ export default function GeographyStep() {
         setSource(selection.source);
       }}
       onRemove={(selection) => {
-        removeSelection(tenant, selection.id);
+        // As adding does: a save's error was about the list as it was.
+        if (removeSelection(tenant, selection.id)) setSaveError(null);
       }}
     />
   );

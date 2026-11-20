@@ -284,6 +284,11 @@ describe('GeographyStep', () => {
     expect(button('Remove Nairobi — County').disabled).toBe(false);
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
     expect(window.localStorage.length).toBe(0);
+    // Removing from the list clears the error about it, as adding does.
+    fireEvent.click(button('Remove Nairobi — County'));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(screen.queryByTestId('boundary-list-item')).toBeNull());
+    expect(screen.queryByText('Network Error')).toBeNull();
   });
 
   it('G-9: names each area a save missed, with the server’s reason, and leaves the step open (#2795)', async () => {
