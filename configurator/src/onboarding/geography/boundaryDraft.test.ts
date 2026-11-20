@@ -328,6 +328,22 @@ describe('what a save left unsaved, across a reload (#2795)', () => {
     expect(restore()).toBeNull();
   });
 
+  it('reads them back without writing them again', () => {
+    act(() => void addSelection(TENANT, sheet(NAIROBI)));
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+    reload();
+    const writes = vi.spyOn(Storage.prototype, 'setItem');
+    try {
+      expect(restore()).toEqual([refused]);
+      expect(writes).not.toHaveBeenCalled();
+    } finally {
+      writes.mockRestore();
+    }
+    // The next change is still written.
+    act(() => keepUnsaved(TENANT, [NAIROBI[2]]));
+    expect(window.localStorage.length).toBe(0);
+  });
+
   it('forgets them once they are all saved, or removed', () => {
     act(() => void addSelection(TENANT, selection(NAIROBI)));
     act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));

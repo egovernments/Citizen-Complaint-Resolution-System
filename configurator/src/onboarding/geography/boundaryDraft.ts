@@ -278,8 +278,10 @@ export function restoreLeftovers(tenantId: string, hierarchyTypes: string[]): Bo
     if (!stored) continue;
     leftovers.set(tenantId, hierarchyType);
     leftoverFailures.set(tenantId, stored.failed);
-    setBoundaryDraft(tenantId, { selections: stored.selections.map(revived) });
-    return leftoverFailures.get(tenantId) ?? [];
+    // Not through setBoundaryDraft: storage already holds exactly this, so it isn't written again.
+    drafts.set(tenantId, { selections: stored.selections.map(revived) });
+    notify();
+    return stored.failed;
   }
   return null;
 }
