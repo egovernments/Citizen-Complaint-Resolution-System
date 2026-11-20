@@ -15144,14 +15144,32 @@
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.geography.google.rejected",
+    "message": "Google ने इस API कुंजी को अस्वीकार कर दिया। जाँचें कि यह पूरी कॉपी हुई है, Google Cloud Console में इसके लिए Maps JavaScript API चालू करें, और इसकी HTTP-referrer पाबंदियों में इस साइट (%{site}) को अनुमति दें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.geography.google.osm_tiles",
     "message": "Tuiles OpenStreetMap",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
   {
+    "code": "app.onboarding.geography.google.rejected",
+    "message": "Google a rejeté cette clé d’API. Vérifiez qu’elle est copiée en entier, activez l’API Maps JavaScript pour cette clé dans Google Cloud Console et autorisez ce site (%{site}) dans ses restrictions de référents HTTP.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.geography.google.osm_tiles",
     "message": "Blocos do OpenStreetMap",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.google.rejected",
+    "message": "O Google rejeitou esta chave de API. Verifique se ela foi copiada por inteiro, ative a API Maps JavaScript para ela no Google Cloud Console e permita este site (%{site}) nas restrições de referenciador HTTP da chave.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -23930,6 +23948,12 @@
   {
     "code": "app.onboarding.geography.google.osm_tiles",
     "message": "OpenStreetMap tiles",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.google.rejected",
+    "message": "Google rejected this API key. Check it is copied in full, enable the Maps JavaScript API for it in Google Cloud Console, and allow this site (%{site}) in its HTTP-referrer restrictions.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

@@ -9,6 +9,7 @@ import { PROVISIONING_STEP_LABELS } from '@/api/onboarding';
 import { PROVISIONING_ERRORS, SIGNUP_ERRORS, SIGNUP_FIELD_ERRORS, signupFieldKey } from './signup/signupErrors';
 import { CONFIDENCE_HINT, CONFIDENCE_LABEL, STATUS_LABEL } from '@/utils/officialBoundaries';
 import { TURBOPASS_UNAVAILABLE_MESSAGE } from '@/utils/turbopassSuggestions';
+import { GOOGLE_KEY_REJECTED_MESSAGE } from '@/utils/googleMaps';
 
 /**
  * Onboarding's English lives in the code, as each t(key, english) call's fallback. The two
@@ -94,6 +95,8 @@ function dynamicKeys(): Map<string, string> {
   for (const [level, english] of Object.entries(CONFIDENCE_HINT)) keys.set(`geography.confidence_hint.${level}`, english);
   for (const [status, english] of Object.entries(STATUS_LABEL)) keys.set(`geography.level_status.${status}`, english);
   keys.set('geography.turbopass_unavailable', TURBOPASS_UNAVAILABLE_MESSAGE);
+  // ...and the Google Maps key check's refusal, from @/utils/googleMaps.
+  keys.set('geography.google.rejected', GOOGLE_KEY_REJECTED_MESSAGE);
   for (const [key, english] of Object.entries(RETIRED)) keys.set(key, english);
   return keys;
 }
