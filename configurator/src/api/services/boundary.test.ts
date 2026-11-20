@@ -267,6 +267,40 @@ describe('boundaryService.createBoundaries', () => {
       vi.useRealTimers();
     }
   });
+
+  it("drops an area's refusal once a retry is accepted, so a slow write isn't blamed on it", async () => {
+    vi.useFakeTimers();
+    const row = (code: string, boundaryType: string, parent?: string): Boundary =>
+      ({ tenantId: 'ke', code, name: code, boundaryType, hierarchyType: 'ADMIN', parent }) as Boundary;
+    const rows = [row('C1', 'County'), row('W1', 'Ward', 'C1')];
+    const notYet = Object.assign(new Error('Parent entity for current boundary relationship does not exist.'), {
+      errors: [{ code: 'PARENT_NOT_FOUND', message: 'Parent entity for current boundary relationship does not exist.' }],
+    });
+    let w1Tries = 0;
+    const spies = [
+      vi.spyOn(boundaryService, 'createBoundaryEntity').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'waitForEntityVisibility').mockResolvedValue(undefined as never),
+      // W1's first write comes before its parent is readable; every retry is accepted.
+      vi.spyOn(boundaryService, 'createBoundaryRelationship').mockImplementation(async (_t, _h, code) => {
+        if (code === 'W1' && ++w1Tries === 1) throw notYet;
+        return true;
+      }),
+      // ...but it never shows up before the checks end.
+      vi.spyOn(boundaryService, 'searchBoundaries').mockResolvedValue([rows[0]]),
+    ];
+    try {
+      const pending = boundaryService.createBoundaries(rows);
+      await vi.runAllTimersAsync();
+      const result = await pending;
+      expect(w1Tries).toBeGreaterThan(1);
+      expect(result.failed).toHaveLength(1);
+      expect(result.failed[0].error).not.toContain('Parent entity');
+      expect(result.failed[0].code).toBeUndefined();
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('boundaryService.existingBoundaries', () => {

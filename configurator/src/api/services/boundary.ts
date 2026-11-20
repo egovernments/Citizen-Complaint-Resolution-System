@@ -581,6 +581,7 @@ export const boundaryService = {
             await this.createBoundaryRelationship(
               b.tenantId, b.hierarchyType, b.code, b.boundaryType, b.parent
             );
+            lastError.delete(b.code);
           } catch (error) {
             // deferred to verify — the next pass re-checks ACTUAL presence
             lastError.set(b.code, error);
@@ -620,6 +621,8 @@ export const boundaryService = {
                 b.tenantId, b.hierarchyType as string, b.code,
                 b.boundaryType as string, b.parent
               );
+              // Accepted this time: an earlier refusal no longer says why it's absent.
+              lastError.delete(b.code);
             } catch (error) {
               // re-checked next round
               lastError.set(b.code, error);
