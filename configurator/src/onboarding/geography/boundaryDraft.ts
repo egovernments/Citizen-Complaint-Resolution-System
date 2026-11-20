@@ -5,6 +5,7 @@ import { labelLocales } from '../labelLocales';
 import { englishT, MessageError, type OnboardingT } from '../i18n';
 import { deriveMapPosition, widenMapPosition, type BoundingBox } from '@/utils/mapConfigFromBoundaries';
 import { MDMS_SCHEMAS } from '@/api/config';
+import { onSignOut } from '@/lib/signOutHooks';
 import type { OsmAdminLevel } from '@/utils/osmBoundaries';
 import type { ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
 import type { SuggestionFeature } from '@/utils/turbopassSuggestions';
@@ -131,7 +132,18 @@ interface StoredLeftovers {
   failed: BoundaryCreateFailure[];
 }
 
-const leftoverKey = (tenantId: string, hierarchyType: string) => `ccrs-geography-unsaved:${tenantId}:${hierarchyType}`;
+/** Who is signed in: what one admin's save left out is theirs, not the next person's to sign in on this browser. */
+function signedInUser(): string {
+  try {
+    return apiClient.getAuth().user?.uuid ?? '';
+  } catch {
+    return '';
+  }
+}
+const leftoverKey = (tenantId: string, hierarchyType: string) => {
+  const user = signedInUser();
+  return `ccrs-geography-unsaved:${tenantId}:${hierarchyType}${user ? `:${user}` : ''}`;
+};
 // The workspaces whose list is a save's leftovers, by the hierarchy it goes into.
 const leftovers = new Map<string, string>();
 // Why the last save left out the areas still in that list.
@@ -271,6 +283,19 @@ export function restoreLeftovers(tenantId: string, hierarchyTypes: string[]): Bo
   }
   return null;
 }
+
+/**
+ * On sign-out: this tab forgets every list, and what a save left out, so the next person to
+ * sign in here doesn't get them. Leftovers stay in storage under the admin they belong to.
+ */
+export function forgetBoundaryDrafts() {
+  drafts.clear();
+  leftovers.clear();
+  leftoverFailures.clear();
+  leftoversKept.clear();
+  notify();
+}
+onSignOut(forgetBoundaryDrafts);
 
 export function useBoundaryDraft(tenantId: string): BoundaryDraft | null {
   return useSyncExternalStore(subscribe, () => drafts.get(tenantId) ?? null);

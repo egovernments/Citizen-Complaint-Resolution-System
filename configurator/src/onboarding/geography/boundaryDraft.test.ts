@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { boundaryService, localizationService, mdmsService } from '@/api';
+import { apiClient, boundaryService, localizationService, mdmsService } from '@/api';
+import { runSignOutHooks } from '@/lib/signOutHooks';
 import type { Boundary } from '@/api/types';
 import {
   addSelection,
@@ -16,13 +17,14 @@ import {
   setBoundaryDraft,
   useBoundaryDraft,
   useLeftoversNotKept,
+  useSaveLeftovers,
   type BoundaryDraft,
   type NewSelection,
 } from './boundaryDraft';
 
 vi.mock('@/api', () => ({
   ApiClientError: class ApiClientError extends Error {},
-  apiClient: { getAuth: () => ({ token: null }) },
+  apiClient: { getAuth: vi.fn(() => ({ token: null })) },
   boundaryService: {
     createHierarchyFromLevels: vi.fn(),
     getHierarchies: vi.fn(),
@@ -378,6 +380,36 @@ describe('what a save left unsaved, across a reload (#2795)', () => {
     expect(codes()).toEqual(['NBI_W2']);
     const { resume } = current().selections[0];
     expect(resume.kind === 'osm' && resume.adminLevels).toEqual([]);
+  });
+
+  describe('on a browser more than one admin signs in to', () => {
+    const signedIn = (uuid: string) =>
+      vi.mocked(apiClient.getAuth).mockReturnValue({ token: 't', user: { uuid, userName: uuid, name: uuid, tenantId: TENANT }, tenantId: TENANT });
+    afterEach(() => {
+      vi.mocked(apiClient.getAuth).mockReturnValue({ token: null } as never);
+    });
+
+    it('keeps what a save left out for the admin whose save it was', () => {
+      signedIn('admin-a');
+      act(() => void addSelection(TENANT, sheet(NAIROBI)));
+      act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+      expect(Object.keys(window.localStorage)).toEqual([`ccrs-geography-unsaved:${TENANT}:ADMIN:admin-a`]);
+      reload();
+      signedIn('admin-b');
+      expect(restore()).toBeNull();
+      signedIn('admin-a');
+      expect(restore()).toEqual([refused]);
+    });
+
+    it('forgets this tab’s list on sign-out, and leaves the stored one to its admin', () => {
+      signedIn('admin-a');
+      act(() => void addSelection(TENANT, sheet(NAIROBI)));
+      act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));
+      act(() => runSignOutHooks());
+      expect(renderHook(() => useBoundaryDraft(TENANT)).result.current).toBeNull();
+      expect(renderHook(() => useSaveLeftovers(TENANT)).result.current).toBeNull();
+      expect(Object.keys(window.localStorage)).toEqual([`ccrs-geography-unsaved:${TENANT}:ADMIN:admin-a`]);
+    });
   });
 
   describe('a list too big for this site’s storage', () => {

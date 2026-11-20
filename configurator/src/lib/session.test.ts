@@ -1,7 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { logout } from '@/api/onboarding';
 import { apiClient } from '@/api';
-import { AUTH_STORAGE_KEY, SIGN_OUT_INCOMPLETE_KEY, signOutThisDevice } from './session';
+import { AUTH_STORAGE_KEY, SIGN_OUT_INCOMPLETE_KEY, clearLocalSession, signOutThisDevice } from './session';
+import { onSignOut } from './signOutHooks';
 vi.mock('@/api/onboarding', () => ({ API_ORIGIN: '', logout: vi.fn() }));
 vi.mock('@/api', () => ({ apiClient: { logout: vi.fn() } }));
 vi.mock('@/providers/bridge', () => ({ digitClient: { clearAuth: vi.fn() }, resetProviders: vi.fn() }));
@@ -35,4 +36,18 @@ it('clears local state before revoking the BFF session', async () => {
   });
   await signOutThisDevice('all');
   expect(logout).toHaveBeenCalledWith('all');
+});
+it('forgets what this tab holds for the person signing out, even when one part fails', async () => {
+  const forget = vi.fn();
+  const unregister = [onSignOut(() => { throw new Error('broken'); }), onSignOut(forget)];
+  try {
+    await signOutThisDevice();
+    expect(forget).toHaveBeenCalledTimes(1);
+    expect(logout).toHaveBeenCalled();
+    // A session that only expired keeps it: the same person signs back in and carries on.
+    clearLocalSession();
+    expect(forget).toHaveBeenCalledTimes(1);
+  } finally {
+    unregister.forEach((off) => off());
+  }
 });
