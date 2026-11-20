@@ -676,6 +676,7 @@
 {"code": "app.onboarding.geography.confidence.medium", "message": "Medium confidence", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.confirmed_means_other", "message": "Confirmed means another source has nearly the same areas. It doesn't mean your government has endorsed this exact file, and “one source only” means a level couldn't be checked, not that it is wrong.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.confirmed_means_second", "message": "Confirmed means a second, independently drawn set has nearly the same areas. It doesn't mean your government has endorsed this exact file, and “one source only” means a level couldn't be checked, not that it is wrong.", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.onboarding.geography.create_failures", "message": "%{count} boundaries failed to create.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.creating", "message": "Creating...", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.empty_body", "message": "Your complaint services are routed inside a boundary hierarchy: countries, districts, wards. Bring one in from a source above to get started.", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.onboarding.geography.empty_title", "message": "No boundaries yet", "module": "configurator-ui", "locale": "en_IN"},

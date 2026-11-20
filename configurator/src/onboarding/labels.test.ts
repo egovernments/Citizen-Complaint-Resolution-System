@@ -67,8 +67,10 @@ function staticCalls(): Map<string, string> {
 const RETIRED: Record<string, string> = {
   'employees.signs_in_as': 'They sign in as %{username}.',
   'bulk_employees.got_account': 'User account (username: employee code)',
-  // It sits under the list it called "below"; now geography.save_retry_above (#2795).
+  // Save and continue no longer tries them again: Retry does, and geography.not_saved_retry_* says so (#2795).
   'geography.save_retry': 'They are still in the list below: Save and continue tries them again.',
+  // A count only; geography.not_saved_retry_* now names each area and the server's reason (#2795).
+  'geography.create_failures': '%{count} boundaries failed to create.',
 };
 
 /** The keys built at runtime, from the lists they come from. */

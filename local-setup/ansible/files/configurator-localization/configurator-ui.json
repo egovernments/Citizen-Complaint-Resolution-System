@@ -23712,6 +23712,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.create_failures",
+    "message": "%{count} boundaries failed to create.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.creating",
     "message": "Creating...",
     "module": "configurator-ui",
