@@ -97,6 +97,24 @@ async function labelCandidates(token: string, codes: string[]): Promise<Map<stri
       if (code && name && out.has(code)) out.get(code)!.unshift(String(name));
     }
   } catch { /* MDMS unreachable — code/raw-key candidates still stand */ }
+  // The inbox labels a subcategory the way complaintLabel() does
+  // (products/pgr/src/utils/complaintLabel.js): the localized
+  // COMPLAINT_HIERARCHY.<CODE> message wins over the node name. Read that from
+  // the deployment's own localization store so the label match below can hit
+  // on tenants where the two differ (bomet: "DamageToPrivatePropertyDuringWorks"
+  // is shown as "Damage to private property during works").
+  try {
+    const j: any = await fetch(
+      `${BASE_URL}/localization/messages/v1/_search?tenantId=${encodeURIComponent(TENANT.split('.')[0])}` +
+        `&locale=en_IN&module=rainmaker-pgr`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ RequestInfo: { apiId: 'Rainmaker', authToken: token } }) },
+    ).then((r) => r.json());
+    const byKey = new Map<string, string>((j.messages || []).map((m: any) => [String(m.code), String(m.message)]));
+    for (const c of codes) {
+      const msg = byKey.get(`COMPLAINT_HIERARCHY.${c.toUpperCase()}`);
+      if (msg) out.get(c)!.unshift(msg);
+    }
+  } catch { /* localization unreachable — MDMS/code candidates still stand */ }
   return out;
 }
 
@@ -268,14 +286,25 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     );
     const labels = await labelCandidates(admin!.token, targets);
 
-    // Open the "Complaint Subtype" dropdown and read its option labels.
-    const ddInput = page.locator('.digit-dropdown-employee-select-wrap input[type="text"]').first();
-    const optionItems = page.locator('.digit-dropdown-options-card .digit-dropdown-item');
+    // Open the "Complaint Subcategory" picker and read its option labels.
+    // Since PR #2241 (97cc00249, products/pgr/src/components/
+    // ComplaintCategoryFilter.js) the inbox's complaint-type filter is a
+    // Category + Subcategory pair of digit-ui-components-v2 Selects: the
+    // subcategory (the serviceCode the search sends) is the combobox button
+    // #pgr-filter-subcategory, and its options are role="option" rows in a
+    // role="listbox" (packages/digit-ui-components-v2/src/components/ui/
+    // select.tsx). The old .digit-dropdown-employee-select-wrap text input no
+    // longer exists. The trigger toggles, so the list is closed again before
+    // the loop below reopens it per candidate.
+    const ddInput = page.locator('#pgr-filter-subcategory');
+    const optionItems = page.locator('[role="listbox"] [role="option"]');
     await ddInput.click();
-    await page.waitForTimeout(800);
+    await expect(optionItems.first(), 'subtype dropdown lists options').toBeVisible({ timeout: 10_000 });
     const optionCount = await optionItems.count();
     expect(optionCount, 'subtype dropdown lists options').toBeGreaterThan(0);
     const optionTexts: string[] = (await optionItems.allInnerTexts()).map((s) => s.trim());
+    await page.keyboard.press('Escape');
+    await expect(optionItems, 'subcategory list closes before the candidates are tried').toHaveCount(0);
 
     /** Option indices to try, best-first: the ones whose label matches a type we
      *  know has rows, then (only if none matched) every remaining option, whose
@@ -294,14 +323,19 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     // set. With a label match this is a single pass; the unmatched fallback
     // learns each option's code from `serviceCode=` in the search URL and skips
     // any type the data has no rows for.
+    //
+    // Picking a subcategory also sets its Category, which narrows the
+    // subcategory list (ComplaintCategoryFilter.js) — so option INDICES from the
+    // unfiltered read above go stale after the first pick. Options are chosen
+    // by their label, and filters are cleared between attempts.
     let matched = false;
     let matchedCode = '';
     const tried: string[] = [];
-    for (const i of order) {
+    for (const [attempt, i] of order.entries()) {
+      if (attempt > 0) await clearFilters(page);
       await ddInput.click();
-      await page.waitForTimeout(500);
-      await optionItems.nth(i).click();
-      await page.waitForTimeout(400);
+      await page.getByRole('option', { name: optionTexts[i], exact: true }).first().click();
+      await expect(ddInput, 'the picked subcategory is shown on the trigger').toContainText(optionTexts[i]);
       const url = await applyFilter(page);
       expect(url).toContain('serviceCode=');
       const requested = url.match(/[?&]serviceCode=([^&]+)/)?.[1] || '';
@@ -332,6 +366,11 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
 
   test('locality filter → only rows in the chosen leaf boundary @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!seedSkip, seedSkip);
+    // At 1280x720 the leaf boundary combobox sits below the fold (y≈770) and the
+    // Select's fixed-position popover opens off-screen, so the option can never be
+    // clicked. A taller viewport plus scrolling each trigger to centre keeps the
+    // popover on screen.
+    await page.setViewportSize({ width: 1280, height: 1000 });
     await openInbox(page);
 
     // Drill the boundary cascade: pick the first option at each level until no
@@ -351,6 +390,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
       const n = await combos.count();
       if (n === 0) break;
       const before = n;
+      await combos.nth(n - 1).evaluate((el) => el.scrollIntoView({ block: 'center' }));
       await combos.nth(n - 1).click();
       await page.waitForTimeout(700);
       const opt = page.getByRole('option').first();

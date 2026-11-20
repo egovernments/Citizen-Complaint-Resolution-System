@@ -15,7 +15,8 @@ import { tenantSlug } from '../utils/identity-bff';
  * self-skips when the employee login is unavailable.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { BASE_URL } from '../utils/env';
+import { BASE_URL, PGR_ID_PREFIX } from '../utils/env';
+import { tryGetProfile } from '../utils/profile';
 import { getPersona, serviceCodesFor } from '../utils/personas';
 import { seedComplaintAsCitizen, driveToPendingAtLme } from '../utils/seed';
 import { readProvisionedCitizen } from '../utils/citizen-provision';
@@ -145,8 +146,11 @@ test.describe('employee inbox-v2 — search', () => {
     test.skip(!!setupSkip, setupSkip);
     await openInbox(page);
 
-    // Matches the field's PG-PGR-YYYY-MM-DD-###### pattern but cannot exist.
-    await page.locator('input[name="complaintNumber"]').fill('PG-PGR-2099-01-01-999999');
+    // Well-formed for THIS deployment (its own idgen prefix, so a field that
+    // validates the prefix still runs the search) but dated 2099, so it cannot exist.
+    const prefix = tryGetProfile()?.pgr.idPrefix || PGR_ID_PREFIX;
+    test.skip(!prefix, 'PGR id prefix unknown (idgen probe failed) — cannot build a well-formed complaint number');
+    await page.locator('input[name="complaintNumber"]').fill(`${prefix}-PGR-2099-01-01-999999`);
     await runSearch(page);
     const rows = await readInboxRows(page);
     expect(rows.length, 'no rows for a non-existent complaint number').toBe(0);

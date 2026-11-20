@@ -869,7 +869,7 @@ function main(): void {
     console.error('usage: build-catalog.ts <runId>');
     process.exit(1);
   }
-  const baseUrl = process.env.BASE_URL || 'https://naipepea.digit.org';
+  const baseUrl = process.env.BASE_URL || '';
   const branch = process.env.BRANCH || 'main';
   const sha = process.env.GIT_SHA || '';
   const reportPath = process.env.REPORT_JSON || 'report.json';

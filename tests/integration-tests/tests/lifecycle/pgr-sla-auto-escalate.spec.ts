@@ -37,6 +37,7 @@ import { test, expect } from '@playwright/test';
 import { getDigitToken } from '../utils/auth';
 import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 import { seedComplaintAsCitizen } from '../utils/seed';
+import { requires } from '../utils/capabilities';
 
 async function assertOk(resp: Response, ctx: string): Promise<any> {
   const body = await resp.json();
@@ -160,6 +161,10 @@ Steps:
 Read-only: doesn't patch HRMS — fails fast with a clear error if the deployment isn't seeded with a hierarchy.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
+    // A deployment that runs no escalation scheduler and seeds no hierarchy
+    // declares pgr.autoEscalation 'absent' and skips here; where it is
+    // 'required', a missing link is still the loud failure this step exists for.
+    requires(test, 'pgr.autoEscalation', 'HRMS reportingTo chain for the escalation scheduler');
     const employees = await searchEmployees(adminToken, TENANT);
     expect(employees.length, `No employees found in ${TENANT}`).toBeGreaterThan(0);
 

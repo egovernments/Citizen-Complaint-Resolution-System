@@ -2,9 +2,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { BASE_URL, ROOT_TENANT, TENANT } from './env';
-import { getMobileValidationRule, generateValidMobile, derivedStartingDigits, type MobileRule } from './mdms-mobile';
+import { getMobileValidationRule, generateValidMobile, ruleFromProfile, type MobileRule } from './mdms-mobile';
 import { getPgrIdPrefix } from './pgr-idgen';
-import { tryGetProfile } from './profile';
 import { request as playwrightRequest } from '@playwright/test';
 import { citizenSignIn } from './identity-bff';
 
@@ -17,8 +16,8 @@ export interface ProvisionedCitizen {
   token: string;
   uuid: string;
   tenantId: string;
-  /** PGR service-request ID prefix discovered via egov-idgen. Deployment-specific. */
-  pgrIdPrefix: string;
+  /** PGR service-request ID prefix discovered via egov-idgen; absent when idgen could not be read. */
+  pgrIdPrefix?: string;
   /**
    * The citizen's BFF session cookies, so UI specs can reuse this sign-in
    * (citizen-login.ts): each OTP send counts against the BFF's per-phone (5/h)
@@ -49,34 +48,25 @@ export function readProvisionedCitizen(): ProvisionedCitizen | null {
 export const CITIZEN_FIXTURE_PATH = CITIZEN_FIXTURE_FILE;
 
 /**
- * Resolve the mobile-validation rule for this deployment.
+ * Resolve the mobile-validation rule the Identity BFF will apply.
  *
- * Profile-first: `profile.mobile` is read straight off the SPA's own boot
- * config (globalConfigs.js — see profile.ts), which is the same rule the
- * citizen wizard's phone field validates against and doesn't depend on a
- * tenant having populated the MDMS schema at all. Falls back to the old
- * MDMS lookup (tries the passed tenant first, then ROOT_TENANT — Bomet
- * ships the rule on `ke`, not `ke.etoebeta`) only when no profile was
- * discovered, e.g. a `--no-deps` single-spec run without PROFILE_INLINE=1.
- * The BFF validates the selected number against its own tenant rule; failure
- * is reported without bypassing that validation.
+ * Tenant-first since v2.20: citizen `otp/_send` validates the number against
+ * the route tenant's own `common-masters.MobileNumberValidation` record (then
+ * its root's; identity-bff citizen-otp/mobile-validation.ts), and a self-serve
+ * workspace gets that record from the country chosen at signup. The SPA's boot
+ * config (globalConfigs.js, `profile.mobile`) is stack-wide, so on a stack
+ * hosting workspaces from several countries it names the wrong country. It is
+ * only the fallback when MDMS has no rule for the tenant or its root, e.g. a
+ * token-less `--no-deps` run. The BFF validates the selected number against
+ * its own tenant rule; failure is reported without bypassing that validation.
  */
 async function resolveMobileRule(tenant: string): Promise<MobileRule> {
-  const profileMobile = tryGetProfile()?.mobile;
-  if (profileMobile?.pattern) {
-    return {
-      prefix: profileMobile.countryCode ?? undefined,
-      pattern: profileMobile.pattern,
-      minLength: profileMobile.length?.min ?? 10,
-      maxLength: profileMobile.length?.max ?? 10,
-      errorMessage: `Please enter a valid mobile number matching ${profileMobile.pattern}`,
-      allowedStartingDigits: derivedStartingDigits(profileMobile.pattern) ?? undefined,
-    };
+  const isGeneric = (rule: MobileRule) => rule.pattern === '^\\d{10}$';
+  for (const id of new Set([tenant, ROOT_TENANT])) {
+    const rule = await getMobileValidationRule(id);
+    if (!isGeneric(rule)) return rule;
   }
-  const direct = await getMobileValidationRule(tenant);
-  if (direct.pattern !== '^\\d{10}$' || tenant === ROOT_TENANT) return direct;
-  // Generic 10-digit fallback returned for the city tenant — try the root.
-  return getMobileValidationRule(ROOT_TENANT);
+  return ruleFromProfile() ?? getMobileValidationRule(tenant);
 }
 
 /** A new number this deployment's mobile rule accepts. */
@@ -92,13 +82,15 @@ export async function provisionFreshCitizen(opts?: { tenant?: string; mobile?: s
   const request = await playwrightRequest.newContext();
   try {
     const context = await citizenSignIn(request, BASE_URL, mobile);
-    if (context.UserRequest.tenantId !== tenant) throw new Error('Provisioned citizen belongs to a different workspace');
+    // The token's tenant is the route tenant's root (egov-user keeps citizens
+    // there); the workspace is the route tenant the BFF returns as `tenant`.
+    if (context.tenant?.tenantId !== tenant) throw new Error('Provisioned citizen belongs to a different workspace');
     const name = context.UserRequest.name;
     if (typeof name !== 'string' || !name) throw new Error('Provisioned citizen has no name');
     return {
       mobile, prefix: rule.prefix, name, userName: String(context.UserRequest.userName), token: context.access_token,
       uuid: context.UserRequest.uuid, tenantId: context.UserRequest.tenantId,
-      pgrIdPrefix: await getPgrIdPrefix(),
+      pgrIdPrefix: await getPgrIdPrefix().catch(() => undefined),
       sessionCookies: (await request.storageState()).cookies,
     };
   } finally {

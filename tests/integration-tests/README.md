@@ -53,7 +53,9 @@ projects pick up `storageState: 'auth.json'`. `auth.json` is gitignored.
 | `CITY_ADMIN_USER` | `EMP-KE_NAIROBI-000089` | City-level admin username (for UI tests) |
 | `CITY_ADMIN_PASS` | `eGov@123` | City-level admin password |
 | `CITIZEN_PHONE_PREFIX` | `7` | First digit(s) for valid mobile numbers |
-| `FIXED_OTP` | `123456` | OTP value (for mock OTP deployments) |
+| `IDENTITY_TEST_TENANT_SLUG` | — | Workspace slug (`/{slug}/digit-ui/...`, BFF tenant context); required since v2.20 |
+| `KC_REALM` | `digit` | Keycloak realm staff and citizens sign in to |
+| `IDENTITY_TEST_OTP_CODE` | — | Citizen phone OTP; needs `identity_citizen_signin_methods: [phone_otp]` and `identity_dev_fixed_otp: true` (or a real sender) on the deployment |
 | `SERVICE_CODE` | `IllegalConstruction` | PGR service code for complaint tests (must exist on the deployment) |
 | `LOCALITY_CODE` | `NAIROBI_CITY_VIWANDANI` | Boundary locality code for address |
 | `EMPLOYEE_USER` / `EMPLOYEE_PASSWORD` | `BOMET_LME` / `eGov@123` | PGR_LME employee for inbox/resolve flows |
@@ -281,4 +283,4 @@ Actions tab once secrets `TEST_BASE_URL` and `ADMIN_PASSWORD` are set.
 - **API tests** are fast (~2s) and use `fetch()` directly — no browser needed
 - **UI tests** use Playwright headless Chromium, take screenshots at each step
 - The city-level admin (`CITY_ADMIN_USER`) is needed because DIGIT's `getCurrentTenantId()` returns the employee's login tenant — UI workflow actions require this to match the complaint's city tenant
-- Citizen registration uses mock OTP (`FIXED_OTP=123456`) — the Kong gateway returns 200 for `/user-otp` and `/otp` endpoints
+- Citizens sign in through the Identity BFF by phone OTP (`IDENTITY_TEST_OTP_CODE`); staff sign in through Keycloak with their email, so every `*_USER` on a v2.20 deployment is a Keycloak login, not a DIGIT username

@@ -1,14 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { citizenSignIn, hostedSignIn, identityJson, selectContext, type Surface } from '../utils/identity-bff';
+import { citizenSignIn, hostedSignIn, identityJson, resolveTenant, selectContext, type Surface } from '../utils/identity-bff';
 import { baseURL, deliveredOtp, missingConfig, otpKeys } from './fixtures';
 
 test.skip(missingConfig().length > 0, 'Pending root real gate: dependency configuration is unset');
 
+// No password citizen: v2.20 citizens sign in only by phone OTP (the citizen
+// client offers no password method, and citizen _select trusts only a proved phone).
 const personas: Array<{ name: string; key: string; surface: Surface; phone?: boolean }> = [
   { name: 'configurator founder', key: 'FOUNDER', surface: 'configurator' },
   { name: 'configurator admin', key: 'ADMIN', surface: 'configurator' },
   { name: 'employee', key: 'EMPLOYEE', surface: 'employee' },
-  { name: 'Keycloak citizen', key: 'CITIZEN', surface: 'citizen' },
   { name: 'phone-only citizen', key: 'PHONE', surface: 'citizen', phone: true },
 ];
 
@@ -20,7 +21,7 @@ for (const persona of personas) {
     const missing = missingConfig(required);
     test.skip(missing.length > 0, `Pending root real gate; unset: ${missing.join(', ')}`);
     const base = baseURL();
-    const tenantId = process.env.IDENTITY_E2E_TENANT_ID!;
+    const tenantId = process.env.IDENTITY_E2E_TENANT_ID || (await resolveTenant(page.request, base)).tenantId;
     const context = persona.phone
       ? await citizenSignIn(page.request, base, process.env.IDENTITY_E2E_PHONE!, deliveredOtp)
       : await (async () => {

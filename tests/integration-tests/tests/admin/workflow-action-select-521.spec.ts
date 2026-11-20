@@ -16,6 +16,7 @@ import { test, expect } from '@playwright/test';
 import { BASE_URL, TENANT } from '../utils/env';
 import { requires } from '../utils/capabilities';
 import { loadAuth, pgrSearch } from '../utils/manage/api';
+import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 
 const COMPLAINTS_LIST_URL = '/configurator/manage/complaints';
 
@@ -37,19 +38,38 @@ test.describe('admin Workflow Action — Escalate visible #521', () => {
       status: 'PENDINGATLME',
       limit: 1,
     }).catch(() => []);
-    test.skip(workable.length === 0, 'no PENDINGATLME complaint seeded to exercise the Escalate action');
+    // pgr _search is role-scoped, so "none found" may only mean none THIS session
+    // can read. lifecycle.setup.ts drives a complaint to PENDINGATLME every run
+    // (complaints.assigned_to_employee): when it exists, the admin must be able to
+    // open it, so it is used rather than skipping on an empty search.
+    const fixtures = readLifecycleFixtures();
+    const seededAtLme =
+      fixtures?.status === 'ok' && fixtures.tenant === TENANT
+        ? fixtures.complaints?.assigned_to_employee
+        : undefined;
+    const workableId =
+      ((workable[0]?.service as any)?.serviceRequestId as string | undefined) ?? seededAtLme;
+    test.skip(
+      !workableId,
+      `no PENDINGATLME complaint on ${TENANT} (none visible to this session, none seeded by lifecycle-setup)`,
+    );
 
     // RC7: the list is sorted most-recent-first, so clicking the FIRST row
     // used to drive whatever complaint happened to be newest — often a
     // terminal (CLOSEDAFTERRESOLUTION) one with no workflow action select at
-    // all, not the PENDINGATLME complaint `pgrSearch` above just found.
-    // Navigate straight to that complaint's edit page instead.
-    const workableId = (workable[0]?.service as any)?.serviceRequestId as string;
-    test.skip(!workableId, 'PENDINGATLME complaint had no serviceRequestId');
-
-    await page.goto(`${BASE_URL}${COMPLAINTS_LIST_URL}/${encodeURIComponent(workableId)}/edit?cb=${Date.now()}`);
+    // all, not the PENDINGATLME complaint found above. Navigate straight to
+    // that complaint's edit page instead.
+    await page.goto(`${BASE_URL}${COMPLAINTS_LIST_URL}/${encodeURIComponent(workableId!)}/edit?cb=${Date.now()}`);
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(3_500);
+    // ComplaintEdit.tsx's "Request ID" field carries the loaded record's id; a
+    // session that cannot read the complaint through /request/_search bounces to
+    // the list instead, which is the failure (not a missing-data skip).
+    await expect(
+      page.getByLabel(/^Request ID$/i),
+      `the Edit page must load ${workableId}; if it bounces to the list, the configurator session cannot ` +
+        "read it through /pgr-services/v2/request/_search (its resource.complaint.scope grants this " +
+        'session no scope — v2.20 seeds SUPERUSER/ACCOUNT_ADMIN = ALL/ALL in eaacdf7f5)',
+    ).toHaveValue(workableId!, { timeout: 30_000 });
 
     await expect(page.getByText(/^Workflow$/i).first()).toBeVisible({ timeout: 10_000 });
 

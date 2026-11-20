@@ -33,9 +33,15 @@ test.describe('employee account — password action visibility #812', () => {
     const passwordButton = page.getByRole('button', { name: /password/i }).first();
     await expect(passwordButton).toBeVisible({ timeout: 15_000 });
 
-    // The #812 assertion: a real button surface, not transparent or white text.
-    const backgroundColor = await passwordButton.evaluate((el) => getComputedStyle(el).backgroundColor);
-    expect(backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
-    expect(backgroundColor).not.toBe('rgb(255, 255, 255)');
+    // The #812 assertion: it must read as a button, not bare text. Since
+    // ee22490a4 the account actions are variant="secondary" (outlined, no fill),
+    // so either a fill or a visible border counts.
+    const style = await passwordButton.evaluate((el) => {
+      const c = getComputedStyle(el);
+      return { bg: c.backgroundColor, borderWidth: parseFloat(c.borderTopWidth), borderColor: c.borderTopColor };
+    });
+    const filled = style.bg !== 'rgba(0, 0, 0, 0)' && style.bg !== 'rgb(255, 255, 255)';
+    const outlined = style.borderWidth > 0 && style.borderColor !== 'rgba(0, 0, 0, 0)' && style.borderColor !== style.bg;
+    expect(filled || outlined, `#812 — the password action must read as a button: ${JSON.stringify(style)}`).toBe(true);
   });
 });

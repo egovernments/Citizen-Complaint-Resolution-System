@@ -3,10 +3,8 @@ import { loginViaApi } from '../auth';
 import { Page, expect } from '@playwright/test';
 import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../env';
 
-// NAIPEPEA_BASE is an explicit override for the legacy demo host; default to the
-// suite's resolved target rather than that host, which is dead and made every
-// caller silently test nothing.
-const BASE = process.env.NAIPEPEA_BASE ?? BASE_URL;
+// The suite's one target. (A NAIPEPEA_BASE override for a dead demo host used to sit here.)
+const BASE = BASE_URL;
 
 // Hosted sign-in keeps the BFF cookie alongside the business token.
 export async function loginEmployeeUI(page: Page, username = ADMIN_USER, password = ADMIN_PASS, tenantId = ROOT_TENANT) {

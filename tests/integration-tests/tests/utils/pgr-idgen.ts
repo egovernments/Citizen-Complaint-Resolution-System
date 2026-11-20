@@ -11,10 +11,8 @@
  * One idgen call per `npx playwright test` invocation; the resulting
  * prefix is cached on disk via citizen-fixture.json (see citizen-provision).
  */
-import { BASE_URL, ROOT_TENANT, TENANT } from './env';
+import { BASE_URL, ROOT_TENANT, TENANT, ADMIN_USER, ADMIN_PASS } from './env';
 import { getDigitToken } from './auth';
-
-const DEFAULT_FALLBACK = 'NCCG';
 
 /**
  * A service-request ID, `<PREFIX>-PGR-<YYYY>-<MM>-<DD>-<seq>`; group 1 is the
@@ -25,29 +23,38 @@ export const SRID_RE = /([A-Z0-9]+(?:-[A-Z0-9]+)*)-PGR-\d{4}-\d{2}-\d{2}-\d+/;
 /**
  * Resolve the PGR ID prefix for this deployment by asking egov-idgen
  * for one `pgr.servicerequestid`. Returns the segment before `-PGR-`
- * (e.g. "NCCG", "PG"). Falls back to "NCCG" only if both the city- and
- * root-scoped idgen calls fail — at which point the caller's regex
- * assertion will fail informatively rather than the helper crashing.
+ * (e.g. "NCCG", "PG"). THROWS when the admin login or both the city- and
+ * root-scoped idgen calls fail: a guessed prefix used to be recorded in the
+ * profile as if discovered, and then every SRID regex failed for a reason
+ * nobody could see. profile.ts's attempt() now logs it as a probe failure.
  */
-export async function getPgrIdPrefix(opts?: { tenant?: string }): Promise<string> {
+export async function getPgrIdPrefix(opts?: { tenant?: string; root?: string; baseUrl?: string }): Promise<string> {
+  const baseUrl = opts?.baseUrl ?? BASE_URL;
   const cityTenant = opts?.tenant ?? TENANT;
-  const tenantsToTry = cityTenant === ROOT_TENANT ? [ROOT_TENANT] : [cityTenant, ROOT_TENANT];
+  // env.ts reads ROOT_TENANT from the profile, which does not exist yet while
+  // profile-setup is discovering it (the first call), so ROOT_TENANT is '' then
+  // unless the env names one. An empty tenant reaches the BFF's _select as
+  // tenantId '' and is refused 400 INVALID_REQUEST. The caller's root wins, then
+  // env.ts's, then the city's own root segment.
+  const root = opts?.root || ROOT_TENANT || cityTenant.split('.')[0];
+  if (!cityTenant || !root) throw new Error('idgen PGR prefix: no tenant to ask (set DIGIT_TENANT or IDENTITY_TEST_TENANT_SLUG)');
+  const tenantsToTry = cityTenant === root ? [root] : [cityTenant, root];
 
   let auth;
   try {
     auth = await getDigitToken({
-      baseURL: BASE_URL,
-      tenant: ROOT_TENANT,
-      username: process.env.ADMIN_USER || 'ADMIN',
-      password: process.env.ADMIN_PASS || process.env.ADMIN_PASSWORD || 'eGov@123',
+      baseURL: baseUrl,
+      tenant: root,
+      username: ADMIN_USER,
+      password: ADMIN_PASS,
     });
-  } catch {
-    return DEFAULT_FALLBACK;
+  } catch (e) {
+    throw new Error(`idgen PGR prefix: admin login failed: ${(e as Error).message}`);
   }
 
   for (const tenant of tenantsToTry) {
     try {
-      const resp = await fetch(`${BASE_URL}/egov-idgen/id/_generate`, {
+      const resp = await fetch(`${baseUrl}/egov-idgen/id/_generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -67,5 +74,5 @@ export async function getPgrIdPrefix(opts?: { tenant?: string }): Promise<string
       // try next tenant
     }
   }
-  return DEFAULT_FALLBACK;
+  throw new Error(`egov-idgen issued no pgr.servicerequestid for ${tenantsToTry.join(', ')}`);
 }

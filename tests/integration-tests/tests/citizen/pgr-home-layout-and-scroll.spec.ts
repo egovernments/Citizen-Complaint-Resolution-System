@@ -133,7 +133,7 @@ Steps:
 1. setTimeout 180s; attach a pageerror listener BEFORE anything navigates.
 2. Seed a throwaway complaint via seedComplaintAsCitizen -> driveToPendingAtLme -> driveToResolved (tests/utils/seed.ts; RESOLVE is PGR_LME-role-gated, not assignee-gated).
 3. citizenOtpLogin as the provisioned citizen (the same identity seed.ts filed as — RATE is only open to the filer) and navigate to /digit-ui/citizen/pgr/rate/{srid}.
-4. Wait for the 5-star row (legacy svg.rating-star or the v2 overlay's role=radio StarRow); click the 4th star so rating > 0 — the submit handler no-ops below that.
+4. Wait for the 5-star row (legacy svg.rating-star or the v2 overlay's button.v2-rating-star StarRow); click the 4th star so rating > 0 — the submit handler no-ops below that.
 5. Submit WITHOUT ticking any of the four "What was good?" checkboxes; assert none is checked first, so a build that pre-ticks one cannot make this pass vacuously.
 6. Assert the SPA advanced to the PGR /response route (SelectRating pushes \`\${parentRoute}/response\` only after the previously-crashing line).
 7. Assert no uncaught pageerror matching /Cannot read properties of undefined|of undefined \\(reading|is not a function/ and that the error boundary ("Something went wrong") did not render.
@@ -161,11 +161,9 @@ Unlike rate-resolved-complaint.spec.ts this test DOES submit — the complaint i
 
       // Two builds ship the 5-star row: the legacy digit-ui-react-components <Rating>
       // (svg.rating-star) and the v2 product overlay's <StarRow>
-      // (button.v2-rating-star, role=radio in an aria-label="rating"
-      // radiogroup). Match either — the union dedupes, so the count stays 5.
-      const stars = page.locator(
-        '.rating-star, .v2-rating-star, [role="radiogroup"][aria-label="rating"] [role="radio"]',
-      );
+      // (button.v2-rating-star). The radiogroup's aria-label is localized
+      // (CS_RATING_LABEL), so it is not a stable hook. Match either class.
+      const stars = page.locator('.rating-star, .v2-rating-star');
       await expect(stars.first()).toBeVisible({ timeout: 60_000 });
       await expect(stars).toHaveCount(5);
 
