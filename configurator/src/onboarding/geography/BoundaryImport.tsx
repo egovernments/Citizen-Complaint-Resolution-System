@@ -522,12 +522,25 @@ export default function BoundaryImport({
       const result = parseBoundaryExcel(workbook);
 
       if (result.validation.valid) {
+        // Finishing a saved hierarchy: the sheet may hold only the missing areas, under ones already saved (#2795).
+        let saved: { code: string; boundaryType: string }[] = [];
+        if (addTo && selectedHierarchy?.hierarchyType === addTo) {
+          try {
+            saved = (await boundaryService.searchBoundaries(boundaryTenant, { hierarchyType: addTo })).map(({ code, boundaryType }) => ({
+              code,
+              boundaryType,
+            }));
+          } catch (err) {
+            setError(t('geography.load_failed', 'Couldn’t load your boundaries. %{reason}', { reason: err instanceof Error ? err.message : String(err) }));
+            return;
+          }
+        }
         setUploadedFile(file);
         setParsedBoundaries(result.data);
         setParsedLevels(result.hierarchyLevels);
 
         // Validate boundaries
-        validateBoundaries(result.data);
+        validateBoundaries(result.data, saved);
         setStep('verify');
       } else {
         // A repeated code blocks the whole sheet, so nothing is written until each row has its own.
@@ -578,8 +591,8 @@ export default function BoundaryImport({
 
   // Checked against the hierarchy the sheet goes into: its levels, and each
   // row's parent one level up (#2795, #2796).
-  const validateBoundaries = (boundaries: BoundaryExcelRow[]) => {
-    const { valid, invalid } = checkBoundaryRows(boundaries, selectedHierarchy?.boundaryHierarchy ?? [], t);
+  const validateBoundaries = (boundaries: BoundaryExcelRow[], saved: { code: string; boundaryType: string }[] = []) => {
+    const { valid, invalid } = checkBoundaryRows(boundaries, selectedHierarchy?.boundaryHierarchy ?? [], t, saved);
     setValidBoundaries(valid);
     setInvalidBoundaries(invalid);
   };

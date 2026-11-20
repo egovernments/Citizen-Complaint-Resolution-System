@@ -24,6 +24,7 @@ vi.mock('@/utils/excelParser', () => ({
 }));
 
 import BoundaryImport from './BoundaryImport';
+import { boundaryService } from '@/api';
 import type { BoundaryExcelRow } from '@/api/types';
 
 const hierarchy = (hierarchyType: string): BoundaryHierarchy => ({
@@ -112,6 +113,47 @@ describe('BoundaryImport: finishing a saved hierarchy', () => {
     // Back leaves the import rather than offering the new-or-existing choice.
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  it('takes a sheet of only the missing areas, under the ones already saved (#2795)', async () => {
+    loadTenantHierarchies.mockResolvedValue({ hierarchies: [hierarchy('ADMIN')], hierarchyType: 'ADMIN' });
+    const saved = vi.spyOn(boundaryService, 'searchBoundaries').mockResolvedValue([
+      { tenantId: 'ke', code: 'C1', name: 'Alpha County', boundaryType: 'County', hierarchyType: 'ADMIN' },
+    ]);
+    try {
+      sheetRows.rows = [
+        { code: 'W1', name: 'Ward One', boundaryType: 'Ward', parentCode: 'C1', row: 2 },
+        { code: 'W2', name: 'Ward Two', boundaryType: 'Ward', parentCode: 'CX', row: 3 },
+      ];
+      render(<BoundaryImport source="excel" hasHierarchies addTo="ADMIN" sourceChoices={[]} onDone={vi.fn()} onCancel={vi.fn()} />);
+      fireEvent.click(await screen.findByRole('button', { name: /use selected hierarchy/i }));
+      const input = document.getElementById('boundary-file-upload') as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [new File(['x'], 'wards.xlsx')] } });
+
+      expect(await screen.findByText(/Row 3: Parent "CX" not found/)).toBeTruthy();
+      expect(screen.queryByText(/Parent "C1" not found/)).toBeNull();
+      expect(screen.getByRole('button', { name: /Upload 1 Boundaries/ })).toBeTruthy();
+      expect(saved).toHaveBeenCalledWith('ke', { hierarchyType: 'ADMIN' });
+    } finally {
+      saved.mockRestore();
+    }
+  });
+
+  it('says so when the saved areas can’t be read, rather than refusing every row', async () => {
+    loadTenantHierarchies.mockResolvedValue({ hierarchies: [hierarchy('ADMIN')], hierarchyType: 'ADMIN' });
+    const saved = vi.spyOn(boundaryService, 'searchBoundaries').mockRejectedValue(new Error('502 Bad Gateway'));
+    try {
+      sheetRows.rows = [{ code: 'W1', name: 'Ward One', boundaryType: 'Ward', parentCode: 'C1', row: 2 }];
+      render(<BoundaryImport source="excel" hasHierarchies addTo="ADMIN" sourceChoices={[]} onDone={vi.fn()} onCancel={vi.fn()} />);
+      fireEvent.click(await screen.findByRole('button', { name: /use selected hierarchy/i }));
+      const input = document.getElementById('boundary-file-upload') as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [new File(['x'], 'wards.xlsx')] } });
+
+      expect(await screen.findByText('Couldn’t load your boundaries. 502 Bad Gateway')).toBeTruthy();
+      expect(screen.queryByRole('tab', { name: /Errors/ })).toBeNull();
+    } finally {
+      saved.mockRestore();
+    }
   });
 });
 

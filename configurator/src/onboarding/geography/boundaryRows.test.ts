@@ -94,4 +94,18 @@ describe('checkBoundaryRows', () => {
       V1: 'Row 5: "Village" isn’t a level of this hierarchy. Use one of: County, Ward.',
     });
   });
+
+  it('takes a saved area as a parent, for a sheet that finishes a saved hierarchy (#2795)', () => {
+    // County C1 is saved; the sheet has only its missing wards, plus one under a saved ward.
+    const saved = [{ code: 'C1', boundaryType: 'County' }, { code: 'W0', boundaryType: 'Ward' }];
+    const rows = sheet(row('W1', 'Ward', 'C1'), row('W2', 'Ward', 'C1'), row('W3', 'Ward', 'W0'), row('W4', 'Ward', 'CX'));
+    const checked = checkBoundaryRows(rows, COUNTY_WARD, undefined, saved);
+    expect(checked.valid.map((r) => r.code)).toEqual(['W1', 'W2']);
+    expect(Object.fromEntries(checked.invalid.map(({ boundary, error }) => [boundary.code, error]))).toEqual({
+      W3: 'Row 4: A Ward’s parent must be a County, but "W0" is a Ward.',
+      W4: 'Row 5: Parent "CX" not found',
+    });
+    // Without them, as before: the sheet alone.
+    expect(validCodes(rows)).toEqual([]);
+  });
 });

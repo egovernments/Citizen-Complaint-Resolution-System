@@ -37,15 +37,25 @@ function parentLevels(levels: BoundaryLevel[]): Map<string, string | undefined> 
  *   - its code, name or type is missing;
  *   - its type isn't one of the hierarchy's levels;
  *   - it has no parent but isn't on the top level, or is on the top level and has one;
- *   - its parent isn't in the sheet, or isn't on the level directly above it;
+ *   - its parent isn't in the sheet (or `saved`), or isn't on the level directly above it;
  *   - its parent row is refused (it couldn't be saved without it).
- * Each refusal names the row and what to change.
+ * Each refusal names the row and what to change. `saved` are the areas already in
+ * the hierarchy, which a sheet that finishes it can name as parents.
  */
-export function checkBoundaryRows(rows: BoundaryExcelRow[], levels: BoundaryLevel[], t: OnboardingT = englishT): CheckedRows {
+export function checkBoundaryRows(
+  rows: BoundaryExcelRow[],
+  levels: BoundaryLevel[],
+  t: OnboardingT = englishT,
+  saved: { code: string; boundaryType: string }[] = [],
+): CheckedRows {
   const parentOf = parentLevels(levels);
   const levelNames = [...parentOf.keys()];
   const top = levelNames.filter((type) => !parentOf.get(type));
-  const byCode = new Map(rows.filter((row) => row.code).map((row) => [row.code, row]));
+  // A row in the sheet comes before a saved area with its code.
+  const byCode = new Map<string, { code: string; boundaryType: string }>([
+    ...saved.map((area) => [area.code, area] as const),
+    ...rows.filter((row) => row.code).map((row) => [row.code, row] as const),
+  ]);
   const errors = new Map<BoundaryExcelRow, string[]>(rows.map((row) => [row, []]));
   const isLevel = (type: string) => parentOf.has(type);
 
@@ -112,7 +122,8 @@ export function checkBoundaryRows(rows: BoundaryExcelRow[], levels: BoundaryLeve
       const found = errors.get(row)!;
       if (found.length > 0 || !row.parentCode) continue;
       const parent = byCode.get(row.parentCode);
-      if (parent && parent !== row && errors.get(parent)!.length > 0) {
+      // A saved parent has no row here, and nothing wrong with it.
+      if (parent && parent !== row && (errors.get(parent as BoundaryExcelRow)?.length ?? 0) > 0) {
         found.push(
           t('geography.excel.parent_has_error', 'Its parent "%{code}" has an error, so it can’t be added until that row is fixed.', {
             code: row.parentCode,
