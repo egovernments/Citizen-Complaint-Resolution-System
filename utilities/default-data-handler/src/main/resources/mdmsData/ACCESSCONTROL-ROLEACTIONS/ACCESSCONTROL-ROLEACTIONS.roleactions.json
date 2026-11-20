@@ -3183,5 +3183,181 @@
     "actioncode": "",
     "tenantId": "{tenantid}",
     "id": 1851
+  },
+  {
+    "rolecode": "ACCOUNT_ADMIN",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "AUTO_ESCALATE",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "CFC",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "CMS_SCREENING_OFFICER",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "COMMON_EMPLOYEE",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "CONFIG_ADMIN",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "CSR",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "DGRO",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "EMPLOYEE",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "GRO",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "HRMS_ADMIN",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "INTERNAL_MICROSERVICE_ROLE",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "LOC_ADMIN",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "PGR_ADMIN",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "PGR_LME",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "PGR_SUPERVISOR",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "PGR_VIEWER",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "QA_AUTOMATION",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "REINDEXING_ROLE",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "SYSTEM",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "TICKET_REPORT_VIEWER",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
+  },
+  {
+    "rolecode": "WORKFLOW_ADMIN",
+    "actionid": 4700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 4700
   }
+
 ]

@@ -13,7 +13,7 @@ every box, fresh or existing.
 `./docker/db-migrations`; it no longer pulls `…/tilt-demo-db-migrations:latest`.
 The deploy syncs that build context, but `up -d` reuses an image the box already
 built, so a new file here only reaches an existing box once the image is rebuilt,
-as in [migration guide §4](../../../../../docs/releases/2.20/migration-guide-v2.12-to-v2.20-beta.md#4-deploy):
+as in [migration guide §4](../../../../../docs/releases/2.20/migration-guide-v2.12-to-v2.20.md#4-deploy):
 
 ```sh
 cd /opt/digit
@@ -138,7 +138,7 @@ action or role-action for them, so the Configurator gets
 when MCP is on. On an existing Compose box the deploy rebuilds
 `db-history-normalize` but reuses the `db-migrations` image it built before, so
 this reaches the rest only once that image is rebuilt (see
-[migration guide §4](../../../../../docs/releases/2.20/migration-guide-v2.12-to-v2.20-beta.md#4-deploy)).
+[migration guide §4](../../../../../docs/releases/2.20/migration-guide-v2.12-to-v2.20.md#4-deploy)).
 
 The rows are `platform-baseline-v1.json`'s (ids 900000, 900001, 901000). The
 guards follow the MCP access floor:

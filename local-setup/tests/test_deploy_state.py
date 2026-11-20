@@ -47,9 +47,10 @@ class StateTestCase(unittest.TestCase):
 class AnalysedSetTests(unittest.TestCase):
     def test_membership(self):
         for rel in ("kong/kong.yml", "configs/a/b.yml", "docker-compose.egov-digit.yaml",
-                    "docker-compose.ke.yml", "identity-keycloak-realm.json"):
+                    "docker-compose.ke.yml", "identity-keycloak-realm.json", "sherlog/sherlog.yaml",
+                    "configure-identity-keycloak.sh", "core-sms-handoff.sh"):
             self.assertTrue(state.is_analysed(rel), rel)
-        for rel in (".env", ".openbao/init.json", "sherlog/rules.yml", "nginx/globalConfigs.js",
+        for rel in (".env", ".openbao/init.json", "sherlog/rendered/rules.yml", "sherlog/textfile/stats.prom", "sherlog/override.yaml", "nginx/globalConfigs.js",
                     "otel/targets/x.json", "db/full-dump.sql", "opensre/logs/a.log", "configs/x/__pycache__/m.pyc",
                     "docker-compose.upgrade-safe.yml", "README.md", "kong/.kong.yml.pinned"):
             self.assertFalse(state.is_analysed(rel), rel)
@@ -106,6 +107,17 @@ class CheckTests(StateTestCase):
         manifest["version"] = 1
         path.write_text(json.dumps(manifest))
         self.assertEqual("NO_BASELINE", state.check(str(self.digit))[1]["status"])
+
+    def test_version_two_baseline_still_protects_original_paths(self):
+        state.record(str(self.digit))
+        path = self.digit / state.STATE_DIR / state.MANIFEST
+        manifest = json.loads(path.read_text())
+        manifest["version"] = 2
+        path.write_text(json.dumps(manifest))
+        self.write("sherlog/sherlog.yaml", "newly protected\n")
+        self.assertEqual("CLEAN", state.check(str(self.digit))[1]["status"])
+        self.write("kong/kong.yml", "hand edit after failed preflight\n")
+        self.assertEqual("DRIFT", state.check(str(self.digit))[1]["status"])
 
     def test_malformed_record_fails_closed(self):
         (self.digit / state.STATE_DIR).mkdir()
@@ -164,6 +176,34 @@ class OverrideTests(StateTestCase):
         self.assertEqual("PASSWORD=before\n", self.read(".env"))
         self.assertEqual("CLEAN", state.check(str(self.digit))[1]["status"])
 
+    def test_conflict_restores_links_modes_and_absent_env_without_following_links(self):
+        self.adopt({"kong/kong.yml": "route: mine\n"})
+        (self.digit / ".env").unlink()
+        outside = Path(self._temp.name) / "outside"
+        outside.mkdir()
+        (outside / "file.conf").write_text("outside remains\n")
+        os.symlink(outside / "file.conf", self.digit / "kong/extra.conf")
+        (self.digit / "configs").mkdir(exist_ok=True)
+        os.symlink(outside, self.digit / "configs/linked-dir")
+        os.chmod(self.digit / "kong/kong.yml", 0o640)
+        state.record(str(self.digit))
+        state.begin(str(self.digit))
+        (self.digit / "kong/extra.conf").unlink()
+        (self.digit / "kong/extra.conf").write_text("rendered\n")
+        (self.digit / "configs/linked-dir").unlink()
+        (self.digit / "configs/linked-dir").mkdir()
+        self.write("configs/linked-dir/new.conf", "new\n")
+        self.write("kong/kong.yml", "route: conflict\n")
+        os.chmod(self.digit / "kong/kong.yml", 0o600)
+        self.write(".env", "new\n")
+        self.assertEqual(3, state.reapply(str(self.digit))[0])
+        self.assertEqual(str(outside / "file.conf"), os.readlink(self.digit / "kong/extra.conf"))
+        self.assertEqual(str(outside), os.readlink(self.digit / "configs/linked-dir"))
+        self.assertEqual("outside remains\n", (outside / "file.conf").read_text())
+        self.assertEqual(0o640, (self.digit / "kong/kong.yml").stat().st_mode & 0o777)
+        self.assertFalse((self.digit / ".env").exists())
+        self.assertEqual("CLEAN", state.check(str(self.digit))[1]["status"])
+
     def test_a_run_that_did_not_render_the_file_is_not_a_conflict(self):
         self.adopt({"kong/kong.yml": "route: mine\n"})
         self.assertEqual((0, "REAPPLIED"), (self.main("reapply", str(self.digit))[0], "REAPPLIED"))
@@ -203,15 +243,16 @@ class PlaybookWiringTests(unittest.TestCase):
         return task["ansible.builtin.script"]["cmd"]
 
     def test_check_runs_before_any_write_and_not_in_upgrade_or_render_mode(self):
-        check, _, stop, needs_full_run, begin = self.named(self.pre_tasks, "drift guard")
+        check, _, stop, needs_full_run = self.named(self.pre_tasks, "drift guard")
+        begin = self.named(self.tasks, "drift guard — mark")[0]
         self.assertIn("'all' not in ansible_run_tags", str(needs_full_run["when"]))
         self.assertIn("deploy_state.py check", self.script(check))
         self.assertIn("deploy_state.py begin", self.script(begin))
         for flag in ("upgrade_safe_mode", "digit_render_only"):
             self.assertIn(flag, str(check["when"]))
         self.assertIn("allow_local_drift", str(stop["when"]))
-        first_writer = next(i for i, t in enumerate(self.pre_tasks) if str(t.get("name", "")).startswith("force-clean"))
-        self.assertLess(self.pre_tasks.index(begin), first_writer)
+        first_config_write = next(i for i, t in enumerate(self.tasks) if t.get("name") == "Create DIGIT directory")
+        self.assertEqual(first_config_write - 1, self.tasks.index(begin))
 
     def test_overrides_go_on_after_the_render_and_before_openbao(self):
         names = [t.get("name", "") for t in self.tasks]
@@ -225,6 +266,10 @@ class PlaybookWiringTests(unittest.TestCase):
         self.assertLess(last_prestart_render, min(adopt, reapply))
         self.assertLess(max(adopt, reapply), openbao)
         self.assertIn("drop_local_overrides", self.script(self.tasks[reapply]))
+
+    def test_merged_identity_account_seed_is_skipped_for_guarded_upgrades(self):
+        task = next(t for t in self.tasks if t.get("name", "").startswith("Identity BFF — ensure its DIGIT admin"))
+        self.assertIn("not (upgrade_safe_mode", str(task["when"]))
 
     def test_record_is_the_last_task_and_keeps_the_commit(self):
         last = self.tasks[-1]

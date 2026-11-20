@@ -103,6 +103,11 @@ variable "db_username" {
   description = "RDS database user name. Set it in terraform.tfvars."
 }
 
+variable "db_availability_zone" {
+  description = "Zone of the RDS instance. Empty = availability_zones[0]. Set it for an environment whose database already runs in another zone: changing an RDS instance's zone replaces the instance."
+  default     = ""
+}
+
 variable "filestore_namespace" {
   description = "Provide the namespace to create filestore secret"
   default = "egov" #REPLACE

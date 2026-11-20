@@ -16,6 +16,9 @@ option, cost, and what leaves the box: [Sherlog's standard](https://github.com/s
    reports are GitHub issues; the Slack webhook carries alerts). The other settings and their
    defaults are in `ansible/inventory/group_vars/digit.yml`; this tenant's differences from `sherlog.yaml` go in
    `sherlog_overrides`.
+   For an Anthropic key, also set `sherlog_model_provider: anthropic` and `sherlog_holmes_model:
+   anthropic/<model>` (the upstream then defaults to `https://api.anthropic.com`). Lower
+   `sherlog_daily_investigations` to fit the key's budget: each investigation is many model calls.
 3. Deploy. Sherlog runs from `/opt/digit/sherlog` as its own compose project (`/opt/digit/sherlog/sherlog.sh ps`).
 
 `enable_sherlog: false` stops it and removes its rules on the next deploy; its data is kept.

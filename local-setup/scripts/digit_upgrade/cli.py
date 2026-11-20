@@ -49,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
                                       "'auto': find it from the files on the box)")
     a.add_argument("--tenant", required=True)
     a.add_argument("--tenant-vars", type=Path, required=True, help="the tenant's host_vars YAML")
+    a.add_argument("--base-tenant-vars", type=Path, required=True, help="host_vars as deployed on the base version")
     a.add_argument("--backup", type=Path, required=True, help="copy of /opt/digit: directory or tar archive")
     a.add_argument("--output", type=Path, required=True, help="directory for run directories")
     a.add_argument("--base-override", type=parse_override, action="append", default=[], metavar="KEY=YAML",
@@ -58,6 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     r = commands.add_parser("resume", help="finish a run after resolving conflicts or reviewing secrets")
     r.add_argument("run", type=Path)
+    r.add_argument("--unmanaged-resolution", type=Path, help="JSON path-to-choice mapping: adopt or leave")
     r.add_argument("--acknowledge-secret-review", action="store_true",
                    help="keep the live value for every secret changed both locally and by the target")
 
@@ -65,6 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("run", type=Path)
     d.add_argument("--confirm", action="store_true", required=True,
                    help="required: the deploy takes the site into maintenance")
+    d.add_argument("--base-tenant-vars", type=Path, required=True, help="the same base settings file used for analysis")
     d.add_argument("--backup-dir", type=Path, default=Path("/var/backups/digit-upgrade"))
     d.add_argument("--mdms-resolution", type=Path, help="choices for the MDMS conflicts of a previous attempt")
     d.add_argument("--foreground", action="store_true", help="do not detach into a systemd unit")
@@ -83,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
 
             run_dir = analyse(
                 repo=args.repo, target_ref=args.target_ref, base_ref=args.base_ref, tenant=args.tenant,
-                tenant_vars=args.tenant_vars, base_overrides=dict(args.base_override), backup=args.backup,
+                tenant_vars=args.tenant_vars, base_tenant_vars_file=args.base_tenant_vars, base_overrides=dict(args.base_override), backup=args.backup,
                 output=args.output, excludes=tuple(args.exclude),
             )
             print(f"READY: {run_dir}\nreport: {run_dir / 'report.md'}")
@@ -91,7 +94,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "resume":
             from .analyse import resume
 
-            run_dir = resume(args.run, acknowledge_secret_review=args.acknowledge_secret_review)
+            run_dir = resume(args.run, acknowledge_secret_review=args.acknowledge_secret_review,
+                             unmanaged_resolution=args.unmanaged_resolution)
             print(f"READY: {run_dir}")
             return 0
         if not args.foreground and UNIT_ENV not in os.environ and shutil.which("systemd-run"):
@@ -123,6 +127,7 @@ def run_on_server(args: argparse.Namespace) -> int:
         deployment = Deployment(
             args.run, backup_parent=getattr(args, "backup_dir", Path("/var/backups/digit-upgrade")),
             resolution=getattr(args, "mdms_resolution", None), log=log,
+            base_tenant_vars_file=getattr(args, "base_tenant_vars", None),
         )
         if args.command == "deploy":
             report = deployment.execute()

@@ -6,7 +6,7 @@ metadata:
   labels:
 {{- toYaml .Values.ws.labels | nindent 4 }}
 spec:
-  replicas: {{ .Values.ws.replicas }}
+  {{- include "novu.replicas" (dict "component" .Values.ws) | nindent 2 }}
   selector:
     matchLabels:
 {{- toYaml .Values.ws.labels | nindent 6 }}

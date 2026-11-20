@@ -68,9 +68,20 @@
       # a container; the directory name is the fallback when there is not.
       proj=$(docker inspect docker-postgres \
         --format '{{ index .Config.Labels "com.docker.compose.project" }}' 2>/dev/null || true)
+      # The project THIS deploy runs as. The deploy never sets
+      # COMPOSE_PROJECT_NAME, and the playbook derives the network name the
+      # same way (`digit_dir | basename`), so a running container whose label
+      # names another project is another stack: a different digit_dir on this
+      # host, or this stack before digit_dir was changed (issue #2783 gap 6).
+      # container_name is fixed, so `up` from here would collide with it.
+      this_proj="${COMPOSE_PROJECT_NAME:-$(basename "${DIGIT_DIR:-$PWD}" \
+                 | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-' | sed 's/^[_-]*//')}"
+      if [ -n "$proj" ] && [ "$proj" != "$this_proj" ]; then
+        echo "FOREIGN container-project:$proj (this deploy would be $this_proj)"
+        exit 0
+      fi
       if [ -z "$proj" ]; then
-        proj="${COMPOSE_PROJECT_NAME:-$(basename "${DIGIT_DIR:-$PWD}" \
-              | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')}"
+        proj="$this_proj"
       fi
       expected_volume="${proj}_postgres_data"
 
@@ -94,7 +105,8 @@
       # root is the definitive marker of a Postgres data directory.
       probed=0
       migrated=""
-      anon=""
+      anons=""
+      attested=""
       for v in $(docker volume ls -q 2>/dev/null); do
         mp=$(docker volume inspect -f '{{ .Mountpoint }}' "$v" 2>/dev/null) || continue
         [ -n "$mp" ] && [ -d "$mp" ] || continue
@@ -108,8 +120,16 @@
           else
             case "$v" in
               # Still not OUR anonymous cluster if it is another project's
-              # named volume; only an unnamed one (64 hex) can be.
-              [0-9a-f]*) [ ${#v} -eq 64 ] && anon="$v" ;;
+              # named volume; only an unnamed one (64 hex) can be. An id the
+              # operator listed in pg_guard_foreign_volumes is another
+              # stack's by attestation and does not count as ours.
+              [0-9a-f]*)
+                if [ ${#v} -eq 64 ]; then
+                  case " $PG_GUARD_FOREIGN_VOLUMES " in
+                    *" $v "*) attested="$v" ;;
+                    *)        anons="$anons $v" ;;
+                  esac
+                fi ;;
             esac
           fi
         fi
@@ -127,8 +147,39 @@
         echo "SAFE migrated-volume:$migrated"
         exit 0
       fi
-      if [ -n "$anon" ]; then
-        echo "ANON dangling-volume:$anon"
+      if [ -n "$anons" ]; then
+        # An anonymous volume is another stack's — not ours, not stranded by
+        # this deploy — only when something SAYS so. A com.docker.compose.project
+        # label naming another project does (a different digit_dir on this
+        # host, issue #2783 gap 6); so does the operator listing the volume id
+        # in pg_guard_foreign_volumes (handled in the loop above). The volume
+        # the engine creates for the image's VOLUME instruction — the pre-#2085
+        # case — most likely carries no compose label at all, so on such a host
+        # a new tenant in a fresh digit_dir needs that attestation; the refusal
+        # below says how. Anything else refuses, as before this PR. The first
+        # cut classified on "this digit_dir has no compose file yet", which is
+        # exactly the state of a live stack whose operator ran `compose down`
+        # and then moved digit_dir (review of #2788).
+        #
+        # EVERY anonymous cluster must be another stack's; one that is not is
+        # ours. Keeping only the last one seen let a labelled foreign volume that
+        # sorted after our unlabelled pre-#2085 cluster hide it (review of
+        # #2788, 4613068913).
+        foreign=""
+        for anon in $anons; do
+          anon_proj=$(docker volume inspect -f '{{ index .Labels "com.docker.compose.project" }}' "$anon" 2>/dev/null || true)
+          if [ -n "$anon_proj" ] && [ "$anon_proj" != "$this_proj" ]; then
+            foreign="${foreign:+$foreign; }$anon (project:$anon_proj)"
+          else
+            echo "ANON dangling-volume:$anon"
+            exit 0
+          fi
+        done
+        echo "SAFE foreign-anon-volume:$foreign"
+        exit 0
+      fi
+      if [ -n "$attested" ]; then
+        echo "SAFE attested-foreign-volume:$attested"
         exit 0
       fi
 
@@ -144,6 +195,8 @@
     # Fallback source for the compose project name when no container exists.
   environment:
     DIGIT_DIR: "{{ digit_dir | default('') }}"
+    # anonymous volume ids the operator attests belong to another stack
+    PG_GUARD_FOREIGN_VOLUMES: "{{ pg_guard_foreign_volumes | default([]) | join(' ') }}"
   register: pg_cluster_probe
   changed_when: false
   failed_when: false
@@ -274,6 +327,37 @@
       disposable — set `pg_allow_data_loss: true` to proceed.
     success_msg: "postgres storage check is conclusive"
 
+# A `docker-postgres` container that belongs to a different compose project
+# (another digit_dir on this host, or the same stack before digit_dir was
+# changed). container_name is fixed in the compose files, so `up` would fail
+# on the name conflict — and with force_clean the teardown would not touch it
+# either, since it is not this project's. Refuse up front with the real reason.
+- name: "preflight — refuse while another compose project's postgres container holds the name docker-postgres"
+  ansible.builtin.assert:
+    that:
+      - not (_foreign and not _override)
+    fail_msg: |
+      The container `docker-postgres` on this box belongs to a DIFFERENT compose
+      project than the one this deploy would run as ({{ digit_dir | basename }}):
+
+        {{ pg_probe_verdict | trim }}
+
+      Container names are fixed in the compose files, so one host runs one
+      stack: `docker compose up` here would fail on the name conflict, and a
+      force_clean teardown would not remove that container either (it is not
+      this project's).
+
+      Nothing has been changed. Either deploy into the directory that stack
+      runs from (check `docker inspect docker-postgres --format '{% raw %}{{ index .Config.Labels "com.docker.compose.working_dir" }}{% endraw %}'`),
+      or stop and remove that stack first — its data stays in its named volume.
+
+      `pg_allow_data_loss: true` skips this check; the deploy will still hit the
+      name conflict unless that container is gone.
+    success_msg: "no other compose project holds docker-postgres"
+  vars:
+    _foreign: "{{ pg_probe_verdict is search('^FOREIGN') }}"
+    _override: "{{ pg_allow_data_loss | default(false) | bool }}"
+
 - name: "preflight — show what this deploy resolves to"
   ansible.builtin.debug:
     msg: >-
@@ -310,9 +394,16 @@
       in that volume. Do NOT run `docker compose down -v`, `docker volume rm`
       or `docker system prune` on this box — that is what would destroy it.
 
-      If this box has never run DIGIT, that volume may belong to something
-      else entirely — a stray `docker run postgres`, or another stack. Check
-      before assuming it is yours.
+      If this box has never run DIGIT from {{ digit_dir }}, that volume may
+      belong to something else entirely — an older stack in another directory,
+      or a stray `docker run postgres`. Check before assuming it is yours:
+      `docker volume inspect <id>` (CreatedAt, labels) and, with the stack that
+      owns it stopped, `docker run --rm -v <id>:/d:ro alpine ls /d`. Once you
+      are sure it is NOT this tenant's, list the id in host_vars:
+
+        pg_guard_foreign_volumes: ["<64-hex id>"]
+
+      and re-run; the check then ignores that volume, and only that volume.
 
       Otherwise migrate the data onto the named volume and re-run:
         docs/releases/2.12/operations/postgres-volume-migration.md

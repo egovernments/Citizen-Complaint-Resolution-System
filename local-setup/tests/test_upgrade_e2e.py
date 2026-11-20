@@ -79,7 +79,7 @@ class UpgradeEndToEndTests(unittest.TestCase):
 
         cls.output = tmp / "runs"
         try:
-            analyse.analyse(repo=cls.repo, target_ref=cls.target, base_ref=cls.base, tenant="rt", tenant_vars=cls.vars,
+            analyse.analyse(repo=cls.repo, target_ref=cls.target, base_ref=cls.base, tenant="rt", tenant_vars=cls.vars, base_tenant_vars_file=cls.vars,
                             base_overrides={}, backup=cls.live, output=cls.output, excludes=())
         except NeedsOperator:
             pass
@@ -93,7 +93,7 @@ class UpgradeEndToEndTests(unittest.TestCase):
 
     def test_1_analysis_finds_the_changes_and_the_conflict(self):
         manifest = analyse.read_json(self.run_dir / "run.json")
-        self.assertEqual("CONFLICTS", manifest["status"])
+        self.assertEqual("UNMANAGED", manifest["status"])
         self.assertEqual([PERSISTER], manifest["conflicts"])
         self.assertEqual(
             {("A", "configs/custom/local.yml"), ("M", PERSISTER), ("D", "configs/egov-persister/boundary-persister.yml"),
@@ -108,6 +108,10 @@ class UpgradeEndToEndTests(unittest.TestCase):
         workspace = self.run_dir / "workspace"
         with self.assertRaises(NeedsOperator):
             analyse.resume(self.run_dir, acknowledge_secret_review=False)
+        choices = Path(self._temp.name) / "choices.json"
+        choices.write_text('{"configs/custom/local.yml": "adopt"}')
+        with self.assertRaises(NeedsOperator):
+            analyse.resume(self.run_dir, acknowledge_secret_review=False, unmanaged_resolution=choices)
         path = workspace / PERSISTER
         text = re.sub(r"<<<<<<< .*?>>>>>>> target\n", "      description: both wordings\n",
                       path.read_text(encoding="utf-8"), flags=re.S)
@@ -154,7 +158,7 @@ class UpgradeEndToEndTests(unittest.TestCase):
         """A box deployed before the drift guard: no recorded commit, found from its files."""
         try:
             analyse.analyse(repo=self.repo, target_ref=self.target, base_ref="auto", tenant="rt",
-                            tenant_vars=self.vars, base_overrides={}, backup=self.live,
+                            tenant_vars=self.vars, base_tenant_vars_file=self.vars, base_overrides={}, backup=self.live,
                             output=Path(self._temp.name) / "auto-runs", excludes=())
         except NeedsOperator:
             pass  # the same conflict as test_1

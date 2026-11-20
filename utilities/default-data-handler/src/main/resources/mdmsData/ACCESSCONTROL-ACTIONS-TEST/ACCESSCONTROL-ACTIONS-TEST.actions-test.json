@@ -2817,5 +2817,19 @@
     "serviceCode": "MDMS",
     "code": "null",
     "path": ""
+  },
+  {
+    "id": 4700,
+    "url": "/pgr-services/v2/employee/_context",
+    "code": "null",
+    "name": "Employee Working Context",
+    "path": "",
+    "method": "POST",
+    "enabled": false,
+    "displayName": "Employee Working Context",
+    "orderNumber": 0,
+    "serviceCode": "pgr-services",
+    "parentModule": ""
   }
+
 ]

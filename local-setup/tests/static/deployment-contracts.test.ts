@@ -221,17 +221,28 @@ describe('ansible playbook-deploy.yml', () => {
   // Parsing the one payload that mentions INTERNAL_USER checks the fields
   // together, and survives task renames, field reordering and whitespace.
   test('seeds INTERNAL_USER on state_root after bootstrap', () => {
-    // The Jinja expressions sit inside JSON string values, so the body is
-    // still valid JSON — `{{ state_root }}` parses as a plain string.
-    const payloads = [...playbook.matchAll(/body='(\{.*?\})'\s*$/gm)]
-      .map((m) => m[1])
-      .filter((b) => b.includes('INTERNAL_USER'));
+    // The body is a YAML mapping under `vars:` that the task hands to curl as
+    // `to_json` through the environment (a shell-quoted JSON string broke on a
+    // quote in the password — review of #2788). The Jinja expressions are
+    // quoted YAML scalars, so `{{ state_root }}` parses as a plain string.
+    const marker = '_internal_user_body:';
+    const starts = [...playbook.matchAll(new RegExp(`^( +)${marker}\\s*$`, 'gm'))];
+    // Exactly one definition — two would mean a duplicate seed path, and this
+    // test would silently only be covering whichever came first.
+    expect(starts).toHaveLength(1);
+    const indent = starts[0][1].length;
+    const after = playbook.slice(starts[0].index! + starts[0][0].length + 1);
+    // the mapping body: the lines that follow until one steps back to the key's indent
+    const body: string[] = [];
+    for (const line of after.split('\n')) {
+      if (line.trim() !== '' && line.search(/\S/) <= indent) break;
+      body.push(line);
+    }
+    const payload = yaml.safeLoad(body.join('\n')) as { User: Record<string, unknown> };
+    // and the task really sends THAT mapping
+    expect(playbook).toContain('SEED_BODY: "{{ _internal_user_body | to_json }}"');
 
-    // Exactly one — two would mean a duplicate seed path, and this test would
-    // silently only be covering whichever came first.
-    expect(payloads).toHaveLength(1);
-
-    const user = JSON.parse(payloads[0]).User;
+    const user = payload.User;
     expect(user.userName).toBe('INTERNAL_USER');
     expect(user.tenantId).toBe('{{ state_root }}');
     // SYSTEM is what makes HRMS's startup lookup accept it.
@@ -1052,6 +1063,41 @@ describe('Novu workflow creation deployment contract', () => {
     expect(novuValues).toMatch(/^ {4}repository: "ghcr\.io\/novuhq\/novu\/worker"\n {4}tag: "2\.3\.0"$/m);
   });
 
+  // The k8s bootstrap Job runs copies of the Ansible deployment's Novu scripts: a chart cannot
+  // read files outside its own directory. A fix to one must reach the other.
+  test('the novu chart bootstrap scripts are identical to the Ansible ones', () => {
+    for (const script of ['novu-mint-key.sh', 'bootstrap-novu-whatsapp.sh', 'load-dotenv.sh']) {
+      expect(read(`devops/deploy-as-code/charts/backbone-services/novu/files/bootstrap/${script}`))
+        .toBe(read(`backend/novu-bridge/config/${script}`));
+    }
+  });
+
+  // A failed hook fails the novu release, and helmfile then stops before core, common and urban.
+  test('the k8s Novu bootstrap never fails the hook, and fits in the release timeout', () => {
+    const chart = 'devops/deploy-as-code/charts/backbone-services/novu';
+    const run = read(`${chart}/files/bootstrap/run.sh`);
+    expect(run).not.toMatch(/set -[a-z]*e/);
+    expect(run).not.toMatch(/exit [1-9]/);
+    expect(run.trimEnd().endsWith('exit 0')).toBe(true);
+    // A new key reaches the bridge only when its pod restarts.
+    expect(run).toContain('rollout restart deployment "$BRIDGE_DEPLOYMENT"');
+    const values = read(`${chart}/values.yaml`);
+    const num = (key: string) => Number(new RegExp(`^ {2}${key}: (\\d+)$`, 'm').exec(values)![1]);
+    const timeout = Number(/chart: \.\/novu\n(?:.*\n)*? {2}timeout: (\d+)\n/.exec(
+      read('devops/deploy-as-code/charts/backbone-services/backboneservices-helmfile.yaml'))![1]);
+    expect(num('publicApiWaitSeconds') + num('privateApiWaitSeconds')).toBeLessThan(num('activeDeadlineSeconds'));
+    expect(num('activeDeadlineSeconds')).toBeLessThan(timeout);
+  });
+
+  // Registration closed only when the Job makes the account; with a pinned key the operator signs up.
+  test('novu-api closes sign-up exactly when the bootstrap is on, whatever api.env holds', () => {
+    const api = read('devops/deploy-as-code/charts/backbone-services/novu/templates/api/api-deployment.yaml');
+    const block = api.slice(api.indexOf('{{- if .Values.bootstrap.enabled }}'));
+    expect(block).toContain('- name: DISABLE_USER_REGISTRATION\n              value: "true"');
+    expect(api).toContain('{{- if or .Values.api.env .Values.bootstrap.enabled }}');
+    expect(api).not.toContain('{{- if .Values.api.env }}');
+  });
+
   // M1 (re-review): novu-bridge must know whether the worker preloads those providers
   // (NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS), and it must come from the SAME switch as the mount,
   // or the two can disagree and the bridge offers providers whose every send fails.
@@ -1292,12 +1338,14 @@ describe('digit-user-preferences-service runs the implementation its definition 
   const props = read(`${SRC}/src/main/resources/application.properties`);
   const values = readYaml(`${CHART}/values.yaml`);
 
-  // Every tag this image was published under before the rewrite is the Go binary: the
-  // 2.12 release (2.12-5137119, v2.12, v2.12.x) and the master channel (master-*). The
-  // set is closed, so a release cut from the Java tree needs no edit here. What stops a
-  // release from forgetting this image is that both its defaults follow the notification
-  // stack's one tag (the block above), which the release step pins in one go.
-  const GO_BUILD_TAG = /^(2\.12(-[0-9a-f]+)?|v2\.12(\.\d+)*|master(-.*)?)$/;
+  // Every tag this image was published under before the Java rewrite (9934255618) is the
+  // Go binary: the 2.12 release (2.12-5137119, v2.12, v2.12.x), the bare `master` channel,
+  // and the four master-<sha7> builds cut before the rewrite reached master. master-<sha7>
+  // tags cut since then are Java builds from this tree, so they are not in the set. The set
+  // is closed, so a release cut from the Java tree needs no edit here. What stops a release
+  // from forgetting this image is that both its defaults follow the notification stack's
+  // one tag (the block above), which the release step pins in one go.
+  const GO_BUILD_TAG = /^(2\.12(-[0-9a-f]+)?|v2\.12(\.\d+)*|master|master-(2242e47|298af68|8116812|7c91934))$/;
 
   // A compose service's environment as a map, whichever form (map or KEY=VALUE list) it
   // is written in. Values arrive as YAML scalars, so a trailing comment is not part of one.

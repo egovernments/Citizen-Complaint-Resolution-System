@@ -454,7 +454,7 @@ digit_ui_esbuild_branch: main
 # instead, which then needs digit_ui_esbuild_repo pointed at a source tree.
 digit_ui_bundle_image: >-
   {{ (ccrs_tagged_images | default({})).get('digit-ui-esbuild')
-     or 'egovio/digit-ui-esbuild:master-b4adf0d' }}
+     or 'egovio/digit-ui-esbuild:v2.20' }}
 
 # ──────────────────────────────────────────────────────────────────────
 # One-tag deploys (#1729)
@@ -585,8 +585,15 @@ sherlog_image: ghcr.io/singhalkarun/sherlog
 sherlog_version: "0.6.6"
 sherlog_mode: shadow
 sherlog_model_api_key: ""          # secret: OpenBao
-sherlog_model_provider: ""          # empty: Sherlog's default (openai)
-sherlog_model_upstream: ""          # empty: the provider's API
+sherlog_model_provider: ""          # empty: Sherlog's default (openai); or another key of sherlog_model_providers
+sherlog_model_upstream: ""          # empty: the provider's API, from sherlog_model_providers
+sherlog_holmes_model: ""            # empty: HolmesGPT's default, an OpenAI model. With anthropic: anthropic/<model>
+# The providers Sherlog knows, and the API each one's key goes to when sherlog_model_upstream is empty. The preflight
+# check and templates/sherlog.env.j2 both read this. Sherlog's compose defaults the upstream to api.openai.com
+# whatever the provider, so the deploy always writes it for a provider other than the default.
+sherlog_model_providers:
+  openai: https://api.openai.com
+  anthropic: https://api.anthropic.com
 sherlog_daily_investigations: 30
 sherlog_github_issues_repo: ""      # owner/repo: one issue per problem (live mode)
 sherlog_github_issues_token: ""    # secret: OpenBao; required when sherlog_github_issues_repo is set

@@ -53,6 +53,21 @@ FINAL = {"deployed", "aborted", "rolled-back"}
 RECOVERABLE_BY_RESTART = {"backing-up", "predicting", "restart-failed"}
 
 
+def compose_chain(tenant: str, values: dict[str, Any], *, guarded: bool, source_root: Path) -> list[str]:
+    """Match playbook-deploy.yml's ordered Compose chain, never glob stale overlays."""
+    files = ["docker-compose.egov-digit.yaml"]
+    if values.get("db_fast_path", False) and not guarded:
+        files.append("docker-compose.fast-path.yml")
+    if values.get("data_volume_host_paths"):
+        files.append("docker-compose.hostpaths.yml")
+    files += [f"docker-compose.{name}.yml" for name in ("migrations", "monitoring", "matomo", "opensre")]
+    if (source_root / "local-setup" / f"docker-compose.{tenant}.yml").is_file():
+        files.append(f"docker-compose.{tenant}.yml")
+    if guarded:
+        files.append("docker-compose.upgrade-safe.yml")
+    return files
+
+
 def stop_process_group(process: subprocess.Popen, grace: float = 30) -> None:
     for sig, wait in ((signal.SIGTERM, grace), (signal.SIGKILL, None)):
         with contextlib.suppress(ProcessLookupError):
@@ -209,7 +224,8 @@ class Docker:
 
 class Deployment:
     def __init__(self, run_dir: Path, *, backup_parent: Path, resolution: Path | None, docker: Docker | None = None,
-                 tool_root: Path = render.TOOL_ROOT, log: Callable[[str], None] = print) -> None:
+                 tool_root: Path = render.TOOL_ROOT, log: Callable[[str], None] = print,
+                 base_tenant_vars_file: Path | None = None) -> None:
         self.run_dir = run_dir.resolve()
         self.dir = self.run_dir / "deploy"
         self.backup_parent = backup_parent.resolve()
@@ -218,6 +234,7 @@ class Deployment:
         self.tool_root = tool_root
         self.log = log
         self.manifest = read_json(self.run_dir / "run.json")
+        self.base_tenant_vars_file = base_tenant_vars_file
         self.tenant = self.manifest["tenant"]
         self.tenant_vars = tool_root / "local-setup/ansible/inventory/host_vars" / f"{self.tenant}.yml"
         self.journal = Journal(self.dir) if self.dir.is_dir() else None
@@ -233,6 +250,12 @@ class Deployment:
             raise UpgradeError(f"the run is {self.manifest['status']}, not READY; finish it with digit-upgrade resume")
         if self.manifest["deployed"]:
             raise UpgradeError("this run was already deployed")
+        analyse.require_current_run(self.manifest)
+        analyse.validate_unmanaged(self.manifest, self.manifest["unmanaged_resolution"])
+        if self.base_tenant_vars_file is None:
+            raise UpgradeError("--base-tenant-vars is required")
+        if sha256_file(self.base_tenant_vars_file) != self.manifest["base_tenant_vars_sha256"]:
+            raise UpgradeError("base tenant variables changed since analysis; re-analyse")
         self._check_checkout()
         values = self.values = analyse.load_yaml(self.tenant_vars)
         if values.get("ansible_connection") != "local" and values.get("ansible_host") not in (None, "localhost", "127.0.0.1"):
@@ -246,7 +269,8 @@ class Deployment:
         raw = {"live": digit_dir}
         base_vars = scratch / "base-tenant-vars.yml"
         overrides = read_json(self.run_dir / "base-overrides.json") if (self.run_dir / "base-overrides.json").exists() else {}
-        analyse.write_yaml(base_vars, analyse.base_tenant_vars(values, overrides))
+        base_values = analyse.base_tenant_vars(analyse.load_yaml(self.base_tenant_vars_file), overrides)
+        analyse.write_yaml(base_vars, base_values)
         for name, commit, vars_path, legacy in (
             ("base", self.manifest["base_commit"], base_vars, True),
             ("target", self.manifest["target_commit"], self.tenant_vars, False),
@@ -257,7 +281,7 @@ class Deployment:
                 render.preflight(source, vars_path)
             raw[name] = scratch / f"{name}-render"
             render.render(source, self.tenant, vars_path, raw[name], allow_legacy=legacy)
-        known = analyse.values_in_structure(values) | analyse.values_in_structure(analyse.base_tenant_vars(values, overrides))
+        known = analyse.values_in_structure(values) | analyse.values_in_structure(base_values)
         prepared = prepare(raw, scratch / "normalized", known_secrets=known, excludes=self.manifest["excludes"])
         self._check_same_as_analysed(prepared.hashes, prepared.normalized["live"])
 
@@ -304,11 +328,18 @@ class Deployment:
             )
 
     def _changed_since_analysis(self, live_tree: Path) -> list[str]:
+        original = self.run_dir / "inputs" / "live"
+        if original.is_dir():
+            def fingerprints(root):
+                return {p.relative_to(root).as_posix(): ("symlink:" + os.readlink(p) if p.is_symlink() else sha256_file(p))
+                        for p in root.rglob("*") if p.is_symlink() or p.is_file()}
+            before, after = fingerprints(original), fingerprints(live_tree)
+            return sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
         workspace = self.run_dir / "workspace"
         with tempfile.TemporaryDirectory() as scratch:
             env = dict(os.environ, GIT_INDEX_FILE=str(Path(scratch) / "index"), GIT_DIR=str(workspace / ".git"),
                        GIT_WORK_TREE=str(live_tree))
-            run(["git", "add", "-A"], cwd=live_tree, env=env)
+            run(["git", "-c", "core.excludesFile=/dev/null", "add", "-A", "--force"], cwd=live_tree, env=env)
             return run(["git", "diff", "--cached", "--name-only", "live"], cwd=live_tree, env=env).stdout.split()
 
     def _materialize(self, prepared, scratch: Path) -> tuple[Path, list[str], list[str]]:
@@ -424,22 +455,25 @@ class Deployment:
                 f"PostgreSQL data ({stack.data_directory}) is not on the named volume {named}. Move it first: "
                 "docs/releases/2.12/operations/postgres-volume-migration.md"
             )
-        files = sorted(p.name for p in preview.glob("docker-compose.*.y*ml")
-                       if p.name not in ("docker-compose.fast-path.yml", "docker-compose.upgrade-safe.yml"))
-        args = ["docker", "compose", "--project-name", stack.project, "--project-directory", str(preview)]
-        for name in ["docker-compose.egov-digit.yaml", *[f for f in files if f != "docker-compose.egov-digit.yaml"]]:
-            args += ["-f", str(preview / name)]
-        args += ["-f", str(self.tool_root / "local-setup/docker-compose.upgrade-safe.yml"),
-                 "--profile", "*", "config", "--no-interpolate", "--format", "json"]
-        config = json.loads(self.docker.run(args, cwd=preview).stdout)
-        volumes = config["services"]["postgres-db"].get("volumes", [])
-        data = [v for v in volumes if v.get("target") == stack.data_directory]
-        if len(data) != 1 or data[0].get("source") != "postgres_data":
-            raise UpgradeError(
-                f"the new stack would not mount postgres_data at {stack.data_directory}; refusing to start it on other storage"
-            )
-        if any(str(v.get("target", "")).startswith("/docker-entrypoint-initdb.d") for v in volumes):
-            raise UpgradeError("the new stack would mount an initdb dump into PostgreSQL")
+        for guarded in (False, True):
+            files = compose_chain(self.tenant, self.values, guarded=guarded, source_root=self.tool_root)
+            args = ["docker", "compose", "--project-name", stack.project, "--project-directory", str(preview)]
+            for name in files:
+                path = self.tool_root / "local-setup" / name if name == "docker-compose.upgrade-safe.yml" else preview / name
+                args += ["-f", str(path)]
+            args += ["--profile", "*", "config", "--no-interpolate", "--format", "json"]
+            config = json.loads(self.docker.run(args, cwd=preview).stdout)
+            volumes = config["services"]["postgres-db"].get("volumes", [])
+            data = [v for v in volumes if v.get("target") == stack.data_directory]
+            definition = config.get("volumes", {}).get("postgres_data", {})
+            resolved_name = definition.get("name", named)
+            mode = "guarded upgrade" if guarded else "ordinary deployment"
+            if len(data) != 1 or data[0].get("type") != "volume" or data[0].get("source") != "postgres_data" or resolved_name != named:
+                raise UpgradeError(
+                    f"the {mode} would not mount postgres_data ({named}) at {stack.data_directory}; refusing to start it on other storage"
+                )
+            if guarded and any(str(v.get("target", "")).startswith("/docker-entrypoint-initdb.d") for v in volumes):
+                raise UpgradeError("the guarded upgrade would mount an initdb dump into PostgreSQL")
 
     def _check_space(self, digit_dir: Path, stack: StackRecord) -> None:
         paths = [digit_dir, *map(Path, stack.host_paths)]
@@ -686,22 +720,23 @@ class Deployment:
             done |= set(wave)
 
     def _wait_healthy(self, stack: StackRecord, services: list[str], *, restart_once: bool, seconds: int = 300) -> None:
-        deadline = time.monotonic() + seconds
-        pending = dict.fromkeys(services, restart_once)
+        pending = {service: [restart_once, time.monotonic() + seconds] for service in services}
         while pending:
             for service in list(pending):
+                can_restart, deadline = pending[service]
                 container = self._container(stack, service)
                 state = self.docker.inspect(container)[0]["State"] if container else {}
                 health = (state.get("Health") or {}).get("Status")
                 if state.get("Running") and health in (None, "healthy"):
                     del pending[service]
-                elif container and (not state.get("Running") or health == "unhealthy" or time.monotonic() > deadline):
-                    if not pending[service]:
+                elif time.monotonic() >= deadline or (container and (not state.get("Running") or health == "unhealthy")):
+                    if not container:
+                        raise UpgradeError(f"{service} container did not appear within {seconds}s")
+                    if not can_restart:
                         raise UpgradeError(f"{service} did not become healthy after a restart")
                     self.log(f"{service} did not come up cleanly; restarting it once")
                     self.docker.run(["docker", "restart", container])
-                    pending[service] = False
-                    deadline = time.monotonic() + seconds
+                    pending[service] = [False, time.monotonic() + seconds]
             if pending:
                 time.sleep(3)
 
@@ -791,9 +826,9 @@ class Deployment:
         stack = plan["stack"]
         maintenance = Maintenance(stack.public_ports, self.docker.run)
         self.journal.enter("preflight-passed", stack=asdict(stack))
-        maintenance.on()
-        self.log(f"maintenance: public web traffic on ports {stack.public_ports} is refused until the end")
         try:
+            maintenance.on()
+            self.log(f"maintenance: public web traffic on ports {stack.public_ports} is refused until the end")
             backup = self.backup(stack)
             predicted, keep = self.predict(backup, stack)
         except BaseException as exc:

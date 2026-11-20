@@ -19,14 +19,16 @@ from pathlib import Path
 from typing import Any
 
 from . import merge, render
-from .common import NeedsOperator, UpgradeError, read_json, run, run_streaming, sha256_file, stamp, utc_now, write_json
+from .common import hash_tree, safe_relative, NeedsOperator, UpgradeError, read_json, run, run_streaming, sha256_file, stamp, utc_now, write_json
 from .redaction import is_secret_key, redact_structure, values_in_structure
-from .trees import leaks, prepare
+from .trees import analysed_paths, leaks, prepare
 
 READY = "READY"
 RENDERED_BASE_CANDIDATES = 8
 CONFLICTS = "CONFLICTS"
 SECRET_REVIEW = "SECRET_REVIEW"
+UNMANAGED = "UNMANAGED"
+RUN_VERSION = 2
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -100,6 +102,7 @@ def analyse(
     base_ref: str | None,
     tenant: str,
     tenant_vars: Path,
+    base_tenant_vars_file: Path,
     base_overrides: dict[str, Any],
     backup: Path,
     output: Path,
@@ -126,7 +129,7 @@ def analyse(
             )
         base_ref_source = "deploy-state" if base_ref is None else "auto" if base_ref == "auto" else "argument"
 
-        base_values = base_tenant_vars(tenant_values, base_overrides)
+        base_values = base_tenant_vars(load_yaml(base_tenant_vars_file), base_overrides)
         base_vars = scratch / "base-tenant-vars.yml"
         write_yaml(base_vars, base_values)
         raw = {"live": live_root}
@@ -152,17 +155,29 @@ def analyse(
         known = values_in_structure(tenant_values) | values_in_structure(base_values)
         prepared = prepare(raw, scratch / "normalized", known_secrets=known, excludes=excludes)
 
+        override_file = live_root / ".digit-deploy-state" / "overrides.json"
+        adopted = read_json(override_file) if override_file.is_file() else {}
+        unmanaged = sorted(set(analysed_paths(raw["live"], excludes))
+                           - set(analysed_paths(raw["base"], excludes)) - set(adopted))
         run_dir = new_run_dir(output)
+        if unmanaged:
+            for name, tree in prepared.normalized.items():
+                shutil.copytree(tree, run_dir / "inputs" / name, symlinks=True)
+            write_json(run_dir / "unmanaged-resolution.json", {p: "adopt or leave" for p in unmanaged})
         result = merge.merge(prepared.normalized, run_dir / "workspace")
         patch = merge.git(run_dir / "workspace", "diff", "--binary", "base", "live").stdout
         (run_dir / "local-changes.patch").write_text(patch, encoding="utf-8")
-        if not result.conflicts:
+        if not result.conflicts and not unmanaged:
             merge.export_worktree(run_dir / "workspace", run_dir / "candidate")
 
         if base_overrides:
             write_json(run_dir / "base-overrides.json", base_overrides)
-        status = CONFLICTS if result.conflicts else SECRET_REVIEW if prepared.secrets["blocker_count"] else READY
+        status = UNMANAGED if unmanaged else CONFLICTS if result.conflicts else SECRET_REVIEW if prepared.secrets["blocker_count"] else READY
         manifest = {
+            "run_version": RUN_VERSION,
+            "base_tenant_vars_sha256": sha256_file(base_tenant_vars_file),
+            "unmanaged": unmanaged,
+            "unmanaged_resolution": {},
             "created_at": utc_now(),
             "tool_commit": _tool_commit(),
             "tenant": tenant,
@@ -244,10 +259,48 @@ def _find_base(repo: Path, live_root: Path, target_commit: str, tenant: str, bas
     return best["commit"], best["out"], best["how"], selection
 
 
-def resume(run_dir: Path, *, acknowledge_secret_review: bool) -> Path:
+def resume(run_dir: Path, *, acknowledge_secret_review: bool, unmanaged_resolution: Path | None = None) -> Path:
     """Finish a run after the operator resolved conflicts and/or reviewed secrets."""
     run_dir = run_dir.resolve()
     manifest = read_json(run_dir / "run.json")
+    require_current_run(manifest)
+    if unmanaged_resolution is not None:
+        if manifest["status"] != UNMANAGED:
+            raise UpgradeError("unmanaged decisions are already fixed; re-analyse to change them")
+        choices = read_json(unmanaged_resolution)
+        validate_unmanaged(manifest, choices)
+        inputs = {name: run_dir / "inputs" / name for name in ("base", "live", "target")}
+        if {name: hash_tree(tree) for name, tree in inputs.items()} != manifest["tree_hashes"]:
+            raise UpgradeError("the saved normalized inputs changed; re-analyse")
+        # Keep immutable inputs for a retry; filter only a private working copy.
+        with tempfile.TemporaryDirectory(prefix=".unmanaged-", dir=run_dir) as scratch:
+            filtered = Path(scratch) / "live"
+            shutil.copytree(inputs["live"], filtered, symlinks=True)
+            for rel, choice in choices.items():
+                if choice == "leave":
+                    (filtered / safe_relative(rel)).unlink()
+            if (run_dir / "workspace").exists():
+                shutil.rmtree(run_dir / "workspace")
+            result = merge.merge({**inputs, "live": filtered}, run_dir / "workspace")
+        patch = merge.git(run_dir / "workspace", "diff", "--binary", "base", "live").stdout
+        (run_dir / "local-changes.patch").write_text(patch, encoding="utf-8")
+        manifest.update(unmanaged_resolution=choices, local_changes=result.local_changes,
+                        conflicts=result.conflicts, workspace_stage0=result.stage0,
+                        deployment_changes=result.deployment_changes)
+        ignored = {rel for rel, choice in choices.items() if choice == "leave"}
+        findings = [f for f in manifest["secrets"]["findings"] if f["path"] not in ignored]
+        manifest["secrets"].update(findings=findings,
+            blocker_count=sum(f["severity"] == "blocker" for f in findings),
+            warning_count=sum(f["severity"] == "warning" for f in findings))
+        manifest["status"] = CONFLICTS if result.conflicts else SECRET_REVIEW if manifest["secrets"]["blocker_count"] else READY
+        if not result.conflicts:
+            shutil.rmtree(run_dir / "candidate", ignore_errors=True)
+            merge.export_worktree(run_dir / "workspace", run_dir / "candidate")
+        # Publish the new workspace before asking the operator to resolve it.
+        write_json(run_dir / "run.json", manifest)
+        write_report(run_dir, manifest)
+        if result.conflicts:
+            _require_ready(run_dir, manifest)
     if manifest["status"] == CONFLICTS:
         workspace = run_dir / "workspace"
         manifest["deployment_changes"] = merge.conclude(workspace, manifest["conflicts"], manifest["workspace_stage0"])
@@ -265,7 +318,25 @@ def resume(run_dir: Path, *, acknowledge_secret_review: bool) -> Path:
     return run_dir
 
 
+def require_current_run(manifest: dict[str, Any]) -> None:
+    if manifest.get("run_version") != RUN_VERSION or "base_tenant_vars_sha256" not in manifest or "unmanaged_resolution" not in manifest:
+        raise UpgradeError("this run predates explicit base settings and unmanaged decisions; re-analyse")
+
+
+def validate_unmanaged(manifest: dict[str, Any], choices: dict[str, str]) -> None:
+    if set(choices) != set(manifest["unmanaged"]) or any(c not in ("adopt", "leave") for c in choices.values()):
+        raise UpgradeError("unmanaged resolution must cover every reported path exactly, with 'adopt' or 'leave'")
+    for rel in choices:
+        safe_relative(rel)
+
+
 def _require_ready(run_dir: Path, manifest: dict[str, Any]) -> None:
+    if manifest["status"] == UNMANAGED:
+        raise NeedsOperator(
+            f"{len(manifest['unmanaged'])} unmanaged path(s); choose adopt or leave in "
+            f"{run_dir / 'unmanaged-resolution.json'}, then run digit-upgrade resume {run_dir} "
+            f"--unmanaged-resolution {run_dir / 'unmanaged-resolution.json'} before resolving merge conflicts"
+        )
     if manifest["status"] == CONFLICTS:
         raise NeedsOperator(
             f"{len(manifest['conflicts'])} file(s) conflict with the target version. Resolve them in "
@@ -290,6 +361,8 @@ def write_report(run_dir: Path, manifest: dict[str, Any]) -> None:
         "status", "base_ref", "base_commit", "target_ref", "target_commit", "renderers",
         "local_changes", "conflicts", "deployment_changes", "secrets",
     )}
+    report["unmanaged"] = manifest.get("unmanaged", [])
+    report["unmanaged_resolution"] = manifest.get("unmanaged_resolution", {})
     write_json(run_dir / "report.json", report)
     secrets = manifest["secrets"]
     out = [
@@ -324,6 +397,12 @@ def write_report(run_dir: Path, manifest: dict[str, Any]) -> None:
             "> does not reproduce shows up as a local change.",
             "",
         ]
+    if manifest.get("unmanaged"):
+        out += ["## Unmanaged files", "", "These live paths are absent from the base render and are not adopted overrides.",
+                "Choose `adopt` to merge them, or `leave` to exclude them from overrides and use normal release behavior.",
+                "A file absent from the target may remain on disk: synchronization does not delete it.", ""]
+        out += [f"- `{p}`: {manifest['unmanaged_resolution'].get(p, 'decision required')}" for p in manifest["unmanaged"]]
+        out.append("")
     sections = (
         ("Conflicts", [f"- `{path}`" for path in manifest["conflicts"]]),
         ("Local changes", [f"- {c['status']} `{c['path']}`" for c in manifest["local_changes"]]),

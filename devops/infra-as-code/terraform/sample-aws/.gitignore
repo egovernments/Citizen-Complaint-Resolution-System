@@ -6,3 +6,9 @@ terraform.tfvars
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl
+
+# An environment's DB password (environments/<env>.secret.tfvars), shared out of
+# band, and the remote-state stack's per-environment backend, copied in from
+# environments/ before `terraform init`.
+*.secret.tfvars
+remote-state/backend_override.tf

@@ -47,7 +47,7 @@ MANIFEST = "manifest.json"
 OVERRIDES = "overrides.json"
 OVERRIDE_FILES = "overrides"
 PRE_DEPLOY = "pre-deploy"
-VERSION = 2
+VERSION = 3
 EXIT_ATTENTION = 3
 
 # Configuration a deploy renders deterministically from the repository and the
@@ -69,14 +69,23 @@ ANALYSED_ROOTS = (
     "postman",
     "scripts",
     "seeds",
+    "sherlog",
 )
 ANALYSED_TOP_LEVEL = (
     "docker-compose.*.yml",
     "docker-compose.*.yaml",
     "identity-keycloak-realm.json",
+    "configure-identity-keycloak.sh",
+    "core-sms-handoff.sh",
 )
 # Inside the analysed set, but written at runtime, downloaded, or transient.
 NOT_ANALYSED = (
+    "sherlog/.env",
+    "sherlog/.bundle-version",
+    "sherlog/override.yaml",
+    "sherlog/textfile/*",
+    "sherlog/rendered/*",
+    "sherlog/logs/*",
     "db/full-dump.sql",
     "docker-compose.upgrade-safe.yml",
     "kong/.kong.yml.pinned",
@@ -100,7 +109,7 @@ def is_analysed(rel, extra_excludes=()):
     top = rel.split("/", 1)[0]
     if "/" in rel:
         return top in ANALYSED_ROOTS
-    return any(fnmatch.fnmatchcase(rel, pattern) for pattern in ANALYSED_TOP_LEVEL)
+    return top in ANALYSED_ROOTS or any(fnmatch.fnmatchcase(rel, pattern) for pattern in ANALYSED_TOP_LEVEL)
 
 
 def fingerprint(path):
@@ -203,11 +212,15 @@ def check(digit_dir):
     manifest = _load_manifest(digit_dir)
     # A record from another version covers a different analysed set, so
     # comparing against it would report files it never covered as hand edits.
-    if manifest is None or manifest.get("version") != VERSION:
+    if manifest is None or manifest.get("version") not in (2, VERSION):
         return 0, {"status": "NO_BASELINE"}
     if manifest.get("status") != "complete":
         return 0, {"status": "INCOMPLETE_PREVIOUS", "started_at": manifest.get("started_at")}
     recorded, current = manifest["files"], analysed_files(digit_dir)
+    if manifest.get("version") == 2:
+        # Version 2 never covered Sherlog or the two top-level helper scripts.
+        current = {p: v for p, v in current.items() if p.split("/", 1)[0] != "sherlog"
+                   and p not in ("configure-identity-keycloak.sh", "core-sms-handoff.sh")}
     changes = {
         "modified": sorted(p for p in recorded if p in current and current[p] != recorded[p]),
         "added": sorted(p for p in current if p not in recorded),
@@ -228,12 +241,15 @@ def begin(digit_dir):
     snapshot = _state(digit_dir, PRE_DEPLOY)
     shutil.rmtree(snapshot, ignore_errors=True)
     if _load_overrides(digit_dir):
+        saved = {}
         for rel in list(analysed_files(digit_dir)) + [".env"]:
             source = os.path.join(digit_dir, rel)
-            if os.path.isfile(source) and not os.path.islink(source):
+            saved[rel] = fingerprint(source)
+            if saved[rel] is not None:
                 stored = os.path.join(snapshot, rel)
                 os.makedirs(os.path.dirname(stored), mode=0o700, exist_ok=True)
-                shutil.copy2(source, stored)
+                shutil.copy2(source, stored, follow_symlinks=False)
+        _write_json(_state(digit_dir, PRE_DEPLOY + ".json"), saved)
     manifest["status"] = "in-progress"
     manifest["started_at"] = _now()
     _write_json(_state(digit_dir, MANIFEST), manifest)
@@ -243,15 +259,32 @@ def begin(digit_dir):
 def _restore_snapshot(digit_dir):
     """Put the analysed files and .env back as ``begin`` found them."""
     snapshot = _state(digit_dir, PRE_DEPLOY)
-    saved = set()
-    for current, dirs, files in os.walk(snapshot):
-        for name in files:
-            saved.add(os.path.relpath(os.path.join(current, name), snapshot).replace(os.sep, "/"))
-    for rel in analysed_files(digit_dir):
-        if rel not in saved:
-            os.unlink(os.path.join(digit_dir, rel))
-    for rel in sorted(saved):
-        _write_in_place(os.path.join(snapshot, rel), os.path.join(digit_dir, rel))
+    saved = _load(_state(digit_dir, PRE_DEPLOY + ".json"), "pre-deploy index")
+    if saved is None:
+        raise ValueError("cannot restore a snapshot without its path index")
+    current = set(analysed_files(digit_dir)) | {".env"}
+    for rel in sorted(current, key=lambda p: (-p.count("/"), p)):
+        path = os.path.join(digit_dir, rel)
+        if saved.get(rel) is None and os.path.lexists(path):
+            os.unlink(path)
+    for rel, identity in sorted(saved.items(), key=lambda item: (item[0].count("/"), item[0])):
+        if identity is None:
+            continue
+        path = os.path.join(digit_dir, rel)
+        source = os.path.join(snapshot, rel)
+        if os.path.islink(path):
+            os.unlink(path)
+        if identity.startswith("symlink:"):
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            elif os.path.lexists(path):
+                os.unlink(path)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            os.symlink(os.readlink(source), path, target_is_directory=os.path.isdir(source))
+        else:
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            _write_in_place(source, path)
     manifest = _load_manifest(digit_dir)
     manifest["status"] = "complete"
     manifest.pop("started_at", None)
@@ -334,6 +367,9 @@ def record(digit_dir, commit=None):
         previous = _load_manifest(digit_dir) if os.path.isdir(digit_dir) else None
         commit = (previous or {}).get("deployed_commit")
     shutil.rmtree(_state(digit_dir, PRE_DEPLOY), ignore_errors=True)
+    index_path = _state(digit_dir, PRE_DEPLOY + ".json")
+    if os.path.exists(index_path):
+        os.unlink(index_path)
     files = analysed_files(digit_dir)
     _write_json(
         _state(digit_dir, MANIFEST),

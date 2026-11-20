@@ -305,8 +305,10 @@ class DeployPreflightTests(TempDirCase):
         run_dir = self.tmp / "run"
         run_dir.mkdir(exist_ok=True)
         (run_dir / "run.json").write_text(json.dumps({"tenant": "t", "status": "READY"}))
-        return deploy.Deployment(run_dir, backup_parent=self.tmp / "b", resolution=None, docker=docker,
+        deployment = deploy.Deployment(run_dir, backup_parent=self.tmp / "b", resolution=None, docker=docker,
                                  tool_root=self.tmp)
+        deployment.values = {}
+        return deployment
 
     def stack(self, data_directory="/var/lib/postgresql/data"):
         return deploy.StackRecord(digit_dir=str(self.tmp), project="digit", compose_files=[], services=[],
@@ -520,15 +522,284 @@ class CliTests(unittest.TestCase):
 
     def test_overrides_are_yaml_and_secrets_are_refused(self):
         args = cli.build_parser().parse_args([
-            "analyse", "--repo", ".", "--target-ref", "x", "--tenant", "t", "--tenant-vars", "v",
+            "analyse", "--repo", ".", "--target-ref", "x", "--tenant", "t", "--tenant-vars", "v", "--base-tenant-vars", "v",
             "--backup", "b", "--output", "o", "--base-override", "enable_novu=false",
         ])
         self.assertEqual([("enable_novu", False)], args.base_override)
         with self.assertRaisesRegex(UpgradeError, "cannot set secrets"):
             analyse.analyse(repo=Path("."), target_ref="HEAD", base_ref=None, tenant="t",
                             tenant_vars=ROOT / "local-setup/ansible/inventory/host_vars/_example.yml",
+                            base_tenant_vars_file=ROOT / "local-setup/ansible/inventory/host_vars/_example.yml",
                             base_overrides={"db_password": "x"}, backup=Path("."), output=Path("."), excludes=())
 
+
+
+class OpenReviewSafetyTests(TempDirCase):
+    def test_partial_maintenance_failure_and_interrupt_are_cleaned_up(self):
+        for failure in (UpgradeError("v6 unavailable"), deploy.Interrupted("received SIGTERM")):
+            with self.subTest(failure=type(failure).__name__):
+                present = set()
+                def runner(args, check=True, **kwargs):
+                    tool, action = args[:2]
+                    if action == "-I":
+                        if tool == "ip6tables":
+                            raise failure
+                        present.add(tool)
+                    elif action == "-D":
+                        present.discard(tool)
+                    return subprocess.CompletedProcess(args, 0 if action != "-C" or tool in present else 1, "", "")
+                d = deploy.Deployment.__new__(deploy.Deployment)
+                d.docker = deploy.Docker(runner)
+                d.journal = deploy.Journal(self.tmp)
+                d.log = lambda _: None
+                d.run_dir = self.tmp
+                stack = deploy.StackRecord(str(self.tmp), "digit", [], [], {}, [], "/pgdata")
+                d.preflight = mock.Mock(return_value={"stack": stack})
+                d.restart_previous = mock.Mock()
+                d.cleanup_clone = mock.Mock()
+                d.backup = mock.Mock()
+                with mock.patch.object(deploy.shutil, "which", return_value=True):
+                    with self.assertRaises(type(failure)):
+                        d._execute(self.tmp / "deploy.log")
+                self.assertFalse(present)
+                d.restart_previous.assert_called_once_with(stack)
+                d.backup.assert_not_called()
+                self.assertEqual("aborted", d.journal.phase)
+
+    def test_failed_recovery_keeps_maintenance_and_reports_instructions(self):
+        d = deploy.Deployment.__new__(deploy.Deployment)
+        d.docker = mock.Mock()
+        d.journal = deploy.Journal(self.tmp)
+        d.log = lambda _: None
+        d.run_dir = self.tmp
+        stack = deploy.StackRecord(str(self.tmp), "digit", [], [], {}, [], "/pgdata")
+        d.preflight = mock.Mock(return_value={"stack": stack})
+        d.restart_previous = mock.Mock(side_effect=UpgradeError("restart failed"))
+        with mock.patch.object(deploy, "Maintenance") as maintenance:
+            maintenance.return_value.on.side_effect = UpgradeError("v6 failed")
+            with self.assertRaisesRegex(UpgradeError, "digit-upgrade rollback"):
+                d._execute(self.tmp / "deploy.log")
+            maintenance.return_value.off.assert_not_called()
+        self.assertEqual("restart-failed", d.journal.phase)
+
+    def test_missing_container_times_out_without_restart(self):
+        d = deploy.Deployment.__new__(deploy.Deployment)
+        d._container = mock.Mock(return_value=None)
+        d.docker = mock.Mock()
+        with mock.patch.object(deploy.time, "monotonic", side_effect=[0, 6]), mock.patch.object(deploy.time, "sleep"):
+            with self.assertRaisesRegex(UpgradeError, "container did not appear"):
+                d._wait_healthy(mock.Mock(), ["missing"], restart_once=True, seconds=5)
+        d.docker.run.assert_not_called()
+
+    def test_each_service_has_its_own_deadline_and_only_one_restart(self):
+        d = deploy.Deployment.__new__(deploy.Deployment)
+        d._container = lambda _, s: s
+        d.docker = mock.Mock()
+        d.docker.inspect.return_value = [{"State": {"Running": False}}]
+        d.log = lambda _: None
+        with mock.patch.object(deploy.time, "monotonic", return_value=0), mock.patch.object(deploy.time, "sleep"):
+            with self.assertRaisesRegex(UpgradeError, "after a restart"):
+                d._wait_healthy(mock.Mock(), ["broken"], restart_once=True)
+        self.assertEqual(1, d.docker.run.call_count)
+
+    def test_other_service_restarts_cannot_extend_a_missing_service_deadline(self):
+        d = deploy.Deployment.__new__(deploy.Deployment)
+        d._container = lambda _, s: None if s == "missing" else s
+        d.docker = mock.Mock()
+        d.docker.inspect.return_value = [{"State": {"Running": False}}]
+        d.log = lambda _: None
+        with mock.patch.object(deploy.time, "monotonic", side_effect=[0, 0, 1, 1, 4, 6]), mock.patch.object(deploy.time, "sleep"):
+            with self.assertRaisesRegex(UpgradeError, "missing container did not appear"):
+                d._wait_healthy(mock.Mock(), ["missing", "broken"], restart_once=True, seconds=5)
+
+    def test_storage_checks_use_real_order_and_refuse_ordinary_mount_regression(self):
+        mounts = [{"Type": "volume", "Name": "digit_postgres_data", "Destination": "/var/lib/postgresql/data"}]
+        d = deploy.Deployment.__new__(deploy.Deployment)
+        d.tenant, d.values, d.tool_root = "t", {"db_fast_path": False}, self.tmp
+        calls = []
+        def runner(args, **kwargs):
+            calls.append(args)
+            if args[1] == "inspect":
+                return subprocess.CompletedProcess(args, 0, json.dumps([{"Mounts": mounts}]), "")
+            target = "/var/lib/postgresql/data" if any("upgrade-safe" in a for a in args) else "/wrong"
+            out = {"services": {"postgres-db": {"volumes": [{"type": "volume", "source": "postgres_data", "target": target}]}}}
+            return subprocess.CompletedProcess(args, 0, json.dumps(out), "")
+        d.docker = deploy.Docker(runner)
+        stack = deploy.StackRecord(str(self.tmp), "digit", [], [], {}, [], "/var/lib/postgresql/data")
+        with self.assertRaisesRegex(UpgradeError, "ordinary deployment"):
+            d._check_postgres_storage(self.tmp, self.tmp, stack)
+        self.assertFalse(any("upgrade-safe" in a for a in calls[-1]))
+        write(self.tmp, "local-setup/docker-compose.t.yml", "services: {}")
+        normal = deploy.compose_chain("t", {"db_fast_path": True, "data_volume_host_paths": {"postgres_data": "/data"}}, guarded=False, source_root=self.tmp)
+        self.assertEqual(["docker-compose.egov-digit.yaml", "docker-compose.fast-path.yml", "docker-compose.hostpaths.yml",
+                          "docker-compose.migrations.yml", "docker-compose.monitoring.yml", "docker-compose.matomo.yml",
+                          "docker-compose.opensre.yml", "docker-compose.t.yml"], normal)
+        guarded = deploy.compose_chain("t", {"db_fast_path": True}, guarded=True, source_root=self.tmp)
+        self.assertNotIn("docker-compose.fast-path.yml", guarded)
+        self.assertEqual("docker-compose.upgrade-safe.yml", guarded[-1])
+
+    def test_compose_chain_matches_playbook_for_all_switch_combinations(self):
+        import itertools
+        import shlex
+        import yaml
+        from jinja2 import Environment
+        play = yaml.safe_load((ROOT / "local-setup/ansible/playbook-deploy.yml").read_text())[0]
+        task = next(t for t in play["tasks"] if "compose_files" in t.get("ansible.builtin.set_fact", {}))
+        env = Environment()
+        env.filters["bool"] = bool
+        template = env.from_string(task["ansible.builtin.set_fact"]["compose_files"])
+        overlay = self.tmp / "local-setup/docker-compose.t.yml"
+        for fast, hostpaths, guarded, tenant_overlay in itertools.product((False, True), repeat=4):
+            if tenant_overlay:
+                write(self.tmp, "local-setup/docker-compose.t.yml", "services: {}")
+            else:
+                overlay.unlink(missing_ok=True)
+            values = {"db_fast_path": fast, "data_volume_host_paths": {"postgres_data": "/data"} if hostpaths else {}}
+            rendered = template.render(**values, upgrade_safe_mode=guarded, inventory_hostname="t",
+                                       per_tenant_overlay={"stat": {"exists": tenant_overlay}})
+            actual = shlex.split(rendered)[1::2]
+            self.assertEqual(actual, deploy.compose_chain("t", values, guarded=guarded, source_root=self.tmp))
+
+    def test_global_git_ignore_does_not_drop_analysed_files(self):
+        xdg = self.tmp / "xdg"
+        write(xdg, "git/ignore", "*.env\n*.local\nlogs/\n")
+        trees = {n: self.tmp / n for n in ("base", "live", "target")}
+        for n, tree in trees.items():
+            write(tree, "configs/custom.env", n)
+            write(tree, "configs/.gitignore", "*.env\n")
+        with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": str(xdg)}):
+            result = merge.merge(trees, self.tmp / "workspace")
+        self.assertEqual(["configs/custom.env"], result.conflicts)
+        self.assertEqual([{"status": "M", "path": "configs/custom.env"}], result.local_changes)
+
+
+class ExplicitInputsTests(TempDirCase):
+    def setUp(self):
+        super().setUp()
+        self.base_vars = write(self.tmp, "base.yml", "feature: old\npassword: base-private-secret\n")
+        self.target_vars = write(self.tmp, "target.yml", "feature: new\npassword: target-private-secret\n")
+        self.live = self.tmp / "live"
+        write(self.live, "configs/app.yml", "feature: old\n")
+        self.output = self.tmp / "runs"
+
+    def renderer(self, source, tenant, vars_file, destination, **kwargs):
+        values = analyse.load_yaml(vars_file)
+        write(destination, "configs/app.yml", f"feature: {values['feature']}\n")
+        return render.OWN
+
+    def patches(self):
+        import contextlib
+        stack = contextlib.ExitStack()
+        stack.enter_context(mock.patch.object(render, "resolve_commit", side_effect=lambda _, ref: ref))
+        stack.enter_context(mock.patch.object(render, "export_commit"))
+        stack.enter_context(mock.patch.object(render, "preflight"))
+        stack.enter_context(mock.patch.object(render, "render", side_effect=self.renderer))
+        return stack
+
+    def analyse(self):
+        with self.patches():
+            return analyse.analyse(repo=self.tmp, target_ref="target", base_ref="base", tenant="t",
+                                   tenant_vars=self.target_vars, base_tenant_vars_file=self.base_vars,
+                                   base_overrides={}, backup=self.live, output=self.output, excludes=())
+
+    def test_old_and_target_settings_are_separate_and_private(self):
+        run_dir = self.analyse()
+        manifest = analyse.read_json(run_dir / "run.json")
+        self.assertEqual([], manifest["local_changes"])
+        self.assertEqual("feature: new\n", (run_dir / "candidate/configs/app.yml").read_text())
+        self.assertEqual([], leaks(run_dir, ("base-private-secret", "target-private-secret")))
+        d = deploy.Deployment(run_dir, backup_parent=self.tmp / "backup", resolution=None,
+                              tool_root=self.tmp, base_tenant_vars_file=self.base_vars)
+        self.base_vars.write_text("feature: changed\n")
+        with mock.patch.object(deploy.os, "geteuid", return_value=0), mock.patch.object(deploy.shutil, "which", return_value=True):
+            with self.assertRaisesRegex(UpgradeError, "base tenant variables changed"):
+                d.preflight(self.tmp / "scratch")
+
+    def test_secrets_from_both_settings_files_are_redacted_in_rendered_outputs(self):
+        write(self.live, "configs/app.yml", "feature: old\npassword: base-private-secret\n")
+        def renderer(source, tenant, vars_file, destination, **kwargs):
+            values = analyse.load_yaml(vars_file)
+            write(destination, "configs/app.yml", f"feature: {values['feature']}\npassword: {values['password']}\n")
+            return render.OWN
+        with self.patches(), mock.patch.object(render, "render", side_effect=renderer):
+            run_dir = analyse.analyse(repo=self.tmp, target_ref="target", base_ref="base", tenant="t",
+                                      tenant_vars=self.target_vars, base_tenant_vars_file=self.base_vars,
+                                      base_overrides={}, backup=self.live, output=self.output, excludes=())
+        self.assertIn("password: <REDACTED>", (run_dir / "candidate/configs/app.yml").read_text())
+        self.assertEqual([], leaks(run_dir, ("base-private-secret", "target-private-secret")))
+
+    def test_modified_saved_inputs_cannot_be_used_for_unmanaged_decisions(self):
+        write(self.live, "configs/extra.yml", "extra: yes\n")
+        with self.assertRaises(NeedsOperator):
+            self.analyse()
+        run_dir = next(self.output.glob("digit-upgrade-*"))
+        (run_dir / "inputs/live/configs/extra.yml").write_text("tampered\n")
+        choices = write(self.tmp, "choices.json", '{"configs/extra.yml":"adopt"}')
+        with self.assertRaisesRegex(UpgradeError, "saved normalized inputs changed"):
+            analyse.resume(run_dir, acknowledge_secret_review=False, unmanaged_resolution=choices)
+
+    def test_unmanaged_files_require_exact_decisions_and_leave_is_not_adopted(self):
+        write(self.live, "configs/obsolete.yml", "old: yes\npassword: obsolete-private-secret\n")
+        with self.assertRaises(NeedsOperator):
+            self.analyse()
+        run_dir = next(self.output.glob("digit-upgrade-*"))
+        manifest = analyse.read_json(run_dir / "run.json")
+        self.assertEqual("UNMANAGED", manifest["status"])
+        self.assertFalse((run_dir / "candidate").exists())
+        self.assertEqual([], leaks(run_dir, ("obsolete-private-secret",)))
+        choices = write(self.tmp, "choices.json", '{}')
+        with self.assertRaisesRegex(UpgradeError, "cover every reported path exactly"):
+            analyse.resume(run_dir, acknowledge_secret_review=False, unmanaged_resolution=choices)
+        choices.write_text('{"configs/obsolete.yml":"leave"}')
+        analyse.resume(run_dir, acknowledge_secret_review=False, unmanaged_resolution=choices)
+        manifest = analyse.read_json(run_dir / "run.json")
+        self.assertEqual("READY", manifest["status"])
+        self.assertEqual([], manifest["deployment_changes"])
+        self.assertNotIn("obsolete.yml", (run_dir / "local-changes.patch").read_text())
+        self.assertFalse((run_dir / "candidate/configs/obsolete.yml").exists())
+        self.assertTrue((self.live / "configs/obsolete.yml").exists())
+        self.assertIn("may remain on disk", (run_dir / "report.md").read_text())
+        with self.assertRaisesRegex(UpgradeError, "already fixed"):
+            analyse.resume(run_dir, acknowledge_secret_review=False, unmanaged_resolution=choices)
+
+    def test_adopt_and_leave_when_target_adds_the_same_path(self):
+        for choice in ("adopt", "leave"):
+            with self.subTest(choice=choice):
+                self.output = self.tmp / choice
+                write(self.live, "configs/new.yml", "value: operator\n")
+                def renderer(source, tenant, vars_file, destination, **kwargs):
+                    self.renderer(source, tenant, vars_file, destination, **kwargs)
+                    if source.name == "target-source":
+                        write(destination, "configs/new.yml", "value: release\n")
+                    return render.OWN
+                with self.patches(), mock.patch.object(render, "render", side_effect=renderer):
+                    with self.assertRaises(NeedsOperator):
+                        analyse.analyse(repo=self.tmp, target_ref="target", base_ref="base", tenant="t",
+                                        tenant_vars=self.target_vars, base_tenant_vars_file=self.base_vars,
+                                        base_overrides={}, backup=self.live, output=self.output, excludes=())
+                run_dir = next(self.output.glob("digit-upgrade-*"))
+                choices = write(self.tmp, "choices.json", '{"configs/new.yml":"' + choice + '"}')
+                if choice == "adopt":
+                    with self.assertRaises(NeedsOperator):
+                        analyse.resume(run_dir, acknowledge_secret_review=False, unmanaged_resolution=choices)
+                    self.assertEqual("CONFLICTS", analyse.read_json(run_dir / "run.json")["status"])
+                else:
+                    analyse.resume(run_dir, acknowledge_secret_review=False, unmanaged_resolution=choices)
+                    self.assertEqual("value: release\n", (run_dir / "candidate/configs/new.yml").read_text())
+
+    def test_existing_adopted_additions_are_not_unmanaged(self):
+        write(self.live, "configs/custom.yml", "custom: yes\n")
+        write(self.live, ".digit-deploy-state/overrides.json", '{"configs/custom.yml":{"rendered":null,"carried":"hash"}}')
+        run_dir = self.analyse()
+        self.assertEqual([], analyse.read_json(run_dir / "run.json")["unmanaged"])
+        self.assertTrue((run_dir / "candidate/configs/custom.yml").is_file())
+
+    def test_old_runs_require_fresh_analysis(self):
+        run_dir = self.tmp / "old-run"
+        run_dir.mkdir()
+        write(run_dir, "run.json", '{"status":"READY"}')
+        with self.assertRaisesRegex(UpgradeError, "re-analyse"):
+            analyse.resume(run_dir, acknowledge_secret_review=False)
 
 if __name__ == "__main__":
     unittest.main()

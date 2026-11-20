@@ -64,9 +64,11 @@ digit-ui:
     mapTenant: "pg"
 
 # Same-origin /turbopass, proxied to the shared Turbopass on naipepea.digit.org
-# (official boundary sets for 12 countries) with this site's cookies stripped:
-# the SPA's default TURBOPASS_URL, so the Geography step's Fetch and
-# Preconfigured options work without running Turbopass on this cluster.
+# with this site's cookies stripped: the SPA's default TURBOPASS_URL, so the
+# Geography step's Fetch and Preconfigured options work without running
+# Turbopass on this cluster. Keep this a name under a domain we control: the
+# proxy only checks the certificate matches the name, and the boundary sets it
+# serves are imported into new tenants.
 turbopass-proxy:
   upstream:
     host: naipepea.digit.org
@@ -80,7 +82,7 @@ turbopass-proxy:
 # and otel-collector were never installed here. Remove a name to bring it
 # back; its status-page check (charts/monitoring/gatus) follows this list.
 disabledReleases:
-  - egov-otp                # citizen phone OTP is off (identity-bff)
+  - egov-otp                # identity-bff uses the fixed citizen OTP, never egov-otp
   - user-otp                # legacy citizen OTP login
   - egov-user-event
   - egov-notification-mail  # mail goes through Keycloak SMTP and Novu
@@ -105,14 +107,13 @@ identity:
   keycloak:
     # One immutable build for Keycloak and the BFF (helm-identity.md); the
     # charts' own default is the rolling nightly-develop. This file is the last
-    # values layer, so THIS is the tag cms-saas runs. master-b4adf0d's
-    # configure-keycloak.sh aborts in the realm-configure hook (readonly
-    # KCADM_SERVER; fixed in keycloak/configure-keycloak.sh), so the keycloak
-    # release stays `failed` and a full apply skips identity-bff. Once an
-    # identity-keycloak build with that fix is published, set it here and in
-    # identity-bff below, then `helmfile -e cms-saas -l name=keycloak sync`.
+    # values layer, so THIS is the tag cms-saas runs. v2.20 is the release
+    # build, like every other CCRS image; it includes the configure-keycloak.sh
+    # realm-configure fix (readonly KCADM_SERVER, 158bc8037a) that kept the
+    # keycloak release `failed` on master-b4adf0d. Apply with
+    # `helmfile -e cms-saas -l name=keycloak sync`.
     image:
-      tag: "master-b4adf0d"
+      tag: "v2.20"
     configure:
       # Founders sign up with an emailed link (Configurator /signup).
       magicLinkEnabled: true
@@ -130,17 +131,26 @@ identity:
         user: "digitcms@egovernments.org"   # password: identity-secrets' keycloak-smtp-password
   identity-bff:
     image:
-      tag: "master-b4adf0d"
+      tag: "v2.20"
     config:
-      # Citizen phone-OTP sign-in off until an HTTP SMS sender exists: "log"
-      # would write every code to identity-bff's log (and so to Loki), letting
-      # anyone who reads it sign in as any citizen.
+      # No SMS sender yet: "log" would write every code to identity-bff's log
+      # (and so to Loki), letting anyone who reads it sign in as any citizen.
       IDENTITY_OTP_SENDER: ""
+      # No fixed citizen OTP (bomet's demo 123456): cms-saas is open for
+      # signups, so a real workspace's citizens could be signed in by anyone
+      # with their number. Citizen sign-in needs an `http` SMS sender here.
       # ACCOUNT_ADMIN employee on pg, created by identity-bootstrap.
       DIGIT_ADMIN_USERNAME: "IDENTITY_ADMIN"
   # Creates identity-secrets, pgr-onboarding, Keycloak's database and the two
   # DIGIT employees (DIGIT_ADMIN_USERNAME above, pgr-services' provisioner below).
   bootstrap:
+    enabled: true
+
+# As the Ansible deployment: each signup workspace gets its own Novu organization, and sending
+# does not consult user preferences.
+novu-bridge:
+  preference-enabled: false
+  tenant-accounts:
     enabled: true
 
 pgr-services:
@@ -150,5 +160,6 @@ pgr-services:
   onboarding:
     runnerEnabled: true
     identityBffUrl: "http://identity-bff.egov:3000"
+    notificationAccountUrl: "http://novu-bridge.egov:8080/novu-bridge"
     provisionerUsername: "PGR_PROVISIONER"
     provisionerTenantId: "pg"

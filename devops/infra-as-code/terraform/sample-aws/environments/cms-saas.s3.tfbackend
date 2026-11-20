@@ -1,0 +1,8 @@
+# cms-saas.digit.org (EKS ccrs-prod, AWS 349271159511): where this stack's state
+# lives. Overrides the REPLACE_ME placeholders in main.tf's backend block:
+#   terraform init -reconfigure -backend-config=environments/cms-saas.s3.tfbackend
+bucket         = "ccrs-prod-tfstate-349271159511"
+key            = "terraform-setup/terraform.tfstate"
+region         = "ap-south-1"
+dynamodb_table = "ccrs-prod-tfstate-349271159511"
+encrypt        = true

@@ -29,6 +29,14 @@ IN_CI = bool(os.environ.get("CI"))
 
 # Tasks that reference analysed paths without being part of the render.
 NOT_RENDERED = {
+    "Sherlog — start (after the stack: it joins the stack's network)": "executes the downloaded runtime bundle",
+    "Sherlog — record this deploy for the pre-checks and the verifier": "executes a runtime helper to write excluded textfile output",
+
+    "Sherlog — its compose bundle for sherlog_version (from the image)": "downloads the runtime bundle, not repository configuration",
+    "Sherlog — settings (.env) and this tenant's overrides": "writes excluded runtime settings after OpenBao",
+    "Sherlog — render the rules, Alertmanager config and investigation settings": "reads sherlog.yaml; writes excluded rendered/ output",
+    "Sherlog — off: stop it and remove its rules (no-op if it never ran)": "runs the downloaded runtime bundle; removes generated rules",
+
     "Configurator SPA — place runtime config.js beside the host-served dist":
         "reads configurator-runtime/config.js; writes the host-served dist outside /opt/digit",
     "status board — basic-auth user for the Mac nginx container": "macOS only; upgrades are Linux-only",
@@ -101,6 +109,12 @@ class RenderContractTests(unittest.TestCase):
             and task.get("name") not in NOT_RENDERED
         ]
         self.assertEqual([], unclassified, "tag these `render`, or add them to NOT_RENDERED with a reason")
+
+    def test_synchronized_directory_mappings_are_covered(self):
+        for task, origin in deploy_tasks():
+            if module(task) == "synchronize" and "digit_config_dirs" in task.get("vars", {}):
+                for dest in task["vars"]["digit_config_dirs"]:
+                    self.assertIn(dest, deploy_state.ANALYSED_ROOTS, f"{origin}: unprotected sync root {dest}")
 
     def test_not_rendered_entries_still_exist(self):
         names = {task.get("name") for task, _ in deploy_tasks()}
@@ -177,7 +191,8 @@ class RenderRunTests(unittest.TestCase):
         self.assertEqual(render.OWN, how)
         files = deploy_state.analysed_files(str(out))
         for expected in ("docker-compose.egov-digit.yaml", "kong/kong.yml", "nginx/digit-ui.conf",
-                         "configurator-runtime/config.js", "identity-keycloak-realm.json"):
+                         "configurator-runtime/config.js", "identity-keycloak-realm.json", "sherlog/sherlog.yaml",
+                         "configure-identity-keycloak.sh", "core-sms-handoff.sh"):
             self.assertIn(expected, files)
         compose = (out / "docker-compose.egov-digit.yaml").read_text(encoding="utf-8")
         self.assertIn(f"STATE_LEVEL_TENANT_ID: {self.values['state_root']}", compose)

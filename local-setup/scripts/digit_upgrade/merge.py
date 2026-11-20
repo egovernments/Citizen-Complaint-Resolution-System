@@ -25,7 +25,7 @@ MARKER_LINES = ("<<<<<<< ", "||||||| ", "=======", ">>>>>>> ")
 
 
 def git(repo: Path, *args: str, check: bool = True):
-    return run(["git", *IDENTITY, "-c", "core.autocrlf=false", *args], cwd=repo, check=check,
+    return run(["git", *IDENTITY, "-c", "core.autocrlf=false", "-c", "core.excludesFile=/dev/null", *args], cwd=repo, check=check,
                env={**os.environ, **ISOLATED})
 
 
@@ -55,7 +55,7 @@ def _commit_tree(repo: Path, tree: Path, message: str) -> None:
         if child.name != ".git":
             shutil.rmtree(child) if child.is_dir() and not child.is_symlink() else child.unlink()
     shutil.copytree(tree, repo, dirs_exist_ok=True, symlinks=True)
-    git(repo, "add", "-A")
+    git(repo, "add", "-A", "--force")
     git(repo, "commit", "-q", "--allow-empty", "-m", message)
 
 

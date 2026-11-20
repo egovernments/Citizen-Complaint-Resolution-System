@@ -1,0 +1,27 @@
+{{- /*
+  The anonymous public-dashboard aliases, straight to pgr-services, as Kong's exact
+  pgr-public-analytics-* routes do. Their controller methods discard RequestInfo and force the
+  PUBLIC floor.
+
+  They must NOT go on the Spring gateway's open list: the gateway does not strip client-supplied
+  userInfo from anonymous requests, so every other service behind that list would need to distrust
+  it too. Bypassing the gateway leaves it with no anonymous route to these paths at all. nginx
+  prefers these longer paths over the /pgr-services prefix.
+
+  limit-rpm counts per address nginx sees. Behind a load balancer without proxy protocol that is
+  the balancer's, shared by all visitors, so publicAnalytics.limitRpm is a site-wide flood guard
+  sized for many concurrent visitors, not Kong's 60 per client per minute.
+*/ -}}
+{{- if .Values.publicAnalytics.enabled }}
+{{- $paths := list }}
+{{- range .Values.publicAnalytics.paths }}
+{{- $paths = append $paths (printf "/%s/v2/analytics/public/%s" $.Values.ingress.context .) }}
+{{- end }}
+{{- include "common.ingress.exact" (dict
+      "root" .
+      "name" (printf "%s-public-analytics" (include "common.name" .))
+      "paths" $paths
+      "annotations" (dict
+        "nginx.ingress.kubernetes.io/limit-rpm" (.Values.publicAnalytics.limitRpm | toString)
+        "nginx.ingress.kubernetes.io/proxy-body-size" .Values.publicAnalytics.maxBodySize)) }}
+{{- end }}

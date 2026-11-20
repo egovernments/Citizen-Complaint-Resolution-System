@@ -34,5 +34,8 @@
 - name: Render
   ansible.builtin.import_playbook: playbook-deploy.yml
   vars:
+    # Render the intended successful configuration. A scratch render has no
+    # live bootstrap verdict; normal deploys compute this gate from the host.
+    state_root_switch: "{{ state_root != 'pg' }}"
     digit_render_only: true
     deploy_become: false

@@ -17,11 +17,12 @@ covers the two mechanisms that prevent that:
 The configuration a deploy renders deterministically from the repository and
 the tenant's host_vars: `configs/`, `kong/`, `nginx/`, `otel/`, `gatus/`,
 `seeds/`, `db/`, `docker/`, `scripts/`, `dataloader/`,
-`postman/`, `opensre/`, `configurator-runtime/`, `novu-worker-providers/`, the
-top-level `docker-compose.*.yml` files and `identity-keycloak-realm.json`.
+`postman/`, `opensre/`, `configurator-runtime/`, `novu-worker-providers/`,
+`sherlog/` repository configuration, the top-level `docker-compose.*.yml` files,
+`identity-keycloak-realm.json`, `configure-identity-keycloak.sh` and `core-sms-handoff.sh`.
 
 Not analysed: `.env` and `.openbao/` (secrets, rebuilt every deploy from
-host_vars and OpenBao), `sherlog/` (generated from its image),
+host_vars and OpenBao), Sherlog runtime settings and generated output,
 `nginx/globalConfigs.js` (chosen at runtime), `notification-seed/` (seeder
 input copied from the repository), `otel/targets/`, logs, caches and
 `db/full-dump.sql`. Change those through host_vars, not by hand.
@@ -47,7 +48,8 @@ later `./deploy.sh` re-applies them on top of its render, before any container
 starts. If a newer version renders an overridden file differently from the
 version the override was made against, carrying your copy forward would drop
 that version's change, so the deploy stops and puts every analysed file back
-exactly as it was before the run (nothing is restarted). Rebase the overrides
+with its contents, modes and symlink targets from before the render. Generated files,
+earlier UI/image builds, and earlier service actions are not rolled back. Rebase the overrides
 with the upgrade workflow, or drop them all and take the new version's files:
 `./deploy.sh <tenant> -e drop_local_overrides=true`.
 
@@ -65,7 +67,8 @@ Ansible that `deploy.sh` uses, as `scripts/install-prereqs.sh` sets it up (its
 modules need the distribution's passlib and bcrypt; a private virtualenv without
 them fails part-way through the deploy).
 
-Update the tenant's host_vars for the target version **before** analysing:
+Keep a private copy of the deployed host_vars for `--base-tenant-vars`, then
+update the working host_vars for the target version **before** analysing:
 the analysis and the deploy run the target's `preflight.py` and refuse what it
 refuses, but some requirements are only checked by the playbook itself (in
 2.12.x → master, for example, Keycloak and its SMTP settings). Read the target's
@@ -98,6 +101,7 @@ local-setup/scripts/digit-upgrade analyse \
   --target-ref <commit, tag or branch to deploy> \
   --tenant mytenant \
   --tenant-vars local-setup/ansible/inventory/host_vars/mytenant.yml \
+  --base-tenant-vars /secure/mytenant-before-upgrade.yml \
   --backup /var/backups/opt-digit-YYYY-MM-DD.tar.zst \
   --output /var/lib/digit-upgrade/runs
 ```
@@ -110,6 +114,11 @@ Analysis is read-only: no container, database, OpenBao or `/opt/digit` write.
   commits whose verbatim-copied files match the box best are rendered, and the
   closest render wins; the report lists the candidates). Do not guess: a wrong
   base turns every difference between the two versions into a "local change".
+- `--base-tenant-vars PATH` is required: supply the host_vars used for the old
+  deployment, before preparing the target's settings. If settings did not change,
+  pass the same file as `--tenant-vars`. Keep both files private; their contents
+  are not saved in the shareable run directory. Both file fingerprints are
+  checked before deployment. `--base-override` adjusts this base input only.
 - `--base-override KEY=VALUE` (repeatable): a host_vars value as it was when the
   base version was deployed, if it has changed since (not for secrets).
 - `--exclude GLOB` (repeatable): ignore a path, e.g. a generated file specific
@@ -127,7 +136,24 @@ Every secret-looking value is replaced by `<REDACTED>`; the output is safe to
 share for review. Exit status: `0` ready, `2` needs you (conflicts or secret
 review), `1` error.
 
-### 2. Resolve conflicts (exit 2, status CONFLICTS)
+### 2. Decide unmanaged files, then resolve conflicts
+
+A live file absent from the base render, unless already an adopted override,
+needs a decision (exit 2, status `UNMANAGED`). It may be an operator addition or
+an obsolete release file retained by rsync. Edit the generated
+`<run>/unmanaged-resolution.json` mapping: choose `adopt` to merge that file as
+an override, or `leave` to exclude it from overrides and use normal release
+behavior. Cover every reported path exactly. A file absent from the target may
+remain on disk because deployment synchronization does not delete it.
+
+```bash
+local-setup/scripts/digit-upgrade resume <run> \
+  --unmanaged-resolution <run>/unmanaged-resolution.json
+```
+
+Make these decisions before editing the merge workspace; the merge is rebuilt
+from its verified redacted inputs. Decisions are fixed for the run; re-analyse
+to change them. Continue with merge conflicts if reported (status `CONFLICTS`).
 
 ```bash
 cd /var/lib/digit-upgrade/runs/digit-upgrade-*/workspace
@@ -157,7 +183,8 @@ local-setup/scripts/digit-upgrade resume <run> --acknowledge-secret-review
 
 ```bash
 git checkout <target commit from run.json>   # clean, exactly the analysed commit
-sudo local-setup/scripts/digit-upgrade deploy <run> --confirm
+sudo local-setup/scripts/digit-upgrade deploy <run> --confirm \
+  --base-tenant-vars /secure/mytenant-before-upgrade.yml
 ```
 
 The deploy runs as a transient systemd unit, so a dropped SSH session does not
@@ -165,14 +192,14 @@ stop it; the terminal only follows its log (`<run>/deploy/deploy.log`). In
 order:
 
 1. **Preflight, nothing changes.** The checkout is the analysed commit and
-   clean; the tenant vars are byte-identical. Both versions are rendered again
+   clean; the base and target tenant vars are byte-identical to their respective analysis inputs. Both versions are rendered again
    and `/opt/digit` is re-read: all three must hash exactly as analysed, so the
    deploy installs what was reviewed and nothing on the box moved since the
    backup (if it did, the paths are listed: take a new backup and re-analyse).
    Redacted values are filled in from the unredacted trees, each decided like a
    merged line: unchanged on one side means the other side's value wins.
    PostgreSQL's data directory must be on the `postgres_data` named volume and
-   the new Compose stack must mount it at the same place; a box still on the
+   both the guarded upgrade and subsequent ordinary deployment Compose chains must mount it at the same place; a box still on the
    image's anonymous volume must first follow
    `docs/releases/2.12/operations/postgres-volume-migration.md`.
    Disk space for the backup is checked.
@@ -251,3 +278,17 @@ an entry in its `NOT_RENDERED` list saying why), and actually renders the
 current version and the v2.12 tags. Deploy-time SQL that writes MDMS rows must
 be listed in `digit_upgrade/mdms.py` (`DEPLOY_SQL`) so the upgrade can predict
 it; the same test enforces that.
+
+## Review-fix compatibility
+
+Analysis runs created before explicit base settings and unmanaged decisions must
+be recreated. Deployment manifests from the previous guard version still protect
+their original paths; the next successful deploy adds coverage for Sherlog's
+repository configuration and the two top-level helper scripts. Sherlog's generated
+rules, textfile output, runtime environment, overrides and bundle marker are excluded.
+
+On a normal deploy's override conflict, the guard restores the protected files,
+symlinks (without following their targets), modes, and whether `.env` existed.
+This is configuration recovery: generated files such as `nginx/globalConfigs.js`
+and `kong/.kong.yml.pinned`, earlier UI/image builds, and earlier service actions
+are not rolled back. Use the guarded upgrade for full backup and rollback.
