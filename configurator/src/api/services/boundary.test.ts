@@ -268,6 +268,38 @@ describe('boundaryService.createBoundaries', () => {
     }
   });
 
+  it.each(['BOUNDARY_TYPE_ERROR', 'HIERARCHY_ERROR'])('reports a %s refusal straight away: no retry can change it', async (code) => {
+    vi.useFakeTimers();
+    const row = (c: string, boundaryType: string, parent?: string): Boundary =>
+      ({ tenantId: 'ke', code: c, name: c, boundaryType, hierarchyType: 'ADMIN', parent }) as Boundary;
+    const rows = [row('C1', 'County'), row('W1', 'Village', 'C1')];
+    const refusal = Object.assign(new Error('Refused'), { errors: [{ code, message: 'Refused' }] });
+    const writes: string[] = [];
+    const spies = [
+      vi.spyOn(boundaryService, 'createBoundaryEntity').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'waitForEntityVisibility').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'createBoundaryRelationship').mockImplementation(async (_t, _h, c) => {
+        writes.push(c);
+        if (c === 'W1') throw refusal;
+        return true;
+      }),
+      vi.spyOn(boundaryService, 'searchBoundaries').mockResolvedValue([rows[0]]),
+    ];
+    try {
+      const start = Date.now();
+      const pending = boundaryService.createBoundaries(rows);
+      await vi.runAllTimersAsync();
+      const result = await pending;
+      expect(writes.filter((c) => c === 'W1')).toHaveLength(1);
+      // No back-off waits before it's reported.
+      expect(Date.now() - start).toBe(0);
+      expect(result.failed).toEqual([{ boundary: rows[1], error: 'Refused', code }]);
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+      vi.useRealTimers();
+    }
+  });
+
   it("drops an area's refusal once a retry is accepted, so a slow write isn't blamed on it", async () => {
     vi.useFakeTimers();
     const row = (code: string, boundaryType: string, parent?: string): Boundary =>

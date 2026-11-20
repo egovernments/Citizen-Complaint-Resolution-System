@@ -21,6 +21,15 @@ function serverErrorCode(error: unknown): string | undefined {
   return typeof code === 'string' && code ? code : undefined;
 }
 
+/**
+ * boundary-service's refusals of a relationship that no retry can change
+ * (BoundaryRelationshipValidator): its level isn't one of the hierarchy's, or
+ * isn't the one under its parent's. A hierarchy's levels and a saved parent's
+ * level never change. Parent, entity or hierarchy "not found" can be lag, so
+ * those are retried.
+ */
+const REFUSED_FOR_GOOD = new Set(['BOUNDARY_TYPE_ERROR', 'HIERARCHY_ERROR']);
+
 const HIERARCHY_PAGE_SIZE = 100;
 /** Still finding rows after this many pages means offset is ignored, not 20,000 hierarchies. */
 const HIERARCHY_MAX_PAGES = 200;
@@ -611,7 +620,10 @@ export const boundaryService = {
         } catch {
           // transient search failure — next round re-checks
         }
-        const missing = expectedRel.filter((b) => !present.has(b.code));
+        // An area the server refused for good is reported now, not retried every round.
+        const missing = expectedRel.filter(
+          (b) => !present.has(b.code) && !REFUSED_FOR_GOOD.has(serverErrorCode(lastError.get(b.code)) ?? ''),
+        );
         if (missing.length === 0) break;
         await new Promise((r) => setTimeout(r, 2000 * Math.min(round + 1, 4)));
         for (const levelBoundaries of this.groupByLevel(missing)) {
