@@ -139,7 +139,7 @@
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-api</artifactId>
-            <version>1.45.0</version>
+            <version>1.67.0</version>
         </dependency>
         <!-- SDK + in-memory reader, tests only: lets AnalyticsMetricsTest assert the
              exact instrument names/units the collector's prometheus exporter surfaces. -->
