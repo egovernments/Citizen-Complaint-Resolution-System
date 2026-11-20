@@ -41,6 +41,7 @@ import {
   usePendingHierarchyRecord,
   useBoundaryDraft,
   useSaveLeftovers,
+  useLeftoversNotKept,
   type BoundaryDraft,
   type BoundarySelection,
 } from './boundaryDraft';
@@ -165,6 +166,8 @@ export default function GeographyStep() {
   // Save and continue goes on without them, leaving them here for Retry.
   const leftovers = useSaveLeftovers(tenant);
   const awaitingRetry = leftovers !== null;
+  // This browser couldn't keep a full copy of them, so they don't survive a reload as they are.
+  const leftoversNotKept = useLeftoversNotKept(tenant);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -515,7 +518,18 @@ export default function GeographyStep() {
       {(saveError || (awaitingRetry && !saving)) && (
         <Alert variant="destructive">
           <AlertDescription>
-            {[awaitingRetry && !saving && draft ? notSavedMessage(draftBoundaries(draft).length, t) : null, saveError].filter(Boolean).join(' ')}
+            {[
+              awaitingRetry && !saving && draft ? notSavedMessage(draftBoundaries(draft).length, t) : null,
+              awaitingRetry && !saving && leftoversNotKept
+                ? t(
+                    'geography.not_saved_not_kept',
+                    'This browser couldn’t keep a full copy of these areas. Select Retry before you close or reload this page.',
+                  )
+                : null,
+              saveError,
+            ]
+              .filter(Boolean)
+              .join(' ')}
             {awaitingRetry && !saving && leftovers.length > 0 && (
               <ul className="mt-2 space-y-1" data-testid="geography-save-failures">
                 {leftovers.slice(0, MAX_FAILURES_SHOWN).map(({ boundary, error, code, unconfirmed }) => (

@@ -251,6 +251,7 @@
 {"code": "app.onboarding.geography.excel.type_not_a_level", "message": "\"%{type}\" इस पदानुक्रम का स्तर नहीं है। इनमें से कोई एक इस्तेमाल करें: %{levels}।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.geography.list.finish_with_excel", "message": "अपनी सहेजी गई सीमाएं पूरी करने के लिए “Excel से अपलोड करें” इस्तेमाल करें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.geography.not_saved_more", "message": "और %{count} अन्य", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.onboarding.geography.not_saved_not_kept", "message": "यह ब्राउज़र इन क्षेत्रों की पूरी प्रति नहीं रख सका। यह पृष्ठ बंद या पुनः लोड करने से पहले “पुनः प्रयास करें” चुनें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.geography.not_saved_retry_one", "message": "1 क्षेत्र सहेजा नहीं गया। यह ऊपर की सूची में है: इसे फिर से सहेजने के लिए “पुनः प्रयास करें” चुनें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.geography.not_saved_retry_other", "message": "%{count} क्षेत्र सहेजे नहीं गए। वे ऊपर की सूची में हैं: उन्हें फिर से सहेजने के लिए “पुनः प्रयास करें” चुनें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.geography.not_saved_unconfirmed", "message": "सर्वर ने पुष्टि नहीं की कि यह सहेजा गया।", "module": "configurator-ui", "locale": "hi_IN"},

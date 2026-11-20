@@ -136,6 +136,8 @@ const leftoverKey = (tenantId: string, hierarchyType: string) => `ccrs-geography
 const leftovers = new Map<string, string>();
 // Why the last save left out the areas still in that list.
 const leftoverFailures = new Map<string, BoundaryCreateFailure[]>();
+// How much of that list this browser could keep, as of the last write.
+const leftoversKept = new Map<string, LeftoversKept>();
 
 function storable(selection: BoundarySelection): StoredSelection {
   if (selection.resume.kind !== 'excel') return selection as StoredSelection;
@@ -160,8 +162,11 @@ function revived(selection: StoredSelection): BoundarySelection {
   return { ...selection, id, resume };
 }
 
-/** Without what only Edit reopens with (a fetch's every outline, an upload's outlines file), for a list too big to store whole. */
-function slim(stored: StoredLeftovers): StoredLeftovers {
+/**
+ * Without what only Edit reopens with (a fetch's every outline per level, an upload's rows and
+ * outlines file). Edit is off while the list is a save's leftovers, so storage never needs them.
+ */
+function lean(stored: StoredLeftovers): StoredLeftovers {
   return {
     ...stored,
     selections: stored.selections.map((selection) => ({
@@ -169,24 +174,43 @@ function slim(stored: StoredLeftovers): StoredLeftovers {
       resume:
         selection.resume.kind === 'osm'
           ? { ...selection.resume, adminLevels: [], pickedSuggestion: null }
-          : { ...selection.resume, polygonFile: null, polygonSidecar: null },
+          : { ...selection.resume, parsed: [], valid: [], invalid: [], polygonFile: null, polygonSidecar: null },
     })),
   };
 }
 
-function writeLeftovers(key: string, stored: StoredLeftovers | null) {
+/** Without the areas' outlines as well, for a list still too big: Retry then saves them without map outlines. */
+function withoutOutlines(stored: StoredLeftovers): StoredLeftovers {
+  return {
+    ...stored,
+    selections: stored.selections.map((selection) => ({
+      ...selection,
+      boundaries: selection.boundaries.map((boundary) => ({ ...boundary, geometry: undefined })),
+    })),
+  };
+}
+
+/** Whether this browser holds a full copy of the leftovers ("whole"), one without their outlines, or none. */
+type LeftoversKept = 'whole' | 'without_outlines' | 'none';
+
+function writeLeftovers(key: string, stored: StoredLeftovers | null): LeftoversKept {
   try {
     if (!stored) {
       window.localStorage.removeItem(key);
-      return;
+      return 'whole';
     }
+    const kept = lean(stored);
     try {
-      window.localStorage.setItem(key, JSON.stringify(stored));
+      window.localStorage.setItem(key, JSON.stringify(kept));
+      return 'whole';
     } catch {
-      window.localStorage.setItem(key, JSON.stringify(slim(stored)));
+      // Too big for what's left of this site's storage: keep the areas, without their outlines.
     }
+    window.localStorage.setItem(key, JSON.stringify(withoutOutlines(kept)));
+    return 'without_outlines';
   } catch {
-    // Storage unavailable or full: the list lives as long as the page, as before.
+    // Storage unavailable or full: the list lives as long as the page, and the page says so.
+    return 'none';
   }
 }
 
@@ -215,17 +239,19 @@ function storeLeftovers(tenantId: string) {
   if (!draft || !hierarchyType) {
     leftovers.delete(tenantId);
     leftoverFailures.delete(tenantId);
+    leftoversKept.delete(tenantId);
     return;
   }
   const listed = new Set(draftBoundaries(draft).map((b) => b.code));
   const failed = (leftoverFailures.get(tenantId) ?? []).filter((f) => listed.has(f.boundary.code));
   leftovers.set(tenantId, hierarchyType);
   leftoverFailures.set(tenantId, failed);
-  writeLeftovers(leftoverKey(tenantId, hierarchyType), {
+  const kept = writeLeftovers(leftoverKey(tenantId, hierarchyType), {
     selections: draft.selections.map(storable),
     // The page shows only each area's name and code beside the reason; its outline is in the selection.
     failed: failed.map(({ boundary, error, code, unconfirmed }) => ({ boundary: { ...boundary, geometry: undefined }, error, code, unconfirmed })),
   });
+  leftoversKept.set(tenantId, kept);
 }
 
 /**
@@ -260,6 +286,17 @@ const NO_FAILURES: BoundaryCreateFailure[] = [];
 export function useSaveLeftovers(tenantId: string): BoundaryCreateFailure[] | null {
   return useSyncExternalStore(subscribe, () =>
     drafts.has(tenantId) && leftovers.has(tenantId) ? (leftoverFailures.get(tenantId) ?? NO_FAILURES) : null,
+  );
+}
+
+/**
+ * True while the list is a save's leftovers and this browser couldn't keep a full copy of it
+ * (storage blocked or full): a reload would lose it, or bring it back without its outlines.
+ */
+export function useLeftoversNotKept(tenantId: string): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => drafts.has(tenantId) && leftovers.has(tenantId) && (leftoversKept.get(tenantId) ?? 'whole') !== 'whole',
   );
 }
 

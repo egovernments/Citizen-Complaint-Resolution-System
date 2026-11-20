@@ -251,6 +251,7 @@
 {"code": "app.onboarding.geography.excel.type_not_a_level", "message": "« %{type} » n’est pas un niveau de cette hiérarchie. Utilisez l’un de ceux-ci : %{levels}.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.geography.list.finish_with_excel", "message": "Pour terminer vos limites enregistrées, utilisez « Importer depuis Excel ».", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.geography.not_saved_more", "message": "et %{count} de plus", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.geography.not_saved_not_kept", "message": "Ce navigateur n’a pas pu garder une copie complète de ces zones. Sélectionnez « Réessayer » avant de fermer ou de recharger cette page.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.geography.not_saved_retry_one", "message": "1 zone n’a pas été enregistrée. Elle figure dans la liste ci-dessus : sélectionnez « Réessayer » pour tenter de l’enregistrer à nouveau.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.geography.not_saved_retry_other", "message": "%{count} zones n’ont pas été enregistrées. Elles figurent dans la liste ci-dessus : sélectionnez « Réessayer » pour tenter de les enregistrer à nouveau.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.geography.not_saved_unconfirmed", "message": "Le serveur n’a pas confirmé l’enregistrement.", "module": "configurator-ui", "locale": "fr_FR"},

@@ -251,6 +251,7 @@
 {"code": "app.onboarding.geography.excel.type_not_a_level", "message": "\"%{type}\" não é um nível desta hierarquia. Use um destes: %{levels}.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.geography.list.finish_with_excel", "message": "Para concluir seus limites salvos, use Enviar do Excel.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.geography.not_saved_more", "message": "e mais %{count}", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.onboarding.geography.not_saved_not_kept", "message": "Este navegador não conseguiu guardar uma cópia completa dessas áreas. Selecione Tentar novamente antes de fechar ou recarregar esta página.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.geography.not_saved_retry_one", "message": "1 área não foi salva. Ela está na lista acima: selecione Tentar novamente para tentar salvá-la de novo.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.geography.not_saved_retry_other", "message": "%{count} áreas não foram salvas. Elas estão na lista acima: selecione Tentar novamente para tentar salvá-las de novo.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.geography.not_saved_unconfirmed", "message": "O servidor não confirmou que foi salva.", "module": "configurator-ui", "locale": "pt_BR"},

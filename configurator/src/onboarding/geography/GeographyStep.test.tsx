@@ -252,6 +252,28 @@ describe('GeographyStep', () => {
     expect(createHierarchy).toHaveBeenCalledTimes(1);
   });
 
+  it('says to Retry before closing the page when this browser can’t keep the areas a save missed', async () => {
+    createBoundaries.mockImplementationOnce(async (boundaries) => {
+      landed(boundaries.slice(0, 2));
+      return { success: boundaries.slice(0, 2), failed: [{ boundary: boundaries[2], error: 'refused' }] };
+    });
+    const full = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+    try {
+      act(() => void addSelection('ke', selection(NAIROBI)));
+      renderStep();
+      await saveAndConfirm();
+      expect(
+        await screen.findByText(
+          '1 area wasn’t saved. It’s in the list above: select Retry to try it again. This browser couldn’t keep a full copy of these areas. Select Retry before you close or reload this page.',
+        ),
+      ).toBeTruthy();
+    } finally {
+      full.mockRestore();
+    }
+  });
+
   it('a save that fails before defining the hierarchy leaves the list as it was', async () => {
     createHierarchy.mockRejectedValueOnce(new Error('Network Error'));
     act(() => void addSelection('ke', selection(NAIROBI)));

@@ -15,6 +15,7 @@ import {
   saveBoundaryDraft,
   setBoundaryDraft,
   useBoundaryDraft,
+  useLeftoversNotKept,
   type BoundaryDraft,
   type NewSelection,
 } from './boundaryDraft';
@@ -377,6 +378,57 @@ describe('what a save left unsaved, across a reload (#2795)', () => {
     expect(codes()).toEqual(['NBI_W2']);
     const { resume } = current().selections[0];
     expect(resume.kind === 'osm' && resume.adminLevels).toEqual([]);
+  });
+
+  describe('a list too big for this site’s storage', () => {
+    const OUTLINE = { type: 'Polygon' as const, coordinates: [[[36.8, -1.3], [36.9, -1.3], [36.9, -1.2], [36.8, -1.3]]] };
+    const outlined = NAIROBI.map((b) => ({ ...b, geometry: OUTLINE }));
+    const bigSheet = () => {
+      const s = sheet(outlined);
+      if (s.resume.kind === 'excel') s.resume.parsed = s.resume.valid = outlined.map((b, i) => ({ row: i + 2, code: b.code, name: b.name, boundaryType: b.boundaryType, parentCode: b.parent }));
+      return s;
+    };
+    const stored = () => JSON.parse(window.localStorage.getItem(`ccrs-geography-unsaved:${TENANT}:ADMIN`) as string);
+    const notKept = () => renderHook(() => useLeftoversNotKept(TENANT)).result.current;
+
+    it('never stores what only Edit reads: Edit is off for a save’s leftovers', () => {
+      act(() => void addSelection(TENANT, bigSheet()));
+      act(() => keepUnsaved(TENANT, outlined.slice(0, 2), [refused]));
+      const [kept] = stored().selections;
+      expect(kept.resume.parsed).toEqual([]);
+      expect(kept.resume.valid).toEqual([]);
+      // Retry writes each area's outline, so that stays.
+      expect(kept.boundaries[0].geometry).toEqual(OUTLINE);
+      expect(notKept()).toBe(false);
+    });
+
+    it('keeps the areas without their outlines when even that doesn’t fit, and says so', () => {
+      act(() => void addSelection(TENANT, bigSheet()));
+      const full = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+        throw new DOMException('full', 'QuotaExceededError');
+      });
+      act(() => keepUnsaved(TENANT, outlined.slice(0, 2), [refused]));
+      full.mockRestore();
+      // NBI_W2 as listed, with no outline.
+      expect(stored().selections[0].boundaries).toEqual([NAIROBI[2]]);
+      expect(notKept()).toBe(true);
+      reload();
+      expect(restore()).toEqual([refused]);
+      expect(codes()).toEqual(['NBI_W2']);
+    });
+
+    it('says so when nothing could be kept', () => {
+      act(() => void addSelection(TENANT, bigSheet()));
+      const full = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('full', 'QuotaExceededError');
+      });
+      act(() => keepUnsaved(TENANT, outlined.slice(0, 2), [refused]));
+      full.mockRestore();
+      expect(notKept()).toBe(true);
+      // Once they're saved there's nothing left to warn about.
+      act(() => keepUnsaved(TENANT, [outlined[2]]));
+      expect(notKept()).toBe(false);
+    });
   });
 
   it('carries on without storage, and ignores what it can’t read', () => {
