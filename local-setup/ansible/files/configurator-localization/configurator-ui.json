@@ -750,6 +750,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.resources.form_validations",
+    "message": "Form Validations",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.resources.tenant_boundary",
     "message": "Tenant Boundary (HRMS)",
     "module": "configurator-ui",
@@ -1946,6 +1952,12 @@
   {
     "code": "app.resources.mobile_validation",
     "message": "मोबाइल नंबर सत्यापन",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.form_validations",
+    "message": "फ़ॉर्म सत्यापन",
     "module": "configurator-ui",
     "locale": "hi_IN"
   },
@@ -3150,6 +3162,12 @@
     "locale": "fr_FR"
   },
   {
+    "code": "app.resources.form_validations",
+    "message": "Validations de formulaire",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.resources.tenant_boundary",
     "message": "Limite d'entité (HRMS)",
     "module": "configurator-ui",
@@ -4346,6 +4364,12 @@
   {
     "code": "app.resources.mobile_validation",
     "message": "Validação de número de celular",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.form_validations",
+    "message": "Validações de formulário",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },

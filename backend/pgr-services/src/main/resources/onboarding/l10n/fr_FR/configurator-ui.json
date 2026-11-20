@@ -124,6 +124,7 @@
 {"code": "app.resources.theme_config", "message": "Configuration du thème", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.resources.user_validation", "message": "Validation des champs utilisateur", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.resources.mobile_validation", "message": "Validation du numéro de mobile", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.resources.form_validations", "message": "Validations de formulaire", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.resources.tenant_boundary", "message": "Limite d'entité (HRMS)", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.resources.auto_escalation_ignore", "message": "Auto-escalade ignorée", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.resources.workflow_bs_master", "message": "Maître BS de flux", "module": "configurator-ui", "locale": "fr_FR"},

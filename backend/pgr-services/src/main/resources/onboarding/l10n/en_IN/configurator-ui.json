@@ -124,6 +124,7 @@
 {"code": "app.resources.theme_config", "message": "Theme Config", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.resources.user_validation", "message": "User Field Validation", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.resources.mobile_validation", "message": "Mobile Number Validation", "module": "configurator-ui", "locale": "en_IN"},
+{"code": "app.resources.form_validations", "message": "Form Validations", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.resources.tenant_boundary", "message": "Tenant Boundary (HRMS)", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.resources.auto_escalation_ignore", "message": "Auto-Escalation Ignored", "module": "configurator-ui", "locale": "en_IN"},
 {"code": "app.resources.workflow_bs_master", "message": "Workflow BS Master", "module": "configurator-ui", "locale": "en_IN"},

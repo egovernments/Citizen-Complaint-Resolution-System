@@ -227,6 +227,9 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // are layered on later via src/admin/schemaDescriptors/ (Stage 1+).
   'theme-config':           { type: 'mdms', label: 'Theme Config',             schema: 'common-masters.ThemeConfig',               idField: 'code',              nameField: 'name' },
   'mobile-number-validation': { type: 'mdms', label: 'Mobile Number Validation', schema: 'common-masters.MobileNumberValidation', idField: 'countryCode',       nameField: 'countryCode' },
+  // The postalCode row is the workspace's postal-code rule (sign-up writes its country's one, #2787); this is
+  // where an admin changes it. Edited with src/admin/schemaDescriptors/form-validations.ts.
+  'form-validations':       { type: 'mdms', label: 'Form Validations',         schema: 'common-masters.FormValidations',           idField: 'fieldType',         nameField: 'fieldType',        descriptionField: 'regex' },
   // Unlisted for the same reason as 'auto-escalation' above.
   'auto-escalation-ignore': { type: 'mdms', label: 'Workflow Escalation Ignore (non-PGR)', schema: 'Workflow.AutoEscalationStatesToIgnore', idField: 'businessService', nameField: 'businessService', unlisted: true },
   // Keyed on `code` (DEFAULT), NOT on REOPENSLA. mdms-v2 rejects any update that

@@ -6,8 +6,10 @@ import type { SchemaDescriptor } from './types';
  * Carries the non-mobile rules: email, name, postalCode
  * (MobileNumberValidation stays mobile-number-only).
  *
- * The `postalCode` row is the PRIMARY per-tenant postal rule: DDH seeds a
- * default 5-digit row at tenant creation, and editing it here changes the
+ * The `postalCode` row is the PRIMARY per-tenant postal rule: self-serve
+ * sign-up writes the workspace country's rule (platform seed
+ * countryPostalRules, #2787), DDH seeds a default 5-digit row at tenant
+ * creation, and editing it here (Advanced → Form Validations) changes the
  * rule in DIGIT Studio and the PGR create-complaint flows alike — it
  * outranks the deployment's host_vars
  * `core_postal_configs.postalCodePattern` (globalConfigs
@@ -24,6 +26,6 @@ export const formValidationsDescriptor: SchemaDescriptor = {
     { path: 'fieldType', widget: 'text', required: true,
       help: 'Which user field this pattern validates — "email", "name", or "postalCode". One row per fieldType; frontends fall back to their built-in pattern (for postalCode: the globalConfigs CORE_POSTAL_CONFIGS pattern) when a row is absent.' },
     { path: 'regex', widget: 'regex', label: 'Regex pattern', required: true,
-      help: 'Full-anchor regex, e.g. "^[0-9]{5}$" for a 5-digit postal code. For postalCode the UI derives the localized error message from this pattern too — no separate message field exists.' },
+      help: 'Full-anchor regex, e.g. "^[0-9]{5}$" for a 5-digit postal code. For postalCode an empty value is always accepted; the rule applies only to what is typed. The UI derives the localized error message from this pattern too — no separate message field exists.' },
   ],
 };
