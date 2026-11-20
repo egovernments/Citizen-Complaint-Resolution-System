@@ -103,6 +103,22 @@ describe('configurator sign in', () => {
     });
   });
 
+  it('says how long to wait when the network is over its limit, and never that an email was sent (#2805)', async () => {
+    vi.mocked(api.requestPasswordSetup).mockRejectedValue(
+      new api.OnboardingError(429, 'NETWORK_RATE_LIMITED', 'Too many requests from this network. Try again later.', { retryAfter: 600 }),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /set up or reset your password/i }));
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'gro@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /send password setup link/i }));
+
+    expect(await screen.findByText('Too many requests from this network. Try again in 10 minutes.')).toBeInTheDocument();
+    expect(screen.queryByText('Check your email')).not.toBeInTheDocument();
+    // The form stays open with the address, so they can send it again later.
+    expect(screen.getByLabelText(/email address/i)).toHaveValue('gro@example.com');
+  });
+
   it('consumes a recovery result once under StrictMode and shows its action', async () => {
     vi.mocked(api.requestPasswordSetup).mockResolvedValue({
       message: 'If an eligible account exists, a password setup email has been sent.',

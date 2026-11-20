@@ -2771,6 +2771,21 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       }
     });
 
+    it("tells a resend inside the cooldown to wait for it, even when the IP is spent too", async () => {
+      Object.assign(config as any, { identityCitizenOtpResendSeconds: 60, identityCitizenOtpIpSendLimit: 1 });
+      try {
+        const ip = "203.0.113.78";
+        expect((await send("799000529", ip)).status).toBe(202);
+        const tooSoon = await send("799000529", ip);
+        expect((await tooSoon.json()).code).toBe("OTP_RESEND_TOO_SOON");
+        expect(Number(tooSoon.headers.get("retry-after"))).toBeLessThanOrEqual(60);
+      } finally {
+        Object.assign(config as any, {
+          identityCitizenOtpResendSeconds: 0, identityCitizenOtpIpSendLimit: otpConfig.identityCitizenOtpIpSendLimit,
+        });
+      }
+    });
+
     it("refunds the IP charge and cooldown of a send refused by the per-phone cap", async () => {
       Object.assign(config as any, {
         identityCitizenOtpResendSeconds: 60, identityCitizenOtpPhoneSendLimit: 1, identityCitizenOtpIpSendLimit: 1,

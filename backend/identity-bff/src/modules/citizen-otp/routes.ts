@@ -5,6 +5,7 @@ import { endPhoneSessions } from "../revocation/index.js";
 import { completePhoneProof, phoneSignIn, PhoneProofError, type PhoneEffects } from "./phone-service.js";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
+import { sendRateLimited } from "../../app/rate-limited.js";
 import { boundTenantOf, routeForSlug, type PublicTenantRoute } from "../access-context/tenant-route.js";
 import { enabledIdentityMethods } from "../authentication/methods.js";
 import { mobileValidationForRoute } from "../citizen-otp/mobile-validation.js";
@@ -36,14 +37,6 @@ import {
 const LOCALE = /^[a-z]{2,3}_[A-Z]{2}$/;
 const CODE = /^\d{6}$/;
 const CHALLENGE_ID = /^[A-Za-z0-9_-]{16,64}$/;
-
-type Refusal = { status: number; body: { error: string; code: string; retryAfter?: number } };
-
-function refuse(response: express.Response, refusal: Refusal) {
-  if (refusal.body.retryAfter) response.setHeader("Retry-After", String(refusal.body.retryAfter));
-  return response.status(refusal.status).json(refusal.body);
-}
-
 
 /**
  * Every response of these routes carries a stable `code`; `error` is display
@@ -148,14 +141,12 @@ export function registerCitizenOtpRoutes(app: express.Application, phoneEffects:
       const allowance = await reserveSend(phoneNumber, request.ip || "unknown");
       if (!allowance.allowed) {
         await audit({ ...base, outcome: "REFUSED", reason: `OTP_${allowance.reason}` });
-        return refuse(response, {
-          status: 429,
-          body: {
-            error: "Too many codes requested. Try again later.",
-            code: allowance.reason === "COOLDOWN" ? "OTP_RESEND_TOO_SOON" : "OTP_RATE_LIMITED",
-            retryAfter: allowance.retryAfter,
-          },
-        });
+        return sendRateLimited(
+          response,
+          allowance.reason === "COOLDOWN" ? "OTP_RESEND_TOO_SOON" : "OTP_RATE_LIMITED",
+          "Too many codes requested. Try again later.",
+          allowance.retryAfter,
+        );
       }
 
       const { challenge, code } = await createChallenge(phoneNumber, tenant, { purpose, ...(current && { subject: current.session.claims.sub, sessionRef: privateRef("session", current.sessionId) }) }).catch(async (error) => {

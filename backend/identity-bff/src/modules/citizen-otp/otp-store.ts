@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, randomInt } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
-import { countInWindow, uncount } from "../../infrastructure/rate-limit.js";
+import { reserveInWindows, uncount } from "../../infrastructure/rate-limit.js";
 import { getRedis } from "../../infrastructure/redis.js";
 import type { BoundTenant } from "../authentication/surfaces.js";
 
@@ -63,41 +63,34 @@ export type SendAllowance =
   | { allowed: false; reason: "COOLDOWN" | "PHONE_LIMIT" | "IP_LIMIT"; retryAfter: number };
 
 /**
- * Resend limits: a per-phone cooldown between codes, and per-phone and per-IP
- * counts in a window. Refused requests count too; a granted send that then
- * fails to deliver is refunded with `refundSend`.
+ * Resend limits, reserved in one atomic step: a cooldown between codes (per
+ * number AND caller IP), then per-IP and per-phone counts in a window. A
+ * refused request counts only where it was refused; what the limits before it
+ * charged is given back. So pressing "resend" too early costs nothing from
+ * the IP budget that others behind the same address share, and a number at
+ * its cap neither drains that budget nor turns the next attempt into a
+ * misleading OTP_RESEND_TOO_SOON. The cooldown is checked first, so a resend
+ * inside it is told to wait for it even when the IP is spent too. A granted
+ * send that then fails to deliver is refunded with `refundSend`.
  */
 export async function reserveSend(phoneNumber: string, ip: string): Promise<SendAllowance> {
   const phoneRef = privateRef("phone", phoneNumber);
   const ipRef = privateRef("ip", ip);
   const window = config.identityCitizenOtpSendWindowSeconds;
   const cooldown = config.identityCitizenOtpResendSeconds > 0;
-  const inCooldown = async () => {
-    const ttl = await getRedis().ttl(cooldownKey(phoneRef, ipRef));
-    return { allowed: false as const, reason: "COOLDOWN" as const, retryAfter: Math.max(1, ttl) };
-  };
-  // The cooldown is checked first, so pressing "resend" too early costs
-  // nothing from the IP budget that others behind the same address share.
-  if (cooldown && await getRedis().exists(cooldownKey(phoneRef, ipRef))) return inCooldown();
-  const ipSends = await countInWindow(ipSendsKey(ipRef), window);
-  if (ipSends.count > config.identityCitizenOtpIpSendLimit) {
-    return { allowed: false, reason: "IP_LIMIT", retryAfter: Math.max(1, ipSends.ttl) };
-  }
-  if (cooldown && !await getRedis().set(
-    cooldownKey(phoneRef, ipRef), "1", "EX", config.identityCitizenOtpResendSeconds, "NX",
-  )) {
-    // Lost a race with another send for the same number.
-    await uncount(ipSendsKey(ipRef));
-    return inCooldown();
-  }
-  const phoneSends = await countInWindow(phoneSendsKey(phoneRef), window);
-  if (phoneSends.count > config.identityCitizenOtpPhoneSendLimit) {
-    // Nothing was sent: give back the IP charge and the cooldown, so a number
-    // at its cap neither drains the address's shared budget nor turns the
-    // next attempt into a misleading OTP_RESEND_TOO_SOON.
-    await uncount(ipSendsKey(ipRef));
-    if (cooldown) await getRedis().del(cooldownKey(phoneRef, ipRef));
-    return { allowed: false, reason: "PHONE_LIMIT", retryAfter: Math.max(1, phoneSends.ttl) };
+  const limits = [
+    ...(cooldown ? [{
+      reason: "COOLDOWN" as const,
+      key: cooldownKey(phoneRef, ipRef),
+      limit: 1,
+      windowSeconds: config.identityCitizenOtpResendSeconds,
+    }] : []),
+    { reason: "IP_LIMIT" as const, key: ipSendsKey(ipRef), limit: config.identityCitizenOtpIpSendLimit, windowSeconds: window },
+    { reason: "PHONE_LIMIT" as const, key: phoneSendsKey(phoneRef), limit: config.identityCitizenOtpPhoneSendLimit, windowSeconds: window },
+  ];
+  const reservation = await reserveInWindows(limits);
+  if (!reservation.allowed) {
+    return { allowed: false, reason: limits[reservation.refusedBy]!.reason, retryAfter: reservation.retryAfter };
   }
   return { allowed: true, reservation: { phoneRef, ipRef, cooldown } };
 }

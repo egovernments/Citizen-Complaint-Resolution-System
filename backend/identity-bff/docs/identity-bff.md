@@ -321,7 +321,7 @@ One-time read (GETDEL).
 
 #### 3.2.5 `POST /identity/v1/authentication/magic-link-requests`
 
-Unchanged. Body `{email, firstName, lastName, returnTo?}`. Always `202 {message}`; existing, new, rate-limited and failed requests are indistinguishable. Errors: `INVALID_REQUEST`, `UNSUPPORTED_RETURN_TO` (400); `UNTRUSTED_ORIGIN` 403; `SIGNIN_METHODS_UNAVAILABLE` (the method catalogue can't be read), `SIGNUP_UNAVAILABLE` (magic link not enabled) (503).
+Body `{email, firstName, lastName, returnTo?}`. `202 {message}`; existing, new and failed requests are indistinguishable. A 429 shows that the address (or the network) had recent requests, never whether an account exists. Errors: `INVALID_REQUEST`, `UNSUPPORTED_RETURN_TO` (400); `UNTRUSTED_ORIGIN` 403; `EMAIL_RATE_LIMITED`, `NETWORK_RATE_LIMITED` (429, `Retry-After`; see [Email request limits](#email-request-limits)); `SIGNIN_METHODS_UNAVAILABLE` (the method catalogue can't be read), `SIGNUP_UNAVAILABLE` (magic link not enabled) (503).
 
 #### 3.2.6 `POST /identity/v1/password/setup-requests` (item 5)
 
@@ -330,8 +330,26 @@ Body `{email?, returnTo?, surface?, tenantSlug?}`.
 - `surface` defaults to `configurator`. It picks the Keycloak `client_id` of the setup email, so the action pages use that surface's theme, and setup-complete returns to that surface.
 - On `employee` and `citizen`, `tenantSlug` is required, and `returnTo` is checked against the surface prefix exactly as in `/authorize`.
 - A signed-in caller (the cookie of the chosen surface) may omit `email`.
-- Always `202 {message}`, also when rate-limited. Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE`, `UNSUPPORTED_RETURN_TO` (400); `UNTRUSTED_ORIGIN` 403; `TENANT_ROUTE_NOT_FOUND` 404; `TENANT_ROUTE_UNAVAILABLE` 503.
+- `202 {message}` whether or not an eligible account exists; a 429 shows only that the address or network had recent requests. Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE`, `UNSUPPORTED_RETURN_TO` (400); `UNTRUSTED_ORIGIN` 403; `TENANT_ROUTE_NOT_FOUND` 404; `EMAIL_RATE_LIMITED`, `NETWORK_RATE_LIMITED` (429, `Retry-After`); `TENANT_ROUTE_UNAVAILABLE` 503.
 - The same email is sent in-process by `workspace-members/_link` for a new user and by its `resend`, without a slug: it goes through the `digit-identity-bff` client, so its pages use the Configurator theme, which has no tenant branding.
+
+#### Email request limits
+
+The two email routes above (#2805) count each request per IP and per address (the email as typed, or a signed-in caller's subject) in one window, in one atomic Redis script.
+
+- **The IP first.** Over its limit, the request is refused with `NETWORK_RATE_LIMITED` and the address is not charged. The IP is the caller as `IDENTITY_TRUST_PROXY_HOPS` resolves it; IPv6 counts by /64, since one home or host normally holds a whole /64. At `0` behind a proxy, everyone shares the proxy's bucket.
+- **Then the address.** Over its limit, the request is refused with `EMAIL_RATE_LIMITED`, and the IP keeps its charge. Probing many addresses therefore spends the IP's budget, and once it is spent every answer is `NETWORK_RATE_LIMITED`, whatever the address.
+
+Refused requests answer `429` with `Retry-After` and `retryAfter` (seconds) in the body, and send nothing.
+
+| Route | Per address | Per IP | Window |
+|---|---|---|---|
+| `magic-link-requests` | `IDENTITY_MAGIC_LINK_REQUEST_LIMIT` (3) | `IDENTITY_MAGIC_LINK_REQUEST_IP_LIMIT` (20) | `IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS` (1800) |
+| `password/setup-requests` | `IDENTITY_PASSWORD_SETUP_LIMIT` (3) | `IDENTITY_PASSWORD_SETUP_IP_LIMIT` (20) | `IDENTITY_PASSWORD_SETUP_TTL_SECONDS` (900) |
+
+**Why 20 per IP.** An office behind one NAT shares one IP; 3 per IP (the limit before #2805) stopped the fourth person in the office. 20 matches the citizen OTP's per-IP default. The cost: one IP can trigger up to 20 emails (and, for sign-up, 20 Keycloak users) per window, or hold about 6 addresses at their limit. Raise it for a larger office on one IP; lower it where no users share one.
+
+**What a 429 reveals.** The address counter is keyed by the address as typed, whether or not an account has it, so a refusal says nothing about whether an account exists. It does show that the address had recent requests in the window (`Retry-After` hints when the first one came). Before #2805 every outcome was a 202, and an over-limit person was told an email was on its way when none was. #2805 accepts this disclosure so the person is told why no email came and how long to wait.
 
 #### 3.2.7 `GET /identity/v1/password/setup-complete/:state{/:tenantSlug}`
 
@@ -743,6 +761,8 @@ The console calls HRMS first, then the BFF. The BFF never writes HRMS (§1), and
 | `AUTH_RESULT_NOT_FOUND` | 404 | no | The sign-in result was already read or has expired |
 | `SIGNIN_METHODS_UNAVAILABLE` | 503 | yes | The Keycloak client's method catalogue can't be read |
 | `SIGNUP_UNAVAILABLE` | 503 | after-change | Self sign-up (magic link) is not enabled |
+| `EMAIL_RATE_LIMITED` | 429 | after-change | Sign-up or password email: per-address quota; nothing was sent; Retry-After and retryAfter are set |
+| `NETWORK_RATE_LIMITED` | 429 | after-change | Sign-up or password email: per-IP quota (an office may share one IP); nothing was sent; Retry-After and retryAfter are set |
 | `ACTION_NOT_ALLOWED` | 400 | no | The action is not in the client's digit.auth.account.actions |
 | `CREDENTIAL_NOT_SECOND_FACTOR` | 409 | no | delete_credential targets a primary credential |
 | `PROVIDER_ALREADY_LINKED` | 409 | no | idp_link for a provider that is already linked |
@@ -1216,6 +1236,7 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 | `IDENTITY_WORKSPACE_TRIAL_REMINDER_DAYS` | Reminder emails, in days before a trial ends; comma-separated, default `14,7,3,2,1`. The "locked" email at the end is always sent |
 | `IDENTITY_NOVU_BRIDGE_URL`, `IDENTITY_NOVU_BRIDGE_TOKEN` | novu-bridge base URL (`http://novu-bridge:8080/novu-bridge`) and its `NOVU_BRIDGE_INTERNAL_SEND_TOKEN`, for `messages/_dispatch`. Either empty: no reminder emails, said once at startup (`identity.workspace_trial.reminders`, `enabled: false`). An empty URL is the off switch (`identity_workspace_trial_reminders_enabled: false` on Ansible) |
 | `IDENTITY_RECONCILIATION_INTERVAL_SECONDS` | Unchanged (default 300); reported by `/readyz` |
+| `IDENTITY_MAGIC_LINK_REQUEST_IP_LIMIT`, `IDENTITY_PASSWORD_SETUP_IP_LIMIT` | Per-IP limits of the two email routes, checked before the per-address limit and charged also for requests the address limit refuses; IPv6 counts by /64 (default 20 each, for an office behind one NAT; [Email request limits](#email-request-limits), #2805) |
 | `IDENTITY_STAFF_PHONE_JOIN` | `true` signs an employee's own number in as that staff person (§3.2.10, #2595). Default `false` until #2631: whoever can write an employee's mobile could otherwise take over that number's citizen sign-in |
 
 Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worker variables, the role allowlist, and the `admin/admin` Keycloak fallback.
