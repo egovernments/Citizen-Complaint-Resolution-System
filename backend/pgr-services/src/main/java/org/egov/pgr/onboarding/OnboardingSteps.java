@@ -195,6 +195,7 @@ public class OnboardingSteps {
             progress.record("workflow:" + workflow.path("businessService").asText(), () -> ensureWorkflow(scope, tenant, workflow));
         }
         progress.record("mobile", () -> ensureMobileRule(scope, signup));
+        progress.record("postal", () -> ensurePostalRule(scope, signup));
         var locales = locales(signup);
         progress.record("state-info", () -> {
             var data = new LinkedHashMap<String, Object>(); data.put("code", tenant); data.put("name", signup.getAccountName());
@@ -250,6 +251,19 @@ public class OnboardingSteps {
         if (rule.isMissingNode()) throw new OnboardingFailure("COUNTRY_NOT_SUPPORTED", false);
         validateMobileRule(rule);
         ensureRecord(scope, signup.getRequestedTenantId(), "common-masters.MobileNumberValidation", rule.path("countryCode").asText(), asMap(rule));
+    }
+    static final String FORM_VALIDATIONS = "common-masters.FormValidations";
+    /**
+     * The workspace's postal-code rule: a FormValidations postalCode row holding the signup country's pattern, which
+     * the complaint forms and the management console read before the deployment's CORE_POSTAL_CONFIGS (#2787).
+     * Create-if-absent, so a rule the admin changed in the management console is never written over. A country with
+     * no rule in the seed gets no row and keeps the deployment's pattern.
+     */
+    void ensurePostalRule(OnboardingProgress.WriteScope scope, OnboardingSignup signup) {
+        JsonNode rule = seed.countryPostalRule(Objects.toString(signup.getCountryCode(), ""));
+        if (rule.isMissingNode()) return;
+        ensureRecord(scope, signup.getRequestedTenantId(), FORM_VALIDATIONS, "postalCode",
+                Map.of("fieldType", "postalCode", "regex", rule.path("regex").asText()));
     }
     void ensureDashboardConfig(OnboardingProgress.WriteScope scope, OnboardingSignup signup) {
         // The dashboard (digit-ui and KpiCatalogService) reads its zone from the tenant's own "default" record.

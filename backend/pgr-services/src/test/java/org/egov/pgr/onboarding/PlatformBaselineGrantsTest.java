@@ -30,6 +30,11 @@ public class PlatformBaselineGrantsTest {
             "/mdms-v2/v2/_create/identity.invitationPolicy", "/mdms-v2/v2/_update/identity.invitationPolicy",
             "/mdms-v2/v2/_create/dss.DashboardConfig", "/mdms-v2/v2/_update/dss.DashboardConfig");
 
+    // MDMS writes the management console makes on a new workspace through the generic master screens:
+    // Advanced -> Form Validations edits the postal-code rule sign-up writes (#2787).
+    private static final List<String> CONSOLE_MDMS_WRITES = List.of(
+            "/mdms-v2/v2/_create/common-masters.FormValidations", "/mdms-v2/v2/_update/common-masters.FormValidations");
+
     @Test public void everyWorkspaceSetupMdmsWriteIsGrantedToAFounderRole() throws Exception {
         var seed = new PlatformBaseline(new ObjectMapper());
         Set<String> founder = new HashSet<>(); seed.founderRoles().forEach(r -> founder.add(r.asText()));
@@ -44,10 +49,12 @@ public class PlatformBaselineGrantsTest {
             if ("ACCESSCONTROL-ROLEACTIONS.roleactions".equals(row.path("schemaCode").asText()))
                 grants.computeIfAbsent(data.path("actionid").asLong(), k -> new HashSet<>()).add(data.path("rolecode").asText());
         }
-        for (String uri : WORKSPACE_SETUP_MDMS_WRITES)
+        for (String uri : concat(WORKSPACE_SETUP_MDMS_WRITES, CONSOLE_MDMS_WRITES))
             assertTrue(uri + " has no founder grant", actions.getOrDefault(uri, Set.of()).stream()
                     .anyMatch(id -> grants.getOrDefault(id, Set.of()).stream().anyMatch(founder::contains)));
     }
+
+    private static List<String> concat(List<String> a, List<String> b) { var all = new ArrayList<>(a); all.addAll(b); return all; }
 
     /** digit-ui calls the inbox routes when InboxVisibilityConfig.serverSide is true; a role that can search complaints must reach it. */
     @Test public void inboxSearchAndCountAreGrantedToTheSameEmployeeRolesAsExistingTenants() throws Exception {

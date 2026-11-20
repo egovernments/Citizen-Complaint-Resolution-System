@@ -23,6 +23,7 @@ public class PlatformBaseline {
         // The seed version is recorded per workspace as seed_version. Bump it with every content change, here only:
         // records are create-if-absent, so BaselineUpgrader brings workspaces on an older version up to this one.
         if (!seed.path("version").asText().matches("[1-9][0-9]{0,8}")) throw new IOException("Unsupported platform seed");
+        validatePostalRules(seed);
         for (Resource pack : new PathMatchingResourcePatternResolver().getResources(PACKS)) {
             String[] path = pack.getURL().getPath().split("/");
             String locale = path[path.length - 2], module = path[path.length - 1].replaceFirst("\\.json$", "");
@@ -47,6 +48,36 @@ public class PlatformBaseline {
     public JsonNode founderRoles() { return seed.path("founderRoles"); }
     public JsonNode countryMobileRule(String country) {
         return seed.path("countryMobileRules").path(country.toUpperCase(java.util.Locale.ROOT)).deepCopy();
+    }
+    /**
+     * The country's postal-code rule ({"regex": ...}), or a missing node when the seed has none: the workspace then
+     * keeps the deployment's CORE_POSTAL_CONFIGS pattern (#2787).
+     */
+    public JsonNode countryPostalRule(String country) {
+        return seed.path("countryPostalRules").path(country.toUpperCase(java.util.Locale.ROOT)).deepCopy();
+    }
+    /**
+     * A postal rule becomes the workspace's common-masters.FormValidations postalCode row, which the browsers apply
+     * with new RegExp(regex).test(value): a rule that doesn't compile would be skipped, and an unanchored one would
+     * accept any text holding a match. Such a seed is refused at startup instead.
+     */
+    static void validatePostalRules(JsonNode seed) throws IOException {
+        JsonNode rules = seed.path("countryPostalRules");
+        if (rules.isMissingNode()) return;
+        if (!rules.isObject()) throw new IOException("Platform seed countryPostalRules must be an object");
+        for (var entry : (Iterable<Map.Entry<String, JsonNode>>) rules::fields) {
+            String country = entry.getKey();
+            JsonNode rule = entry.getValue();
+            if (!seed.path("countryMobileRules").has(country))
+                throw new IOException("Platform seed countryPostalRules." + country + " is not a supported country");
+            String regex = rule.path("regex").asText("");
+            if (!rule.isObject() || rule.size() != 1 || !rule.path("regex").isTextual() || !regex.startsWith("^") || !regex.endsWith("$"))
+                throw new IOException("Platform seed countryPostalRules." + country + " needs one anchored regex, like ^[0-9]{5}$");
+            try { java.util.regex.Pattern.compile(regex); }
+            catch (java.util.regex.PatternSyntaxException invalid) {
+                throw new IOException("Platform seed countryPostalRules." + country + ".regex does not compile: " + regex, invalid);
+            }
+        }
     }
     /** ISO 3166-1 alpha-2 codes that have a country mobile rule in the seed. */
     public Set<String> supportedCountries() {

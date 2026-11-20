@@ -361,6 +361,36 @@ public class OnboardingStepsTest {
         prerequisites();assertEquals("^[6-9][0-9]{9}$",rows.get("newtown|common-masters.MobileNumberValidation|+91").path("data").path("mobileNumberRegex").asText());
         verify(client,never()).read(eq("mdms"),anyString(),argThat(b->!b.toString().contains("tenantId=newtown")));
     }
+    /** #2787: a new workspace gets its country's postal-code rule, so the complaint forms stop using the deployment's. */
+    @Test public void everySignupCountryGetsItsPostalRule() {
+        Map<String,String> expected=Map.of("IN","^[1-9][0-9]{5}$","KE","^[0-9]{5}$","ET","^[0-9]{4}$",
+                "MZ","^(?:[1-9][0-9]{3}|[0-9]{4}-[0-9]{2}|[1-3][0-9]{4}-[0-9]{3})$");
+        for(var country:expected.entrySet()) {
+            rows.remove("newtown|common-masters.FormValidations|postalCode");
+            signup.setCountryCode(country.getKey());op.getRecordProgress().remove("mobile");op.getRecordProgress().remove("postal");prerequisites();
+            JsonNode row=rows.get("newtown|common-masters.FormValidations|postalCode");
+            assertNotNull(country.getKey(),row);
+            assertEquals(country.getKey(),mapper.valueToTree(Map.of("fieldType","postalCode","regex",country.getValue())),row.path("data"));
+            assertTrue(row.path("isActive").asBoolean());
+        }
+        assertTrue("the FormValidations schema comes first",writes.contains("schema:common-masters.FormValidations"));
+    }
+    @Test public void aPostalRuleTheAdminAlreadyHasIsLeftAsIs() {
+        rows.put("newtown|common-masters.FormValidations|postalCode",mapper.valueToTree(Map.of("isActive",true,"data",Map.of("fieldType","postalCode","regex","^[0-9]{5}(-[0-9]{4})?$"))));
+        prerequisites();
+        assertEquals("^[0-9]{5}(-[0-9]{4})?$",rows.get("newtown|common-masters.FormValidations|postalCode").path("data").path("regex").asText());
+        assertFalse(writes.contains("record:common-masters.FormValidations"));
+        assertEquals("DONE",op.getRecordProgress().get("postal"));
+    }
+    @Test public void aCountryWithNoPostalRuleKeepsTheDeploymentPattern() throws Exception {
+        var seed=spy(new PlatformBaseline(mapper));
+        doReturn(com.fasterxml.jackson.databind.node.MissingNode.getInstance()).when(seed).countryPostalRule("IN");
+        steps=new OnboardingSteps(client,seed,mapper);
+        prerequisites();
+        assertFalse(rows.containsKey("newtown|common-masters.FormValidations|postalCode"));
+        assertFalse(writes.contains("record:common-masters.FormValidations"));
+        assertEquals("DONE",op.getRecordProgress().get("postal"));
+    }
     @Test public void unsupportedCountryIsExplicit() {
         signup.setCountryCode("ZZ");OnboardingFailure failure=assertThrows(OnboardingFailure.class,this::prerequisites);
         assertEquals("COUNTRY_NOT_SUPPORTED",failure.getCode());assertFalse(failure.isRetryable());
