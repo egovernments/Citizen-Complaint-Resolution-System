@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { config } from "../../src/infrastructure/config.js";
 import { closeCache, initCache } from "../../src/infrastructure/redis.js";
 import { currentPersonLease } from "../../src/modules/accounts/person-lease.js";
-import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
+import { propagateIdentifiers, propagateVerifiedIdentifiers } from "../../src/modules/sync/identifiers.js";
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), write: vi.fn(), mobile: vi.fn(), adminPhone: vi.fn() }));
 vi.mock("../../src/modules/organizations/organization-service.js", () => ({
@@ -84,5 +84,18 @@ describe("verified identifier propagation", () => {
   it("keeps dependency errors retryable instead of treating them as success", async () => {
     mocks.write.mockRejectedValue(new Error("dependency unavailable"));
     await expect(propagateIdentifiers("subject")).rejects.toThrow("dependency unavailable");
+  });
+  it("the poller's event for a person Keycloak no longer has completes without writing", async () => {
+    mocks.request.mockImplementation(async (_path: string, _init?: unknown, accept?: number[]) =>
+      accept?.includes(404) ? new Response('{"error":"User not found"}', { status: 404 }) : new Response(JSON.stringify(user)));
+    await expect(propagateVerifiedIdentifiers("deleted")).resolves.toBeUndefined();
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("the poller's event for a present person still propagates and keeps failures retryable", async () => {
+    await propagateVerifiedIdentifiers("subject");
+    expect(mocks.write).toHaveBeenCalledTimes(2);
+    mocks.write.mockRejectedValue(new Error("dependency unavailable"));
+    await expect(propagateVerifiedIdentifiers("subject")).rejects.toThrow("dependency unavailable");
   });
 });

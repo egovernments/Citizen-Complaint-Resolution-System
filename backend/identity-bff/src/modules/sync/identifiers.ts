@@ -1,7 +1,7 @@
 import { withPersonLease } from "../accounts/person-lease.js";
 import { writeDigitIdentifiers } from "../accounts/digit-writer.js";
 import { readBindings } from "../bindings/store.js";
-import { readUser } from "../../integrations/keycloak/admin-api.js";
+import { findUser, readUser } from "../../integrations/keycloak/admin-api.js";
 import { splitE164 } from "../citizens/citizen-registration.js";
 import { mobileValidationForRoute } from "../citizen-otp/mobile-validation.js";
 import { keycloakPhoneIsAdminControlled } from "../organizations/organization-service.js";
@@ -58,7 +58,14 @@ export function propagateIdentifiers(subject: string): Promise<PropagationResult
   });
 }
 
-/** Poller compatibility: failure keeps the event retryable; reconcile retries skips. */
+/**
+ * Poller compatibility: failure keeps the event retryable; reconcile retries skips.
+ * A person Keycloak no longer has is done, not retryable: their own DELETE event
+ * revokes them, and an UPDATE recorded just before the delete (an Organization
+ * removal rewrites its members) would otherwise 404 forever, stall the poller
+ * and take /readyz down with it.
+ */
 export async function propagateVerifiedIdentifiers(subject: string): Promise<void> {
+  if (!await findUser(subject)) return;
   await propagateIdentifiers(subject);
 }
