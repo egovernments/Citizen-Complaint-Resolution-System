@@ -8784,24 +8784,6 @@
     "locale": "pt_BR"
   },
   {
-    "code": "app.onboarding.common.row_problem",
-    "message": "पंक्ति %{row}: %{problem}",
-    "module": "configurator-ui",
-    "locale": "hi_IN"
-  },
-  {
-    "code": "app.onboarding.common.row_problem",
-    "message": "Ligne %{row} : %{problem}",
-    "module": "configurator-ui",
-    "locale": "fr_FR"
-  },
-  {
-    "code": "app.onboarding.common.row_problem",
-    "message": "Linha %{row}: %{problem}",
-    "module": "configurator-ui",
-    "locale": "pt_BR"
-  },
-  {
     "code": "app.onboarding.common.save_changes",
     "message": "बदलाव सहेजें",
     "module": "configurator-ui",
@@ -10098,16 +10080,70 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.departments.bulk.bad_department_code",
+    "message": "विभाग कोड “%{code}” में केवल बड़े अक्षर (A-Z), अंक और अंडरस्कोर हो सकते हैं।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.bad_designation_code",
+    "message": "पदनाम कोड “%{code}” में केवल बड़े अक्षर (A-Z), अंक और अंडरस्कोर हो सकते हैं।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.department_not_added",
+    "message": "%{codes} से जुड़ा है, जिसे जोड़ा नहीं जा सका।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.departments.bulk.found",
     "message": "%{file} में %{departments} और %{designations} हैं।",
     "module": "configurator-ui",
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.departments.bulk.bad_department_code",
+    "message": "le code de service « %{code} » ne peut contenir que des lettres majuscules, des chiffres et des traits de soulignement.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.bad_designation_code",
+    "message": "le code de fonction « %{code} » ne peut contenir que des lettres majuscules, des chiffres et des traits de soulignement.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.department_not_added",
+    "message": "Liée à %{codes}, dont l’ajout a échoué.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.departments.bulk.found",
     "message": "%{file} contient %{departments} et %{designations}.",
     "module": "configurator-ui",
     "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.bad_department_code",
+    "message": "o código de departamento “%{code}” só pode usar letras maiúsculas, dígitos e sublinhados.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.bad_designation_code",
+    "message": "o código de cargo “%{code}” só pode usar letras maiúsculas, dígitos e sublinhados.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.department_not_added",
+    "message": "Vinculado a %{codes}, que não pôde ser adicionado.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
   },
   {
     "code": "app.onboarding.departments.bulk.found",
@@ -10140,8 +10176,20 @@
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.departments.bulk.sheet_row_problem",
+    "message": "%{sheet} शीट, पंक्ति %{row}: %{problem}",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.departments.bulk.none_found",
     "message": "Aucun service ni aucune fonction trouvés. Utilisez les onglets Department et Designation du modèle.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.sheet_row_problem",
+    "message": "Feuille %{sheet}, ligne %{row} : %{problem}",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
@@ -10152,8 +10200,26 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.departments.bulk.sheet_row_problem",
+    "message": "Planilha %{sheet}, linha %{row}: %{problem}",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.departments.bulk.title",
     "message": "अपने विभाग और पदनाम अपलोड करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_one",
+    "message": "विभाग %{codes} मौजूद नहीं है। इसे Department शीट में जोड़ें, या पहले से मौजूद किसी विभाग का इस्तेमाल करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_other",
+    "message": "विभाग %{codes} मौजूद नहीं हैं। इन्हें Department शीट में जोड़ें, या पहले से मौजूद विभागों का इस्तेमाल करें।",
     "module": "configurator-ui",
     "locale": "hi_IN"
   },
@@ -10164,8 +10230,32 @@
     "locale": "fr_FR"
   },
   {
+    "code": "app.onboarding.departments.bulk.unknown_department_one",
+    "message": "le service %{codes} n’existe pas. Ajoutez-le à la feuille Department, ou utilisez un service que vous avez déjà.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_other",
+    "message": "les services %{codes} n’existent pas. Ajoutez-les à la feuille Department, ou utilisez des services que vous avez déjà.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.departments.bulk.title",
     "message": "Envie seus departamentos e cargos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_one",
+    "message": "o departamento %{codes} não existe. Adicione-o à planilha Department ou use um que você já tem.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_other",
+    "message": "os departamentos %{codes} não existem. Adicione-os à planilha Department ou use os que você já tem.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -21810,12 +21900,6 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.common.row_problem",
-    "message": "Row %{row}: %{problem}",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
     "code": "app.onboarding.common.save_changes",
     "message": "Save changes",
     "module": "configurator-ui",
@@ -22248,6 +22332,24 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.departments.bulk.bad_department_code",
+    "message": "department code “%{code}” can only use capital letters, digits and underscores.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.bad_designation_code",
+    "message": "designation code “%{code}” can only use capital letters, digits and underscores.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.department_not_added",
+    "message": "Linked to %{codes}, which couldn’t be added.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.departments.bulk.found",
     "message": "%{file} has %{departments} and %{designations}.",
     "module": "configurator-ui",
@@ -22266,8 +22368,26 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.departments.bulk.sheet_row_problem",
+    "message": "%{sheet} row %{row}: %{problem}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.departments.bulk.title",
     "message": "Upload your departments and designations",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_one",
+    "message": "department %{codes} doesn’t exist. Add it to the Department sheet, or use one you already have.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_other",
+    "message": "departments %{codes} don’t exist. Add them to the Department sheet, or use ones you already have.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
