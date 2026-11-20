@@ -1,0 +1,23 @@
+{
+  "run_id": "run-001-initial",
+  "registered": "2026-11-08T05:09:14Z",
+  "status": "complete",
+  "rubric_version": "0.3",
+  "prompt_sha256": "754a5097b54bc07c0c34320caf6ec0a0cf62106dacdfa5e8c1c542911af9aca8",
+  "provider": "gemini",
+  "model": "gemini-3.5-flash-lite + gemini-3.1-flash-lite (mixed)",
+  "selection": "all",
+  "base_run": null,
+  "input_file": "complaints_description_only_cleaned.latest.csv",
+  "input_sha256": "196155806b46993f980772adc786a98b57f811480e46d0e648a516f6e9e0fcae",
+  "rows_target": 58640,
+  "rows_labelled": 58640,
+  "notes": "Initial full labelling pass. Mixed models: about 19k rows by gemini-3.5-flash-lite, most of the rest by gemini-3.1-flash-lite, a few hundred by another provider; per-row model was not recorded. Per-row reasons were dropped. Prompt hash recorded at registration, not at labelling time.",
+  "label_counts": {
+    "Low": 12967,
+    "Medium": 22593,
+    "High": 16938,
+    "Critical": 6142
+  },
+  "updated": "2026-11-08T05:09:16Z"
+}

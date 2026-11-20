@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CCRS Severity</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1b1f27; --muted: #5d6675; --line: #dfe3ea; --accent: #2b59c3;
+    --low: #2e7d4f; --medium: #b7791f; --high: #d4561a; --critical: #b3261e; --bar: #e8ebf1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --card: #1b2029; --text: #e8ebf1; --muted: #98a2b3; --line: #2b3240; --accent: #7fa4f5;
+      --low: #5dc08a; --medium: #e0a94a; --high: #f08a52; --critical: #f0736b; --bar: #2b3240;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: .95rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  label { display: block; font-weight: 600; margin: 0 0 6px; font-size: .9rem; }
+  textarea, input[type=text] { width: 100%; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+  textarea { min-height: 110px; resize: vertical; }
+  textarea:focus, input:focus, button:focus-visible, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { margin-bottom: 14px; }
+  .samples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { font: inherit; font-size: .8rem; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+  .chip:hover { color: var(--text); border-color: var(--accent); }
+  fieldset { border: 0; padding: 0; margin: 0 0 14px; }
+  legend { font-weight: 600; font-size: .9rem; margin-bottom: 6px; padding: 0; }
+  .opt { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; margin: 4px 0; font-size: .92rem; }
+  .opt input { margin-top: 5px; }
+  .opt small { color: var(--muted); }
+  button.go { font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 8px; padding: 10px 20px; cursor: pointer; }
+  button.go:disabled { opacity: .55; cursor: progress; }
+  #status { color: var(--muted); font-size: .9rem; margin-top: 10px; min-height: 1.4em; }
+  progress { width: 100%; height: 8px; margin-top: 6px; }
+  #result[hidden] { display: none; }
+  .verdict { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .badge { font-size: 1.5rem; font-weight: 700; }
+  .badge.Low { color: var(--low); } .badge.Medium { color: var(--medium); } .badge.High { color: var(--high); } .badge.Critical { color: var(--critical); }
+  .review { font-size: .85rem; color: var(--medium); border: 1px solid var(--medium); border-radius: 6px; padding: 1px 8px; }
+  .bars { display: grid; grid-template-columns: 70px 1fr 54px; gap: 6px 10px; align-items: center; font-size: .9rem; }
+  .track { height: 10px; background: var(--bar); border-radius: 5px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 5px; }
+  .fill.Low { background: var(--low); } .fill.Medium { background: var(--medium); } .fill.High { background: var(--high); } .fill.Critical { background: var(--critical); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .note { color: var(--muted); font-size: .82rem; margin-top: 12px; }
+  footer { color: var(--muted); font-size: .8rem; }
+  pre { background: var(--bar); border-radius: 8px; padding: 10px; overflow-x: auto; font-size: .8rem; margin: 12px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Complaint severity</h1>
+  <p class="sub">Scores a citizen complaint as Low, Medium, High or Critical. Runs entirely in your browser; nothing you type is sent anywhere.</p>
+
+  <section class="card">
+    <div class="row">
+      <label for="desc">Complaint</label>
+      <textarea id="desc" placeholder="e.g. Stray dogs chased and bit a child near the school gate"></textarea>
+      <div class="samples" id="samples" aria-label="Sample complaints"></div>
+    </div>
+    <div class="row">
+      <label for="ctype">Complaint type <span style="font-weight:400;color:var(--muted)">(optional, pick from the list)</span></label>
+      <input type="text" id="ctype" list="ctypes" placeholder="e.g. Street Dogs" autocomplete="off">
+      <datalist id="ctypes"></datalist>
+    </div>
+    <fieldset>
+      <legend>Text model</legend>
+      <label class="opt"><input type="radio" name="dtype" value="q8" checked> <span>Fast <small>- about 120 MB download, results can differ slightly near the cut-offs</small></span></label>
+      <label class="opt"><input type="radio" name="dtype" value="fp32"> <span>Exact <small>- about 470 MB download, identical to the server API</small></span></label>
+    </fieldset>
+    <button class="go" id="go">Score complaint</button>
+    <div id="status" role="status" aria-live="polite"></div>
+    <progress id="prog" max="100" value="0" hidden></progress>
+  </section>
+
+  <section class="card" id="result" hidden aria-live="polite">
+    <div class="verdict"><span class="badge" id="sev"></span><span id="conf" class="num"></span><span class="review" id="review" hidden>Needs review</span></div>
+    <div class="bars" id="bars"></div>
+    <p class="note">"Critical" is returned whenever its probability is 50% or more, even if another class scores higher. "Needs review" means confidence is under 60%.</p>
+    <pre id="json"></pre>
+  </section>
+
+  <footer>The first score downloads the text model once; your browser caches it for next time.</footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
