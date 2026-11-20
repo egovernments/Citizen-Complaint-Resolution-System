@@ -271,7 +271,7 @@ describe('GeographyStep', () => {
         success: boundaries.slice(0, 1),
         failed: [
           { boundary: boundaries[1], error: 'Boundary type is not in the hierarchy', code: 'BOUNDARY_TYPE_ERROR' },
-          { boundary: boundaries[2], error: 'Relationship still absent after verify retries' },
+          { boundary: boundaries[2], error: 'Relationship still absent after verify retries', unconfirmed: true },
         ],
       };
     });
@@ -289,6 +289,28 @@ describe('GeographyStep', () => {
     // Still in the list for Retry, and the sources stay closed while it is.
     expect(screen.getByTestId('boundary-list-item').textContent).toContain('2 wards');
     expectListLocked('Nairobi — County');
+  });
+
+  it('shows a reason that came without a server code, like a network error', async () => {
+    createBoundaries.mockImplementation(async (boundaries) => {
+      landed(boundaries.slice(0, 1));
+      return {
+        success: boundaries.slice(0, 1),
+        failed: [
+          { boundary: boundaries[1], error: 'Failed to fetch' },
+          // An error with no words at all reads as unconfirmed.
+          { boundary: boundaries[2], error: ' ' },
+        ],
+      };
+    });
+    act(() => void addSelection('ke', selection(NAIROBI)));
+    renderStep();
+    await saveAndConfirm();
+    await screen.findByTestId('geography-save-failures');
+    expect([...screen.getByTestId('geography-save-failures').querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      'NBI_W1: Failed to fetch',
+      'NBI_W2: The server didn’t confirm it was saved.',
+    ]);
   });
 
   describe('after a reload, the areas a save missed (#2795)', () => {

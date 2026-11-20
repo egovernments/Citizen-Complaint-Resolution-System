@@ -328,6 +328,7 @@ describe('boundaryService.createBoundaries', () => {
       expect(result.failed).toHaveLength(1);
       expect(result.failed[0].error).not.toContain('Parent entity');
       expect(result.failed[0].code).toBeUndefined();
+      expect(result.failed[0].unconfirmed).toBe(true);
     } finally {
       spies.forEach((spy) => spy.mockRestore());
       vi.useRealTimers();

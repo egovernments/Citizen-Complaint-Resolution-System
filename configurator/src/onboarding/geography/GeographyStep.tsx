@@ -518,14 +518,14 @@ export default function GeographyStep() {
             {[awaitingRetry && !saving && draft ? notSavedMessage(draftBoundaries(draft).length, t) : null, saveError].filter(Boolean).join(' ')}
             {awaitingRetry && !saving && leftovers.length > 0 && (
               <ul className="mt-2 space-y-1" data-testid="geography-save-failures">
-                {leftovers.slice(0, MAX_FAILURES_SHOWN).map(({ boundary, error, code }) => (
+                {leftovers.slice(0, MAX_FAILURES_SHOWN).map(({ boundary, error, code, unconfirmed }) => (
                   <li key={boundary.code}>
                     <span className="font-medium">
                       {boundary.name && boundary.name !== boundary.code ? `${boundary.name} (${boundary.code})` : boundary.code}
                     </span>
                     {': '}
-                    {/* The server's own words when it said why; its code in small print. */}
-                    {code ? error : t('geography.not_saved_unconfirmed', 'The server didn’t confirm it was saved.')}
+                    {/* Why it failed, in the words it came with (a refusal, "Failed to fetch"); a code, if any, in small print. */}
+                    {unconfirmed || !error.trim() ? t('geography.not_saved_unconfirmed', 'The server didn’t confirm it was saved.') : error}
                     {code && <span className="ml-1 text-xs opacity-70">({code})</span>}
                   </li>
                 ))}

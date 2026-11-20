@@ -13,6 +13,8 @@ export interface BoundaryCreateFailure {
   error: string;
   /** e.g. BOUNDARY_TYPE_ERROR; absent when the server never said why. */
   code?: string;
+  /** Nothing refused it: it just wasn't there after the checks, so `error` is only an internal note. */
+  unconfirmed?: boolean;
 }
 
 /** The DIGIT error code on an ApiClientError (read by shape: tests mock the client module). */
@@ -649,15 +651,18 @@ export const boundaryService = {
       if (present.has(b.code)) success.push(b);
       else {
         const refusal = lastError.get(b.code);
-        failed.push({
-          boundary: b,
-          error:
-            refusal instanceof Error && refusal.message
-              ? refusal.message
-              : 'Relationship still absent after verify retries — boundary-service ' +
-                'persistence/visibility gap (parent may be missing).',
-          code: serverErrorCode(refusal),
-        });
+        failed.push(
+          refusal instanceof Error && refusal.message
+            ? { boundary: b, error: refusal.message, code: serverErrorCode(refusal) }
+            : {
+                boundary: b,
+                error:
+                  'Relationship still absent after verify retries — boundary-service ' +
+                  'persistence/visibility gap (parent may be missing).',
+                code: serverErrorCode(refusal),
+                unconfirmed: true,
+              },
+        );
       }
     }
 

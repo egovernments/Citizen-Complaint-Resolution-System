@@ -340,6 +340,14 @@ describe('what a save left unsaved, across a reload (#2795)', () => {
     expect(restore()).toBeNull();
   });
 
+  it('remembers which areas the server never confirmed, rather than refused', () => {
+    const unconfirmed = { boundary: NAIROBI[2], error: 'Relationship still absent after verify retries', unconfirmed: true };
+    act(() => void addSelection(TENANT, sheet(NAIROBI)));
+    act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [unconfirmed]));
+    reload();
+    expect(restore()).toEqual([unconfirmed]);
+  });
+
   it('keeps an edited list, without the reasons the page no longer shows', () => {
     act(() => void addSelection(TENANT, sheet(NAIROBI)));
     act(() => keepUnsaved(TENANT, NAIROBI.slice(0, 2), [refused]));

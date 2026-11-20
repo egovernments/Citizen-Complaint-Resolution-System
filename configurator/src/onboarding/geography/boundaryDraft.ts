@@ -224,7 +224,7 @@ function storeLeftovers(tenantId: string) {
   writeLeftovers(leftoverKey(tenantId, hierarchyType), {
     selections: draft.selections.map(storable),
     // The page shows only each area's name and code beside the reason; its outline is in the selection.
-    failed: failed.map(({ boundary, error, code }) => ({ boundary: { ...boundary, geometry: undefined }, error, code })),
+    failed: failed.map(({ boundary, error, code, unconfirmed }) => ({ boundary: { ...boundary, geometry: undefined }, error, code, unconfirmed })),
   });
 }
 
