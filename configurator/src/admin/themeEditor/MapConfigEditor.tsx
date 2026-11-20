@@ -22,6 +22,7 @@ import { digitClient } from '@/providers/bridge';
 import { getDescriptor } from '../schemaDescriptors';
 import type { FieldSpec } from '../schemaDescriptors/types';
 import { validateGoogleMapsKey } from '@/utils/googleMaps';
+import { BASE_MAP_THEMES, KEYLESS_CARTO_NOTE, mapConfigProblem, resolveTileAttribution, resolveTileUrl } from './mapConfigRules';
 
 /**
  * Editor for `RAINMAKER-PGR.MapConfig`.
@@ -37,15 +38,8 @@ import { validateGoogleMapsKey } from '@/utils/googleMaps';
 const SCHEMA = 'RAINMAKER-PGR.MapConfig';
 const MAP_CONFIG_KEY = 'DEFAULT';
 
-// Base-tile presets, mirroring digit-ui-esbuild products/pgr useMapConfig.js so
-// the preview shows the basemap the citizen map will actually render.
-const BASE_MAP_THEMES: Record<string, { tileUrl: string; label: string }> = {
-  voyager: { label: 'Voyager (light, labelled)', tileUrl: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png' },
-  light: { label: 'Light', tileUrl: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' },
-  dark: { label: 'Dark', tileUrl: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' },
-  osm: { label: 'OpenStreetMap', tileUrl: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' },
-};
-const DEFAULT_THEME = 'voyager';
+// Base-tile presets and the keyless-CARTO fallback live in ./mapConfigRules,
+// mirroring the citizen map so the preview shows what citizens will get.
 const DEFAULT_WARD_COLOR = '#FFA74F';
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
@@ -143,16 +137,19 @@ function FieldInput({
   }
 
   if (spec.path === 'baseMapTheme') {
+    // Same rule as the citizen map: CARTO without a key shows OpenStreetMap.
+    const { keylessCarto } = resolveTileUrl(raw, data.tileUrl);
     return (
       <FieldShell spec={spec}>
         <Select value={(raw as string) ?? ''} onValueChange={(v) => setField(spec.path, v)}>
-          <SelectTrigger><SelectValue placeholder="Voyager (default)" /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="OpenStreetMap (default)" /></SelectTrigger>
           <SelectContent>
             {Object.entries(BASE_MAP_THEMES).map(([value, t]) => (
               <SelectItem key={value} value={value}>{t.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
+        {keylessCarto && <p className="text-xs mt-1 text-amber-700">{KEYLESS_CARTO_NOTE}</p>}
       </FieldShell>
     );
   }
@@ -219,7 +216,7 @@ function GoogleKeyInput({
   );
 }
 
-function MapPreview({ data, setField }: { data: Obj; setField: (path: string, value: unknown) => void }) {
+export function MapPreview({ data, setField }: { data: Obj; setField: (path: string, value: unknown) => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const tileRef = useRef<L.TileLayer | null>(null);
@@ -227,6 +224,7 @@ function MapPreview({ data, setField }: { data: Obj; setField: (path: string, va
 
   const theme = data.baseMapTheme as string | undefined;
   const tileUrl = data.tileUrl as string | undefined;
+  const tileAttribution = data.tileAttribution as string | undefined;
   const wardColor = data.wardHighlightColor as string | undefined;
   const center = data.center as Obj | undefined;
   const zoom = data.defaultZoom;
@@ -259,7 +257,9 @@ function MapPreview({ data, setField }: { data: Obj; setField: (path: string, va
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    const map = L.map(containerRef.current, { scrollWheelZoom: true, attributionControl: false });
+    // Attribution on, as on the citizen map: the OpenStreetMap tile policy
+    // requires a visible credit wherever its tiles are shown.
+    const map = L.map(containerRef.current, { scrollWheelZoom: true });
     map.setView([0, 20], 2);
     mapRef.current = map;
     overlayRef.current = L.layerGroup().addTo(map);
@@ -270,13 +270,12 @@ function MapPreview({ data, setField }: { data: Obj; setField: (path: string, va
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const url = (typeof tileUrl === 'string' && tileUrl.trim())
-      ? tileUrl.trim()
-      : BASE_MAP_THEMES[theme && BASE_MAP_THEMES[theme] ? theme : DEFAULT_THEME].tileUrl;
+    const { url } = resolveTileUrl(theme, tileUrl);
+    const attribution = resolveTileAttribution(theme, tileUrl, tileAttribution);
     if (tileRef.current) tileRef.current.remove();
-    tileRef.current = L.tileLayer(url, { maxZoom: 19 }).addTo(map);
+    tileRef.current = L.tileLayer(url, { maxZoom: 19, attribution }).addTo(map);
     tileRef.current.bringToBack();
-  }, [theme, tileUrl]);
+  }, [theme, tileUrl, tileAttribution]);
 
   // Overlays only — redrawn on colour/position changes, never re-framing the map
   // (so editing the ward colour doesn't yank the view around).
@@ -370,6 +369,8 @@ export function MapConfigEditor() {
   const setField = (path: string, value: unknown) => setData((prev) => setPath(prev, path, value));
 
   const handleSave = async () => {
+    const problem = mapConfigProblem(data);
+    if (problem) { setSaveError(problem); return; }
     setSaving(true); setSaveError(null);
     try {
       const payload = { ...data, code: MAP_CONFIG_KEY };

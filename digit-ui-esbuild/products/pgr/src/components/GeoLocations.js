@@ -11,6 +11,14 @@ import useMapConfig from "../hooks/pgr/useMapConfig";
 import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 import { hasUsableGeoLocation } from "../utils/geoLocation";
 import { translateOr } from "../utils/selectPlaceholder";
+import {
+  boundsOfFeatures,
+  createTileFailureTracker,
+  nextOpeningView,
+  openingViewKey,
+  OPENING_VIEW_WAIT_MS,
+  resolveOpeningView,
+} from "../utils/mapView";
 
 // Fix default icon issue in React builds
 delete L.Icon.Default.prototype._getIconUrl;
@@ -60,6 +68,42 @@ const MapRefSetter = ({ mapRef }) => {
   return null;
 };
 
+// Moves the map to the opening view (#2804). A child of MapContainer, so the
+// map instance exists by the time it runs; `request` is a fresh object for every
+// move, so the same view can be applied twice (open, then Clear). Fitting a
+// single small ward stops at street level rather than the tile limit.
+const OUTLINE_FIT_MAX_ZOOM = 16;
+const OpeningViewSetter = ({ request }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (!request) return;
+    const { view, maxZoom } = request;
+    if (view.bounds) {
+      const { south, west, north, east } = view.bounds;
+      map.fitBounds([[south, west], [north, east]], { padding: [16, 16], maxZoom: Math.min(maxZoom, OUTLINE_FIT_MAX_ZOOM) });
+    } else {
+      map.setView([view.center.lat, view.center.lng], view.zoom);
+    }
+  }, [map, request]);
+  return null;
+};
+
+// Reports the citizen's own pans and zooms (#2804), so a late opening view
+// never moves the map back. Leaflet fires the same move/zoom events for code
+// as for people, so this listens for the input itself: a press or touch
+// (drag, pinch, double-click, a pin), the wheel, and the keyboard.
+const USER_MAP_INPUT = ["pointerdown", "touchstart", "wheel", "keydown"];
+const USER_MAP_INPUT_OPTIONS = { capture: true, passive: true };
+const UserInputWatcher = ({ onInput }) => {
+  const map = useMap();
+  useEffect(() => {
+    const container = map.getContainer();
+    USER_MAP_INPUT.forEach((type) => container.addEventListener(type, onInput, USER_MAP_INPUT_OPTIONS));
+    return () => USER_MAP_INPUT.forEach((type) => container.removeEventListener(type, onInput, USER_MAP_INPUT_OPTIONS));
+  }, [map, onInput]);
+  return null;
+};
+
 const REVERSE_GEOCODE_TIMEOUT_MS = 10000;
 
 // Resolve a pin to a ward polygon. Returns {code, name, parent_subcounty} or null.
@@ -89,8 +133,8 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   // Nominatim Accept-Language is ISO 639-1 — derive from the active i18n
   // locale (e.g. `sw_KE` → `sw`) so place names come back in the user's
   // language on `?Accept-Language=` (closes egovernments/CCRS#520 for the
-  // address-text path; map TILE labels are baked into the CARTO raster
-  // tiles and require a vector-tile provider swap to translate.)
+  // address-text path; map TILE labels are baked into the raster tiles
+  // and require a vector-tile provider swap to translate.)
   const nominatimLang = ((i18n?.language || Digit?.StoreData?.getCurrentLanguage?.() || "en") + "").split("_")[0] || "en";
 
   // Base tile theme, ward highlight, starting position and geocoding scope are
@@ -102,6 +146,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     tileAttribution,
     wardHighlightColor: wardColor,
     center,
+    configuredCenter,
+    configuredZoom,
+    fallbackCenter,
     defaultZoom,
     minZoom,
     maxZoom,
@@ -128,9 +175,6 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   // the surrounding area instead of a single block at street level.
   const DEFAULT_CENTER = center;
   const DEFAULT_ZOOM = defaultZoom;
-  // Shown before any pin exists (and after Clear): a deliberately wide frame the
-  // citizen zooms in from. Clamped so it can't sit outside the tenant's bounds.
-  const OVERVIEW_ZOOM = Math.max(minZoom, Math.min(5, maxZoom));
   const [coords, setCoords] = useState(DEFAULT_CENTER);
   const [markerPos, setMarkerPos] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -142,12 +186,64 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const [polygonPoints, setPolygonPoints] = useState([]);
   const [hoveredWard, setHoveredWard] = useState(null);
   const [selectedWard, setSelectedWard] = useState(null);
-  // Tenant ward polygons (boundary-service when MAP_TENANT is set, else
-  // the bundled static Nairobi wards). Null while the fetch is in flight.
+  // Tenant ward polygons from boundary-service. Null until the first wards
+  // arrive; `partial` while more are still loading.
   const tenantBoundaries = useTenantBoundaries();
+  const boundariesDone = tenantBoundaries !== null && !tenantBoundaries.partial;
+
+  // Where the map opens before a pin exists, and after Clear (#2804): the
+  // MapConfig centre, else the tenant's boundary outline, else the deployment
+  // default, at city zoom rather than the old continent-wide zoom 5.
+  const outline = useMemo(() => boundsOfFeatures(tenantBoundaries), [tenantBoundaries]);
+  const openingView = useMemo(
+    () => resolveOpeningView({ configCenter: configuredCenter, configZoom: configuredZoom, outline, fallbackCenter, minZoom, maxZoom }),
+    [configuredCenter, configuredZoom, outline, fallbackCenter, minZoom, maxZoom]
+  );
+  const [openingRequest, setOpeningRequest] = useState(null);
+  // Key of the opening view last applied (see nextOpeningView).
+  const [appliedOpening, setAppliedOpening] = useState(null);
+  const showOpeningView = (key) => {
+    setCoords(openingView.center);
+    setOpeningRequest({ view: openingView, maxZoom });
+    setAppliedOpening(key);
+  };
+  // Without a MapConfig centre the map waits for the wards, but only this long:
+  // a slow or hung boundary call must not hold it on the loading state.
+  const [waitedOut, setWaitedOut] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setWaitedOut(true), OPENING_VIEW_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  // Once the citizen has panned, zoomed, searched or used locate-me, a late
+  // opening view must not move the map back.
+  const [userMoved, setUserMoved] = useState(false);
+  const markUserMoved = useCallback(() => setUserMoved(true), []);
+
+  // Tiles that never load leave a blank grey box. Say so, and point at the
+  // search box, which works without tiles. Several failures with no tile
+  // loading in between show the notice; a tile that loads hides it again.
+  const [tilesFailed, setTilesFailed] = useState(false);
+  const tileFailures = useRef(null);
+  if (!tileFailures.current) tileFailures.current = createTileFailureTracker();
+  useEffect(() => {
+    tileFailures.current = createTileFailureTracker();
+    setTilesFailed(false);
+  }, [tileUrl]);
+  const tileEvents = useMemo(
+    () => ({
+      tileload: () => {
+        tileFailures.current.loaded();
+        setTilesFailed(false);
+      },
+      tileerror: () => {
+        if (tileFailures.current.failed()) setTilesFailed(true);
+      },
+    }),
+    []
+  );
+
   const mapRef = useRef(null);
   const searchInputRef = useRef(null);
-  const hasInitialized = useRef(false);
   // Coords of the last reverse-geocode ATTEMPT (not success). The formData
   // sync effect below must never re-request coords that were already tried:
   // a failed / rate-limited Nominatim call writes {lat, lng} without an
@@ -192,22 +288,23 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     });
   }, [selectedWard, trans, i18n.language]);
 
-  // Waits for MapConfig: the seeded lat/lng below is latched once, so running
-  // this before MDMS resolves would pin the citizen to the fallback centre and
-  // silently discard the tenant's configured starting position.
+  // This key was historically global to the browser session, so it could
+  // leak a pin from a previous complaint (and between citizen/employee
+  // flows). Wizard-local formData is the sole restoration source now.
   useEffect(() => {
-    if (!isReady || hasInitialized.current) return;
-    hasInitialized.current = true;
-    // This key was historically global to the browser session, so it could
-    // leak a pin from a previous complaint (and between citizen/employee
-    // flows). Wizard-local formData is the sole restoration source now.
     Digit.SessionStorage.del("PGR_MAP_LOCATION");
-    if (!hasUsableGeoLocation(formData?.[config.key])) {
-      setCoords(DEFAULT_CENTER);
-      setMarkerPos(null);
-      mapRef.current?.setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], OVERVIEW_ZOOM);
-    }
-  }, [isReady, DEFAULT_CENTER.lat, DEFAULT_CENTER.lng, OVERVIEW_ZOOM]);
+  }, []);
+
+  // Opens the map once MapConfig is in (and, without a configured centre, the
+  // wards or the wait), then moves to a better view only while the citizen has
+  // neither touched the map nor got a pin. A restored pin keeps the map on it.
+  const hasPin = hasUsableGeoLocation(formData?.[config.key]);
+  useEffect(() => {
+    const key = nextOpeningView({ ready: isReady, view: openingView, boundariesDone, waitedOut, applied: appliedOpening, userMoved, hasPin });
+    if (key) showOpeningView(key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReady, openingView, boundariesDone, waitedOut, appliedOpening, userMoved, hasPin]);
+  const openingPending = !appliedOpening && !waitedOut && !userMoved && !hasPin;
 
   useEffect(() => () => reverseGeocodeController.current?.abort(), []);
 
@@ -364,6 +461,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
 
     setSearchQuery(suggestion.display_name);
     setSuggestions([]); // Clear suggestions
+    markUserMoved();
 
     if (isPolygonMode) {
       setCoords({ lat, lng });
@@ -392,6 +490,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
         const { lat, lon } = data[0];
         const latitude = parseFloat(lat);
         const longitude = parseFloat(lon);
+        markUserMoved();
 
         if (isPolygonMode) {
           setCoords({ lat: latitude, lng: longitude });
@@ -420,6 +519,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
+          markUserMoved();
           if (isPolygonMode) {
             setCoords({ lat: latitude, lng: longitude });
           } else {
@@ -462,12 +562,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setMarkerPos(null);
     setSuggestions([]);
     setPolygonPoints([]);
-    setCoords(DEFAULT_CENTER);
     setSelectedWard(null);
     setIsSearching(false);
-    if (mapRef.current) {
-      mapRef.current.setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], OVERVIEW_ZOOM);
-    }
+    showOpeningView(openingViewKey(openingView, boundariesDone));
     // Clear location from formData
     onSelect(config.key, null);
   };
@@ -498,15 +595,17 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
         }}>
           <MapContainer
             center={[coords.lat, coords.lng]}
-            zoom={markerPos ? DEFAULT_ZOOM : OVERVIEW_ZOOM}
+            zoom={markerPos ? DEFAULT_ZOOM : openingView.zoom}
             minZoom={minZoom}
             maxZoom={maxZoom}
             style={{ height: "100%", width: "100%" }}
             zoomControl={false}
           >
             <MapRefSetter mapRef={mapRef} />
+            <OpeningViewSetter request={openingRequest} />
+            <UserInputWatcher onInput={markUserMoved} />
             <MapClickHandler onClick={handleMapClick} />
-            <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} />
+            <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} eventHandlers={tileEvents} />
             {tenantBoundaries?.features?.length > 0 && (
               <GeoJSON
                 key={`${selectedWard || "_"}-${hoveredWard || "_"}-${tenantBoundaries.features.length}-${i18n.language}`}
@@ -543,7 +642,29 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
             )}
           </MapContainer>
 
-          {isSearching && (
+          {tilesFailed && (
+            <div
+              role="status"
+              style={{
+                position: "absolute",
+                bottom: "30px",
+                left: "20px",
+                right: "90px",
+                maxWidth: "480px",
+                zIndex: 999,
+                backgroundColor: "white",
+                borderRadius: "12px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                padding: "12px 16px",
+                fontSize: "14px",
+                color: "#0B0C0C"
+              }}
+            >
+              {translateOr(t, "CS_MAP_TILES_FAILED", "Map couldn't load. You can still pick the location by typing the address/area.")}
+            </div>
+          )}
+
+          {(isSearching || openingPending) && (
             <div style={{
               position: "absolute",
               top: 0,

@@ -1,0 +1,245 @@
+/**
+ * Base tiles and opening view for the complaint maps (#2804).
+ *
+ * Plain functions with no React and no globals, so useMapConfig and
+ * GeoLocations stay thin and the rules can be tested on their own.
+ */
+
+// The tile rules down to resolveBaseTiles (presets, the CARTO key check, the
+// credit lines) are copied in configurator/src/admin/themeEditor/
+// mapConfigRules.ts, so the Map Configuration preview matches the citizen map.
+// The two apps share no code: change both copies together.
+
+const CARTO_ATTRIBUTION =
+  '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>';
+const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+// Named base-map presets. The complaint-location maps used to hardcode the
+// CARTO `dark_all` raster theme, which renders as a black background on
+// tenants that expect a light map (egovernments/CCRS#882). The base theme is
+// resolved per tenant from MDMS so operators can switch it without a code
+// change.
+export const BASE_MAP_THEMES = {
+  voyager: {
+    tileUrl: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    tileAttribution: CARTO_ATTRIBUTION,
+  },
+  light: {
+    tileUrl: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    tileAttribution: CARTO_ATTRIBUTION,
+  },
+  dark: {
+    tileUrl: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    tileAttribution: CARTO_ATTRIBUTION,
+  },
+  // The OSM tile policy asks for the plain host; the a/b/c subdomains are
+  // legacy aliases.
+  osm: {
+    tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    tileAttribution: OSM_ATTRIBUTION,
+  },
+};
+
+// OpenStreetMap is the default: it needs no key. CARTO raster tiles without a
+// key now come back as "API KEY REQUIRED" watermarks, so a CARTO default left
+// every tenant that never chose a theme with a blank map.
+export const DEFAULT_BASE_MAP_THEME = "osm";
+
+// Opening zoom when nothing says how big the tenant's area is: about a whole
+// city in view. (The old opening zoom, 5, showed most of a continent.)
+export const CITY_ZOOM = 12;
+
+const CARTO_TILE_HOST = /^(?:https?:)?\/\/(?:[^/?#]*\.)?basemaps\.cartocdn\.com\//i;
+const OSM_TILE_HOST = /^(?:https?:)?\/\/(?:[^/?#]*\.)?tile\.openstreetmap\.org\//i;
+const KEY_PARAM = /[?&](?:api_?key|key)=[^&#]+/i;
+
+const escapeHtml = (text) =>
+  text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+
+/**
+ * Credit line for a custom tile URL that came without one: the tile server's
+ * own host ("© tiles.example.org"), never a preset's credit for tiles that
+ * preset doesn't serve. Credentials, the port and {s}. placeholders are left
+ * out; a relative URL gets no credit.
+ */
+export const genericTileCredit = (url) => {
+  const match = /^(?:https?:)?\/\/([^/?#]+)/i.exec(url);
+  if (!match) return "";
+  const host = match[1]
+    .replace(/^.*@/, "")
+    .replace(/:\d*$/, "")
+    .replace(/^(?:\{[^}]*\}\.)+/, "");
+  return host ? `&copy; ${escapeHtml(host)}` : "";
+};
+
+/**
+ * True for a CARTO basemap URL that carries no API key. CARTO answers those with
+ * a watermark tile (HTTP 200), so the map looks loaded but shows nothing. A
+ * WRONG key looks the same and cannot be told apart here.
+ */
+export const isKeylessCartoUrl = (url) =>
+  typeof url === "string" && CARTO_TILE_HOST.test(url.trim()) && !KEY_PARAM.test(url);
+
+const trimmed = (v) => (typeof v === "string" ? v.trim() : "");
+
+/**
+ * Tile URL and attribution for a MapConfig record.
+ *
+ * - A raw `tileUrl` wins (this is how a keyed CARTO URL is configured).
+ * - Otherwise the named `baseMapTheme`, defaulting to OpenStreetMap.
+ * - Anything that resolves to CARTO without a key falls back to OpenStreetMap,
+ *   because those tiles are only watermarks. `keylessCartoFallback` says so,
+ *   for the console warning.
+ */
+export const resolveBaseTiles = (cfg) => {
+  const themeName = trimmed(cfg?.baseMapTheme);
+  const themeKey = BASE_MAP_THEMES[themeName] ? themeName : DEFAULT_BASE_MAP_THEME;
+  const rawUrl = trimmed(cfg?.tileUrl);
+  const rawAttr = trimmed(cfg?.tileAttribution);
+  const osm = BASE_MAP_THEMES.osm;
+
+  if (rawUrl) {
+    if (isKeylessCartoUrl(rawUrl)) {
+      return { tileUrl: osm.tileUrl, tileAttribution: osm.tileAttribution, keylessCartoFallback: true };
+    }
+    // A raw URL without its own credit line: CARTO's or OpenStreetMap's for
+    // their own tile servers, otherwise the URL's host. Never the named theme's:
+    // those tiles don't come from it.
+    let fallbackAttr = genericTileCredit(rawUrl);
+    if (CARTO_TILE_HOST.test(rawUrl)) fallbackAttr = CARTO_ATTRIBUTION;
+    else if (OSM_TILE_HOST.test(rawUrl)) fallbackAttr = OSM_ATTRIBUTION;
+    return { tileUrl: rawUrl, tileAttribution: rawAttr || fallbackAttr, keylessCartoFallback: false };
+  }
+
+  const preset = BASE_MAP_THEMES[themeKey];
+  // Named CARTO presets never carry a key.
+  if (isKeylessCartoUrl(preset.tileUrl)) {
+    return { tileUrl: osm.tileUrl, tileAttribution: osm.tileAttribution, keylessCartoFallback: true };
+  }
+  return { tileUrl: preset.tileUrl, tileAttribution: preset.tileAttribution, keylessCartoFallback: false };
+};
+
+// Visits every [lng, lat] pair in a GeoJSON coordinate tree of any depth.
+const eachPosition = (coords, visit) => {
+  if (!Array.isArray(coords)) return;
+  if (typeof coords[0] === "number" && typeof coords[1] === "number") {
+    visit(coords[0], coords[1]);
+    return;
+  }
+  for (const child of coords) eachPosition(child, visit);
+};
+
+/**
+ * Bounding box ({ south, west, north, east }) of every feature in a GeoJSON
+ * FeatureCollection, or undefined when nothing has usable coordinates.
+ */
+export const boundsOfFeatures = (collection) => {
+  let south = Infinity;
+  let west = Infinity;
+  let north = -Infinity;
+  let east = -Infinity;
+  for (const feature of collection?.features || []) {
+    eachPosition(feature?.geometry?.coordinates, (lng, lat) => {
+      if (!Number.isFinite(lng) || !Number.isFinite(lat) || Math.abs(lng) > 180 || Math.abs(lat) > 90) return;
+      if (lat < south) south = lat;
+      if (lat > north) north = lat;
+      if (lng < west) west = lng;
+      if (lng > east) east = lng;
+    });
+  }
+  if (!(south <= north && west <= east)) return undefined;
+  return { south, west, north, east };
+};
+
+const clampZoom = (zoom, minZoom, maxZoom) => Math.max(minZoom, Math.min(zoom, maxZoom));
+
+/**
+ * Where the citizen map opens before a location is picked.
+ *
+ *   1. The centre set in MapConfig (by an admin, or by the configurator's
+ *      Geography step), at the configured zoom or city zoom.
+ *   2. Otherwise the tenant's boundary outline: `bounds` is set and the caller
+ *      fits it; `center`/`zoom` are its midpoint and city zoom for the moment
+ *      before the fit.
+ *   3. Otherwise `fallbackCenter` (the deployment's MAP_CENTER, else the
+ *      built-in default) at city zoom.
+ */
+export const resolveOpeningView = ({ configCenter, configZoom, outline, fallbackCenter, minZoom = 0, maxZoom = 22 }) => {
+  if (configCenter) {
+    return { source: "config", center: configCenter, zoom: clampZoom(configZoom ?? CITY_ZOOM, minZoom, maxZoom) };
+  }
+  if (outline) {
+    return {
+      source: "outline",
+      center: { lat: (outline.south + outline.north) / 2, lng: (outline.west + outline.east) / 2 },
+      zoom: clampZoom(CITY_ZOOM, minZoom, maxZoom),
+      bounds: outline,
+    };
+  }
+  return { source: "fallback", center: fallbackCenter, zoom: clampZoom(CITY_ZOOM, minZoom, maxZoom) };
+};
+
+// How long the citizen map waits for the ward outlines before it opens anyway
+// (#2804). Most tenants' wards arrive well inside this; a slow or hung
+// boundary-service call must not hold the map on a loading state.
+export const OPENING_VIEW_WAIT_MS = 3000;
+
+/**
+ * Names an opening view, so the caller can tell a better view from a repeat:
+ * "config", "outline:some" (wards still loading), "outline:all" or "fallback".
+ */
+export const openingViewKey = (view, boundariesDone) =>
+  view.source === "outline" ? `outline:${boundariesDone ? "all" : "some"}` : view.source;
+
+/**
+ * The opening view the citizen map should move to now, as its key, or null to
+ * leave the map where it is.
+ *
+ * - A MapConfig centre opens at once.
+ * - Otherwise the map waits for the wards: until all of them are in, or until
+ *   `waitedOut` (OPENING_VIEW_WAIT_MS), whichever is first. Then it opens on the
+ *   wards loaded so far, else on the fallback.
+ * - A better view that turns up later (the wards after the fallback, or all of
+ *   them after some) is applied too, so a slow tenant still ends up on its
+ *   outline.
+ * - Nothing moves the map once the citizen has (pan, zoom, search, locate-me)
+ *   or while there is a pin.
+ */
+export const nextOpeningView = ({ ready, view, boundariesDone, waitedOut, applied, userMoved, hasPin }) => {
+  if (!ready || userMoved || hasPin) return null;
+  if (view.source !== "config" && !boundariesDone && !waitedOut) return null;
+  const key = openingViewKey(view, boundariesDone);
+  return key === applied ? null : key;
+};
+
+// Tile-failure notice (#2804): failures needed, with no tile loading in
+// between, and how recent they must be.
+export const TILE_FAILURES_FOR_NOTICE = 3;
+export const TILE_FAILURE_WINDOW_MS = 10000;
+
+/**
+ * Decides when the citizen map says its tiles couldn't load.
+ *
+ * One failed tile is normal (a blip, a tile missing at the edge of the world),
+ * so `failed()` only says yes after several failures in a short window with no
+ * tile loading in between. `loaded()` starts the count again, so the notice
+ * goes away once tiles load, and comes back if the connection drops later.
+ */
+export const createTileFailureTracker = ({
+  threshold = TILE_FAILURES_FOR_NOTICE,
+  windowMs = TILE_FAILURE_WINDOW_MS,
+  now = () => Date.now(),
+} = {}) => {
+  let failures = [];
+  return {
+    loaded() {
+      failures = [];
+    },
+    failed() {
+      const at = now();
+      failures = failures.filter((t) => at - t < windowMs);
+      failures.push(at);
+      return failures.length >= threshold;
+    },
+  };
+};

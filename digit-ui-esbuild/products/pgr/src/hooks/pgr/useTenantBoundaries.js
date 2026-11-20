@@ -64,11 +64,15 @@ const GEOMETRY_CHUNK_SIZE = 40;
 //   2. boundary/_search (query params: tenantId, codes csv, limit) per
 //      chunk of LEAF codes → geometry, joined back by code.
 // Yields an empty FeatureCollection — never another tenant's wards — when no
-// boundary tenant is configured, any fetch fails, or every leaf is
-// geometry-less / placeholder.
+// boundary tenant is configured, the fetch fails before any ward arrives, or
+// every leaf is geometry-less / placeholder.
 //
-// Returns null while the fetch is in flight; consumers gate the <GeoJSON>
-// layer on features.length and skip pin resolution until it arrives.
+// Returns null until the first wards arrive. The geometry comes in chunks, one
+// request after another, so the wards are published as each chunk lands, with
+// `partial: true` until the last one (#2804): the citizen map can open on the
+// tenant without waiting for every chunk, and one hung request doesn't hide the
+// wards before it. A chunk that fails keeps the wards already loaded.
+// Consumers gate the <GeoJSON> layer on features.length.
 const useTenantBoundaries = () => {
   const [tenantBoundaries, setTenantBoundaries] = useState(null);
   // Which tenant's tree to draw is resolved from MDMS MapConfig, falling back to
@@ -91,6 +95,7 @@ const useTenantBoundaries = () => {
     }
 
     const fetchBoundaries = async () => {
+      const features = [];
       try {
         const { hierarchyType: HIERARCHY_TYPE, lowestLevel: configuredLevel } = await getTenantHierarchy(MAP_TENANT);
         // Step 1: full hierarchy tree (codes + parentage only).
@@ -153,8 +158,8 @@ const useTenantBoundaries = () => {
           leaves = nodes.filter((n) => n.depth === maxDepth);
         }
 
-        // Step 2: geometry per leaf code, chunked.
-        const geometryByCode = {};
+        // Step 2: geometry per leaf code, chunked. Each chunk's wards are
+        // published as soon as it lands; only the last one drops `partial`.
         for (let i = 0; i < leaves.length; i += GEOMETRY_CHUNK_SIZE) {
           const chunk = leaves.slice(i, i + GEOMETRY_CHUNK_SIZE);
           const entResponse = await Digit.CustomService.getResponse({
@@ -163,21 +168,27 @@ const useTenantBoundaries = () => {
             body: {},
             method: "POST",
           });
+          const geometryByCode = {};
           for (const row of entResponse?.Boundary || []) {
             if (row?.code) geometryByCode[row.code] = row.geometry;
           }
+          // Relationships carry no name field; code doubles as the label
+          // (consumers tooltip on `name`, localization happens at render
+          // via t() where applicable).
+          for (const n of chunk) {
+            if (!hasRealGeometry(geometryByCode[n.code])) continue;
+            features.push({
+              type: "Feature",
+              geometry: geometryByCode[n.code],
+              properties: { code: n.code, name: n.code, parent_subcounty: n.parent },
+            });
+          }
+          const more = i + GEOMETRY_CHUNK_SIZE < leaves.length;
+          if (cancelled) return;
+          if (more && features.length > 0) {
+            setTenantBoundaries({ type: "FeatureCollection", features: [...features], partial: true });
+          }
         }
-
-        // Relationships carry no name field; code doubles as the label
-        // (consumers tooltip on `name`, localization happens at render
-        // via t() where applicable).
-        const features = leaves
-          .filter((n) => hasRealGeometry(geometryByCode[n.code]))
-          .map((n) => ({
-            type: "Feature",
-            geometry: geometryByCode[n.code],
-            properties: { code: n.code, name: n.code, parent_subcounty: n.parent },
-          }));
 
         if (cancelled) return;
         if (features.length > 0) {
@@ -189,7 +200,10 @@ const useTenantBoundaries = () => {
         }
       } catch (e) {
         console.error("Failed to fetch tenant boundaries:", e);
-        if (!cancelled) setTenantBoundaries(EMPTY_BOUNDARIES);
+        if (cancelled) return;
+        // Keep the wards that did arrive; they are no longer partial, since
+        // nothing more is coming.
+        setTenantBoundaries(features.length > 0 ? { type: "FeatureCollection", features } : EMPTY_BOUNDARIES);
       }
     };
     fetchBoundaries();

@@ -1104,6 +1104,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CS_MAP_TILES_FAILED",
+        "message": "Não foi possível carregar o mapa. Ainda pode indicar o local escrevendo a morada ou a zona.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_MYCOMPLAINTS_NO_COMPLAINTS",
         "message": "Ainda não registou nenhuma reclamação. \nComece com uma e faça a diferença.",
         "module": "rainmaker-pgr",

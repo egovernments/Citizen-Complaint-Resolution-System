@@ -30,7 +30,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   const [fetchedAddress, setFetchedAddress] = useState(null);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
   // Map theming resolved per tenant from MDMS RAINMAKER-PGR.MapConfig:
-  // base tile theme (defaults to the light voyager basemap) + ward-highlight
+  // base tile theme (defaults to OpenStreetMap) + ward-highlight
   // colour (defaults to the legacy orange #FFA74F).
   const {
     tileUrl,
@@ -49,7 +49,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // Nominatim Accept-Language is ISO 639-1; derive from i18n locale (e.g.
   // `sw_KE` → `sw`). Falls back to English (closes egovernments/CCRS#520
   // for the address-text part — map TILE labels are baked into the
-  // CARTO raster tiles and need a vector-tile provider swap to render
+  // raster tiles and need a vector-tile provider swap to render
   // in Swahili).
   const nominatimLang = ((i18n?.language || Digit?.StoreData?.getCurrentLanguage?.() || "en") + "").split("_")[0] || "en";
 
