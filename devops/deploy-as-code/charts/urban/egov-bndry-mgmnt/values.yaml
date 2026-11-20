@@ -21,12 +21,12 @@ initContainers:
     schemaTable: "egov-bndry-mgmnt_schema"
     image:
       repository: "egov-bndry-mgmnt-db"
-      tag: "bndry-mgmnt-8b5fc86"
+      tag: "bndry-mgmnt-3794b8c"
 
 # Container Configs
 image:
   repository: "egov-bndry-mgmnt"
-  tag: "bndry-mgmnt-8b5fc86"
+  tag: "bndry-mgmnt-3794b8c"
 replicas: "1"
 appType: "java-spring"
 tracing-enabled: true

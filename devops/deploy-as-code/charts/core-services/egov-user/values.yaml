@@ -24,7 +24,7 @@ initContainers:
 #   (a Kenya/India format). Maputo's rule (MDMS common-masters.MobileNumberValidation)
 #   is +258 / numbers starting with 8, so a hardcoded-regex build REJECTS every
 #   valid Maputo number → citizen register/create/provisioning fails.
-#   2.12-87e13fe carries the Digit-Core#1044 fixes (MDMS-driven per-tenant mobile
+#   2.12-68f707e (on the 2.12 core-services merge, 87e13fe) carries the Digit-Core#1044 fixes (MDMS-driven per-tenant mobile
 #   validation, tenant-aware encryption, SafeHtmlValidator/CCRS#771) that were
 #   previously only in the `mobilevalidation-jdk8-4984479` preview build.
 #   PARITY: Compose pins this EXACT image (local-setup/docker-compose.egov-digit.yaml)
@@ -34,7 +34,7 @@ initContainers:
 #   regex (v.mobileKERequired).
 image:
   repository: "egovio/egov-user"
-  tag: "2.12-87e13fe"
+  tag: "2.12-68f707e"
   pullPolicy: "IfNotPresent"
 replicas: "1"
 healthChecks:
