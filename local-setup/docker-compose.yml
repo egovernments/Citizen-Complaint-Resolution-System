@@ -166,6 +166,8 @@ services:
     # Waits for MinIO itself (under Tilt, depends_on is not applied), then exits with the real
     # result: a non-zero exit here means the egov-rainmaker bucket is missing and filestore
     # uploads will fail, so it must not look like success.
+    # egov-rainmaker is private (VAPT #223); downloads use presigned URLs from
+    # egov-filestore. Only */pgr-landing/* (pre-login landing pictures) is public.
     entrypoint:
       - /bin/sh
       - -c
@@ -176,7 +178,9 @@ services:
           sleep 2
         done
         mc mb --ignore-existing myminio/egov-rainmaker &&
-        mc anonymous set download myminio/egov-rainmaker
+        mc anonymous set none myminio/egov-rainmaker &&
+        echo '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::egov-rainmaker/*/pgr-landing/*"]}]}' > /tmp/public-landing.json &&
+        mc anonymous set-json /tmp/public-landing.json myminio/egov-rainmaker
     networks:
       - egov-network
 
@@ -765,6 +769,7 @@ services:
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
       ISS3ENABLED: 'true'
       MINIO_URL: http://minio:9000
+      PRESIGNED_URL_EXPIRY_TIME_IN_SECS: ${FILESTORE_URL_EXPIRY_SECS:-3600}  # VAPT #223: 1 h, not 24 h
       AWS_KEY: minioadmin
       AWS_SECRETKEY: minioadmin
       IS_BUCKET_FIXED: 'true'

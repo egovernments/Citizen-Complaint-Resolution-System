@@ -114,5 +114,8 @@ spec:
             - |
               mc alias set myminio http://minio:9000 minioadmin minioadmin
               mc mb --ignore-existing myminio/egov-rainmaker
-              mc anonymous set download myminio/egov-rainmaker
+              # Private (VAPT #223); only */pgr-landing/* (pre-login landing pictures) is public.
+              mc anonymous set none myminio/egov-rainmaker
+              echo '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::egov-rainmaker/*/pgr-landing/*"]}]}' > /tmp/public-landing.json
+              mc anonymous set-json /tmp/public-landing.json myminio/egov-rainmaker
               echo "Bucket egov-rainmaker created successfully"
