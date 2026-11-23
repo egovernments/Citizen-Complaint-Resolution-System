@@ -2,6 +2,8 @@ import contextlib
 import io
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -85,6 +87,24 @@ class CheckTests(StateTestCase):
         state.record(str(self.digit))
         manifest = json.loads((self.digit / state.STATE_DIR / state.MANIFEST).read_text())
         self.assertEqual("0123abc", manifest["deployed_commit"])
+
+    def test_partial_repair_after_failed_deploy_does_not_keep_the_old_commit(self):
+        state.record(str(self.digit), "version-A")
+        state.begin(str(self.digit))
+        self.write("kong/kong.yml", "rendered-by-B\n")
+        state.record(str(self.digit))
+        manifest = json.loads((self.digit / state.STATE_DIR / state.MANIFEST).read_text())
+        self.assertEqual("complete", manifest["status"])
+        self.assertIsNone(manifest["deployed_commit"])
+        self.assertEqual("CLEAN", state.check(str(self.digit))[1]["status"])
+        state.record(str(self.digit))
+        self.assertIsNone(json.loads((self.digit / state.STATE_DIR / state.MANIFEST).read_text())["deployed_commit"])
+
+    def test_partial_run_that_changed_config_has_no_known_commit(self):
+        state.record(str(self.digit), "version-A")
+        self.write("kong/kong.yml", "changed-by-partial-run\n")
+        state.record(str(self.digit))
+        self.assertIsNone(json.loads((self.digit / state.STATE_DIR / state.MANIFEST).read_text())["deployed_commit"])
 
     def test_symlink_retarget_is_drift(self):
         self.write("kong/other.yml", "route: b\n")
@@ -253,6 +273,7 @@ class PlaybookWiringTests(unittest.TestCase):
         self.assertIn("allow_local_drift", str(stop["when"]))
         first_config_write = next(i for i, t in enumerate(self.tasks) if t.get("name") == "Create DIGIT directory")
         self.assertEqual(first_config_write - 1, self.tasks.index(begin))
+        self.assertIn("'all' in ansible_run_tags or 'render' in ansible_run_tags", begin["when"])
 
     def test_overrides_go_on_after_the_render_and_before_openbao(self):
         names = [t.get("name", "") for t in self.tasks]
@@ -278,6 +299,68 @@ class PlaybookWiringTests(unittest.TestCase):
         self.assertIn("rev-parse HEAD", self.script(last))
         self.assertIn("'all' in ansible_run_tags", self.script(last))
 
+
+
+@unittest.skipUnless(shutil.which("ansible-playbook") or os.environ.get("CI"), "ansible-playbook is not installed")
+class PartialDeployAnsibleTests(unittest.TestCase):
+    def run_tasks(self, tasks, variables, directory, *extra):
+        playbook = directory / "test.yml"
+        playbook.write_text(yaml.safe_dump([{"hosts": "localhost", "gather_facts": False,
+                                            "vars": variables, "tasks": tasks}], allow_unicode=True))
+        return subprocess.run(["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook), *extra],
+                              capture_output=True, text=True, timeout=60)
+
+    def task(self, prefix):
+        play = yaml.safe_load((ROOT / "local-setup/ansible/playbook-deploy.yml").read_text())[0]
+        return next(t for t in play.get("pre_tasks", []) + play["tasks"] if t.get("name", "").startswith(prefix))
+
+    def test_drop_overrides_is_refused_before_any_tagged_task_can_write(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            directory = Path(scratch)
+            sentinel = directory / "changed"
+            override_index = directory / "overrides.json"
+            override_index.write_text('{"preserve":"this"}')
+            result = self.run_tasks([
+                self.task("local overrides — dropping"),
+                {"name": "must not write", "ansible.builtin.copy": {"content": "bad", "dest": str(sentinel)}, "tags": ["always"]},
+            ], {"drop_local_overrides": True}, directory, "--tags", "notifications")
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("requires a full deploy", result.stdout + result.stderr)
+            self.assertFalse(sentinel.exists())
+            self.assertEqual('{"preserve":"this"}', override_index.read_text())
+
+    def test_failed_reapply_reports_its_real_error_with_empty_stdout(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            directory = Path(scratch)
+            digit = directory / "digit"
+            (digit / "kong").mkdir(parents=True)
+            (digit / "kong/kong.yml").write_text("changed\n")
+            index = digit / state.STATE_DIR / state.OVERRIDES
+            index.parent.mkdir()
+            index.write_text('{"kong/kong.yml":{"rendered":"before","carried":"local"}}')
+            task = self.task("local overrides — re-apply")
+            task["ansible.builtin.script"]["cmd"] = f"{ROOT / 'local-setup/scripts/deploy_state.py'} reapply {digit}"
+            result = self.run_tasks([task], {}, directory)
+            output = result.stdout + result.stderr
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("cannot undo this render", output)
+            self.assertNotIn("from_json", output)
+
+    def test_normal_partial_run_does_not_mark_a_complete_baseline_in_progress(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            directory = Path(scratch)
+            digit = directory / "digit"
+            (digit / "configs").mkdir(parents=True)
+            (digit / "configs/a.yml").write_text("a: 1\n")
+            state.record(str(digit), "version-A")
+            task = self.task("drift guard — mark")
+            task["ansible.builtin.script"]["cmd"] = f"{ROOT / 'local-setup/scripts/deploy_state.py'} begin {digit}"
+            result = self.run_tasks([task], {}, directory, "--tags", "notifications")
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            manifest = json.loads((digit / state.STATE_DIR / state.MANIFEST).read_text())
+            self.assertEqual("complete", manifest["status"])
+            state.record(str(digit))
+            self.assertEqual("version-A", json.loads((digit / state.STATE_DIR / state.MANIFEST).read_text())["deployed_commit"])
 
 if __name__ == "__main__":
     unittest.main()

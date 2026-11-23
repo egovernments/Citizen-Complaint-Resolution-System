@@ -196,6 +196,11 @@ jobs:
       - name: End to end (analyse, resolve, resume, deploy preflight)
         run: python3 -m unittest -v local-setup.tests.test_upgrade_e2e
 
+      - name: Cold volume backup and restore (disposable Docker volumes)
+        run: |
+          sudo apt-get install -y zstd
+          sudo env DIGIT_UPGRADE_STORAGE_TESTS=1 LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" "$(command -v python3)" -m unittest -v local-setup.tests.test_upgrade_storage
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 45

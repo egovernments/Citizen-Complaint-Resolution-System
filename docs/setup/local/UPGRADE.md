@@ -52,10 +52,16 @@ with its contents, modes and symlink targets from before the render. Generated f
 earlier UI/image builds, and earlier service actions are not rolled back. Rebase the overrides
 with the upgrade workflow, or drop them all and take the new version's files:
 `./deploy.sh <tenant> -e drop_local_overrides=true`.
+Dropping overrides requires a full deploy. Combining it with `--tags` is refused
+before the override index or files are changed.
 
 The first deploy after this guard was introduced has no record to compare
 against; it says so and records one. A run limited by `--tags` keeps the
-previously recorded deployed version.
+previously recorded deployed version only if the earlier deploy completed and
+the protected files are unchanged. A partial repair after a failed full deploy
+records the version as unknown. For the next analysis, supply the actual
+`--base-ref <commit>` or use `--base-ref auto`; a later partial run cannot make an
+unknown version known. A successful full deploy records its commit again.
 
 ## The upgrade workflow
 
@@ -170,6 +176,13 @@ filled in from the server at deploy time).
 
 ### 3. Secret review (exit 2, status SECRET_REVIEW)
 
+A file changed only by a password or another secret still needs deployment,
+even though its redacted copies look identical. Those files are listed among
+deployment changes and become persistent local overrides. A local-only secret
+edit keeps the server's value; a secret changed both locally and by the target
+still requires the acknowledgement below. Secret values are restored only in
+the private deployment overlay and never written into the shareable report.
+
 When a secret field was changed both on the box and by the target version,
 `report.md` lists it. Deployment keeps the box's value; if the target moved or
 removed that field, so there is nowhere to keep it, the deploy refuses and
@@ -245,6 +258,30 @@ sudo local-setup/scripts/digit-upgrade rollback <run>
 It restarts the old stack if nothing had changed yet and rolls back fully
 otherwise; it also removes a database clone a killed run left behind and lifts
 the maintenance rule.
+
+### Volume storage and backup compatibility
+
+Before maintenance, every volume's real data directory is resolved and saved in
+the backup's `stack.json`. Ordinary local Docker volumes use their `_data`
+directory. Local bind-backed volumes (`type: none`, `o: bind` or `rbind`, optionally
+`rw`) use their absolute host `device` directory, including volumes configured
+through `data_volume_host_paths`. Space checks, cold archives, and restoration
+all use that same directory, even after Docker unmounts the volume. Unsupported
+drivers, network filesystems, read-only bindings, and inaccessible or unsafe
+paths are refused before services stop. Keep the backup directory outside every
+volume's storage directory.
+
+Recovery checks the recorded storage locations and reads every volume archive
+before stopping or replacing anything. If a volume's location or options changed,
+automatic recovery stops with an error rather than restoring into another folder.
+Older backups without location metadata remain usable for ordinary local volumes.
+Old bind-volume archives may contain only an empty Docker mountpoint and are
+refused for automatic restoration; use a verified data backup or, for PostgreSQL,
+the logical `egov.dump` and `globals.sql` with manual recovery procedures.
+
+On fast-path installations, guarded upgrades keep the fast-path service settings,
+including URL-shortener migration history. The final upgrade-safe overlay removes
+the initialization mounts while retaining the existing PostgreSQL data volume.
 
 ### Cleaning up after an upgrade
 

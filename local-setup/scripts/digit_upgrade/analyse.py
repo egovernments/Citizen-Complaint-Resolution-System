@@ -196,7 +196,7 @@ def analyse(
             "local_changes": result.local_changes,
             "conflicts": result.conflicts,
             "workspace_stage0": result.stage0,
-            "deployment_changes": result.deployment_changes,
+            "deployment_changes": include_secret_changes(result.deployment_changes, prepared.secrets["findings"]),
             "secrets": prepared.secrets,
             "secret_review_acknowledged": False,
             "deployed": False,
@@ -235,6 +235,8 @@ def _find_base(repo: Path, live_root: Path, target_commit: str, tenant: str, bas
     import deploy_state
 
     tied = render.base_candidates(repo, live_root, until=target_commit)
+    if not tied:
+        raise UpgradeError("no candidate base version was found; supply the deployed version explicitly with --base-ref")
     live = deploy_state.analysed_files(str(live_root), excludes)
     scored = []
     for index, (score, commit) in enumerate(tied[:RENDERED_BASE_CANDIDATES]):
@@ -308,6 +310,7 @@ def resume(run_dir: Path, *, acknowledge_secret_review: bool, unmanaged_resoluti
         manifest["resolved_conflicts"] = manifest["conflicts"]
         manifest["conflicts"] = []
         manifest["status"] = SECRET_REVIEW if manifest["secrets"]["blocker_count"] else READY
+    manifest["deployment_changes"] = include_secret_changes(manifest["deployment_changes"], manifest["secrets"]["findings"])
     if manifest["status"] == SECRET_REVIEW and acknowledge_secret_review:
         manifest["secret_review_acknowledged"] = True
         manifest["status"] = READY
@@ -316,6 +319,17 @@ def resume(run_dir: Path, *, acknowledge_secret_review: bool, unmanaged_resoluti
     write_report(run_dir, manifest)
     _require_ready(run_dir, manifest)
     return run_dir
+
+
+def include_secret_changes(changes, findings):
+    """Redaction hides value-only edits from Git; they still need deployment."""
+    if changes is None:
+        return None  # unresolved merge
+    paths = {change["path"]: change for change in changes}
+    for finding in findings:
+        if finding["change"] in ("local-only", "both-changed"):
+            paths.setdefault(finding["path"], {"path": finding["path"], "status": "M"})
+    return [paths[path] for path in sorted(paths)]
 
 
 def require_current_run(manifest: dict[str, Any]) -> None:
@@ -373,6 +387,7 @@ def write_report(run_dir: Path, manifest: dict[str, Any]) -> None:
         f"- Base: `{manifest['base_ref']}` → `{manifest['base_commit']}` (rendered by: {manifest['renderers']['base']})",
         f"- Target: `{manifest['target_ref']}` → `{manifest['target_commit']}`",
         f"- Local changes: **{len(manifest['local_changes'])}**",
+        f"- Files carried to deployment (including secret-only edits): **{len(manifest['deployment_changes'] or [])}**",
         f"- Conflicts: **{len(manifest['conflicts'])}**",
         f"- Secret fields changed locally and by the target: **{secrets['blocker_count']}**"
         + (" (acknowledged: live values are kept)" if manifest["secret_review_acknowledged"] else ""),

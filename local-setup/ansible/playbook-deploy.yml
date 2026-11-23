@@ -137,6 +137,15 @@
         - allow_local_drift | default(false) | bool
         - "'all' not in ansible_run_tags"
 
+    - name: "local overrides — dropping overrides needs a full deploy"
+      ansible.builtin.fail:
+        msg: "drop_local_overrides requires a full deploy so the carried files are replaced; rerun without --tags."
+      tags: ['always']
+      when:
+        - not (digit_render_only | default(false) | bool)
+        - drop_local_overrides | default(false) | bool
+        - "'all' not in ansible_run_tags"
+
     # ── host_vars naming preflight ─────────────────────────────────────────
     # Ansible variables are lowercase (every key in inventory/host_vars/ is).
     # The env-var names on the LEFT of `=` in templates/digit.env.j2 are
@@ -1658,6 +1667,7 @@
       when:
         - not ansible_check_mode
         - not (digit_render_only | default(false) | bool)
+        - "'all' in ansible_run_tags or 'render' in ansible_run_tags"
 
     - name: Create DIGIT directory
       tags: ['render']
@@ -2997,7 +3007,7 @@
         compose_files: >-
           {{
             '-f docker-compose.egov-digit.yaml' +
-            (' -f docker-compose.fast-path.yml' if ((db_fast_path | default(false)) and not (upgrade_safe_mode | default(false) | bool)) else '') +
+            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
             (' -f docker-compose.hostpaths.yml' if (data_volume_host_paths | default({}) | length > 0) else '') +
             ' -f docker-compose.migrations.yml' +
             ' -f docker-compose.monitoring.yml' +
@@ -3215,7 +3225,7 @@
           {{ '--discard' if (drop_local_overrides | default(false) | bool) else '' }}
         executable: python3
       register: local_overrides
-      changed_when: (local_overrides.stdout | default('{}') | from_json).status | default('NONE') != 'NONE'
+      changed_when: local_overrides.rc == 0 and (local_overrides.stdout | default('{}', true) | from_json).status | default('NONE') != 'NONE'
       failed_when: local_overrides.rc | default(0) not in [0, 3]
       when:
         - not (upgrade_safe_mode | default(false) | bool)

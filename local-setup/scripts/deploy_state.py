@@ -27,8 +27,9 @@ Commands, in deploy order:
     ``--discard`` drops the overrides instead.
 ``record DIR [COMMIT]``
     After a successful deploy: the baseline the next ``check`` compares against.
-    Without COMMIT (a run limited by --tags renders nothing), the previously
-    recorded deployed commit is kept.
+    Without COMMIT, keep the previous commit only for an unchanged, completed
+    baseline. A partial repair of an incomplete deploy records an unknown
+    commit, so upgrade analysis requires an explicit base version.
 
 The analysed set below is shared with the upgrade tooling (digit_upgrade), so
 what a normal deploy protects is exactly what an upgrade carries forward.
@@ -363,14 +364,15 @@ def reapply(digit_dir, discard=False):
 
 
 def record(digit_dir, commit=None):
+    files = analysed_files(digit_dir)
     if not commit:
         previous = _load_manifest(digit_dir) if os.path.isdir(digit_dir) else None
-        commit = (previous or {}).get("deployed_commit")
+        if previous and previous.get("status") == "complete" and previous["files"] == files:
+            commit = previous.get("deployed_commit")
     shutil.rmtree(_state(digit_dir, PRE_DEPLOY), ignore_errors=True)
     index_path = _state(digit_dir, PRE_DEPLOY + ".json")
     if os.path.exists(index_path):
         os.unlink(index_path)
-    files = analysed_files(digit_dir)
     _write_json(
         _state(digit_dir, MANIFEST),
         {

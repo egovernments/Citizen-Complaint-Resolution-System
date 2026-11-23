@@ -56,12 +56,15 @@ class UpgradeEndToEndTests(unittest.TestCase):
         # The working tree under test, not just its last commit.
         subprocess.run(["rsync", "-a", "--delete", "--exclude=.git", "--exclude=node_modules", f"{ROOT}/", f"{cls.repo}/"],
                        check=True)
+        for name in ("local", "both"):
+            (cls.repo / f"local-setup/configs/review-{name}-secret.yml").write_text("password: UpgradeBaseSecret123\n")
         git(cls.repo, "add", "-A")
         git(cls.repo, "commit", "-q", "--allow-empty", "-m", "base")
         cls.base = git(cls.repo, "rev-parse", "HEAD")
         replace_line(cls.repo / "local-setup" / PERSISTER, 5, "      description: target wording")
         with (cls.repo / "local-setup/kong/kong.yml").open("a", encoding="utf-8") as stream:
             stream.write("# target-side change\n")
+        (cls.repo / "local-setup/configs/review-both-secret.yml").write_text("password: UpgradeTargetSecret456\n")
         git(cls.repo, "commit", "-q", "-am", "target")
         cls.target = git(cls.repo, "rev-parse", "HEAD")
 
@@ -75,6 +78,8 @@ class UpgradeEndToEndTests(unittest.TestCase):
         kong.write_text("# operator note\n" + kong.read_text(encoding="utf-8"), encoding="utf-8")
         (cls.live / "configs/custom").mkdir()
         (cls.live / "configs/custom/local.yml").write_text("service: local\npassword: SuperSecret123\n")
+        for name in ("local", "both"):
+            (cls.live / f"configs/review-{name}-secret.yml").write_text("password: UpgradeLiveSecret789\n")
         (cls.live / "configs/egov-persister/boundary-persister.yml").unlink()
 
         cls.output = tmp / "runs"
@@ -100,9 +105,12 @@ class UpgradeEndToEndTests(unittest.TestCase):
              ("M", "kong/kong.yml")},
             {(c["status"], c["path"]) for c in manifest["local_changes"]},
         )
-        self.assertEqual(1, manifest["secrets"]["warning_count"])
+        self.assertEqual(2, manifest["secrets"]["warning_count"])
+        self.assertEqual(1, manifest["secrets"]["blocker_count"])
         output = b"".join(p.read_bytes() for p in self.run_dir.rglob("*") if p.is_file() and ".git" not in p.parts)
         self.assertNotIn(b"SuperSecret123", output)
+        for secret in (b"UpgradeBaseSecret123", b"UpgradeLiveSecret789", b"UpgradeTargetSecret456"):
+            self.assertNotIn(secret, output)
 
     def test_2_resume_after_resolution(self):
         workspace = self.run_dir / "workspace"
@@ -117,7 +125,10 @@ class UpgradeEndToEndTests(unittest.TestCase):
                       path.read_text(encoding="utf-8"), flags=re.S)
         path.write_text(text, encoding="utf-8")
         git(workspace, "add", PERSISTER)
-        analyse.resume(self.run_dir, acknowledge_secret_review=False)
+        with self.assertRaises(NeedsOperator):
+            analyse.resume(self.run_dir, acknowledge_secret_review=False)
+        self.assertEqual("SECRET_REVIEW", analyse.read_json(self.run_dir / "run.json")["status"])
+        analyse.resume(self.run_dir, acknowledge_secret_review=True)
         candidate = self.run_dir / "candidate"
         kong = (candidate / "kong/kong.yml").read_text(encoding="utf-8")
         self.assertTrue(kong.startswith("# operator note\n") and kong.endswith("# target-side change\n"))
@@ -139,9 +150,14 @@ class UpgradeEndToEndTests(unittest.TestCase):
         deployment, prepared, scratch = self.preflight_trees(self.live)
         deployment._check_same_as_analysed(prepared.hashes, prepared.normalized["live"])
         overlay, deleted, conflicts = deployment._materialize(prepared, scratch)
-        self.assertEqual((["configs/egov-persister/boundary-persister.yml"], []), (deleted, conflicts))
+        self.assertEqual(["configs/egov-persister/boundary-persister.yml"], deleted)
+        self.assertEqual(1, len(conflicts))
         self.assertEqual("service: local\npassword: SuperSecret123\n",
                          (overlay / "configs/custom/local.yml").read_text(encoding="utf-8"))
+        for name in ("local", "both"):
+            self.assertEqual("password: UpgradeLiveSecret789\n",
+                             (overlay / f"configs/review-{name}-secret.yml").read_text())
+        deployment._check_secret_promise(prepared, overlay, deleted)
         shutil.rmtree(overlay)
 
     def test_4_deploy_refuses_a_box_edited_after_the_backup(self):

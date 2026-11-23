@@ -635,7 +635,7 @@ class OpenReviewSafetyTests(TempDirCase):
                           "docker-compose.migrations.yml", "docker-compose.monitoring.yml", "docker-compose.matomo.yml",
                           "docker-compose.opensre.yml", "docker-compose.t.yml"], normal)
         guarded = deploy.compose_chain("t", {"db_fast_path": True}, guarded=True, source_root=self.tmp)
-        self.assertNotIn("docker-compose.fast-path.yml", guarded)
+        self.assertIn("docker-compose.fast-path.yml", guarded)
         self.assertEqual("docker-compose.upgrade-safe.yml", guarded[-1])
 
     def test_compose_chain_matches_playbook_for_all_switch_combinations(self):
@@ -800,6 +800,162 @@ class ExplicitInputsTests(TempDirCase):
         write(run_dir, "run.json", '{"status":"READY"}')
         with self.assertRaisesRegex(UpgradeError, "re-analyse"):
             analyse.resume(run_dir, acknowledge_secret_review=False)
+
+
+class NewReviewSecretTests(TempDirCase):
+    def prepared(self, live_secret, target_secret, *, target_text=None):
+        raw = {name: self.tmp / name for name in ("base", "live", "target")}
+        write(raw["base"], "configs/auth.yml", "password: original-secret-123\n")
+        write(raw["live"], "configs/auth.yml", f"password: {live_secret}\n")
+        write(raw["target"], "configs/auth.yml", target_text or f"password: {target_secret}\n")
+        prepared = prepare(raw, self.tmp / "normalized", known_secrets=())
+        d = deploy.Deployment.__new__(deploy.Deployment)
+        d.dir, d.run_dir = self.tmp / "deploy", self.tmp / "run"
+        d.run_dir.mkdir()
+        merge_result = merge.merge(prepared.normalized, d.run_dir / "workspace")
+        self.assertEqual([], merge_result.deployment_changes)
+        merge.export_worktree(d.run_dir / "workspace", d.run_dir / "candidate")
+        d.manifest = {"deployment_changes": [], "secrets": prepared.secrets}
+        return d, prepared
+
+    def test_local_password_only_change_is_carried_and_becomes_an_override(self):
+        import deploy_state
+        d, prepared = self.prepared("rotated-live-secret-456", "original-secret-123")
+        self.assertEqual("local-only", prepared.secrets["findings"][0]["change"])
+        overlay, deleted, conflicts = d._materialize(prepared, self.tmp)
+        self.assertEqual([], conflicts)
+        self.assertEqual("password: rotated-live-secret-456\n", (overlay / "configs/auth.yml").read_text())
+        d._check_secret_promise(prepared, overlay, deleted)
+        deployed = self.tmp / "deployed"
+        write(deployed, "configs/auth.yml", "password: original-secret-123\n")
+        deploy_state.adopt(str(deployed), str(overlay), deleted)
+        deploy_state.record(str(deployed), "target")
+        deploy_state.begin(str(deployed))
+        write(deployed, "configs/auth.yml", "password: original-secret-123\n")
+        self.assertEqual(0, deploy_state.reapply(str(deployed))[0])
+        self.assertIn("rotated-live-secret-456", (deployed / "configs/auth.yml").read_text())
+        self.assertEqual([], leaks(d.run_dir, ("original-secret-123", "rotated-live-secret-456")))
+
+    def test_both_changed_password_can_keep_live_after_review(self):
+        d, prepared = self.prepared("rotated-live-secret-456", "new-target-secret-789")
+        self.assertEqual("both-changed", prepared.secrets["findings"][0]["change"])
+        overlay, deleted, conflicts = d._materialize(prepared, self.tmp)
+        self.assertTrue(conflicts)  # preflight still requires acknowledgement
+        d._check_secret_promise(prepared, overlay, deleted)
+        self.assertIn("rotated-live-secret-456", (overlay / "configs/auth.yml").read_text())
+        self.assertEqual([], leaks(d.run_dir, ("new-target-secret-789", "rotated-live-secret-456")))
+
+    def test_secret_paths_respect_deletions_and_unmanaged_leave(self):
+        findings = [{"path": "configs/auth.yml", "change": "local-only"}]
+        self.assertEqual([{"path": "configs/auth.yml", "status": "M"}], analyse.include_secret_changes([], findings))
+        deleted = [{"path": "configs/auth.yml", "status": "D"}]
+        self.assertEqual(deleted, analyse.include_secret_changes(deleted, findings))
+        self.assertEqual([], analyse.include_secret_changes([], []))
+        self.assertIsNone(analyse.include_secret_changes(None, findings))
+
+    def test_missing_local_secret_is_refused_even_when_only_a_warning(self):
+        raw = {name: self.tmp / name for name in ("live", "target")}
+        write(raw["live"], "configs/auth.yml", "password: live-rotated-secret\n")
+        write(raw["target"], "configs/auth.yml", "feature: new\n")
+        d = deploy.Deployment.__new__(deploy.Deployment)
+        d.manifest = {"secrets": {"findings": [{"path": "configs/auth.yml", "field": "$.password",
+                        "severity": "warning", "change": "local-only"}]}}
+        overlay = self.tmp / "overlay"
+        overlay.mkdir()
+        with self.assertRaisesRegex(UpgradeError, "cannot keep the box's value"):
+            d._check_secret_promise(mock.Mock(raw=raw), overlay, [])
+
+    def test_empty_auto_base_candidates_give_an_operator_error(self):
+        with mock.patch.object(render, "base_candidates", return_value=[]):
+            with self.assertRaisesRegex(UpgradeError, "--base-ref"):
+                analyse._find_base(self.tmp, self.tmp, "target", "t", self.tmp / "vars", self.tmp, ())
+
+
+class VolumeStorageTests(TempDirCase):
+    def setUp(self):
+        super().setUp()
+        self.root = self.tmp / "docker"
+        self.mountpoint = self.root / "volumes/test-volume/_data"
+        self.mountpoint.mkdir(parents=True)
+        self.device = self.tmp / "real-data"
+        self.device.mkdir()
+        self.info = {"Name": "test-volume", "Driver": "local", "Options": None, "Mountpoint": str(self.mountpoint)}
+        self.calls = []
+        def runner(args, **kwargs):
+            self.calls.append(args)
+            out = json.dumps([self.info]) if args[1:3] == ["volume", "inspect"] else str(self.root)
+            return subprocess.CompletedProcess(args, 0, out, "")
+        self.d = deploy.Deployment.__new__(deploy.Deployment)
+        self.d.docker = deploy.Docker(runner)
+        self.d.backup_parent = self.tmp / "backups"
+        self.stack = deploy.StackRecord(str(self.tmp / "digit"), "project", [], [], {}, ["test-volume"], "/pgdata")
+
+    def bind(self):
+        self.info["Options"] = {"type": "none", "o": "bind", "device": str(self.device)}
+
+    def test_bind_uses_device_and_ordinary_volume_uses_mountpoint(self):
+        self.assertEqual(str(self.mountpoint), self.d._volume_storage("test-volume")["path"])
+        self.bind()
+        self.assertEqual(str(self.device), self.d._volume_storage("test-volume")["path"])
+
+    def test_legacy_bind_backup_is_rejected_before_stopping_anything(self):
+        self.bind()
+        with self.assertRaisesRegex(UpgradeError, "legacy backup.*may be empty"):
+            self.d._rollback(self.tmp / "old-backup", self.stack)
+        self.assertTrue(all(args[1] in ("volume", "info") for args in self.calls))
+        self.assertTrue(self.device.is_dir())
+
+    def test_legacy_ordinary_backup_remains_supported(self):
+        self.d._validate_volume_storage(self.stack, restore=True)
+        self.assertEqual("volume", self.stack.volume_storage["test-volume"]["kind"])
+
+    def test_malformed_new_metadata_is_not_treated_as_a_legacy_backup(self):
+        self.stack.volume_storage = {"test-volume": None}
+        with self.assertRaisesRegex(UpgradeError, "metadata.*malformed"):
+            self.d._rollback(self.tmp / "backup", self.stack)
+
+    def test_changed_device_is_rejected_before_restore(self):
+        self.bind()
+        self.stack.volume_storage = {"test-volume": self.d._volume_storage("test-volume")}
+        other = self.tmp / "other-data"
+        other.mkdir()
+        self.info["Options"] = {**self.info["Options"], "device": str(other)}
+        with self.assertRaisesRegex(UpgradeError, "changed since"):
+            self.d._rollback(self.tmp / "backup", self.stack)
+        self.assertTrue(self.device.is_dir())
+
+    def test_unsupported_and_unsafe_storage_are_refused(self):
+        for options in ({"type": "nfs", "o": "addr=host", "device": ":/data"},
+                        {"type": "none", "o": "bind,ro", "device": str(self.device)},
+                        {"type": "none", "o": "bind", "device": "/"},
+                        {"type": "none", "o": "bind", "device": "relative/path"}):
+            with self.subTest(options=options):
+                self.info["Options"] = options
+                with self.assertRaises(UpgradeError):
+                    self.d._volume_storage("test-volume")
+        self.info["Driver"] = "unsupported-driver"
+        with self.assertRaisesRegex(UpgradeError, "local Docker volume"):
+            self.d._volume_storage("test-volume")
+
+    def test_space_and_backup_use_the_saved_data_path(self):
+        self.bind()
+        self.stack.volume_storage = {"test-volume": self.d._volume_storage("test-volume")}
+        self.d.log = lambda _: None
+        self.d.journal = mock.Mock()
+        self.d.backup_parent.mkdir()
+        digit = Path(self.stack.digit_dir)
+        digit.mkdir()
+        with mock.patch.object(deploy, "run", return_value=subprocess.CompletedProcess([], 0, "10 bytes", "")) as runner:
+            self.d._check_space(digit, self.stack)
+            self.assertIn(["du", "-sb", str(self.device)], [c.args[0] for c in runner.call_args_list])
+        self.d._keep_images = mock.Mock()
+        self.d.docker.inspect = mock.Mock(return_value=[{"Id": "postgres-id"}])
+        self.d.docker.project_containers = mock.Mock(return_value=[])
+        self.d.docker.snapshot = mock.Mock(return_value={})
+        with mock.patch.object(deploy, "run_streaming"), mock.patch.object(self.d, "_archive_directory") as archive:
+            backup = self.d.backup(self.stack)
+        self.assertIn(mock.call(self.device, backup / "volumes/test-volume.tar.zst"), archive.call_args_list)
+        self.assertEqual(str(self.device), json.loads((backup / "stack.json").read_text())["volume_storage"]["test-volume"]["path"])
 
 if __name__ == "__main__":
     unittest.main()

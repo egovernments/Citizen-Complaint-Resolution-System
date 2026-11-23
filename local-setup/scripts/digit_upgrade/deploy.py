@@ -56,7 +56,7 @@ RECOVERABLE_BY_RESTART = {"backing-up", "predicting", "restart-failed"}
 def compose_chain(tenant: str, values: dict[str, Any], *, guarded: bool, source_root: Path) -> list[str]:
     """Match playbook-deploy.yml's ordered Compose chain, never glob stale overlays."""
     files = ["docker-compose.egov-digit.yaml"]
-    if values.get("db_fast_path", False) and not guarded:
+    if values.get("db_fast_path", False):
         files.append("docker-compose.fast-path.yml")
     if values.get("data_volume_host_paths"):
         files.append("docker-compose.hostpaths.yml")
@@ -180,6 +180,7 @@ class StackRecord:
     host_paths: list[str] = field(default_factory=list)
     mdms_tables: list[str] = field(default_factory=list)
     analysed_files: dict[str, str | None] = field(default_factory=dict)
+    volume_storage: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 class Docker:
@@ -295,6 +296,7 @@ class Deployment:
         preview = self._preview(raw["target"], overlay, deleted, scratch / "preview")
         stack = self._discover(digit_dir)
         self._check_postgres_storage(preview, digit_dir, stack)
+        stack.volume_storage = {volume: self._volume_storage(volume) for volume in stack.volumes}
         self._check_space(digit_dir, stack)
         return {"digit_dir": digit_dir, "overlay": overlay, "deleted": deleted, "stack": stack,
                 "restore_conflicts": restore_conflicts}
@@ -349,14 +351,14 @@ class Deployment:
         overlay.mkdir(mode=0o700, parents=True)
         candidate = self.run_dir / "candidate"
         deleted, conflicts = [], []
-        for change in self.manifest["deployment_changes"]:
+        for change in analyse.include_secret_changes(self.manifest["deployment_changes"], self.manifest["secrets"]["findings"]):
             rel = safe_relative(change["path"])
             if change["status"] == "D":
                 deleted.append(rel.as_posix())
                 continue
             source = candidate / rel
             if source.is_symlink() or not source.is_file():
-                raise UpgradeError(f"candidate change is not a regular file: {rel}")
+                raise UpgradeError(f"cannot carry {rel}: the merged candidate has no regular file; correct the configuration and re-analyse")
             destination = overlay / rel
             destination.parent.mkdir(parents=True, exist_ok=True)
             data = source.read_bytes()
@@ -377,7 +379,7 @@ class Deployment:
         return overlay, sorted(deleted), conflicts
 
     def _check_secret_promise(self, prepared, overlay: Path, deleted: list[str]) -> None:
-        """An acknowledged secret conflict keeps the box's value; refuse if the merge cannot.
+        """Locally changed secrets keep the box's value; refuse if the merge cannot.
 
         That happens when the target moved or removed the field: the merged file
         then has no place for the box's value, and deploying would silently use
@@ -385,7 +387,7 @@ class Deployment:
         """
         lost = []
         for finding in self.manifest["secrets"]["findings"]:
-            if finding["severity"] != "blocker":
+            if finding["change"] not in ("local-only", "both-changed"):
                 continue
             rel = finding["path"]
             final = None if rel in deleted else overlay / rel if (overlay / rel).is_file() else prepared.raw["target"] / rel
@@ -398,7 +400,7 @@ class Deployment:
                 lost.append(f"{rel} {finding['field']}")
         if lost:
             raise UpgradeError(
-                "these secrets were changed on this box and by the target, and the merged configuration "
+                "these secrets were changed on this box, and the merged configuration "
                 "cannot keep the box's value (the target moved or removed the field): " + ", ".join(lost)
                 + ". Set them where the new version expects them (host_vars or OpenBao) and re-run the analysis "
                 "from a fresh backup; nothing was changed"
@@ -477,8 +479,7 @@ class Deployment:
 
     def _check_space(self, digit_dir: Path, stack: StackRecord) -> None:
         paths = [digit_dir, *map(Path, stack.host_paths)]
-        paths += [Path(self.docker.run(["docker", "volume", "inspect", "-f", "{{.Mountpoint}}", v]).stdout.strip())
-                  for v in stack.volumes]
+        paths += [Path(stack.volume_storage[v]["path"]) for v in stack.volumes]
         used = sum(int(run(["du", "-sb", str(p)]).stdout.split()[0]) for p in paths)
         self.backup_parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         free = shutil.disk_usage(self.backup_parent).free
@@ -488,6 +489,7 @@ class Deployment:
     # ── backup: writers stopped, cold copies ───────────────────────────────
 
     def backup(self, stack: StackRecord) -> Path:
+        self._validate_volume_storage(stack)
         backup = self.backup_parent / f"digit-upgrade-{stamp()}"
         backup.mkdir(mode=0o700)
         self.journal.enter("backing-up", backup=str(backup), stack=asdict(stack))
@@ -510,13 +512,17 @@ class Deployment:
         for path in map(Path, stack.host_paths):
             archives[str(path)] = (path, backup / "host" / f"{str(path).strip('/').replace('/', '_')}.tar.zst")
         for volume in stack.volumes:
-            archives[f"volume:{volume}"] = (self._mountpoint(volume), backup / "volumes" / f"{volume}.tar.zst")
+            archives[f"volume:{volume}"] = (Path(stack.volume_storage[volume]["path"]), backup / "volumes" / f"{volume}.tar.zst")
         for source, archive in archives.values():
-            archive.parent.mkdir(mode=0o700, exist_ok=True)
-            run(["tar", "--zstd", "-cpf", str(archive), "-C", str(source.parent), source.name])
-            run(["tar", "--zstd", "-tf", str(archive)])  # readable end to end
+            self._archive_directory(source, archive)
         write_json(backup / "stack.json", asdict(stack))
         return backup
+
+    @staticmethod
+    def _archive_directory(source: Path, archive: Path) -> None:
+        archive.parent.mkdir(mode=0o700, exist_ok=True)
+        run(["tar", "--zstd", "-cpf", str(archive), "-C", str(source.parent), source.name])
+        run(["tar", "--zstd", "-tf", str(archive)])  # readable end to end
 
     def _keep_images(self, stack: StackRecord, label: str) -> None:
         """Pin every running image under a tag of its own, so the deploy cannot drop it.
@@ -535,12 +541,59 @@ class Deployment:
                 self.log(f"{service}: its image ({image['ref']}) has no record left; kept by committing its container")
             image["keep"] = keep
 
-    def _mountpoint(self, volume: str) -> Path:
-        path = Path(self.docker.run(["docker", "volume", "inspect", "-f", "{{.Mountpoint}}", volume]).stdout.strip())
-        root = Path(self.docker.run(["docker", "info", "-f", "{{.DockerRootDir}}"]).stdout.strip()) / "volumes"
-        if path.name != "_data" or path.parent.parent != root:
-            raise UpgradeError(f"refusing an unexpected Docker volume mountpoint: {path}")
-        return path
+    def _volume_storage(self, volume: str) -> dict[str, Any]:
+        """Resolve storage independently of whether Docker currently mounts the volume."""
+        info = json.loads(self.docker.run(["docker", "volume", "inspect", volume]).stdout)[0]
+        options = info.get("Options") or {}
+        if info.get("Name") != volume or info.get("Driver") != "local":
+            raise UpgradeError(f"unsupported storage for volume {volume}: a local Docker volume is required")
+        if not options:
+            kind = "volume"
+            path = Path(info.get("Mountpoint") or "")
+            root = Path(self.docker.run(["docker", "info", "-f", "{{.DockerRootDir}}"]).stdout.strip()) / "volumes"
+            if path.name != "_data" or path.parent.name != volume or path.parent.parent != root:
+                raise UpgradeError(f"refusing an unexpected Docker volume mountpoint: {path}")
+        else:
+            flags = set(options.get("o", "").split(","))
+            if (set(options) != {"type", "o", "device"} or options.get("type") != "none"
+                    or not flags.intersection({"bind", "rbind"}) or flags - {"bind", "rbind", "rw"}):
+                raise UpgradeError(f"unsupported storage options for volume {volume}; only local bind directories are supported")
+            kind, path = "bind", Path(options.get("device") or "")
+        try:
+            if not path.is_absolute():
+                raise ValueError("storage path must be absolute")
+            path = path.resolve(strict=True)
+            if path == Path(path.anchor) or not path.is_dir():
+                raise ValueError("storage path must be a directory other than the filesystem root")
+            if self.backup_parent == path or path in self.backup_parent.parents:
+                raise ValueError("backup directory must be outside the volume's storage")
+        except (OSError, ValueError) as exc:
+            raise UpgradeError(f"unsafe or inaccessible storage for volume {volume}: {exc}") from exc
+        return {"kind": kind, "path": str(path), "driver": "local", "options": options}
+
+    def _validate_volume_storage(self, stack: StackRecord, *, restore: bool = False) -> None:
+        """Refuse changed storage or legacy bind backups before touching any data."""
+        legacy = not stack.volume_storage
+        if not legacy and set(stack.volume_storage) != set(stack.volumes):
+            raise UpgradeError("backup volume storage metadata is incomplete")
+        resolved = {}
+        for volume in stack.volumes:
+            current = self._volume_storage(volume)
+            saved = stack.volume_storage.get(volume)
+            if saved is None:
+                if not legacy:
+                    raise UpgradeError(f"backup storage metadata for volume {volume} is malformed")
+                if not restore:
+                    raise UpgradeError(f"volume {volume} was not checked during preflight")
+                if current["kind"] == "bind":
+                    raise UpgradeError(
+                        f"legacy backup for bind volume {volume} may be empty; automatic restore refused. "
+                        "Use a verified data backup or the logical database dump for manual recovery"
+                    )
+            elif current != saved:
+                raise UpgradeError(f"storage for volume {volume} changed since backup/preflight; restore refused")
+            resolved[volume] = current
+        stack.volume_storage = resolved
 
     # ── prediction: target migrations on a clone ───────────────────────────
 
@@ -768,6 +821,9 @@ class Deployment:
             Maintenance(stack.public_ports, self.docker.run).off()
 
     def _rollback(self, backup: Path, stack: StackRecord) -> None:
+        self._validate_volume_storage(stack, restore=True)
+        for volume in stack.volumes:
+            run(["tar", "--zstd", "-tf", str(backup / "volumes" / f"{volume}.tar.zst")])
         self.log(f"rolling back from {backup}")
         running = self.docker.project_containers(stack.project)
         if running:
@@ -782,10 +838,10 @@ class Deployment:
                 path.rename(path.with_name(f"{path.name}.failed-{suffix}"))
             run(["tar", "--zstd", "-xpf", str(archive), "-C", str(path.parent)])
         for volume in stack.volumes:
-            mountpoint = self._mountpoint(volume)
+            mountpoint = Path(stack.volume_storage[volume]["path"])
             for child in mountpoint.iterdir():
                 shutil.rmtree(child) if child.is_dir() and not child.is_symlink() else child.unlink()
-            # Archived as <mountpoint>/_data; extract its contents back in place.
+            # Drop the archived source directory's name (_data or a host directory).
             run(["tar", "--zstd", "-xpf", str(backup / "volumes" / f"{volume}.tar.zst"), "-C", str(mountpoint),
                  "--strip-components=1"])
         if deploy_state.analysed_files(stack.digit_dir) != stack.analysed_files:
@@ -855,7 +911,7 @@ class Deployment:
             report = {
                 "status": "DEPLOYED", "at": utc_now(), "backup": str(backup),
                 "target_commit": self.manifest["target_commit"],
-                "carried_changes": len(self.manifest["deployment_changes"]),
+                "carried_changes": len(analyse.include_secret_changes(self.manifest["deployment_changes"], self.manifest["secrets"]["findings"])),
                 "secret_conflicts_kept_live": plan["restore_conflicts"],
                 "mdms": mdms_result,
             }
