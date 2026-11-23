@@ -44,6 +44,11 @@ export const UploadServices = {
         tenantId: tenantId,
         fileStoreIds: filesArray?.join(","),
       },
+      // /filestore/v1/files/url needs a login (VAPT #223); the gateway reads
+      // the token from this header on GET requests.
+      headers: Digit.UserService.getUser()?.access_token
+        ? { "auth-token": Digit.UserService.getUser().access_token }
+        : {},
     };
     const res = await Axios(config);
     return res;

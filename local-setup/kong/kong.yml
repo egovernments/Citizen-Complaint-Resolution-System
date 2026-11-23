@@ -161,8 +161,13 @@ plugins:
           ["/boundary-service/boundary-hierarchy-definition/_search"]=true,
           ["/boundary-service/boundary/_search"]=true,
           ["/egov-indexer/index-operations/_index"]=true, ["/egov-indexer/index-operations/_reload"]=true,
-          ["/filestore/v1/file"]=true, ["/filestore/v1/files"]=true, ["/filestore/v1/files/url"]=true,
-          ["/filestore/v1/files/id"]=true, ["/filestore/v1/files/tag"]=true,
+          -- /filestore/v1/{file,files,files/url,files/id,files/tag} REMOVED from
+          -- auth-optional (VAPT: insecure file storage, #223). Anyone holding a
+          -- fileStoreId could download a complaint attachment without logging
+          -- in. They are now PROTECTED (a valid token is required, on every
+          -- method, incl. multipart uploads) but action-RBAC-exempt — see
+          -- RBAC_EXEMPT below. Pictures shown before login (landing page) are
+          -- served from the bucket's public pgr-landing/ prefix instead.
           ["/egov-url-shortening"]=true,
           ["/workflow/history/v1/_search"]=true, ["/egov-idgen/id/_generate"]=true,
           -- /user/_search REMOVED from auth-optional (audit: anonymous-user-search).
@@ -336,6 +341,15 @@ plugins:
               -- classification and is strictly stricter than master (which allowed
               -- anonymous).
               or p == "/user/_search"
+              -- Filestore (#223): same model as /user/_search. A token is now
+              -- required (no more anonymous downloads), but there is no
+              -- per-role action check: /files/id has no accesscontrol actions
+              -- at all and upload/url are mapped to only some roles, so RBAC
+              -- would 403 admins and screening officers. Any logged-in user may
+              -- use them; a per-file ownership check is a filestore change.
+              or p == "/filestore/v1/file" or p == "/filestore/v1/files"
+              or p == "/filestore/v1/files/url" or p == "/filestore/v1/files/id"
+              or p == "/filestore/v1/files/tag"
         end
 
         local function enforce_rbac(resolved, token)
@@ -388,12 +402,24 @@ plugins:
         -- that its roles cannot authorize. Fail CLOSED on a protected path with
         -- no resolvable token. (The SPA, Keycloak and health routes were already
         -- returned above, so this reaches only DIGIT API routes.)
-        if kong.request.get_method() ~= "POST" then
-          if not is_protected then return end          -- auth-optional GETs (boundary, filestore dl, ...) pass
+        --
+        -- Multipart POSTs (filestore uploads, #223) take the same header route:
+        -- they have no JSON body to carry RequestInfo.authToken, so the JSON
+        -- gate below 401'd them on a protected path, and on the old
+        -- auth-optional filestore path they passed with no user identified.
+        -- `Authorization: Bearer` is honoured as well because digit-ui-v2, the
+        -- configurator and the MCP (DigitApiClient) send the token that way.
+        local ctype = kong.request.get_header("content-type")
+        local is_multipart = type(ctype) == "string" and ctype:lower():find("multipart/form-data", 1, true) ~= nil
+        if kong.request.get_method() ~= "POST" or is_multipart then
+          if not is_protected then return end          -- auth-optional GETs (boundary, localization, ...) pass
           local hdr = kong.request.get_header("auth-token")
+          local authz = kong.request.get_header("authorization")
+          local btok = type(authz) == "string" and authz:match("^[Bb]earer%s+(%S+)%s*$") or nil
           local q = kong.request.get_query()
           local qtok = q and q["access_token"]
           local ntoken = (type(hdr) == "string" and hdr ~= "" and hdr)
+                      or btok
                       or (type(qtok) == "string" and qtok ~= "" and qtok) or nil
           if not ntoken then deny_unauth(); return end  -- protected, no token -> 401 (or audit-warn)
           local resolved, status = resolve_principal(ntoken)

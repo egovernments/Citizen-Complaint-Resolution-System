@@ -451,15 +451,19 @@ services:
     depends_on:
       minio:
         condition: service_healthy
-    # NOTE (audit finding minio-anonymous-access, still OPEN): the
-    # `mc anonymous set download` below makes egov-rainmaker world-readable,
-    # and nginx proxies /file-store/ straight to it — every uploaded
-    # attachment is public to anyone who can guess or is given the URL.
+    # Bucket access (audit finding minio-anonymous-access / VAPT #223, CLOSED):
+    # egov-rainmaker is PRIVATE. It used to be `mc anonymous set download`,
+    # which made every attachment downloadable — and the whole bucket
+    # listable — by anyone, through nginx's /file-store/ passthrough.
     #
-    # It is deliberately still here. egov-filestore has no presigned-URL
-    # support today, so dropping the policy on its own 404s every attachment
-    # in the UI. Removing this line MUST land together with that filestore
-    # change, not before it. Tracked separately.
+    # The UI never needed that: egov-filestore hands out presigned URLs
+    # (/filestore/v1/files/url, now login-only at Kong), and a signature is
+    # checked whatever the bucket policy is. The one exception is pictures
+    # shown BEFORE login (landing page): anonymous GetObject is granted on
+    # the */pgr-landing/* prefix only — what the landing builder uploads to.
+    # No ListBucket, so nothing can be enumerated even there.
+    #
+    # Reruns on every deploy, so it also closes an existing open bucket.
 
     # Authenticate with the REAL root credentials, not the literal defaults.
     #
@@ -488,7 +492,9 @@ services:
       set -e;
       mc --config-dir /tmp/.mc alias set myminio http://minio:9000 \"$$MINIO_ROOT_USER\" \"$$MINIO_ROOT_PASSWORD\";
       mc --config-dir /tmp/.mc mb --ignore-existing myminio/egov-rainmaker;
-      mc --config-dir /tmp/.mc anonymous set download myminio/egov-rainmaker;
+      mc --config-dir /tmp/.mc anonymous set none myminio/egov-rainmaker;
+      echo '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":[\"*\"]},\"Action\":[\"s3:GetObject\"],\"Resource\":[\"arn:aws:s3:::egov-rainmaker/*/pgr-landing/*\"]}]}' > /tmp/public-landing.json;
+      mc --config-dir /tmp/.mc anonymous set-json /tmp/public-landing.json myminio/egov-rainmaker;
       "
     networks:
       - egov-network
@@ -1381,6 +1387,10 @@ services:
       # MinIO/S3 storage (local S3-compatible storage for dev)
       ISS3ENABLED: 'true'
       MINIO_URL: http://minio:9000
+      # Presigned download links (VAPT #223): 1 hour, down from the image's
+      # 24 h default. Pages fetch a fresh link each time they open; an old
+      # link copied out of the browser stops working after this.
+      PRESIGNED_URL_EXPIRY_TIME_IN_SECS: ${FILESTORE_URL_EXPIRY_SECS:-3600}
       # Falls back to the MinIO root credentials, which are themselves now
       # required — so a missing secret aborts instead of quietly using
       # minioadmin/minioadmin against a bucket holding citizen attachments.
