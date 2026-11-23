@@ -1,6 +1,6 @@
 """End to end on real renders: analyse → resolve → resume → deploy preflight.
 
-Uses a throwaway clone with one extra "target" commit, a simulated /opt/digit
+Uses a throwaway repository with known base and target commits, a simulated /opt/digit
 (the base render plus operator edits), and the deployer's own preflight steps
 up to the point where it would touch Docker.  Needs ansible-playbook.
 """
@@ -52,7 +52,10 @@ class UpgradeEndToEndTests(unittest.TestCase):
             encoding="utf-8",
         )
         cls.repo = tmp / "repo"
-        subprocess.run(["git", "clone", "-q", "--shared", str(ROOT), str(cls.repo)], check=True)
+        # Only these two fixture versions are candidates. Inheriting the real
+        # repository's history introduces releases that never had our synthetic
+        # secret files, making automatic base selection depend on checkout HEAD.
+        subprocess.run(["git", "init", "-q", str(cls.repo)], check=True)
         # The working tree under test, not just its last commit.
         subprocess.run(["rsync", "-a", "--delete", "--exclude=.git", "--exclude=node_modules", f"{ROOT}/", f"{cls.repo}/"],
                        check=True)
