@@ -10,17 +10,15 @@ test.describe('Employee Logout', () => {
   test('clears session and redirects to login', async ({ page }) => {
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
 
-    const tokenBefore = await page.evaluate(() => localStorage.getItem('Employee.token'));
+    // #224: the employee session lives in the tab (sessionStorage), never in localStorage.
+    const tokenBefore = await page.evaluate(() => sessionStorage.getItem('Employee.token'));
     expect(tokenBefore).toBeTruthy();
 
-    // Clear session localStorage (simulates logout)
+    // Clear the tab's session (simulates logout)
     await page.evaluate(() => {
-      localStorage.removeItem('Employee.token');
-      localStorage.removeItem('Employee.user-info');
+      for (const k of ['Employee.token', 'Employee.user-info', 'token', 'user-info', 'Digit.User']) sessionStorage.removeItem(k);
       localStorage.removeItem('Employee.tenant-id');
       localStorage.removeItem('Employee.locale');
-      localStorage.removeItem('token');
-      localStorage.removeItem('user-info');
       localStorage.removeItem('tenant-id');
     });
 
@@ -34,7 +32,7 @@ test.describe('Employee Logout', () => {
     expect(page.url()).toMatch(/\/(user\/login|citizen|login)/);
 
     // Verify token is cleared
-    const tokenAfter = await page.evaluate(() => localStorage.getItem('Employee.token'));
+    const tokenAfter = await page.evaluate(() => sessionStorage.getItem('Employee.token') || localStorage.getItem('Employee.token'));
     expect(tokenAfter).toBeFalsy();
   });
 });

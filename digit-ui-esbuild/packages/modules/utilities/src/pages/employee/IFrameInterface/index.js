@@ -42,7 +42,7 @@ const IFrameInterface = (props) => {
           // Intercepting here
           this.addEventListener('readystatechange', function() {
             if (this.readyState === XMLHttpRequest.OPENED) {
-              const oidcToken = window.localStorage.getItem(localStorageKey);
+              const oidcToken = (window.sessionStorage.getItem(localStorageKey) || window.localStorage.getItem(localStorageKey)) /* #224: tab first; Keycloak still uses localStorage */;
               if (oidcToken) {
                 const accessToken = oidcToken;
                 
@@ -72,7 +72,7 @@ const IFrameInterface = (props) => {
         const originalFetch = iframeWindow.fetch;
         iframeWindow.fetch = function (url, options = {}) {
           options.headers = options.headers || {};
-          const oidcToken = window.localStorage.getItem(localStorageKey);
+          const oidcToken = (window.sessionStorage.getItem(localStorageKey) || window.localStorage.getItem(localStorageKey)) /* #224: tab first; Keycloak still uses localStorage */;
           if (oidcToken) {
             const accessToken = oidcToken;
     
@@ -113,7 +113,7 @@ const IFrameInterface = (props) => {
         const originalDocumentApi = iframeWindow.document.api;
         iframeWindow.document.api = function (url, options = {}) {
           options.headers = options.headers || {};
-          const oidcToken = window.localStorage.getItem(localStorageKey);
+          const oidcToken = (window.sessionStorage.getItem(localStorageKey) || window.localStorage.getItem(localStorageKey)) /* #224: tab first; Keycloak still uses localStorage */;
           if (oidcToken) {
             const accessToken = oidcToken;
             

@@ -12,7 +12,8 @@ let lastRoleSetKey = null;
 
 function currentRoleSetKey() {
   try {
-    const raw = window.localStorage?.getItem('Employee.user-info');
+    // #224: DIGIT login keeps it in the tab; Keycloak mode still writes localStorage.
+    const raw = window.sessionStorage?.getItem('Employee.user-info') || window.localStorage?.getItem('Employee.user-info');
     const info = raw && raw !== 'undefined' ? JSON.parse(raw) : null;
     const codes = (Array.isArray(info?.roles) ? info.roles : [])
       .map(r => String(r?.code ?? ''))

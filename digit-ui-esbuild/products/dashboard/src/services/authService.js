@@ -82,7 +82,9 @@ import { isPublicDashboardRuntime } from "./dashboardRuntime";
  */
 
 /**
- * Every localStorage key this module owns, in one table.
+ * Every session-storage key this module owns, in one table (tab-only since #224;
+ * comments below that say "localStorage" describe the shared-alias rules, which
+ * now apply within the tab).
  *
  * `shared: true` marks keys the co-hosted digit-ui app also reads — index.js
  * copies them into Digit.SessionStorage at boot to seed the employee session.
@@ -122,9 +124,22 @@ function parseJson(raw) {
   }
 }
 
+// #224: the employee session lives in THIS tab (sessionStorage), not in
+// localStorage, so closing the tab ends it — same as the main digit-ui login,
+// which writes Employee.token / Employee.user-info / token / user-info here too.
+// A citizen's aliases on the co-hosted portal stay in localStorage, so the two
+// can no longer overwrite each other; the ownership rules below still apply
+// within the tab.
+const sessionStore = () => window.sessionStorage;
+
 function readStorage(key) {
   try {
-    const raw = window.localStorage?.getItem(key);
+    // Keycloak mode still writes Employee.* to localStorage, so fall back to it
+    // for those keys only. Never for the unprefixed aliases: in localStorage those
+    // belong to the citizen portal. In DIGIT mode start-up has already removed
+    // any Employee.* left in localStorage, so the fallback finds nothing there.
+    let raw = sessionStore()?.getItem(key);
+    if (raw == null && key.startsWith("Employee.")) raw = window.localStorage?.getItem(key);
     return raw && raw !== "undefined" && raw !== "null" ? parseJson(raw) : null;
   } catch {
     return null;
@@ -133,7 +148,7 @@ function readStorage(key) {
 
 function writeStorage(key, value) {
   try {
-    window.localStorage?.setItem(key, JSON.stringify(value));
+    sessionStore()?.setItem(key, JSON.stringify(value));
   } catch {
     /* private mode / quota — non-fatal, the session just won't survive reload */
   }
@@ -400,7 +415,7 @@ export function clearSession({ force = false } = {}) {
   SESSION_KEYS.forEach((k) => {
     if (!mayDropAliases && (k === KEYS.tokenAlias.key || k === KEYS.userInfoAlias.key)) return;
     try {
-      window.localStorage?.removeItem(k);
+      sessionStore()?.removeItem(k);
     } catch {
       /* ignore */
     }

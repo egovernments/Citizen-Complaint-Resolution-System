@@ -3,22 +3,16 @@ import { BackLink, Loader, Toast, Button } from "@egovernments/digit-ui-componen
 import { FormComposerV2 } from "@egovernments/digit-ui-react-components";
 import { useTranslation } from "react-i18next";
 import { useHistory, useLocation, useRouteMatch } from "react-router-dom";
+import { saveEmployeeLogin } from "@egovernments/digit-ui-libraries";
 import ImageComponent from "../../../components/ImageComponent";
 import SandBoxHeader from "../../../components/SandBoxHeader";
 import Carousel from "../SignUp-v2/CarouselComponent/CarouselComponent";
 
+// #224: same as the password login — credentials stay in this tab only.
 const setEmployeeDetail = (userObject, token) => {
   if (Digit.Utils.getMultiRootTenant()) return;
   let locale = JSON.parse(sessionStorage.getItem("Digit.locale"))?.value || Digit.Utils.getDefaultLanguage();
-  localStorage.setItem("Employee.tenant-id", userObject?.tenantId);
-  localStorage.setItem("tenant-id", userObject?.tenantId);
-  localStorage.setItem("citizen.userRequestObject", JSON.stringify(userObject));
-  localStorage.setItem("locale", locale);
-  localStorage.setItem("Employee.locale", locale);
-  localStorage.setItem("token", token);
-  localStorage.setItem("Employee.token", token);
-  localStorage.setItem("user-info", JSON.stringify(userObject));
-  localStorage.setItem("Employee.user-info", JSON.stringify(userObject));
+  saveEmployeeLogin({ tab: sessionStorage, local: localStorage, userObject, token, locale });
 };
 
 const Otp = ({ isLogin = false }) => {

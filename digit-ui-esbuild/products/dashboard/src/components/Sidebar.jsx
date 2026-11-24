@@ -15,7 +15,8 @@ const NAV_ITEMS = [
 /** Signed-in employee's username + significant (non-EMPLOYEE) role, for the footer. */
 function getSignedInLabel() {
   try {
-    const raw = window.localStorage?.getItem("Employee.user-info");
+    // #224: DIGIT login keeps it in the tab; Keycloak mode still writes localStorage.
+    const raw = window.sessionStorage?.getItem("Employee.user-info") || window.localStorage?.getItem("Employee.user-info");
     if (!raw) return null;
     const u = JSON.parse(raw);
     const info = u?.roles ? u : u?.userInfo || u;

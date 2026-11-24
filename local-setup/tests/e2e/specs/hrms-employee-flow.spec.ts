@@ -234,7 +234,7 @@ test.describe.serial('HRMS employee creation and login', () => {
     expect(page.url()).toContain('/employee');
 
     // Verify session data
-    const employeeToken = await page.evaluate(() => localStorage.getItem('Employee.token'));
+    const employeeToken = await page.evaluate(() => sessionStorage.getItem('Employee.token')); // #224: tab-only
     expect(employeeToken).toBeTruthy();
     console.log(`Employee ${employeeCode} logged in via UI successfully`);
   });

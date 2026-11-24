@@ -51,12 +51,19 @@ setup('authenticate', async ({ page }) => {
     page.getByRole('button', { name: /Sign In/i }).click(),
   ]);
 
-  // Sanity: localStorage should now hold the configurator session blob.
-  // We don't print the token — only assert presence.
+  // Sanity: this tab should now hold the configurator session blob (#224:
+  // the configurator keeps its login in sessionStorage). We don't print the
+  // token — only assert presence.
   const hasAuthState = await page.evaluate(
-    () => !!localStorage.getItem('crs-auth-state'),
+    () => !!sessionStorage.getItem('crs-auth-state'),
   );
   expect(hasAuthState).toBe(true);
 
+  // storageState records localStorage only. Put a copy there for the saved
+  // state: on load the configurator takes a localStorage copy into the tab once
+  // and deletes it (the upgrade path), so every spec starts signed in that way.
+  await page.evaluate(() => {
+    localStorage.setItem('crs-auth-state', sessionStorage.getItem('crs-auth-state') as string);
+  });
   await page.context().storageState({ path: AUTH_FILE });
 });

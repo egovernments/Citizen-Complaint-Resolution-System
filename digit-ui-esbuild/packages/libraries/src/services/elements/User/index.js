@@ -3,6 +3,8 @@ import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
 import { getAuthAdapter } from "../../auth/index";
 import { isKeycloakAuth } from "../../auth/authSurface";
+import { rememberSessionExpiry, isSessionExpired } from "../../atoms/Utils/authSession";
+import { announceEmployeeSignOut } from "../../atoms/Utils/employeeSignOutBroadcast";
 
 export const UserService = {
   authenticate: async (details) => {
@@ -81,6 +83,11 @@ export const UserService = {
     // to the employee language-selection screen, which is the wrong
     // "you've been logged out" landing for a citizen session.
     const logoutRedirectURL = window?.globalConfigs?.getConfig("LOGOUT_REDIRECT_URL") || `/${window?.contextPath}/${userType === "citizen" ? "citizen/login" : "employee/user/language-selection"}`;
+    // Each tab holds its own employee login (#224): tell the employee's other
+    // tabs to sign out too. Before localStorage.clear(), which would remove the
+    // announcement before the other tabs see it.
+    const signedIn = UserService.getUser()?.info;
+    if (String(signedIn?.type || "").toUpperCase() === "EMPLOYEE") announceEmployeeSignOut({ userId: signedIn?.uuid });
     try {
       await UserService.logoutUser();
     } catch (e) {
@@ -100,8 +107,15 @@ export const UserService = {
       params: { tenantId: stateCode },
     }),
   setUser: (data) => {
+    // Record when this session's token dies (oauth expires_in was previously
+    // discarded), so long flows can check BEFORE an expensive submit instead
+    // of discovering the expiry via a failed call.
+    rememberSessionExpiry(data);
     return Digit.SessionStorage.set("User", data);
   },
+  // false when unknown (pre-existing sessions / responses without expires_in) —
+  // callers must treat "expired" as certain and "not expired" as best-effort.
+  isSessionExpired: () => isSessionExpired(),
   setExtraRoleDetails: (data) => {
     const userDetails = Digit.SessionStorage.get("User");
     return Digit.SessionStorage.set("User", { ...userDetails, extraRoleInfo: data });

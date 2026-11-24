@@ -1,10 +1,10 @@
 /**
  * Admin Assignment Test — login via API token injection, view inbox, assign complaints.
  * Bypasses the login form (React FormComposer dropdown doesn't register Playwright clicks)
- * by injecting localStorage session state from the OAuth token response.
+ * by injecting the tab's session state (sessionStorage, #224) from the OAuth token response.
  */
 import { test, expect } from '@playwright/test';
-import { getDigitToken } from '../utils/auth';
+import { getDigitToken, injectEmployeeSession } from '../utils/auth';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
 const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
@@ -39,17 +39,8 @@ test.describe.serial('Admin login and assign complaints', () => {
     // Navigate to login page first (to set the origin)
     await page.goto(`${BASE_URL}/digit-ui/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
 
-    // Inject session into localStorage (same keys the Login component sets)
-    await page.evaluate(({ token, userInfo, tenant }) => {
-      localStorage.setItem('Employee.token', token);
-      localStorage.setItem('Employee.tenant-id', tenant);
-      localStorage.setItem('Employee.user-info', JSON.stringify(userInfo));
-      localStorage.setItem('Employee.locale', 'en_IN');
-      // Also set citizen token (some components check both)
-      localStorage.setItem('token', token);
-      localStorage.setItem('tenant-id', tenant);
-      localStorage.setItem('user-info', JSON.stringify(userInfo));
-    }, { token: adminToken, userInfo: adminUserInfo, tenant: TENANT });
+    // Inject the session into this tab (same keys the Login component sets)
+    await injectEmployeeSession(page, { token: adminToken, userInfo: adminUserInfo, tenant: TENANT });
 
     // Navigate to employee home — should skip login
     await page.goto(`${BASE_URL}/digit-ui/employee`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
@@ -77,15 +68,7 @@ test.describe.serial('Admin login and assign complaints', () => {
 
     // Inject session
     await page.goto(`${BASE_URL}/digit-ui/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-    await page.evaluate(({ token, userInfo, tenant }) => {
-      localStorage.setItem('Employee.token', token);
-      localStorage.setItem('Employee.tenant-id', tenant);
-      localStorage.setItem('Employee.user-info', JSON.stringify(userInfo));
-      localStorage.setItem('Employee.locale', 'en_IN');
-      localStorage.setItem('token', token);
-      localStorage.setItem('tenant-id', tenant);
-      localStorage.setItem('user-info', JSON.stringify(userInfo));
-    }, { token: adminToken, userInfo: adminUserInfo, tenant: TENANT });
+    await injectEmployeeSession(page, { token: adminToken, userInfo: adminUserInfo, tenant: TENANT });
 
     // Capture ALL network calls from the inbox page
     const networkCalls: { url: string; status: number; method: string }[] = [];
@@ -164,15 +147,7 @@ test.describe.serial('Admin login and assign complaints', () => {
 
       // Inject session
       await page.goto(`${BASE_URL}/digit-ui/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-      await page.evaluate(({ token, userInfo, tenant }) => {
-        localStorage.setItem('Employee.token', token);
-        localStorage.setItem('Employee.tenant-id', tenant);
-        localStorage.setItem('Employee.user-info', JSON.stringify(userInfo));
-        localStorage.setItem('Employee.locale', 'en_IN');
-        localStorage.setItem('token', token);
-        localStorage.setItem('tenant-id', tenant);
-        localStorage.setItem('user-info', JSON.stringify(userInfo));
-      }, { token: adminToken, userInfo: adminUserInfo, tenant: TENANT });
+      await injectEmployeeSession(page, { token: adminToken, userInfo: adminUserInfo, tenant: TENANT });
 
       // Navigate to complaint details
       await page.goto(`${BASE_URL}/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {

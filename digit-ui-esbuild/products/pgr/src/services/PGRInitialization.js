@@ -20,8 +20,8 @@ const initializePGRModule = async ({ tenantId }) => {
   // to a single dropdown. Omit the filter so the full County → SubCounty
   // → Ward tree returns (closes egovernments/CCRS#447 item 7 follow-up).
 
-    // Get user info from localStorage
-  const citizenInfo = window.localStorage.getItem("user-info");
+    // The signed-in user's details: this tab first (#224), then localStorage.
+  const citizenInfo = window.sessionStorage.getItem("user-info") || window.localStorage.getItem("user-info");
 
   if (citizenInfo) {
     const user = JSON.parse(citizenInfo);

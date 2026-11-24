@@ -298,6 +298,8 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      # #224: login token valid 8 hours (egov-user default is 7 days)
+      ACCESS_TOKEN_VALIDITY_IN_MINUTES: "${ACCESS_TOKEN_VALIDITY_IN_MINUTES:-480}"
       SERVER_PORT: 8107
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
       EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search

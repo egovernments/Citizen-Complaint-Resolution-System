@@ -196,8 +196,8 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
       .click();
     await page.waitForTimeout(10_000);
 
-    // Verify citizen is logged in: token should be in localStorage
-    const token = await page.evaluate(() => localStorage.getItem('Citizen.token'));
+    // Verify citizen is logged in: the token lives in this tab (#224)
+    const token = await page.evaluate(() => sessionStorage.getItem('Citizen.token'));
     expect(token).toBeTruthy();
     citizenLoggedIn = true;
     console.log('Citizen logged in through UI, URL:', page.url());

@@ -217,7 +217,8 @@ export function ensureMessages() {
 function standaloneAuthToken() {
   if (isPublicDashboardRuntime()) return null;
   try {
-    return window.localStorage.getItem("Employee.token");
+    // #224: DIGIT login keeps it in the tab; Keycloak mode still writes localStorage.
+    return window.sessionStorage.getItem("Employee.token") || window.localStorage.getItem("Employee.token");
   } catch (e) {
     return null;
   }

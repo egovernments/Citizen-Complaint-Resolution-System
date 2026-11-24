@@ -13,6 +13,7 @@
  * state-level tenantId and hierarchy definition tenantId).
  */
 import { test, expect } from '@playwright/test';
+import { injectCitizenSession } from '../../utils/auth';
 
 const BASE_URL = process.env.BASE_URL || 'https://keycloak-sandbox.live.digit.org';
 const KC_URL = process.env.KC_URL || 'http://localhost:18180';
@@ -108,33 +109,28 @@ test.describe('Citizen PGR complaint wizard', () => {
   test('walk through complaint wizard to location step', async ({ page }) => {
     const { jwt, email } = await createCitizenSession();
 
-    // Set up citizen auth in localStorage
+    // Set up citizen auth in this tab (#224: a citizen's login is tab-only)
     await page.goto(`${BASE_URL}/digit-ui/citizen/select-language`, {
       waitUntil: 'domcontentloaded',
       timeout: 15_000,
     });
 
-    await page.evaluate(
-      ({ jwt, email, tenant }) => {
-        localStorage.setItem('token', jwt);
-        localStorage.setItem('Citizen.token', jwt);
-        localStorage.setItem('Citizen.tenant-id', tenant);
-        localStorage.setItem(
-          'Citizen.user-info',
-          JSON.stringify({
-            uuid: 'e2e-citizen-uuid',
-            name: 'E2E Citizen',
-            emailId: email,
-            tenantId: tenant,
-            type: 'CITIZEN',
-            roles: [{ code: 'CITIZEN', name: 'Citizen', tenantId: tenant }],
-          }),
-        );
-        localStorage.setItem('selectedLanguage', 'en_IN');
-        localStorage.setItem('locale', 'en_IN');
+    await injectCitizenSession(page, {
+      token: jwt,
+      tenant: TENANT,
+      userInfo: {
+        uuid: 'e2e-citizen-uuid',
+        name: 'E2E Citizen',
+        emailId: email,
+        tenantId: TENANT,
+        type: 'CITIZEN',
+        roles: [{ code: 'CITIZEN', name: 'Citizen', tenantId: TENANT }],
       },
-      { jwt, email, tenant: TENANT },
-    );
+    });
+    await page.evaluate(() => {
+      localStorage.setItem('selectedLanguage', 'en_IN');
+      localStorage.setItem('locale', 'en_IN');
+    });
 
     // Track boundary API responses
     const boundaryResponses: { url: string; status: number; hasData: boolean }[] = [];

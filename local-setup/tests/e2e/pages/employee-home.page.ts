@@ -30,10 +30,11 @@ export class EmployeeHomePage {
         if (!v) return null;
         try { return JSON.parse(v); } catch { return v; }
       };
-      // Token is stored in localStorage by KeycloakAuthAdapter
-      const employeeToken = localStorage.getItem('Employee.token');
+      // DIGIT login keeps the token in the tab (sessionStorage, #224);
+      // KeycloakAuthAdapter still writes it to localStorage.
+      const employeeToken = sessionStorage.getItem('Employee.token') || localStorage.getItem('Employee.token');
       const employeeTenantId = localStorage.getItem('Employee.tenant-id');
-      const employeeUserInfo = parse(localStorage.getItem('Employee.user-info')) as Record<string, unknown> | null;
+      const employeeUserInfo = parse(sessionStorage.getItem('Employee.user-info') || localStorage.getItem('Employee.user-info')) as Record<string, unknown> | null;
       return {
         employeeToken,
         employeeTenantId,

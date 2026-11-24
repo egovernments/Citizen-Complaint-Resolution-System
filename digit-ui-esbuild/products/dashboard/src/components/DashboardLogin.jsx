@@ -18,8 +18,9 @@ import useDashboardT from "../i18n/useDashboardT";
  * Self-contained employee login for the standalone dashboard build.
  *
  * The standalone /dashboard-ui app has no login of its own — it expects an
- * Employee.token in localStorage (normally set by the main digit-ui login on the
- * same origin). This gate makes the dashboard demo-able on its own: it performs a
+ * Employee.token in this tab's sessionStorage (set by the main digit-ui login on
+ * the same origin; tab-only since #224, so a NEW tab shows this gate). This gate
+ * makes the dashboard demo-able on its own: it performs a
  * real OAuth password grant against /user/oauth/token, stores the token + the
  * returned userInfo (with the significant role first, so the scoping indicator is
  * legible), and hands control back to AdminDashboard.

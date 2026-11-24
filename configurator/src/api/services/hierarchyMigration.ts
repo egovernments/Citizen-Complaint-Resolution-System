@@ -19,6 +19,7 @@
 // BREAKING + one-way: after this runs and the backend is cut over, the ServiceDefs master is retired.
 import { mdmsService, localizationService } from '@/api';
 import { digitClient } from '@/providers/bridge';
+import { readSavedAuth } from '@/lib/authStorage';
 
 const HDEF_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchyDefinition';
 const HIER_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchy';
@@ -28,7 +29,6 @@ const DEPTS_SCHEMA = 'RAINMAKER-PGR.ComplaintTypeDepartments';
 
 const CATEGORY_LEVEL = 'CATEGORY';
 const LEAF_LEVEL = 'SUB_TYPE';
-const AUTH_STORAGE_KEY = 'crs-auth-state';
 
 export type MigrationStepStatus = 'pending' | 'running' | 'done' | 'skipped' | 'error';
 
@@ -91,7 +91,7 @@ interface InteriorNode {
 export function resolveMigrationTenants(): { managing: string; state: string; targets: string[] } {
   let managing = digitClient.stateTenantId || '';
   try {
-    const saved = localStorage.getItem(AUTH_STORAGE_KEY);
+    const saved = readSavedAuth();
     if (saved) {
       const parsed = JSON.parse(saved) as { tenant?: string };
       if (parsed?.tenant) managing = parsed.tenant;

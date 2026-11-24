@@ -116,34 +116,34 @@ MDMS v2 is strict on tenantId — if the dept created with tenantId=child shows 
     expect(rootCount, 'dept must not leak into root tenant — MDMS v2 is strict on tenantId').toBe(0);
   });
 
-  test('targetTenant persists in localStorage and survives reload', {
+  test('targetTenant persists in the saved login and survives reload', {
     annotation: {
       type: 'description',
-      description: `Asserts the targetTenant persistence contract from PR #26. Phase 1 calls setTargetTenant(<child>); the value must be stored in localStorage's crs-auth-state alongside (and distinct from) the session tenant, and survive a full page reload so Phase 4 can read it on mount.
+      description: `Asserts the targetTenant persistence contract from PR #26. Phase 1 calls setTargetTenant(<child>); the value must be stored in the tab's crs-auth-state (sessionStorage since #224) alongside (and distinct from) the session tenant, and survive a full page reload so Phase 4 can read it on mount.
 
 Steps:
-1. setTimeout 90s; navigate to /configurator/manage to get a live origin for localStorage.
-2. Read crs-auth-state from localStorage; throw if missing (auth.setup didn't run).
+1. setTimeout 90s; navigate to /configurator/manage (the app moves auth.setup's copy into the tab).
+2. Read crs-auth-state from sessionStorage; throw if missing (auth.setup didn't run).
 3. Mutate it: s.targetTenant = CHILD_TENANT; write back.
 4. page.reload() with domcontentloaded.
 5. Re-read crs-auth-state; assert tenant === ROOT_TENANT (session tenant unchanged) AND targetTenant === CHILD_TENANT (still pointing at child).
 
-This was prototyped as a UI test on the Phase 4 landing card, but timing on parallel reference-data fetches made it flaky — left as a localStorage round-trip.`,
+This was prototyped as a UI test on the Phase 4 landing card, but timing on parallel reference-data fetches made it flaky — left as a storage round-trip.`,
     },
     tag: ['@area:configurator-manage', '@area:onboarding', '@ccrs:26', '@kind:regression', '@layer:api', '@persona:admin', '@pr:26'] }, async ({ page }) => {
     test.setTimeout(90_000);
 
-    // Land on the app to get a live origin for localStorage.
+    // Land on the app: it moves auth.setup's localStorage copy into this tab.
     await page.goto(`/configurator/manage`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
     // Simulate what Phase 1 does: setTargetTenant(<child>). storageState
     // from auth.setup already has the base session object there.
     await page.evaluate(({ child }) => {
-      const raw = localStorage.getItem('crs-auth-state');
-      if (!raw) throw new Error('crs-auth-state missing from localStorage — auth.setup may not have run');
+      const raw = sessionStorage.getItem('crs-auth-state');
+      if (!raw) throw new Error('crs-auth-state missing from sessionStorage — auth.setup may not have run');
       const s = JSON.parse(raw);
       s.targetTenant = child;
-      localStorage.setItem('crs-auth-state', JSON.stringify(s));
+      sessionStorage.setItem('crs-auth-state', JSON.stringify(s));
     }, { child: CHILD_TENANT });
 
     // Reload — Phase 4 reads state from storage on mount. We want to see
@@ -151,7 +151,7 @@ This was prototyped as a UI test on the Phase 4 landing card, but timing on para
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 30_000 });
 
     const persisted = await page.evaluate(() => {
-      const raw = localStorage.getItem('crs-auth-state');
+      const raw = sessionStorage.getItem('crs-auth-state');
       return JSON.parse(raw!) as { tenant: string; targetTenant?: string };
     });
     expect(persisted.tenant, 'session tenant stays at root').toBe(ROOT_TENANT);

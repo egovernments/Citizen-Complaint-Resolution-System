@@ -61,6 +61,12 @@ var globalConfigs = (function () {
   var analyticsScriptHosts = [];     // extra allowed script hostnames (ops only)
   var analyticsCustomEnabled = false; // true => allow type:"CUSTOM" records
 
+  // #224: an employee with no mouse/keyboard/touch/scroll activity for this many
+  // minutes is logged out. 0 turns it off. Missing => 15 (IdleLogout default).
+  var employeeIdleTimeoutMinutes = 15;
+  // How many seconds before the idle sign-out the employee is warned. 0 = no warning.
+  var employeeIdleWarningSeconds = 60;
+
   var getConfig = function (key) {
     if (key === "STATE_LEVEL_TENANT_ID") return stateTenantId;
     else if (key === "GMAPS_API_KEY") return gmaps_api_key;
@@ -88,6 +94,8 @@ var globalConfigs = (function () {
     else if (key === "ANALYTICS_KILL_SWITCH") return analyticsKillSwitch;
     else if (key === "ANALYTICS_SCRIPT_HOSTS") return analyticsScriptHosts;
     else if (key === "ANALYTICS_CUSTOM_ENABLED") return analyticsCustomEnabled;
+    else if (key === "EMPLOYEE_IDLE_TIMEOUT_MINUTES") return employeeIdleTimeoutMinutes;
+    else if (key === "EMPLOYEE_IDLE_WARNING_SECONDS") return employeeIdleWarningSeconds;
   };
 
   return {

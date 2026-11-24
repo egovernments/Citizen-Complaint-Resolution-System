@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { initLibraries } from "@egovernments/digit-ui-libraries";
+import { initLibraries, purgeLegacyEmployeeAuth, purgeLegacyCitizenAuth, bootUserFromLocal } from "@egovernments/digit-ui-libraries";
 import { isKeycloakAuth } from "../packages/libraries/src/services/auth/authSurface";
 import "./index.css";
 import App from './App';
@@ -91,24 +91,20 @@ async function bootstrap() {
       }
     }
   } else {
+    // #224: an employee's and a citizen's login live in their tab only. Remove
+    // any credential an older build left in localStorage, and never rebuild a
+    // session from it — so closing the tab (or the browser) ends the login.
+    purgeLegacyEmployeeAuth(window.localStorage);
+    purgeLegacyCitizenAuth(window.localStorage);
     const user = window.Digit.SessionStorage.get("User");
     if (!user || !user.access_token || !user.info) {
-      const token = getFromStorage("token");
-      const citizenToken = getFromStorage("Citizen.token");
-      const citizenInfo = getFromStorage("Citizen.user-info");
       const stateCode = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
-      const citizenTenantId = getFromStorage("Citizen.tenant-id") || getFromInfo(citizenInfo) || stateCode;
-      const employeeToken = getFromStorage("Employee.token");
-      const employeeInfo = getFromStorage("Employee.user-info");
-      const employeeTenantId = getFromStorage("Employee.tenant-id") || getFromInfo(employeeInfo) || stateCode;
-      const userType = token === citizenToken ? "citizen" : "employee";
+      const citizenTenantId = getFromStorage("Citizen.tenant-id") || stateCode;
+      const employeeTenantId = getFromStorage("Employee.tenant-id") || stateCode;
+      const { userType, user: userDetails } = bootUserFromLocal(window.localStorage);
 
       window.Digit.SessionStorage.set("user_type", userType);
       window.Digit.SessionStorage.set("userType", userType);
-      const getUserDetails = (access_token, info) => ({ token: access_token, access_token, info });
-      const userDetails = userType === "citizen"
-        ? getUserDetails(citizenToken, citizenInfo)
-        : getUserDetails(employeeToken, employeeInfo);
       window.Digit.SessionStorage.set("User", userDetails);
       window.Digit.SessionStorage.set("Citizen.tenantId", citizenTenantId);
       window.Digit.SessionStorage.set("Employee.tenantId", employeeTenantId);

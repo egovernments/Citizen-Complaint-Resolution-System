@@ -26,8 +26,8 @@ const fetchBoundaries = async ({ tenantId }) => {
   // walk `.children` and render each level of the cascade.
 
 
-    // Get user info from localStorage
-  const citizenInfo = window.localStorage.getItem("user-info");
+    // The signed-in user's details: this tab first (#224), then localStorage.
+  const citizenInfo = window.sessionStorage.getItem("user-info") || window.localStorage.getItem("user-info");
 
   if (citizenInfo) {
     const user = JSON.parse(citizenInfo);

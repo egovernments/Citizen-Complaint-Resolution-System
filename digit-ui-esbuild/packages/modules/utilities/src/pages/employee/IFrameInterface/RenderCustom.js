@@ -71,7 +71,7 @@ const NonIFrameInterface = (props) => {
         }
       };
       xhr.open('GET', url, true);
-      const oidcToken = window.localStorage.getItem(localStorageKey);
+      const oidcToken = (window.sessionStorage.getItem(localStorageKey) || window.localStorage.getItem(localStorageKey)) /* #224: tab first; Keycloak still uses localStorage */;
 
       xhr.setRequestHeader('Authorization', `Bearer ${oidcToken}`);
       // xhr.setRequestHeader('Origin', 'https://unified-dev.digit.org'); // Set your website's origin

@@ -65,6 +65,10 @@ var globalConfigs = (function () {
   // null leaves the rule to the UI (shown only where there is more than one
   // tenant to switch to); true or false decides it for the deployment.
   var showTenantSwitcher = {{ show_tenant_switcher | to_json }};
+  // #224: idle logout for employees, in minutes (0 = off). Default 15.
+  var employeeIdleTimeoutMinutes = {{ (employee_idle_timeout_minutes | default(15)) | to_json }};
+  // Seconds of warning before the idle sign-out (0 = no warning). Default 60.
+  var employeeIdleWarningSeconds = {{ (employee_idle_warning_seconds | default(60)) | to_json }};
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
   // `postalCodePattern` is the ONLY postal-code knob (CCRS#722): a regex
@@ -112,6 +116,8 @@ var globalConfigs = (function () {
   var getConfig = function (key) {
     if (key === "EMPLOYEE_MODULE_DENYLIST") return employeeModuleDenylist;
     if (key === "SHOW_TENANT_SWITCHER") return showTenantSwitcher;
+    if (key === "EMPLOYEE_IDLE_TIMEOUT_MINUTES") return employeeIdleTimeoutMinutes;
+    if (key === "EMPLOYEE_IDLE_WARNING_SECONDS") return employeeIdleWarningSeconds;
     if (key === "LOGIN_TENANT_ALLOWLIST") return loginTenantAllowlist;
     if (key === "STATE_LEVEL_TENANT_ID") {
       return stateTenantId;

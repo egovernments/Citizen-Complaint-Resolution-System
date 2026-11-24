@@ -59,6 +59,7 @@ import { identifyUser, clearUser, trackEvent } from './lib/telemetry';
 import PageViewTracker from './components/PageViewTracker';
 import './App.css';
 import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
+import { readSavedAuth, saveAuth, clearSavedAuth } from '@/lib/authStorage';
 
 // App context for global state
 type AppMode = 'onboarding' | 'management';
@@ -201,16 +202,14 @@ function ManagementAdminResources() {
   );
 }
 
-// Storage key for persisting auth state
-const AUTH_STORAGE_KEY = 'crs-auth-state';
 
 // One-shot flag (sessionStorage) set when a request is rejected for an expired
 // session, read by LoginPage to explain why the operator was sent back.
 export const SESSION_EXPIRED_KEY = 'crs-session-expired';
 
-// Helper to restore apiClient from localStorage
+// Helper to restore apiClient from this tab's saved login (lib/authStorage)
 function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppState['user']; environment: string; tenant: string; targetTenant: string; mode: AppMode; currentPhase: number; completedPhases: number[] } | null {
-  const saved = localStorage.getItem(AUTH_STORAGE_KEY);
+  const saved = readSavedAuth();
   if (!saved) return null;
 
   try {
@@ -276,7 +275,7 @@ function getConfiguredTenantDefault(): string {
 }
 
 function App() {
-  // Initialize state from localStorage if available
+  // Initialize state from this tab's saved login if available
   const [state, setState] = useState<AppState>(() => {
     const restored = restoreApiClientFromStorage();
     if (restored) {
@@ -310,7 +309,7 @@ function App() {
     const expire = () => {
       try { sessionStorage.setItem(SESSION_EXPIRED_KEY, '1'); } catch { /* ignore */ }
       clearUser();
-      localStorage.removeItem(AUTH_STORAGE_KEY);
+      clearSavedAuth();
       apiClient.logout();
       digitClient.clearAuth();
       resetProviders();
@@ -326,10 +325,10 @@ function App() {
   // Re-sync apiClient on every render if authenticated (handles HMR)
   useEffect(() => {
     if (state.isAuthenticated && !apiClient.isAuthenticated()) {
-      // apiClient got reset (HMR), restore from localStorage
+      // apiClient got reset (HMR), restore from the tab's saved login
       const restored = restoreApiClientFromStorage();
       if (!restored) {
-        // localStorage is gone too, force logout
+        // the saved login is gone too, force logout
         setState(s => ({ ...s, isAuthenticated: false, user: null }));
       }
     }
@@ -349,7 +348,7 @@ function App() {
     }
   }, []); // Only run once on mount
 
-  // Persist auth state to localStorage
+  // Persist auth state in this tab (lib/authStorage)
   useEffect(() => {
     if (state.isAuthenticated && state.user) {
       const token = apiClient.getAuth().token;
@@ -367,7 +366,7 @@ function App() {
         completedPhases: state.completedPhases,
         authToken: token,
       };
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData));
+      saveAuth(JSON.stringify(authData));
     }
   }, [state.isAuthenticated, state.user, state.environment, state.tenant, state.targetTenant, state.mode, state.currentPhase, state.completedPhases]);
 
@@ -418,8 +417,8 @@ function App() {
     trackEvent('logout', { tenant: state.tenant });
     clearUser();
 
-    // Clear localStorage
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+    // Clear the saved login
+    clearSavedAuth();
     // Clear apiClient and digitClient
     apiClient.logout();
     digitClient.clearAuth();

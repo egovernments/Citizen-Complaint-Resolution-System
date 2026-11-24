@@ -23,13 +23,16 @@ const EmployeeLogin = ({ stateCode, appTenants }) => {
   const location = useLocation();
 
 
+  // Adds a cache-busting ts, KEEPING the rest of the query: replacing it threw
+  // away `from` (the page to return to after login) and `reason` (why the
+  // employee was signed out), so neither ever reached the login form.
   useEffect(() => {
     const query = new URLSearchParams(location.search);
     if (!query.get("ts")) {
-      const ts = Date.now();
+      query.set("ts", String(Date.now()));
       history.replace({
         pathname: location.pathname,
-        search: `?ts=${ts}`
+        search: `?${query.toString()}`
       });
     }
   }, [location, history]);

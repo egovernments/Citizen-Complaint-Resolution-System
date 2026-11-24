@@ -10,6 +10,8 @@ import DummyLoaderScreen from "./components/DummyLoader";
 import SignUpV2 from "./pages/employee/SignUp-v2";
 import LoginV2 from "./pages/employee/Login-v2";
 import UnifiedLogin from "./pages/common/Login/index";
+import SessionCollisionNotice from "./components/SessionCollisionNotice";
+import IdleLogout from "./components/IdleLogout";
 
 // The unified `/user/login` + `/user/sign-up` entries (and the contextPath
 // mount below) are the CITIZEN single-sign-on surface. Resolve the citizen
@@ -91,6 +93,9 @@ export const DigitApp = ({ stateCode, modules, appTenants, logoUrl, logoUrlWhite
     initData,
   };
   return (
+    <React.Fragment>
+    <SessionCollisionNotice />
+    <IdleLogout />
     <Switch>
      {allowedUserTypes?.some(userType=>userType=="employee")&& <Route path={`/${window?.contextPath}/employee`}>
         <EmployeeApp {...commonProps} />
@@ -105,6 +110,7 @@ export const DigitApp = ({ stateCode, modules, appTenants, logoUrl, logoUrlWhite
         <Redirect to={`/${window?.contextPath}/${defaultLanding}`} />
       </Route>
     </Switch>
+    </React.Fragment>
   );
 };
 

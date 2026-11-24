@@ -51,12 +51,17 @@ function makeStorage(seed = {}) {
 /** Values land in localStorage JSON-encoded — mirror that when seeding. */
 const enc = (v) => JSON.stringify(v);
 
+// #224: the dashboard now keeps its session (and the shared aliases) in the
+// TAB's sessionStorage. The scenarios below are unchanged — they now play out
+// inside the tab — so the seeded store is handed to window.sessionStorage. The
+// `localStorage` name is kept for the existing assertions; window.localStorage
+// itself stays empty and must remain so.
 function load({ local = {}, user = undefined } = {}) {
   const localStorage = makeStorage(local);
   let userSlot = user;
   global.window = {
-    localStorage,
-    sessionStorage: makeStorage(),
+    localStorage: makeStorage(),
+    sessionStorage: localStorage,
     Digit: {
       SessionStorage: {
         get: (k) => (k === "User" ? userSlot : undefined),
