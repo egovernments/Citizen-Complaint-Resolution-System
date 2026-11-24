@@ -410,8 +410,15 @@ plugins:
         -- `Authorization: Bearer` is honoured as well because digit-ui-v2, the
         -- configurator and the MCP (DigitApiClient) send the token that way.
         local ctype = kong.request.get_header("content-type")
-        local is_multipart = type(ctype) == "string" and ctype:lower():find("multipart/form-data", 1, true) ~= nil
-        if kong.request.get_method() ~= "POST" or is_multipart then
+        -- Exact media type (the part before any ";" parameters), never a
+        -- substring, and only on the filestore upload paths. Every other POST,
+        -- whatever its Content-Type, goes through the JSON branch below, which
+        -- replaces RequestInfo.userInfo with the user resolved from the token.
+        local mtype = type(ctype) == "string" and ctype:lower():match("^%s*([^;%s]+)") or nil
+        local upath = kong.request.get_path()
+        local is_upload = mtype == "multipart/form-data"
+          and (upath == "/filestore/v1/files" or upath == "/filestore/v1/file")
+        if kong.request.get_method() ~= "POST" or is_upload then
           if not is_protected then return end          -- auth-optional GETs (boundary, localization, ...) pass
           local hdr = kong.request.get_header("auth-token")
           local authz = kong.request.get_header("authorization")

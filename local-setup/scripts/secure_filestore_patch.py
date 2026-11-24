@@ -46,6 +46,26 @@ A_RBAC_NEW = (
     '              or p == "/filestore/v1/files/tag"\n'
     "        end\n"
 )
+# Multipart detection: the first #223 version (GATE_LOOSE) matched loosely and
+# on every path. Servers patched with it are re-patched to GATE_FIXED, which
+# matches the exact media type on the filestore upload paths only.
+GATE_LOOSE = (
+    '        local ctype = kong.request.get_header("content-type")\n'
+    '        local is_multipart = type(ctype) == "string" and ctype:lower():find("multipart/form-data", 1, true) ~= nil\n'
+    '        if kong.request.get_method() ~= "POST" or is_multipart then\n'
+)
+GATE_FIXED = (
+    '        local ctype = kong.request.get_header("content-type")\n'
+    '        -- Exact media type (the part before any ";" parameters), never a\n'
+    '        -- substring, and only on the filestore upload paths. Every other POST,\n'
+    '        -- whatever its Content-Type, goes through the JSON branch below, which\n'
+    '        -- replaces RequestInfo.userInfo with the user resolved from the token.\n'
+    '        local mtype = type(ctype) == "string" and ctype:lower():match("^%s*([^;%s]+)") or nil\n'
+    '        local upath = kong.request.get_path()\n'
+    '        local is_upload = mtype == "multipart/form-data"\n'
+    '          and (upath == "/filestore/v1/files" or upath == "/filestore/v1/file")\n'
+    '        if kong.request.get_method() ~= "POST" or is_upload then\n'
+)
 A_GATE_OLD = (
     '        if kong.request.get_method() ~= "POST" then\n'
     "          if not is_protected then return end          -- auth-optional GETs (boundary, filestore dl, ...) pass\n"
@@ -59,9 +79,8 @@ A_GATE_NEW = (
     "        -- Multipart POSTs (filestore uploads, VAPT #223) take the same header\n"
     "        -- route: they have no JSON body to carry RequestInfo.authToken.\n"
     "        -- `Authorization: Bearer` is honoured too (digit-ui-v2, configurator, MCP).\n"
-    '        local ctype = kong.request.get_header("content-type")\n'
-    '        local is_multipart = type(ctype) == "string" and ctype:lower():find("multipart/form-data", 1, true) ~= nil\n'
-    '        if kong.request.get_method() ~= "POST" or is_multipart then\n'
+    + GATE_FIXED
+    + (
     "          if not is_protected then return end          -- auth-optional GETs (boundary, localization, ...) pass\n"
     '          local hdr = kong.request.get_header("auth-token")\n'
     '          local authz = kong.request.get_header("authorization")\n'
@@ -71,7 +90,7 @@ A_GATE_NEW = (
     '          local ntoken = (type(hdr) == "string" and hdr ~= "" and hdr)\n'
     "                      or btok\n"
     '                      or (type(qtok) == "string" and qtok ~= "" and qtok) or nil\n'
-)
+))
 
 # Variant B: older gateways that let every non-POST request through unchecked
 # (`if method ~= "POST" then return end`). A dedicated filestore gate is put in
@@ -124,6 +143,8 @@ B_NEW = (
 
 
 def patch_kong(s):
+    if GATE_LOOSE in s:
+        return s.replace(GATE_LOOSE, GATE_FIXED, 1), "changed (multipart gate tightened: exact media type, filestore uploads only)"
     if MARK in s:
         return s, "already"
     if FS_AUTH_OPTIONAL not in s:

@@ -48,7 +48,9 @@ Paths `/filestore/v1/file`, `/files`, `/files/url`, `/files/id`, `/files/tag` we
 
 - `auth-token: <token>` request header (what digit-ui sends)
 - `Authorization: Bearer <token>` header (digit-ui-v2, configurator, MCP)
-- `?access_token=<token>` query parameter
+- `?access_token=<token>` query parameter — accepted for compatibility only; avoid it, because URLs are written to the nginx and Kong access logs. No client in this repo sends it.
+
+Only `multipart/form-data` POSTs to the upload paths (`/filestore/v1/files`, `/filestore/v1/file`) are checked from these headers. Every other POST is checked from `RequestInfo.authToken` in the JSON body, and the gateway replaces `RequestInfo.userInfo` with the user it resolves from that token, so a service never sees a client-supplied identity.
 
 **No per-role check.** Any signed-in user, citizen or employee, may call these paths. This is deliberate: `/files/id` has no access-control action, and `/files/url` and upload are mapped to only some roles, so a role check would refuse admins and screening officers. A per-file ownership check is a filestore-service change and is tracked as #223 Phase 2.
 
@@ -178,19 +180,22 @@ Only a restart or redeploy of `egov-user` picks the value up. A UI-only redeploy
 
 ### 3.5 Browser storage keys you will see
 
-Useful when inspecting a browser during support. None of them hold a credential except the per-tab `Digit.User`.
+Useful when inspecting a browser during support. The first six rows are this tab's copies of a login (employee, citizen or configurator): they hold the token or the person's details, and signing out (logout, idle, expired, signed out in another tab) removes them. The other keys hold no credential.
 
 | Key | Store | Holds |
 |---|---|---|
-| `Digit.User` | sessionStorage (this tab) | the employee's token and user details |
+| `Digit.User` | sessionStorage (this tab) | the signed-in user's token and details (employee or citizen) |
+| `token`, `user-info` | sessionStorage (this tab) | the signed-in user's token and details (names shared by both apps) |
+| `Employee.token`, `Employee.user-info` | sessionStorage (this tab) | an employee's token and details |
+| `Citizen.token`, `Citizen.user-info` | sessionStorage (this tab) | a citizen's token and details |
+| `Digit.citizen.userRequestObject` | sessionStorage (this tab) | the full login response, used by the city switcher and side menu |
+| `crs-auth-state` | sessionStorage (this tab) | the configurator's admin login, token included |
 | `Digit.UserTokenExpiryAt` | sessionStorage | when this tab's token dies (from `expires_in`, minus 60 s skew) |
 | `Digit.IdleLogoutLogin` | sessionStorage | fingerprint of the login the idle clock was last reset for |
 | `Digit.SessionCollisionAck` | sessionStorage | the other account this tab has already acknowledged |
 | `Digit.EmployeeLastActivity` | localStorage (shared) | timestamp of the last activity in any employee tab |
 | `Digit.EmployeeSignedOut` | localStorage (shared) | the last sign-out announcement: `{type, tab, at, user: <hash>}` |
 | BroadcastChannel `digit-employee-session` | in memory | same announcement, for browsers that deliver it faster than the storage event |
-| `Citizen.token`, `Citizen.user-info` | sessionStorage (this tab) | a citizen's token and details, on citizen pages |
-| `crs-auth-state` | sessionStorage (this tab) | the configurator's admin login, token included |
 
 ### 3.6 Localization keys to seed
 
@@ -282,7 +287,10 @@ BASE_URL=https://<host> CITIZEN_MOBILE=<mobile> CITIZEN_OTP=<otp> \
 | Helm `filestore-url-validity` not set → 24 h links on k8s | add `"3600"` to `env.yaml` (2.3) |
 | Upload rate limit and bucket-root 403 exist only in the Ansible nginx template | add to the k8s ingress if needed (2.4) |
 | `host_vars/_example.yml` does not list the three new Ansible variables | document them there (4) |
-| Any signed-in user may call the filestore paths; no per-file ownership check | #223 Phase 2 (filestore service) |
+| Any signed-in user may call the filestore paths; no per-file ownership or tenant check | #223 Phase 2 (filestore service); a first step is to tie the `tenantId` parameter to the caller's tenants in the gateway |
+| The public `*/pgr-landing/*` prefix is unused in this repo (the landing-picture builder is not here), yet any signed-in user can upload under it | remove the policy until the landing builder is ported, or scope it per tenant and validate `module` in filestore |
+| `secure-filestore.sh --build-ui` stops in this repo: it checks the built configurator for the landing-picture change, which this repo does not have | deploy the UI yourself and run with `--ui-ready` |
+| Closing a tab or the idle sign-out ends the session in the browser; the token stays valid on the server until it expires (8 h) unless the employee logs out | server-side idle timeout / revocation is a follow-up |
 | The 8-hour token applies to citizens | raise `ACCESS_TOKEN_VALIDITY_IN_MINUTES` if that is unwanted for an installation (3.3) |
 | Citizens sign in again (OTP) in every new tab and on every new visit | more OTP SMS than before; accepted for #224 |
 | `CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED=true` on a public server lets anyone who knows the fixed OTP sign in as any citizen | keep it off outside test-only stacks |

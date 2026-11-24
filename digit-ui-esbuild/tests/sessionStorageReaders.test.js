@@ -159,7 +159,7 @@ test("redirect-to-login clean-up removes this tab's employee keys", () => {
   const s = read("packages/libraries/src/services/atoms/Utils/authSession.js");
   const list = s.match(/const AUTH_SESSION_KEYS = \[([^\]]*)\]/);
   assert.ok(list, "AUTH_SESSION_KEYS list exists");
-  for (const k of ["Employee.token", "Employee.user-info", "Employee.refresh-token", "token", "user-info", "Citizen.token", "Citizen.user-info"]) assert.ok(list[1].includes(`"${k}"`), k);
+  for (const k of ["Employee.token", "Employee.user-info", "Employee.refresh-token", "token", "user-info", "Citizen.token", "Citizen.user-info", "Digit.citizen.userRequestObject"]) assert.ok(list[1].includes(`"${k}"`), k);
 });
 
 /* ---------------- server: token valid 8 hours, not 7 days ---------------- */
