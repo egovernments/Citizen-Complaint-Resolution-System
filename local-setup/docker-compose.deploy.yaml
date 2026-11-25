@@ -138,6 +138,8 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+    # egov-rainmaker is private (VAPT #223); downloads use presigned URLs from
+    # egov-filestore. Only */pgr-landing/* (pre-login landing pictures) is public.
     # The credentials reach the script through the container environment and
     # are quoted there (`$$` is compose's literal `$`): spliced into the sh -c
     # string at compose time, a password with a space, `;` or `$` split the
@@ -150,7 +152,9 @@ services:
       /bin/sh -c "
       mc alias set myminio http://minio:9000 \"$${MINIO_ROOT_USER}\" \"$${MINIO_ROOT_PASSWORD}\";
       mc mb --ignore-existing myminio/egov-rainmaker;
-      mc anonymous set download myminio/egov-rainmaker;
+      mc anonymous set none myminio/egov-rainmaker;
+      echo '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":[\"*\"]},\"Action\":[\"s3:GetObject\"],\"Resource\":[\"arn:aws:s3:::egov-rainmaker/*/pgr-landing/*\"]}]}' > /tmp/public-landing.json;
+      mc anonymous set-json /tmp/public-landing.json myminio/egov-rainmaker;
       exit 0;
       "
     networks:
@@ -612,6 +616,7 @@ services:
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
       ISS3ENABLED: 'true'
       MINIO_URL: http://minio:9000
+      PRESIGNED_URL_EXPIRY_TIME_IN_SECS: ${FILESTORE_URL_EXPIRY_SECS:-3600}  # VAPT #223: 1 h, not 24 h
       AWS_KEY: ${MINIO_ROOT_USER}
       AWS_SECRETKEY: ${MINIO_ROOT_PASSWORD}
       IS_BUCKET_FIXED: 'true'

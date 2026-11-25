@@ -176,8 +176,13 @@ plugins:
           ["/boundary-service/boundary-hierarchy-definition/_search"]=true,
           ["/boundary-service/boundary/_search"]=true,
           ["/egov-indexer/index-operations/_index"]=true, ["/egov-indexer/index-operations/_reload"]=true,
-          ["/filestore/v1/file"]=true, ["/filestore/v1/files"]=true, ["/filestore/v1/files/url"]=true,
-          ["/filestore/v1/files/id"]=true, ["/filestore/v1/files/tag"]=true,
+          -- /filestore/v1/{file,files,files/url,files/id,files/tag} REMOVED from
+          -- auth-optional (VAPT: insecure file storage, #223). Anyone holding a
+          -- fileStoreId could download a complaint attachment without logging
+          -- in. They are now PROTECTED (a valid token is required, on every
+          -- method, incl. multipart uploads) but action-RBAC-exempt — see
+          -- RBAC_EXEMPT below. Pictures shown before login (landing page) are
+          -- served from the bucket's public pgr-landing/ prefix instead.
           ["/egov-url-shortening"]=true,
           ["/workflow/history/v1/_search"]=true, ["/egov-idgen/id/_generate"]=true,
           -- /user/_search REMOVED from auth-optional (audit: anonymous-user-search).
@@ -411,6 +416,15 @@ plugins:
               -- classification and is strictly stricter than master (which allowed
               -- anonymous).
               or p == "/user/_search"
+              -- Filestore (#223): same model as /user/_search. A token is now
+              -- required (no more anonymous downloads), but there is no
+              -- per-role action check: /files/id has no accesscontrol actions
+              -- at all and upload/url are mapped to only some roles, so RBAC
+              -- would 403 admins and screening officers. Any logged-in user may
+              -- use them; a per-file ownership check is a filestore change.
+              or p == "/filestore/v1/file" or p == "/filestore/v1/files"
+              or p == "/filestore/v1/files/url" or p == "/filestore/v1/files/id"
+              or p == "/filestore/v1/files/tag"
         end
 
         local function enforce_rbac(resolved, token)
@@ -463,17 +477,36 @@ plugins:
         -- that its roles cannot authorize. Fail CLOSED on a protected path with
         -- no resolvable token. (The SPA, Keycloak and health routes were already
         -- returned above, so this reaches only DIGIT API routes.)
-        if kong.request.get_method() ~= "POST" then
-          if not is_protected then return end          -- auth-optional GETs (boundary, filestore dl, ...) pass
+        --
+        -- Multipart POSTs (filestore uploads, #223) take the same header route:
+        -- they have no JSON body to carry RequestInfo.authToken, so the JSON
+        -- gate below 401'd them on a protected path, and on the old
+        -- auth-optional filestore path they passed with no user identified.
+        -- `Authorization: Bearer` is honoured as well because digit-ui-v2, the
+        -- configurator and the MCP (DigitApiClient) send the token that way.
+        local ctype = kong.request.get_header("content-type")
+        -- Exact media type (the part before any ";" parameters), never a
+        -- substring, and only on the filestore upload paths. Every other POST,
+        -- whatever its Content-Type, goes through the JSON branch below, which
+        -- replaces RequestInfo.userInfo with the user resolved from the token.
+        local mtype = type(ctype) == "string" and ctype:lower():match("^%s*([^;%s]+)") or nil
+        local upath = kong.request.get_path()
+        local is_upload = mtype == "multipart/form-data"
+          and (upath == "/filestore/v1/files" or upath == "/filestore/v1/file")
+        if kong.request.get_method() ~= "POST" or is_upload then
+          if not is_protected then return end          -- auth-optional GETs (boundary, localization, ...) pass
           -- A CORS preflight never carries credentials, and this pre-function runs
           -- before the global cors plugin, so a 401 here fails the browser's preflight
           -- for every protected path. Let a real preflight through: the cors plugin
           -- answers it itself (preflight_continue is off), so it never reaches the backend.
           if kong.request.get_method() == "OPTIONS" and kong.request.get_header("Access-Control-Request-Method") then return end
           local hdr = kong.request.get_header("auth-token")
+          local authz = kong.request.get_header("authorization")
+          local btok = type(authz) == "string" and authz:match("^[Bb]earer%s+(%S+)%s*$") or nil
           local q = kong.request.get_query()
           local qtok = q and q["access_token"]
           local ntoken = (type(hdr) == "string" and hdr ~= "" and hdr)
+                      or btok
                       or (type(qtok) == "string" and qtok ~= "" and qtok) or nil
           if not ntoken then deny_unauth(); return end  -- protected, no token -> 401 (or audit-warn)
           local resolved, status = resolve_principal(ntoken)
