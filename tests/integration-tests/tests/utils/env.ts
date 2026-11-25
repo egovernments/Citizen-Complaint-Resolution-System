@@ -87,7 +87,9 @@ function splitList(raw: string): string[] {
  * silently redirect a run at the wrong host.
  */
 export const BASE_URL = process.env.BASE_URL || 'http://localhost';
-export const TENANT = process.env.DIGIT_TENANT || PROFILE?.tenant.city || 'ke.nairobi';
+export const TENANT = process.env.DIGIT_TENANT || PROFILE?.tenant.city || '';
+/** Workspace slug: the input that names the deployment under test (or discovered from DIGIT_TENANT). */
+export const TENANT_SLUG = process.env.IDENTITY_TEST_TENANT_SLUG || PROFILE?.tenant.slug || '';
 // TENANT_CODE / ADMIN_USER / ADMIN_PASSWORD are the names some deploy/*.env files
 // (pg, maputo-local) set; accepting them here keeps one admin identity for every caller.
 export const ROOT_TENANT =
@@ -95,20 +97,26 @@ export const ROOT_TENANT =
   process.env.TENANT_CODE ||
   PROFILE?.tenant.root ||
   (TENANT.includes('.') ? TENANT.split('.')[0] : TENANT);
+/**
+ * The STACK's root tenant (globalConfigs stateTenantId), which on a v2.20 stack
+ * hosting several workspaces is not the workspace under test. A few platform
+ * reads legitimately target it (the configurator's analytics-provider lookup).
+ */
+export const STACK_ROOT_TENANT = (process.env.STACK_ROOT_TENANT || PROFILE?.globalConfigs.stateTenantId || ROOT_TENANT).split('.')[0];
 export const ADMIN_USER = process.env.DIGIT_USERNAME || process.env.ADMIN_USER || 'ADMIN';
 export const ADMIN_PASS = process.env.DIGIT_PASSWORD || process.env.ADMIN_PASSWORD || 'eGov@123';
-export const FIXED_OTP = process.env.FIXED_OTP || '123456';
 /**
  * The complaint type + boundary leaf every seeded complaint is filed against.
  * The profile does not just echo a config value here: pgr.seedServiceCode is the
  * one service whose department a real employee on this deployment actually holds
  * (see the persona-triple comment in personas.ts), and pgr.seedLocalityCode is a
  * leaf proven to exist in the live boundary tree. Guessing either wrong fails the
- * create/assign with DEPARTMENT_NOT_FOUND or a silently dropped record, so the
- * nairobi literals below are a floor, never a plan.
+ * create/assign with DEPARTMENT_NOT_FOUND or a silently dropped record. Empty when
+ * discovery found no seed plan: specs that file complaints skip with the reason the
+ * profile recorded (personas.unresolvedDiagnostics['pgr.seedPlan']).
  */
-export const SERVICE_CODE = process.env.SERVICE_CODE || PROFILE?.pgr.seedServiceCode || 'IllegalConstruction';
-export const LOCALITY_CODE = process.env.LOCALITY_CODE || PROFILE?.pgr.seedLocalityCode || 'NAIROBI_CITY_VIWANDANI';
+export const SERVICE_CODE = process.env.SERVICE_CODE || PROFILE?.pgr.seedServiceCode || '';
+export const LOCALITY_CODE = process.env.LOCALITY_CODE || PROFILE?.pgr.seedLocalityCode || '';
 export const DEFAULT_PASSWORD = 'eGov@123';
 
 /**
@@ -149,7 +157,7 @@ export const GRO_USER = process.env.GRO_USER || ADMIN_USER;
 export const GRO_PASS = process.env.GRO_PASSWORD || ADMIN_PASS;
 
 /** Ward-scoped CSR for boundary jurisdiction-filter regression. */
-export const WARD_CSR_USER = process.env.WARD_CSR_USER || 'BOMET_CSR_CHESOEN_1780282462';
+export const WARD_CSR_USER = process.env.WARD_CSR_USER || PROFILE?.personas.resolved['ward-scoped-csr']?.username || '';
 export const WARD_CSR_PASS = process.env.WARD_CSR_PASSWORD || DEFAULT_PASSWORD;
 
 /**
@@ -178,13 +186,12 @@ export const FORBIDDEN_WARDS = splitList(process.env.FORBIDDEN_WARDS || '');
  * chain's floor, and profile-setup warns when it had to fall back
  * (labelSource !== 'localization').
  *
- * 'Bomet County' survives underneath only because it is what a no-profile run has
- * always done. It is wrong on every deployment except bomet.
+ * Empty without a profile: no other deployment's label is a safe guess.
  */
-export const TENANT_LABEL = process.env.TENANT_LABEL || PROFILE?.tenant.label || 'Bomet County';
+export const TENANT_LABEL = process.env.TENANT_LABEL || PROFILE?.tenant.label || '';
 
-/** Known complaint that is assigned to EMPLOYEE_USER on the deployment. */
-export const ASSIGNED_COMPLAINT_ID = process.env.ASSIGNED_COMPLAINT_ID || 'PG-PGR-2026-04-13-000848';
+/** Operator override for a complaint assigned to EMPLOYEE_USER; lifecycle.setup seeds one otherwise. */
+export const ASSIGNED_COMPLAINT_ID = process.env.ASSIGNED_COMPLAINT_ID || '';
 
 /**
  * A real CITY tenant code (not the state root) known to exist in the tenants
@@ -195,12 +202,13 @@ export const ASSIGNED_COMPLAINT_ID = process.env.ASSIGNED_COMPLAINT_ID || 'PG-PG
  * degenerates to the root and the search test asserts against the only tenant
  * there is — correct, and better than searching for a ke.nairobi nobody seeded.
  */
-export const CITY_TENANT = process.env.CITY_TENANT || PROFILE?.tenant.city || 'ke.nairobi';
+export const CITY_TENANT = process.env.CITY_TENANT || PROFILE?.tenant.city || TENANT;
 
 // ── Keycloak SSO config ────────────────────────────────────────────────────
-// Read by tests/keycloak/*.spec.ts. Each spec self-skips when the realm's
-// OIDC discovery endpoint isn't reachable (deployments without KC enabled).
-export const KC_REALM = process.env.KC_REALM || ROOT_TENANT;
+// Read by tests/keycloak/*.spec.ts. The deploy creates one Keycloak realm for
+// every tenant, `digit` (keycloak_organization_realm in the Ansible deploy);
+// set KC_REALM only where a deployment renamed it.
+export const KC_REALM = process.env.KC_REALM || 'digit';
 export const KC_CLIENT_ID = process.env.KC_CLIENT_ID || 'digit-ui';
 export const KC_BASE = process.env.KC_BASE || `${BASE_URL}/auth`;
 
@@ -214,9 +222,9 @@ export const KC_BASE = process.env.KC_BASE || `${BASE_URL}/auth`;
  * discovers the real prefix live from egov-idgen at setup time (pgr-idgen.ts)
  * and persists it on the provisioned citizen; this only load-bears when that
  * discovery didn't run. The profile asks egov-idgen the same question once per
- * run, so the 'NCCG' (Nairobi) floor is now reached only with no profile at all.
+ * run. Empty without a profile: no other deployment's prefix is a safe guess.
  */
-export const PGR_ID_PREFIX = process.env.PGR_ID_PREFIX || PROFILE?.pgr.idPrefix || 'NCCG';
+export const PGR_ID_PREFIX = process.env.PGR_ID_PREFIX || PROFILE?.pgr.idPrefix || '';
 
 /**
  * Localization locales seeded on the deployment, comma-separated. The timeline

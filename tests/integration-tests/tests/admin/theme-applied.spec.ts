@@ -77,7 +77,10 @@ Catches the most common theme regression — MDMS fetch fails or the applyTheme(
     primaryDark: colors.primary?.dark ?? '',
     headerSidenav: colors.digitv2?.['header-sidenav'] ?? '',
     textPrimary: colors.text?.primary ?? '',
-    border: colors.border ?? '',
+    // A v3 ThemeConfig (it carries `primary-1`) maps `card-border` onto
+    // --color-border as well (applyTheme.js V3_EXPANSION), and that pass runs last.
+    border:
+      (typeof (colors as any)['primary-1'] === 'string' && (colors as any)['card-border']) || colors.border || '',
   };
   console.log('MDMS ThemeConfig colours:', expected);
 

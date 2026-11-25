@@ -189,6 +189,26 @@ export async function fetchTenantLabel(
   return (data.messages || []).find((m) => m.code === want)?.message;
 }
 
+/**
+ * Display names for boundary codes, from rainmaker-boundary-<hierarchy> — the
+ * module the PGR UI loads for its boundary dropdowns (products/pgr Module.js).
+ * Codes without a label are left out; the UI then shows the raw code.
+ */
+export async function fetchBoundaryLabels(
+  tenantId: string,
+  hierarchyType: string,
+  opts?: { locale?: string; authToken?: string; baseUrl?: string },
+): Promise<Record<string, string>> {
+  const baseUrl = opts?.baseUrl ?? BASE_URL;
+  const module = `rainmaker-boundary-${hierarchyType.toLowerCase()}`;
+  const data = await postJson<{ messages?: { code: string; message: string }[] }>(
+    `${baseUrl}/localization/messages/v1/_search` +
+      `?tenantId=${encodeURIComponent(tenantId)}&locale=${opts?.locale ?? 'en_IN'}&module=${encodeURIComponent(module)}`,
+    { RequestInfo: requestInfo(opts?.authToken) },
+  );
+  return Object.fromEntries((data.messages || []).map((m) => [m.code, m.message]));
+}
+
 // ── boundary tree ────────────────────────────────────────────────────────────
 
 export interface BoundaryShape {

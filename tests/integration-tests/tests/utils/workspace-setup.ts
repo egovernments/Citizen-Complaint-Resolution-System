@@ -429,8 +429,15 @@ export async function downloadEmployeeTemplate(digit: Digit, base: string): Prom
         uuid: user.uuid, id: user.id, mobileNumber: user.mobileNumber },
       environment: origin, tenant: user.tenantId, targetTenant: user.tenantId, currentPhase: 1, completedPhases: [], authToken: token,
     })), { user: digit.user as any, token: digit.context.access_token, origin: new URL(base).origin });
-    await page.goto(`${base}/configurator/onboarding/employees`, { waitUntil: 'domcontentloaded' });
-    await page.getByText('Upload a file', { exact: true }).click();
+    // OnboardingLayout locks a step whose predecessors are not in completedPhases and
+    // redirects a direct URL to the resume step. The seeded state starts empty and the
+    // workspace's real progress arrives from the server afterwards, so open the step
+    // from the rail once it reports Employees as reachable, as a person would.
+    await page.goto(`${base}/configurator/onboarding`, { waitUntil: 'domcontentloaded' });
+    const railEntry = page.getByRole('navigation', { name: 'Setup steps' }).getByRole('button', { name: /^Employees\b/ });
+    await expect(railEntry, 'Employees step unlocked by the workspace progress').toBeEnabled({ timeout: 60_000 });
+    await railEntry.click();
+    await page.getByText('Upload a file', { exact: true }).click({ timeout: 60_000 });
     const get = page.getByRole('button', { name: 'Get the template' });
     await expect(get, 'reference data loaded').toBeEnabled({ timeout: 60_000 });
     await get.click();
@@ -449,6 +456,33 @@ export async function downloadEmployeeTemplate(digit: Digit, base: string): Prom
   }
 }
 
+const LOWER = 'abcdefghijkmnopqrstuvwxyz';
+const UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const DIGITS = '23456789';
+const SPECIAL = '@#$%';
+/** Unbiased integer in [0, max), as configurator/src/identity/memberActions.ts randomInt. */
+function randomInt(max: number): number {
+  const limit = 2 ** 32 - (2 ** 32 % max);
+  let word: number;
+  do word = randomBytes(4).readUInt32BE(0); while (word >= limit);
+  return word % max;
+}
+/**
+ * Port of configurator memberActions.throwawayPassword (#2713): one of each class egov-user's
+ * default policy needs, filled to 12, Fisher-Yates shuffled. Without a password HRMS generates
+ * one that can lack an uppercase letter and egov-user refuses it (INVALID_PWD_PATTERN).
+ */
+export function throwawayPassword(length = 12): string {
+  const all = LOWER + UPPER + DIGITS + SPECIAL;
+  const chars = [LOWER, UPPER, DIGITS, SPECIAL].map(set => set[randomInt(set.length)]);
+  while (chars.length < length) chars.push(all[randomInt(all.length)]);
+  for (let index = chars.length - 1; index > 0; index -= 1) {
+    const swap = randomInt(index + 1);
+    [chars[index], chars[swap]] = [chars[swap], chars[index]];
+  }
+  return chars.join('');
+}
+
 export interface Staff { key: string; name: string; email: string; mobile: string; role: 'GRO' | 'PGR_LME'; department: string; jurisdiction: string }
 export interface Hired extends Staff { code: string; uuid: string }
 
@@ -463,7 +497,9 @@ export async function hireAndLink(digit: Digit, base: string, people: Staff[]): 
     const code = `EMP_${String(next++).padStart(4, '0')}`;
     const employee = {
       code, tenantId, employeeStatus: 'EMPLOYED', employeeType: 'PERMANENT',
-      user: { userName: person.name.toLowerCase().replace(/[^a-z0-9]+/g, '.'), name: person.name, mobileNumber: person.mobile, emailId: person.email,
+      // The username is the code (HRMS makes it so anyway); the password is a throwaway that
+      // identity-bff replaces at first sign-in, as createAndLink sends it.
+      user: { userName: code, password: throwawayPassword(), name: person.name, mobileNumber: person.mobile, emailId: person.email,
         type: 'EMPLOYEE', active: true, tenantId,
         roles: ['EMPLOYEE', person.role].map(r => ({ code: r, name: roles.get(r) ?? r, tenantId })) },
       jurisdictions: [{ boundary: person.jurisdiction, boundaryType: BOUNDARIES.find(b => b.code === person.jurisdiction)!.type,

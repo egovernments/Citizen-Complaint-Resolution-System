@@ -4,9 +4,16 @@ import { authorizeUrl, identityJson } from '../utils/identity-bff';
 import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 
 /**
- * The wrong-password target: a Keycloak login with no DIGIT user and no roles
- * (scripts/seed-personas.ts seeds LOGIN_PROBE_LOGIN and writes its password),
+ * The wrong-password target: a Keycloak login with no DIGIT user and no roles,
  * so brute-force protection counts these failures against it, never a persona.
+ * Create it once per deployment in realm `digit` (never link it to DIGIT) and
+ * set LOGIN_PROBE_LOGIN to its email; nobody needs to know its password:
+ *   docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --config /tmp/kcadm.cfg \
+ *     --server http://127.0.0.1:8180 --realm master --user admin --password <keycloak_admin_password>
+ *   docker exec keycloak /opt/keycloak/bin/kcadm.sh create users --config /tmp/kcadm.cfg -r digit \
+ *     -s username=<email> -s email=<email> -s enabled=true -s emailVerified=true
+ *   docker exec keycloak /opt/keycloak/bin/kcadm.sh set-password --config /tmp/kcadm.cfg -r digit \
+ *     --username <email> --new-password "$(openssl rand -base64 24)"
  */
 const PROBE_LOGIN = process.env.LOGIN_PROBE_LOGIN?.trim() ?? '';
 
@@ -60,7 +67,7 @@ test.describe('Employee Login — BFF', () => {
   });
 
   test('a real account with a wrong password is rejected', { tag: ['@area:auth', '@persona:employee'] }, async ({ page }) => {
-    expect(PROBE_LOGIN, 'Set LOGIN_PROBE_LOGIN in the env profile and seed it with scripts/seed-personas.ts').not.toBe('');
+    expect(PROBE_LOGIN, 'Set LOGIN_PROBE_LOGIN to a Keycloak login (realm digit) with no DIGIT link; the recipe is at the top of this file').not.toBe('');
     await expectRefused(page, PROBE_LOGIN, `wrong-${Date.now()}`);
   });
 

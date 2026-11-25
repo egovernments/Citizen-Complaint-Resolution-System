@@ -1,52 +1,29 @@
-/** New Keycloak person -> BFF citizen context -> direct DIGIT service calls.
- * The fixture creates a credentialed person with a verified phone. It does not
- * claim to execute Google consent; sso-config covers the provider hand-off.
+/** New citizen by BFF phone OTP -> BFF citizen context -> direct DIGIT service calls.
+ * v2.20 citizens sign in only with their phone and a one-time code: the
+ * digit-ui-citizen client offers no password method by default, and citizen
+ * `_select` only trusts a phone the BFF proved. The code comes from
+ * IDENTITY_TEST_OTP_CODE (configuredOtp), as for every citizen fixture.
  */
-import { randomUUID } from 'node:crypto';
 import { test, expect, type BrowserContext } from '@playwright/test';
-import { BASE_URL, TENANT, KC_REALM, SERVICE_CODE, LOCALITY_CODE } from '../utils/env';
+import { BASE_URL, TENANT, SERVICE_CODE, LOCALITY_CODE } from '../utils/env';
 import { getMobileValidationRule, generateValidMobile } from '../utils/mdms-mobile';
-import { passwordSignIn, selectContext, type DigitContext } from '../utils/identity-bff';
-import { keycloakAdmin } from '../utils/keycloak-admin';
+import { citizenSignIn, type DigitContext } from '../utils/identity-bff';
+import { tryGetProfile } from '../utils/profile';
 
-test.describe('New Keycloak citizen BFF provisioning', () => {
+test.describe('New citizen BFF provisioning', () => {
   let browserContext: BrowserContext;
   let context: DigitContext;
-  let userUrl: string | undefined;
   let phone: string;
-  // The admin token and the person's password travel only through Node's fetch
-  // (keycloakAdmin calls, passwordSignIn): Playwright traces every context a test creates.
   test.beforeAll(async ({ browser }) => {
-    const admin = keycloakAdmin();
-    const rule = await getMobileValidationRule(TENANT);
-    phone = generateValidMobile(rule);
-    if (!rule.prefix) throw new Error('New citizen fixture needs the tenant country calling code');
-    const username = `e2e-citizen-${randomUUID()}`;
-    const password = `Test@${randomUUID()}`;
-    const created = await fetch(`${admin.base}/admin/realms/${KC_REALM}/users`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${admin.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email: `${username}@example.test`, enabled: true, emailVerified: true,
-        firstName: 'E2E', lastName: 'Citizen',
-        attributes: { phoneNumber: [`+${rule.prefix.replace(/^\+/, '')}${phone}`], phoneNumberVerified: ['true'] },
-        credentials: [{ type: 'password', value: password, temporary: false }] }),
-    });
-    expect(created.status).toBe(201);
-    userUrl = created.headers.get('location') ?? undefined;
-    expect(Boolean(userUrl)).toBe(true);
+    phone = generateValidMobile(await getMobileValidationRule(TENANT));
     browserContext = await browser.newContext();
-    await browserContext.addCookies(await passwordSignIn({ baseURL: BASE_URL, surface: 'citizen', username, password }));
-    context = await selectContext(browserContext.request, BASE_URL, 'citizen', TENANT);
+    context = await citizenSignIn(browserContext.request, BASE_URL, phone);
     expect(context.UserRequest.type).toBe('CITIZEN');
     expect(Boolean(context.access_token)).toBe(true);
   });
 
   test.afterAll(async () => {
     await browserContext?.close();
-    if (userUrl) {
-      const admin = keycloakAdmin();
-      expect((await fetch(userUrl, { method: 'DELETE', headers: { Authorization: `Bearer ${admin.token}` } })).status).toBe(204);
-    }
   });
 
   const info = () => ({ apiId: 'identity-new-citizen-test', authToken: context.access_token });
@@ -60,22 +37,31 @@ test.describe('New Keycloak citizen BFF provisioning', () => {
   });
 
   test('localization search works for new citizen through BFF-selected context', { tag: ['@local-only', '@persona:citizen'] }, async ({ request }) => {
-    const response = await request.post(`${BASE_URL}/localization/messages/v1/_search`, {
-      data: { RequestInfo: info(), tenantId: TENANT, locale: 'en_IN', module: 'rainmaker-common' },
-    });
+    // tenantId/locale/module are QUERY params on this service; in the body they are
+    // absent and it 400s "Required request parameter 'locale'" (see proxy-coverage.spec.ts).
+    const response = await request.post(
+      `${BASE_URL}/localization/messages/v1/_search?tenantId=${TENANT}&locale=en_IN&module=rainmaker-common`,
+      { data: { RequestInfo: info() } },
+    );
     expect(response.status()).toBe(200);
     expect((await response.json()).messages).toBeInstanceOf(Array);
   });
 
   test('access control works for new citizen through BFF-selected context', { tag: ['@local-only', '@persona:citizen'] }, async ({ request }) => {
     const response = await request.post(`${BASE_URL}/access/v1/actions/mdms/_get`, {
-      data: { RequestInfo: info(), tenantId: TENANT, rolesCodes: [{ code: 'CITIZEN' }] },
+      // roleCodes is a list of strings (not `rolesCodes` objects) and actionMaster is
+      // required, or it 400s "Atleast One Role is Required" (see proxy-coverage.spec.ts).
+      data: { RequestInfo: info(), tenantId: TENANT, roleCodes: ['CITIZEN'], actionMaster: 'actions-test', enabled: true },
     });
     expect(response.status()).toBe(200);
     expect(await response.json()).toHaveProperty('actions');
   });
 
   test('PGR complaint creation works for new citizen through BFF-selected context', { tag: ['@local-only', '@persona:citizen'] }, async ({ request }) => {
+    test.skip(
+      !SERVICE_CODE || !LOCALITY_CODE,
+      `no seed plan (service/locality): ${tryGetProfile()?.personas.unresolvedDiagnostics['pgr.seedPlan'] ?? 'no deployment profile'}`,
+    );
     const response = await request.post(`${BASE_URL}/pgr-services/v2/request/_create`, {
       data: { RequestInfo: info(), service: { tenantId: TENANT, serviceCode: SERVICE_CODE,
         description: 'E2E new BFF citizen complaint', source: 'web',

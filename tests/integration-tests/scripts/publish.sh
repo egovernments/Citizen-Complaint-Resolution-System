@@ -114,4 +114,4 @@ ssh "$HOST_SSH" "
   ls -1t | tail -n +$((RUN_LIMIT+1)) | xargs -r rm -rf
 "
 
-echo "[publish] done — https://naipepea.digit.org/tests/#test/<id> for individual tests"
+echo "[publish] done — ${BASE_URL:+$BASE_URL/tests/#test/<id> for individual tests}"
