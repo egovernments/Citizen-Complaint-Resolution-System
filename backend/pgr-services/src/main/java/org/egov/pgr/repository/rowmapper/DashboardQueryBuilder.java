@@ -143,13 +143,21 @@ public class DashboardQueryBuilder {
     }
 
     public String getFilteredDepartmentQuery(String tenantId, Long fromDate, Long toDate, List<Object> preparedStmtList) {
+        // The department masters are read from the tenant's own state root. MDMSUtils tries the
+        // city first and falls back to the state root; the seed and tenant bootstrap write these
+        // masters at the state root, so the two agree there. Unfiltered, both CTEs read every
+        // tenant's rows and DISTINCT ON picked one arbitrarily, so if ke and kenya both define
+        // STREETLIGHT, ke's breakdown could show kenya's department mapping and names.
+        String stateRoot = stateRoot(tenantId);
+        preparedStmtList.add(stateRoot);
+        preparedStmtList.add(stateRoot);
         StringBuilder sb = new StringBuilder(
             "WITH service_dept AS (" +
             " SELECT DISTINCT ON (data->>'code') data->>'code' AS service_code, data->>'department' AS dept_code" +
-            " FROM eg_mdms_data WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive = true AND data->>'department' IS NOT NULL" +
+            " FROM eg_mdms_data WHERE tenantid = ? AND schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive = true AND data->>'department' IS NOT NULL" +
             "), dept_names AS (" +
             " SELECT DISTINCT ON (data->>'code') data->>'code' AS dept_code, data->>'name' AS dept_name" +
-            " FROM eg_mdms_data WHERE schemacode = 'common-masters.Department' AND isactive = true" +
+            " FROM eg_mdms_data WHERE tenantid = ? AND schemacode = 'common-masters.Department' AND isactive = true" +
             "), filtered AS (" +
             " SELECT s.servicecode, s.applicationstatus, s.createdtime, s.lastmodifiedtime" +
             " FROM {schema}.eg_pgr_service_v2 s WHERE s.active = true AND ");
@@ -174,6 +182,13 @@ public class DashboardQueryBuilder {
     }
 
     // --- Helpers ---
+
+    /** The state root of {@code tenantId}: its first state.level.tenantid.length segments. */
+    private String stateRoot(String tenantId) {
+        String[] chunks = tenantId.split("\\.");
+        int len = Math.min(Math.max(config.getStateLevelTenantIdLength(), 1), chunks.length);
+        return String.join(".", java.util.Arrays.copyOf(chunks, len));
+    }
 
     /**
      * Appends tenant filter for MV queries (no column prefix, MVs use 'tenantid' directly).

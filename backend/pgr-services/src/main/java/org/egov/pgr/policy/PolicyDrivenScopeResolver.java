@@ -122,9 +122,10 @@ public class PolicyDrivenScopeResolver {
      * tenant, or a descendant subtree of it — narrowing into a city under a state-wide identity is
      * fine, but a caller may never widen past their own tenant/subtree merely by naming a
      * different tenantId in the search criteria. Fails closed (false) when either side is
-     * missing/blank, since there is then nothing to authorize against.
+     * missing/blank, since there is then nothing to authorize against. Also the check
+     * {@code DashboardTenantGuard} applies to {@code /v2/dashboard}.
      */
-    private static boolean isAuthorizedTenant(String callerTenantId, String requestedTenantId) {
+    public static boolean isAuthorizedTenant(String callerTenantId, String requestedTenantId) {
         if (callerTenantId == null || callerTenantId.isBlank()
                 || requestedTenantId == null || requestedTenantId.isBlank())
             return false;
