@@ -1,4 +1,4 @@
-// Idle logout for employees (#224, VAPT "Insecure Session Management").
+// Idle logout for employees and citizens (#224, VAPT "Insecure Session Management").
 //
 // Pure logic with an injected clock, event target, interval and shared store so
 // it can be tested without a browser.
@@ -21,6 +21,43 @@ export const ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "touchstart
 /** localStorage key holding the last employee activity time (epoch ms). Not a secret. */
 export const LAST_ACTIVITY_KEY = "Digit.EmployeeLastActivity";
 
+/** sessionStorage key holding a citizen's last activity time (epoch ms). Not a secret. */
+export const CITIZEN_LAST_ACTIVITY_KEY = "Digit.CitizenLastActivity";
+
+// The same timer for both user types; only the settings and the clock differ.
+// An employee's tabs share one clock (localStorage) so a forgotten background
+// tab cannot sign out the tab in use. Each citizen tab is its own OTP login
+// (#224), so a citizen's clock lives in that tab (sessionStorage); it still
+// survives a reload or a "reopen closed tab", like the employee's.
+const IDLE_PROFILES = {
+  EMPLOYEE: {
+    page: "employee",
+    timeoutConfig: "EMPLOYEE_IDLE_TIMEOUT_MINUTES",
+    warningConfig: "EMPLOYEE_IDLE_WARNING_SECONDS",
+    clockStorage: "localStorage",
+    activityKey: LAST_ACTIVITY_KEY,
+  },
+  CITIZEN: {
+    page: "citizen",
+    timeoutConfig: "CITIZEN_IDLE_TIMEOUT_MINUTES",
+    warningConfig: "CITIZEN_IDLE_WARNING_SECONDS",
+    clockStorage: "sessionStorage",
+    activityKey: CITIZEN_LAST_ACTIVITY_KEY,
+  },
+};
+
+/**
+ * The idle rules for a signed-in user: their type's profile, but only on that
+ * type's own pages (an employee on /employee/..., a citizen on /citizen/...).
+ * Null when none apply: signed out, another user type, or a public page.
+ */
+export const idleProfileFor = ({ pathname = "", userType = "" } = {}) => {
+  const type = String(userType || "").toUpperCase();
+  const profile = Object.prototype.hasOwnProperty.call(IDLE_PROFILES, type) ? IDLE_PROFILES[type] : null;
+  if (!profile) return null;
+  return String(pathname || "").split("/").includes(profile.page) ? { userType: type, ...profile } : null;
+};
+
 const RETURN_EVENTS = ["focus"]; // on the window
 const DOC_RETURN_EVENTS = ["visibilitychange"]; // on the document
 
@@ -33,11 +70,11 @@ export const idleTimeoutMs = (configuredMinutes) => {
   return Math.round(n * 60 * 1000);
 };
 
-/** A shared last-activity store over a Storage (localStorage in the app). Never throws. */
-export const storageActivityStore = (storage) => ({
+/** A last-activity store over a Storage, under `key` (the employee's by default). Never throws. */
+export const storageActivityStore = (storage, key = LAST_ACTIVITY_KEY) => ({
   read: () => {
     try {
-      const v = Number(storage && storage.getItem(LAST_ACTIVITY_KEY));
+      const v = Number(storage && storage.getItem(key));
       return Number.isFinite(v) && v > 0 ? v : null;
     } catch (e) {
       return null;
@@ -45,7 +82,7 @@ export const storageActivityStore = (storage) => ({
   },
   write: (t) => {
     try {
-      if (storage) storage.setItem(LAST_ACTIVITY_KEY, String(t));
+      if (storage) storage.setItem(key, String(t));
     } catch (e) {
       /* blocked storage: the per-tab countdown still works */
     }

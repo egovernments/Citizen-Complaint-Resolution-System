@@ -69,6 +69,9 @@ globalConfigs:
   employeeIdleTimeoutMinutes: 15
   # Seconds of warning before the idle sign-out (0 = no warning).
   employeeIdleWarningSeconds: 60
+  # The same for citizens on citizen pages.
+  citizenIdleTimeoutMinutes: 15
+  citizenIdleWarningSeconds: 60
   loginTenantAllowlist: []
   coreMobileConfigs: {"countryCode": "+91", "mobileNumberRegex": "^[6-9][0-9]{9}$"}
   corePostalConfigs: {}

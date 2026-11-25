@@ -66,6 +66,9 @@ var globalConfigs = (function () {
   var employeeIdleTimeoutMinutes = 15;
   // How many seconds before the idle sign-out the employee is warned. 0 = no warning.
   var employeeIdleWarningSeconds = 60;
+  // The same for a citizen signed in on citizen pages. Missing => 15 and 60.
+  var citizenIdleTimeoutMinutes = 15;
+  var citizenIdleWarningSeconds = 60;
 
   var getConfig = function (key) {
     if (key === "STATE_LEVEL_TENANT_ID") return stateTenantId;
@@ -96,6 +99,8 @@ var globalConfigs = (function () {
     else if (key === "ANALYTICS_CUSTOM_ENABLED") return analyticsCustomEnabled;
     else if (key === "EMPLOYEE_IDLE_TIMEOUT_MINUTES") return employeeIdleTimeoutMinutes;
     else if (key === "EMPLOYEE_IDLE_WARNING_SECONDS") return employeeIdleWarningSeconds;
+    else if (key === "CITIZEN_IDLE_TIMEOUT_MINUTES") return citizenIdleTimeoutMinutes;
+    else if (key === "CITIZEN_IDLE_WARNING_SECONDS") return citizenIdleWarningSeconds;
   };
 
   return {

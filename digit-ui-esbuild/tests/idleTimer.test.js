@@ -1,4 +1,4 @@
-// #224: an employee left idle is logged out. The timer is plain logic with an
+// #224: an employee or citizen left idle is logged out. The timer is plain logic with an
 // injected clock, events and interval, so every case below runs instantly.
 "use strict";
 const test = require("node:test");
@@ -13,7 +13,7 @@ const SRC = path.join(ROOT, "packages/libraries/src/services/atoms/Utils/idleTim
 const { outputFiles } = esbuild.buildSync({ entryPoints: [SRC], bundle: true, write: false, format: "cjs", platform: "node", target: "es2018" });
 const mod = { exports: {} };
 vm.runInNewContext(outputFiles[0].text, { module: mod, exports: mod.exports });
-const { startIdleTimer, idleTimeoutMs, DEFAULT_EMPLOYEE_IDLE_MINUTES, ACTIVITY_EVENTS, storageActivityStore, markEmployeeActive, LAST_ACTIVITY_KEY } = mod.exports;
+const { startIdleTimer, idleTimeoutMs, DEFAULT_EMPLOYEE_IDLE_MINUTES, ACTIVITY_EVENTS, storageActivityStore, markEmployeeActive, LAST_ACTIVITY_KEY, CITIZEN_LAST_ACTIVITY_KEY, idleProfileFor } = mod.exports;
 
 const MIN = 60 * 1000;
 
@@ -189,6 +189,61 @@ test("the shared store never throws on blocked storage", () => {
   assert.doesNotThrow(() => s.write(1));
 });
 
+/* ---------------- employee and citizen ---------------- */
+
+test("an employee on employee pages gets the employee rules and the shared clock", () => {
+  const p = idleProfileFor({ pathname: "/digit-ui/employee/pgr/inbox", userType: "EMPLOYEE" });
+  assert.strictEqual(p.userType, "EMPLOYEE");
+  assert.strictEqual(p.timeoutConfig, "EMPLOYEE_IDLE_TIMEOUT_MINUTES");
+  assert.strictEqual(p.warningConfig, "EMPLOYEE_IDLE_WARNING_SECONDS");
+  assert.strictEqual(p.clockStorage, "localStorage");
+  assert.strictEqual(p.activityKey, LAST_ACTIVITY_KEY);
+});
+
+test("a citizen on citizen pages gets the citizen rules and a clock kept in the tab", () => {
+  const p = idleProfileFor({ pathname: "/digit-ui/citizen/pgr/create-complaint/complaint-type", userType: "citizen" });
+  assert.strictEqual(p.userType, "CITIZEN");
+  assert.strictEqual(p.timeoutConfig, "CITIZEN_IDLE_TIMEOUT_MINUTES");
+  assert.strictEqual(p.warningConfig, "CITIZEN_IDLE_WARNING_SECONDS");
+  assert.strictEqual(p.clockStorage, "sessionStorage");
+  assert.strictEqual(p.activityKey, CITIZEN_LAST_ACTIVITY_KEY);
+  assert.notStrictEqual(CITIZEN_LAST_ACTIVITY_KEY, LAST_ACTIVITY_KEY);
+});
+
+test("no idle rules on the other user type's pages, on public pages, or for an unknown type", () => {
+  assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/employee/pgr/inbox", userType: "CITIZEN" }), null);
+  assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/citizen/pgr/complaints", userType: "EMPLOYEE" }), null);
+  for (const userType of ["EMPLOYEE", "CITIZEN"]) {
+    assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/landing", userType }), null, userType);
+    assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/privacy-policy", userType }), null, userType);
+  }
+  assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/citizen", userType: "SYSTEM" }), null);
+  assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/citizen", userType: "constructor" }), null);
+  assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/citizen", userType: "" }), null);
+  assert.strictEqual(idleProfileFor(), null);
+});
+
+test("a citizen's clock and an employee's clock never touch each other", () => {
+  const store = memStore({ [LAST_ACTIVITY_KEY]: "1000" });
+  storageActivityStore(store, CITIZEN_LAST_ACTIVITY_KEY).write(9000);
+  assert.strictEqual(store.getItem(LAST_ACTIVITY_KEY), "1000");
+  assert.strictEqual(storageActivityStore(store, CITIZEN_LAST_ACTIVITY_KEY).read(), 9000);
+  assert.strictEqual(storageActivityStore(store).read(), 1000);
+});
+
+test("a citizen left idle is logged out by the same timer, on the citizen clock", () => {
+  const store = memStore();
+  const clock = storageActivityStore(store, CITIZEN_LAST_ACTIVITY_KEY);
+  const h = harness(3 * MIN, { shared: clock });
+  h.advance(2 * MIN);
+  h.fire("touchstart");
+  h.advance(2 * MIN);
+  assert.strictEqual(h.idle(), 0, "touch restarted the countdown");
+  h.advance(1 * MIN + 1);
+  assert.strictEqual(h.idle(), 1);
+  assert.strictEqual(store.getItem(LAST_ACTIVITY_KEY), null, "the employee clock is untouched");
+});
+
 /* ---------------- wiring ---------------- */
 
 test("IdleLogout is mounted in the app next to SessionCollisionNotice", () => {
@@ -197,13 +252,14 @@ test("IdleLogout is mounted in the app next to SessionCollisionNotice", () => {
   assert.match(app, /<IdleLogout \/>/);
 });
 
-test("IdleLogout: employee pages only, DIGIT login only, shared clock, and a tab-only logout", () => {
+test("IdleLogout: the user type's own pages only, DIGIT login only, its own clock, and a tab-only logout", () => {
   const c = fs.readFileSync(path.join(ROOT, "packages/modules/core/src/components/IdleLogout.js"), "utf8");
-  assert.match(c, /EMPLOYEE_IDLE_TIMEOUT_MINUTES/);
-  assert.match(c, /"employee"/);
-  assert.match(c, /EMPLOYEE/);
+  assert.match(c, /idleProfileFor\(\{ pathname, userType: user\?\.info\?\.type \}\)/, "rules come from the shared profile");
+  assert.match(c, /config\(profile\.timeoutConfig\)/);
+  assert.match(c, /config\(profile\.warningConfig\)/);
   assert.match(c, /isKeycloakAuth\(\)/, "Keycloak mode is skipped");
-  assert.match(c, /storageActivityStore\(window\.localStorage\)/, "uses the shared last-activity clock");
+  assert.match(c, /storageActivityStore\(window\[profile\.clockStorage\], profile\.activityKey\)/, "uses the profile's last-activity clock");
+  assert.match(c, /if \(userType !== "EMPLOYEE"\) return undefined;\s*return onEmployeeSignOut/, "the other-tab logout stays employee-only");
   assert.match(c, /Digit\.UserService\.logoutUser\(\)/, "ends the login on the server");
   // The automatic paths (idle, signed out in another tab) end only this tab's
   // login; only the user's own "Sign out now" click may run the full logout,
@@ -216,8 +272,26 @@ test("IdleLogout: employee pages only, DIGIT login only, shared clock, and a tab
   assert.match(c, /onEmployeeSignOut\(\(\) => endThisLogin\(/, "a logout in another tab uses the tab-only sign-out");
 });
 
-test("the idle limit is a deploy setting in globalConfigs (bundled, ansible and Helm)", () => {
+test("the idle limits are deploy settings in globalConfigs (bundled, ansible and Helm)", () => {
   for (const f of ["public/globalConfigs.js", "../local-setup/ansible/templates/globalConfigs.js.j2", "../devops/deploy-as-code/charts/urban/digit-ui/files/globalConfigs.js.tpl"]) {
-    assert.match(fs.readFileSync(path.join(ROOT, f), "utf8"), /EMPLOYEE_IDLE_TIMEOUT_MINUTES/, f);
+    const src = fs.readFileSync(path.join(ROOT, f), "utf8");
+    for (const key of ["EMPLOYEE_IDLE_TIMEOUT_MINUTES", "EMPLOYEE_IDLE_WARNING_SECONDS", "CITIZEN_IDLE_TIMEOUT_MINUTES", "CITIZEN_IDLE_WARNING_SECONDS"]) {
+      assert.match(src, new RegExp(key), `${f}: ${key}`);
+    }
+  }
+  const values = fs.readFileSync(path.join(ROOT, "../devops/deploy-as-code/charts/urban/digit-ui/values.yaml"), "utf8");
+  assert.match(values, /citizenIdleTimeoutMinutes: 15/);
+  assert.match(values, /citizenIdleWarningSeconds: 60/);
+});
+
+test("both login pages say why the user was signed out, through the one shared notice", () => {
+  const notice = fs.readFileSync(path.join(ROOT, "packages/modules/core/src/components/SignedOutNotice.js"), "utf8");
+  assert.match(notice, /readLoginRedirect\(/);
+  for (const key of ["CORE_SIGNED_OUT_IDLE", "CORE_SIGNED_OUT_EXPIRED", "CORE_SIGNED_OUT_OTHER_TAB"]) assert.match(notice, new RegExp(key));
+  for (const f of ["packages/modules/core/src/pages/employee/Login/login.js", "packages/modules/core/src/pages/citizen/Login/SelectMobileNumber.js"]) {
+    const src = fs.readFileSync(path.join(ROOT, f), "utf8");
+    assert.match(src, /import SignedOutNotice from "\.\.\/\.\.\/\.\.\/components\/SignedOutNotice"/, f);
+    assert.match(src, /<SignedOutNotice \/>/, f);
+    assert.doesNotMatch(src, /CORE_SIGNED_OUT_IDLE/, `${f} has no copy of its own`);
   }
 });

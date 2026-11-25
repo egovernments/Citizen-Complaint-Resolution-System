@@ -25,6 +25,7 @@ import {
   Field as V2Field,
 } from "@egovernments/digit-ui-components-v2";
 import { Phone } from "lucide-react";
+import SignedOutNotice from "../../../components/SignedOutNotice";
 import Header from "../../../components/Header";
 
 const SelectMobileNumber = ({
@@ -81,6 +82,7 @@ const SelectMobileNumber = ({
   return (
     <V2LoginShell>
       <SignInCard title={headerText} text={cardText}>
+        <SignedOutNotice />
         <form
           onSubmit={handleSubmit}
           style={{ display: "flex", flexDirection: "column", gap: "16px" }}

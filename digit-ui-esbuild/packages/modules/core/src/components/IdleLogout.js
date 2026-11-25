@@ -6,27 +6,29 @@ import {
   startIdleTimer,
   idleTimeoutMs,
   idleWarningMs,
+  idleProfileFor,
   storageActivityStore,
-  markEmployeeActive,
   redirectToLogin,
   isKeycloakAuth,
   onEmployeeSignOut,
   SIGN_OUT_REASONS,
 } from "@egovernments/digit-ui-libraries";
 
-// Logs an employee out after a period with no mouse, keyboard, touch or scroll
-// activity in ANY of their open tabs (#224, VAPT "Insecure Session Management").
-// Default 15 minutes; set globalConfigs EMPLOYEE_IDLE_TIMEOUT_MINUTES to change
-// it, or to 0 to turn it off. Only for a signed-in employee on employee pages
-// with DIGIT login; citizen/public pages and Keycloak mode are untouched.
+// Logs a signed-in user out after a period with no mouse, keyboard, touch or
+// scroll activity (#224, VAPT "Insecure Session Management"): an employee on
+// employee pages, a citizen on citizen pages, with DIGIT login. Public pages
+// and Keycloak mode are untouched. Default 15 minutes for both; set globalConfigs
+// EMPLOYEE_IDLE_TIMEOUT_MINUTES / CITIZEN_IDLE_TIMEOUT_MINUTES to change it, or
+// to 0 to turn it off. See idleProfileFor for what differs between the two.
 //
-// A minute before (EMPLOYEE_IDLE_WARNING_SECONDS, 0 = no warning) a dialog says
-// so and offers to stay signed in. Staying signed in, or working in another of
-// the employee's tabs, closes the dialog in every tab.
+// A minute before (EMPLOYEE_/CITIZEN_IDLE_WARNING_SECONDS, 0 = no warning) a
+// dialog says so and offers to stay signed in. For an employee, staying signed
+// in or working in another of their tabs closes the dialog in every tab. A
+// citizen's complaint draft survives the sign-out (authSession keeps it).
 //
-// Also ends this tab's login when the employee logs out in another tab: since
-// #224 every tab holds its own login, so the logout button alone used to leave
-// the other tabs signed in.
+// Also ends an employee tab's login when that employee logs out in another
+// tab: since #224 every tab holds its own login, so the logout button alone
+// used to leave the other tabs signed in.
 
 // Remembers, per tab, which login the shared activity clock was last reset for.
 // A NEW token here (any login screen, the dashboard's own login, a password
@@ -129,26 +131,28 @@ const IdleWarning = ({ signOutAt, onStay, onSignOutNow }) => {
 
 const IdleLogout = () => {
   const { pathname } = useLocation();
-  const onEmployeePage = pathname.split("/").includes("employee");
   const user = window?.Digit?.UserService?.getUser?.();
   const token = user?.access_token || null;
-  const employeeSignedIn = !!token && String(user?.info?.type || "").toUpperCase() === "EMPLOYEE";
-  const active = onEmployeePage && employeeSignedIn && !isKeycloakAuth();
+  const profile = token && !isKeycloakAuth() ? idleProfileFor({ pathname, userType: user?.info?.type }) : null;
+  const userType = profile?.userType || null;
+  const active = !!profile;
   const [signOutAt, setSignOutAt] = useState(null);
   const timer = useRef(null);
 
   useEffect(() => {
     setSignOutAt(null);
     timer.current = null;
-    if (!active) return undefined;
-    const timeoutMs = idleTimeoutMs(window?.globalConfigs?.getConfig?.("EMPLOYEE_IDLE_TIMEOUT_MINUTES"));
+    if (!profile) return undefined;
+    const config = (key) => window?.globalConfigs?.getConfig?.(key);
+    const timeoutMs = idleTimeoutMs(config(profile.timeoutConfig));
     if (!timeoutMs) return undefined;
+    const clock = storageActivityStore(window[profile.clockStorage], profile.activityKey);
 
     try {
       const seen = window.sessionStorage.getItem(SEEN_LOGIN_KEY);
       const current = fingerprint(token);
       if (seen !== current) {
-        markEmployeeActive(window.localStorage);
+        clock.write(Date.now());
         window.sessionStorage.setItem(SEEN_LOGIN_KEY, current);
       }
     } catch (e) {
@@ -158,25 +162,27 @@ const IdleLogout = () => {
     const stop = startIdleTimer({
       timeoutMs,
       onIdle: () => endThisLogin(SIGN_OUT_REASONS.IDLE),
-      warnBeforeMs: idleWarningMs(window?.globalConfigs?.getConfig?.("EMPLOYEE_IDLE_WARNING_SECONDS"), timeoutMs),
+      warnBeforeMs: idleWarningMs(config(profile.warningConfig), timeoutMs),
       onWarn: (at) => setSignOutAt(at),
       onActive: () => setSignOutAt(null),
-      shared: storageActivityStore(window.localStorage),
+      shared: clock,
     });
     timer.current = stop;
     return () => {
       timer.current = null;
       stop();
     };
-  }, [active, token]);
+    // `profile` is a new object each render; its identity is the user type.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userType, token]);
 
   // Independent of the idle setting: the same employee logging out in another
   // tab ends this one too. A different employee's tab stays signed in.
   const userId = user?.info?.uuid || null;
   useEffect(() => {
-    if (!active) return undefined;
+    if (userType !== "EMPLOYEE") return undefined;
     return onEmployeeSignOut(() => endThisLogin(SIGN_OUT_REASONS.OTHER_TAB), { userId });
-  }, [active, token, userId]);
+  }, [userType, token, userId]);
 
   if (!active || !signOutAt) return null;
   return (

@@ -36,6 +36,9 @@ var globalConfigs = (function () {
   // #224: idle logout for employees, in minutes (0 = off). Default 15.
   var employeeIdleTimeoutMinutes = {{ if hasKey .Values.globalConfigs "employeeIdleTimeoutMinutes" }}{{ .Values.globalConfigs.employeeIdleTimeoutMinutes | toJson }}{{ else }}15{{ end }};
   var employeeIdleWarningSeconds = {{ if hasKey .Values.globalConfigs "employeeIdleWarningSeconds" }}{{ .Values.globalConfigs.employeeIdleWarningSeconds | toJson }}{{ else }}60{{ end }};
+  // The same for citizens on citizen pages. Defaults 15 and 60.
+  var citizenIdleTimeoutMinutes = {{ if hasKey .Values.globalConfigs "citizenIdleTimeoutMinutes" }}{{ .Values.globalConfigs.citizenIdleTimeoutMinutes | toJson }}{{ else }}15{{ end }};
+  var citizenIdleWarningSeconds = {{ if hasKey .Values.globalConfigs "citizenIdleWarningSeconds" }}{{ .Values.globalConfigs.citizenIdleWarningSeconds | toJson }}{{ else }}60{{ end }};
   var loginTenantAllowlist = {{ .Values.globalConfigs.loginTenantAllowlist | toJson }};
   var coreMobileConfigs = {{ .Values.globalConfigs.coreMobileConfigs | toJson }};
   var corePostalConfigs = {{ .Values.globalConfigs.corePostalConfigs | toJson }};
@@ -74,6 +77,8 @@ var globalConfigs = (function () {
     else if (key === "EMPLOYEE_MODULE_DENYLIST") { return employeeModuleDenylist; }
     else if (key === "EMPLOYEE_IDLE_TIMEOUT_MINUTES") { return employeeIdleTimeoutMinutes; }
     else if (key === "EMPLOYEE_IDLE_WARNING_SECONDS") { return employeeIdleWarningSeconds; }
+    else if (key === "CITIZEN_IDLE_TIMEOUT_MINUTES") { return citizenIdleTimeoutMinutes; }
+    else if (key === "CITIZEN_IDLE_WARNING_SECONDS") { return citizenIdleWarningSeconds; }
     else if (key === "LOGIN_TENANT_ALLOWLIST") { return loginTenantAllowlist; }
     else if (key === "CORE_MOBILE_CONFIGS") { return coreMobileConfigs; }
     else if (key === "CORE_POSTAL_CONFIGS") { return corePostalConfigs; }

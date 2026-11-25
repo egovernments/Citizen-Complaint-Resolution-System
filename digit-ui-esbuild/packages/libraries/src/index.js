@@ -96,10 +96,10 @@ export * from "./constants/mobileValidation";
 export { initLibraries, Enums, Hooks, subFormRegistry, Request, MdmsService, getAuthAdapter, initAuthAdapter, AuthAdapter };
 // Cross-tab session-collision detection — see services/atoms/Utils/sessionCollision.js
 export { detectSessionCollision, onSessionCollision } from "./services/atoms/Utils/sessionCollision";
-// Employee login is tab-only, plus idle logout (#224) — see employeeSession.js / idleTimer.js
+// Employee and citizen logins are tab-only, plus idle logout for both (#224) — see employeeSession.js / idleTimer.js
 export { saveEmployeeLogin, purgeLegacyEmployeeAuth, bootUserFromLocal } from "./services/atoms/Utils/employeeSession";
 export { saveCitizenLogin, purgeLegacyCitizenAuth } from "./services/atoms/Utils/citizenSession";
-export { startIdleTimer, idleTimeoutMs, idleWarningMs, storageActivityStore, markEmployeeActive } from "./services/atoms/Utils/idleTimer";
+export { startIdleTimer, idleTimeoutMs, idleWarningMs, idleProfileFor, storageActivityStore, markEmployeeActive } from "./services/atoms/Utils/idleTimer";
 export { redirectToLogin, readLoginRedirect, SIGN_OUT_REASONS } from "./services/atoms/Utils/authSession";
 // Logout in one tab signs the employee out of every tab — see employeeSignOutBroadcast.js
 export { announceEmployeeSignOut, onEmployeeSignOut } from "./services/atoms/Utils/employeeSignOutBroadcast";

@@ -69,6 +69,9 @@ var globalConfigs = (function () {
   var employeeIdleTimeoutMinutes = {{ (employee_idle_timeout_minutes | default(15)) | to_json }};
   // Seconds of warning before the idle sign-out (0 = no warning). Default 60.
   var employeeIdleWarningSeconds = {{ (employee_idle_warning_seconds | default(60)) | to_json }};
+  // The same for citizens on citizen pages. Defaults 15 and 60.
+  var citizenIdleTimeoutMinutes = {{ (citizen_idle_timeout_minutes | default(15)) | to_json }};
+  var citizenIdleWarningSeconds = {{ (citizen_idle_warning_seconds | default(60)) | to_json }};
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
   // `postalCodePattern` is the ONLY postal-code knob (CCRS#722): a regex
@@ -118,6 +121,8 @@ var globalConfigs = (function () {
     if (key === "SHOW_TENANT_SWITCHER") return showTenantSwitcher;
     if (key === "EMPLOYEE_IDLE_TIMEOUT_MINUTES") return employeeIdleTimeoutMinutes;
     if (key === "EMPLOYEE_IDLE_WARNING_SECONDS") return employeeIdleWarningSeconds;
+    if (key === "CITIZEN_IDLE_TIMEOUT_MINUTES") return citizenIdleTimeoutMinutes;
+    if (key === "CITIZEN_IDLE_WARNING_SECONDS") return citizenIdleWarningSeconds;
     if (key === "LOGIN_TENANT_ALLOWLIST") return loginTenantAllowlist;
     if (key === "STATE_LEVEL_TENANT_ID") {
       return stateTenantId;
