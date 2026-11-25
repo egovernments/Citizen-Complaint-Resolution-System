@@ -39,19 +39,30 @@ export async function requireAccountAdmin(subject: string, tenantId: string): Pr
   return account;
 }
 
-export async function validateBinding(input: { subject: string; tenantId: string; uuid: string; actor: BindingActor }): Promise<void> {
+/** Checks the binding and returns the target DIGIT account it read, so callers need not read it again. */
+export async function validateBinding(input: { subject: string; tenantId: string; uuid: string; actor: BindingActor }): Promise<DigitAccount> {
   await requireWorkspace(input.tenantId, input.actor.kind === "workload");
   const target = await readDigitAccount(input.tenantId, input.uuid);
   if (!target || (!target.active && input.actor.kind !== "migration")) {
     throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "No eligible employee exists at the workspace");
   }
   if (isBffManagedAccount(target)) throw new BindingError("DIGIT_ACCOUNT_MANAGED", "Managed accounts cannot be bound");
-  if (input.actor.kind !== "browser") return;
+  if (input.actor.kind !== "browser") return target;
   if (input.actor.subject === input.subject) throw new BindingError("SELF_BINDING_FORBIDDEN", "You cannot bind your own account");
   const caller = await requireAccountAdmin(input.actor.subject, input.tenantId);
   if (!mayManageRoles(caller.roles, target.roles, input.tenantId)) {
     throw new BindingError("ROLE_ESCALATION_FORBIDDEN", "The employee holds an administrative role you do not hold");
   }
+  return target;
+}
+
+/**
+ * Whether the roles open the Configurator at the tenant (#2599): one of `DIGIT_CONFIGURATOR_ROLES`, held at
+ * that tenant itself. Context selection refuses the Configurator without it, and a workspace invite (#2801)
+ * sends only these members back to the Configurator, so the two must never disagree.
+ */
+export function holdsConfiguratorRole(roles: DigitRole[], tenantId: string): boolean {
+  return roles.some((r) => r.tenantId === tenantId && config.digitConfiguratorRoles.includes(r.code));
 }
 
 /**
