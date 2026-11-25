@@ -395,6 +395,8 @@ export interface DepartmentExcelRow {
   code: string;
   name: string;
   active: boolean;
+  /** The sheet row it came from. */
+  row?: number;
 }
 
 export interface DesignationExcelRow {
@@ -403,6 +405,8 @@ export interface DesignationExcelRow {
   description: string;
   department?: string[];
   active: boolean;
+  /** The sheet row it came from. */
+  row?: number;
 }
 
 export interface ComplaintTypeExcelRow {
