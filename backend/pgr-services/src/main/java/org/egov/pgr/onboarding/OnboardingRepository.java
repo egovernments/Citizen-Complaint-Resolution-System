@@ -113,7 +113,7 @@ public class OnboardingRepository {
                                 "SELECT ?,requested_tenant_id FROM eg_pgr_onboarding_signup WHERE id=? " +
                                 "ON CONFLICT(normalized_name) DO UPDATE SET tenant_id=EXCLUDED.tenant_id " +
                                 "WHERE eg_pgr_onboarding_workspace_name.tenant_id=EXCLUDED.tenant_id", value,signupId);
-                if (reserved != 1) throw new CustomException("ONBOARDING_IDENTIFIER_TAKEN", "Organization name is already reserved");
+                if (reserved != 1) throw new OnboardingIdentifierTaken(type, "reserved");
             }
             int changed = jdbcTemplate.update("INSERT INTO eg_pgr_onboarding_identifier " +
                             "(identifier_type, normalized_value, signup_id, status, reserved_at) " +
@@ -122,10 +122,10 @@ public class OnboardingRepository {
                             "WHERE eg_pgr_onboarding_identifier.signup_id = EXCLUDED.signup_id OR eg_pgr_onboarding_identifier.status = 'RELEASED'",
                     type, value, signupId, now);
             if (changed != 1) {
-                throw new CustomException("ONBOARDING_IDENTIFIER_TAKEN", type + " is already reserved");
+                throw new OnboardingIdentifierTaken(type, "reserved");
             }
         } catch (DuplicateKeyException exception) {
-            throw new CustomException("ONBOARDING_IDENTIFIER_TAKEN", type + " is already reserved");
+            throw new OnboardingIdentifierTaken(type, "reserved");
         }
     }
 
