@@ -9,6 +9,7 @@ import {
   idleProfileFor,
   storageActivityStore,
   redirectToLogin,
+  startSignOut,
   isKeycloakAuth,
   onEmployeeSignOut,
   SIGN_OUT_REASONS,
@@ -16,15 +17,16 @@ import {
 
 // Logs a signed-in user out after a period with no mouse, keyboard, touch or
 // scroll activity (#224, VAPT "Insecure Session Management"): an employee on
-// employee pages, a citizen on citizen pages, with DIGIT login. Public pages
-// and Keycloak mode are untouched. Default 15 minutes for both; set globalConfigs
+// employee pages, a citizen on any other page, with DIGIT login. Keycloak mode
+// is untouched. Default 15 minutes for both; set globalConfigs
 // EMPLOYEE_IDLE_TIMEOUT_MINUTES / CITIZEN_IDLE_TIMEOUT_MINUTES to change it, or
 // to 0 to turn it off. See idleProfileFor for what differs between the two.
 //
 // A minute before (EMPLOYEE_/CITIZEN_IDLE_WARNING_SECONDS, 0 = no warning) a
 // dialog says so and offers to stay signed in. For an employee, staying signed
 // in or working in another of their tabs closes the dialog in every tab. A
-// citizen's complaint draft survives the sign-out (authSession keeps it).
+// citizen signed out mid-complaint gets their answers back after signing in
+// (authSession keeps the draft; the form restores it, see takeResumeAfterSignIn).
 //
 // Also ends an employee tab's login when that employee logs out in another
 // tab: since #224 every tab holds its own login, so the logout button alone
@@ -46,6 +48,7 @@ const fingerprint = (token) => {
 // sign out a citizen in another tab and wipe caches and drafts. The reason is
 // shown on the login page.
 const endThisLogin = async (reason) => {
+  startSignOut(reason);
   try {
     await Digit.UserService.logoutUser();
   } catch (e) {

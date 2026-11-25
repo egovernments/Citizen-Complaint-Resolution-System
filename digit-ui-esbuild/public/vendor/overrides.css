@@ -1608,7 +1608,8 @@ button[class*="toast-close"] svg,
  * the small-screen `width: 100%` clamp at 600px — can't pull the
  * card to a different size mid-render. Height stays content-driven. */
 @media (max-width: 47.99rem) {
-  .digit-popup-overlay .digit-popup-wrapper.digit-logout-popup-wrapper {
+  .digit-popup-overlay .digit-popup-wrapper.digit-logout-popup-wrapper,
+  .digit-popup-overlay .digit-popup-wrapper.digit-idle-warning-popup {
     width: min(420px, calc(100vw - 32px)) !important;
     min-width: min(420px, calc(100vw - 32px)) !important;
     max-width: min(420px, calc(100vw - 32px)) !important;
@@ -1619,7 +1620,8 @@ button[class*="toast-close"] svg,
   }
 }
 @media (min-width: 48rem) {
-  .digit-popup-overlay .digit-popup-wrapper.digit-logout-popup-wrapper {
+  .digit-popup-overlay .digit-popup-wrapper.digit-logout-popup-wrapper,
+  .digit-popup-overlay .digit-popup-wrapper.digit-idle-warning-popup {
     width: 520px !important;
     min-width: 520px !important;
     max-width: 520px !important;
@@ -1634,23 +1636,45 @@ button[class*="toast-close"] svg,
  * yes/no logout confirm that's overkill — the modal ends up looking
  * "too long". Tighten each section's height/padding so the card hugs
  * its actual content. */
-.digit-popup-wrapper.digit-logout-popup-wrapper .digit-popup-header {
+.digit-popup-wrapper.digit-logout-popup-wrapper .digit-popup-header,
+.digit-popup-wrapper.digit-idle-warning-popup .digit-popup-header {
   padding: 18px 20px 8px 20px !important;
   min-height: 0 !important;
   height: auto !important;
 }
-.digit-popup-wrapper.digit-logout-popup-wrapper .digit-popup-children-wrap {
+.digit-popup-wrapper.digit-logout-popup-wrapper .digit-popup-children-wrap,
+.digit-popup-wrapper.digit-idle-warning-popup .digit-popup-children-wrap {
   padding: 4px 20px 16px 20px !important;
   min-height: 0 !important;
   height: auto !important;
   font-size: 0.9375rem !important;
   line-height: 1.5 !important;
 }
-.digit-popup-wrapper.digit-logout-popup-wrapper .digit-popup-footer {
+.digit-popup-wrapper.digit-logout-popup-wrapper .digit-popup-footer,
+.digit-popup-wrapper.digit-idle-warning-popup .digit-popup-footer {
   padding: 8px 20px 18px 20px !important;
   min-height: 0 !important;
   height: auto !important;
   gap: 8px !important;
+}
+/* The idle sign-out warning (#224) is a calm yes/no card too: no nested card
+ * around its body, a heading sized for a small card, and a "Sign out now"
+ * (Secondary) in the theme's secondary-button colours: the vendor stroke and
+ * label are --color-primary-main, yellow on white on yellow-primary tenants. */
+.digit-popup-wrapper.digit-idle-warning-popup .digit-popup-children-wrap {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.digit-popup-wrapper.digit-idle-warning-popup .digit-popup-heading {
+  font-size: 1.25rem !important;
+  line-height: 1.4 !important;
+}
+.digit-popup-wrapper.digit-idle-warning-popup .digit-button-secondary {
+  border: 1px solid var(--color-button-secondary-border, var(--color-primary-1, #204F37)) !important;
+}
+.digit-popup-wrapper.digit-idle-warning-popup .digit-button-secondary .digit-button-label {
+  color: var(--color-button-secondary-text, var(--color-primary-1, #204F37)) !important;
 }
 
 /* v2 employee login card — make the top tenant + DIGIT-secondary logos

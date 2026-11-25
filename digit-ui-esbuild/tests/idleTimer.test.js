@@ -210,13 +210,16 @@ test("a citizen on citizen pages gets the citizen rules and a clock kept in the 
   assert.notStrictEqual(CITIZEN_LAST_ACTIVITY_KEY, LAST_ACTIVITY_KEY);
 });
 
-test("no idle rules on the other user type's pages, on public pages, or for an unknown type", () => {
+test("a signed-in citizen is timed on the public pages too, so time there is not counted as idle", () => {
+  for (const pathname of ["/digit-ui/landing", "/digit-ui/privacy-policy"]) {
+    assert.strictEqual(idleProfileFor({ pathname, userType: "CITIZEN" }).userType, "CITIZEN", pathname);
+    assert.strictEqual(idleProfileFor({ pathname, userType: "EMPLOYEE" }), null, pathname);
+  }
+});
+
+test("no idle rules on the other user type's pages, or for an unknown type", () => {
   assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/employee/pgr/inbox", userType: "CITIZEN" }), null);
   assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/citizen/pgr/complaints", userType: "EMPLOYEE" }), null);
-  for (const userType of ["EMPLOYEE", "CITIZEN"]) {
-    assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/landing", userType }), null, userType);
-    assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/privacy-policy", userType }), null, userType);
-  }
   assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/citizen", userType: "SYSTEM" }), null);
   assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/citizen", userType: "constructor" }), null);
   assert.strictEqual(idleProfileFor({ pathname: "/digit-ui/citizen", userType: "" }), null);
@@ -282,6 +285,15 @@ test("the idle limits are deploy settings in globalConfigs (bundled, ansible and
   const values = fs.readFileSync(path.join(ROOT, "../devops/deploy-as-code/charts/urban/digit-ui/values.yaml"), "utf8");
   assert.match(values, /citizenIdleTimeoutMinutes: 15/);
   assert.match(values, /citizenIdleWarningSeconds: 60/);
+});
+
+test("the warning is a small centred card on phones, with a readable Sign out now", () => {
+  const css = fs.readFileSync(path.join(ROOT, "public/vendor/overrides.css"), "utf8");
+  const phone = css.slice(css.indexOf("@media (max-width: 47.99rem) {\n  .digit-popup-overlay .digit-popup-wrapper.digit-logout-popup-wrapper"));
+  assert.match(phone.slice(0, 600), /\.digit-popup-wrapper\.digit-idle-warning-popup \{[\s\S]*?height: auto !important;/, "same card sizing as the logout confirm");
+  assert.match(css, /\.digit-idle-warning-popup \.digit-button-secondary \.digit-button-label \{\s*color: var\(--color-button-secondary-text/);
+  const c = fs.readFileSync(path.join(ROOT, "packages/modules/core/src/components/IdleLogout.js"), "utf8");
+  assert.match(c, /className="digit-idle-warning-popup"/);
 });
 
 test("both login pages say why the user was signed out, through the one shared notice", () => {

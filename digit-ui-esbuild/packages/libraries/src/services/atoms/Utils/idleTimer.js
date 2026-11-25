@@ -29,16 +29,20 @@ export const CITIZEN_LAST_ACTIVITY_KEY = "Digit.CitizenLastActivity";
 // tab cannot sign out the tab in use. Each citizen tab is its own OTP login
 // (#224), so a citizen's clock lives in that tab (sessionStorage); it still
 // survives a reload or a "reopen closed tab", like the employee's.
+// A citizen is timed on every page outside the employee app, the public landing
+// and privacy pages included: activity there keeps the clock fresh, where an
+// untimed landing page used to leave it stale and sign the citizen out the
+// moment they opened a citizen page again.
 const IDLE_PROFILES = {
   EMPLOYEE: {
-    page: "employee",
+    appliesOn: (segments) => segments.includes("employee"),
     timeoutConfig: "EMPLOYEE_IDLE_TIMEOUT_MINUTES",
     warningConfig: "EMPLOYEE_IDLE_WARNING_SECONDS",
     clockStorage: "localStorage",
     activityKey: LAST_ACTIVITY_KEY,
   },
   CITIZEN: {
-    page: "citizen",
+    appliesOn: (segments) => !segments.includes("employee"),
     timeoutConfig: "CITIZEN_IDLE_TIMEOUT_MINUTES",
     warningConfig: "CITIZEN_IDLE_WARNING_SECONDS",
     clockStorage: "sessionStorage",
@@ -47,15 +51,15 @@ const IDLE_PROFILES = {
 };
 
 /**
- * The idle rules for a signed-in user: their type's profile, but only on that
- * type's own pages (an employee on /employee/..., a citizen on /citizen/...).
- * Null when none apply: signed out, another user type, or a public page.
+ * The idle rules for a signed-in user: their type's profile, on the pages it
+ * covers (an employee on /employee/..., a citizen anywhere outside it). Null
+ * when none apply: signed out, another user type, or the other app's pages.
  */
 export const idleProfileFor = ({ pathname = "", userType = "" } = {}) => {
   const type = String(userType || "").toUpperCase();
   const profile = Object.prototype.hasOwnProperty.call(IDLE_PROFILES, type) ? IDLE_PROFILES[type] : null;
   if (!profile) return null;
-  return String(pathname || "").split("/").includes(profile.page) ? { userType: type, ...profile } : null;
+  return profile.appliesOn(String(pathname || "").split("/")) ? { userType: type, ...profile } : null;
 };
 
 const RETURN_EVENTS = ["focus"]; // on the window
