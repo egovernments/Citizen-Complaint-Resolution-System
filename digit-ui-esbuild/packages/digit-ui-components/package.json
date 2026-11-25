@@ -39,7 +39,7 @@
     "**/styled-components": "5.0.0",
     "**/minimatch": "7.4.6",
     "**/glob": "7.2.3",
-    "minimatch": "7.4.6",
+    "minimatch": "11.0.1",
     "glob": "7.2.3",
      "react-draggable": "4.4.3"
   },
@@ -84,7 +84,7 @@
     "styled-components": "5.0.0",
     "react-dnd-html5-backend": "16.0.1",
     "react-dnd": "16.0.1",
-    "minimatch": "7.4.6",
+    "minimatch": "11.0.1",
     "react-datepicker": "4.8.0"
   },
   "browserslist": {
