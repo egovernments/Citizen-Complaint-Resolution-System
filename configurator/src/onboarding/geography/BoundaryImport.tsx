@@ -56,7 +56,7 @@ import {
   type SuggestionFeature,
 } from '@/utils/turbopassSuggestions';
 import { summarizeBoundaryQuality } from '@/utils/boundaryQuality';
-import { validateGoogleMapsKey, type GoogleKeyCheck } from '@/utils/googleMaps';
+import { GOOGLE_KEY_REJECTED_MESSAGE, GoogleKeyRejectedError, validateGoogleMapsKey, type GoogleKeyCheck } from '@/utils/googleMaps';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMapProviderConfig } from '@/hooks/useMapProviderConfig';
 import { BoundaryMap } from '@/components/ui/BoundaryMap';
@@ -906,7 +906,13 @@ export default function BoundaryImport({
       try {
         check = await validateGoogleMapsKey(key);
       } catch (e) {
-        setGoogleKeyStatus({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+        setGoogleKeyStatus({
+          kind: 'error',
+          text:
+            e instanceof GoogleKeyRejectedError
+              ? t('geography.google.rejected', GOOGLE_KEY_REJECTED_MESSAGE, { site: e.site })
+              : e instanceof Error ? e.message : String(e),
+        });
         return;
       }
       await mdmsService.upsertMapConfig(boundaryTenant, { mapProvider: 'google', googleMapsApiKey: key });

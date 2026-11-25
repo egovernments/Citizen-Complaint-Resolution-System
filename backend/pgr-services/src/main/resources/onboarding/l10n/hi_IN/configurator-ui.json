@@ -773,6 +773,7 @@
 {"code": "app.onboarding.geography.google.google_maps", "message": "Google Maps", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.geography.google.key_placeholder", "message": "Google Maps JavaScript API कुंजी", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.geography.google.osm_tiles", "message": "OpenStreetMap टाइल्स", "module": "configurator-ui", "locale": "hi_IN"},
+{"code": "app.onboarding.geography.google.rejected", "message": "Google ने इस API कुंजी को अस्वीकार कर दिया। जाँचें कि यह पूरी कॉपी हुई है, Google Cloud Console में इसके लिए Maps JavaScript API चालू करें, और इसकी HTTP-referrer पाबंदियों में इस साइट (%{site}) को अनुमति दें।", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.geography.google.replace_key", "message": "सहेजी गई कुंजी बदलें", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.geography.google.save", "message": "सहेजें", "module": "configurator-ui", "locale": "hi_IN"},
 {"code": "app.onboarding.geography.google.save_failed", "message": "%{check}, और इसे Map Config में सहेजना विफल रहा: %{reason}। जिस डिप्लॉयमेंट का MapConfig स्कीमा mapProvider फ़ील्ड से पहले का है, वह इसे अस्वीकार करता है — docs/features/maps/README.md देखें।", "module": "configurator-ui", "locale": "hi_IN"},

@@ -773,6 +773,7 @@
 {"code": "app.onboarding.geography.google.google_maps", "message": "Google Maps", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.geography.google.key_placeholder", "message": "Chave da API JavaScript do Google Maps", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.geography.google.osm_tiles", "message": "Blocos do OpenStreetMap", "module": "configurator-ui", "locale": "pt_BR"},
+{"code": "app.onboarding.geography.google.rejected", "message": "O Google rejeitou esta chave de API. Verifique se ela foi copiada por inteiro, ative a API Maps JavaScript para ela no Google Cloud Console e permita este site (%{site}) nas restrições de referenciador HTTP da chave.", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.geography.google.replace_key", "message": "Substituir a chave salva", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.geography.google.save", "message": "Salvar", "module": "configurator-ui", "locale": "pt_BR"},
 {"code": "app.onboarding.geography.google.save_failed", "message": "%{check}, e não foi possível salvá-la no Map Config: %{reason}. Uma implantação cujo esquema MapConfig é anterior ao campo mapProvider a rejeita — consulte docs/features/maps/README.md.", "module": "configurator-ui", "locale": "pt_BR"},

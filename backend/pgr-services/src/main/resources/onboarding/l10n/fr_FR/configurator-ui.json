@@ -773,6 +773,7 @@
 {"code": "app.onboarding.geography.google.google_maps", "message": "Google Maps", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.geography.google.key_placeholder", "message": "Clé d’API Google Maps JavaScript", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.geography.google.osm_tiles", "message": "Tuiles OpenStreetMap", "module": "configurator-ui", "locale": "fr_FR"},
+{"code": "app.onboarding.geography.google.rejected", "message": "Google a rejeté cette clé d’API. Vérifiez qu’elle est copiée en entier, activez l’API Maps JavaScript pour cette clé dans Google Cloud Console et autorisez ce site (%{site}) dans ses restrictions de référents HTTP.", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.geography.google.replace_key", "message": "Remplacer la clé enregistrée", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.geography.google.save", "message": "Enregistrer", "module": "configurator-ui", "locale": "fr_FR"},
 {"code": "app.onboarding.geography.google.save_failed", "message": "%{check}, et son enregistrement dans Map Config a échoué : %{reason}. Un déploiement dont le schéma MapConfig est antérieur au champ mapProvider la rejette — voir docs/features/maps/README.md.", "module": "configurator-ui", "locale": "fr_FR"},
