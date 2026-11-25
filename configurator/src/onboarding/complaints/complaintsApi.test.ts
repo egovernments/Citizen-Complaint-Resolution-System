@@ -1,7 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { localizationService, mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
-import { loadComplaints, nextData, rowsFingerprint, rowsFor, saveComplaints, type ComplaintDraft } from './complaintsApi';
+import {
+  loadComplaints,
+  MDMS_WRITES_IN_FLIGHT,
+  nextData,
+  removeSheetComplaints,
+  rowsFingerprint,
+  rowsFor,
+  saveComplaints,
+  writeSheetHierarchy,
+  type ComplaintDraft,
+} from './complaintsApi';
 
 vi.mock('@/api', () => ({
   mdmsService: { searchRecords: vi.fn(), create: vi.fn(async () => ({})), update: vi.fn(async () => ({})), setActive: vi.fn(async () => ({})), getStateInfoLocales: vi.fn(async () => ['en_KE']) },
@@ -107,7 +117,7 @@ describe('loadComplaints', () => {
       editable: false,
       leafCount: 1,
       levels: ['AUTHORITY_TYPE', 'MAIN_CATEGORY', 'SUB_TYPE'],
-      departments: ['X'],
+      routes: [{ name: 'A', department: 'X' }],
     });
   });
 
@@ -122,7 +132,10 @@ describe('loadComplaints', () => {
           ],
     );
     const loaded = await loadComplaints('acme');
-    expect(loaded.editable === false && loaded.departments).toEqual(['WATER']);
+    expect(loaded.editable === false && loaded.routes).toEqual([
+      { name: 'Leak', department: 'WATER' },
+      { name: 'Meter', department: 'WATER' },
+    ]);
   });
 });
 
@@ -298,5 +311,259 @@ describe('rowsFingerprint', () => {
     expect(rowsFingerprint([a, b])).toBe(rowsFingerprint([b, a]));
     expect(rowsFingerprint([{ ...a, auditDetails: { ...a.auditDetails!, lastModifiedTime: 2 } }, b])).not.toBe(rowsFingerprint([a, b]));
     expect(rowsFingerprint([{ ...a, isActive: false }, b])).not.toBe(rowsFingerprint([a, b]));
+  });
+});
+
+const DEFINITION = 'RAINMAKER-PGR.ComplaintHierarchyDefinition';
+const definitionRecord = (levels: string[], extra: Partial<MdmsRecord> = {}): MdmsRecord => ({
+  id: `def-${extra.tenantId ?? 'acme'}`,
+  tenantId: 'acme',
+  schemaCode: DEFINITION,
+  uniqueIdentifier: 'PGR',
+  isActive: true,
+  data: { hierarchyType: 'PGR', levels: levels.map((levelCode) => ({ levelCode })) },
+  ...extra,
+});
+
+describe('a spreadsheet hierarchy that has to go (#2806)', () => {
+  it('names each leaf with its department, so a missing GRO or an unknown department can name the categories', async () => {
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === DEFINITION
+        ? [definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'])]
+        : [
+            row('Environment', { levelCode: 'SERVICE', name: 'Environment' }),
+            row('Garbage', { levelCode: 'COMPLAINT_TYPE', name: 'Garbage', parentCode: 'Environment' }),
+            row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', name: 'Uncollected waste', parentCode: 'Garbage', department: 'Sanitation Services', slaHours: 24 }),
+          ],
+    );
+    const loaded = await loadComplaints('acme');
+    expect(loaded.editable === false && loaded.routes).toEqual([{ name: 'Uncollected waste', department: 'Sanitation Services' }]);
+  });
+
+  it('switches off every row and then the definition at the workspace, and nothing at the state root', async () => {
+    const definition = definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'], { tenantId: 'ke.nairobi' });
+    const rootDefinition = definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'], { tenantId: 'ke' });
+    const own = [
+      row('Environment', { levelCode: 'SERVICE' }, { tenantId: 'ke.nairobi' }),
+      row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', department: 'NA' }, { tenantId: 'ke.nairobi' }),
+    ];
+    const gone = row('Old', { levelCode: 'SUB_TYPE' }, { tenantId: 'ke.nairobi', isActive: false });
+    const other = row('Other', { levelCode: 'X', hierarchyType: 'OTHER' }, { tenantId: 'ke.nairobi' });
+    const root = row('Environment', { levelCode: 'SERVICE' }, { id: 'root-env', tenantId: 'ke' });
+    search.mockImplementation(async (_tenant, schema) => (schema === DEFINITION ? [definition, rootDefinition] : [...own, gone, other, root]));
+
+    await removeSheetComplaints('ke.nairobi');
+
+    expect(setActive.mock.calls).toEqual([
+      [own[0], false],
+      [own[1], false],
+      [definition, false],
+    ]);
+    expect(create).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('refuses at a state root with cities, whose rows those cities file against', async () => {
+    const tenant = (code: string): MdmsRecord => ({ id: code, tenantId: 'ke', schemaCode: 'tenant.tenants', uniqueIdentifier: code, isActive: true, data: { code } });
+    const shared = row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', department: 'SANIT' }, { tenantId: 'ke' });
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === 'tenant.tenants'
+        ? [tenant('ke'), tenant('ke.nairobi'), tenant('ke.bomet')]
+        : schema === DEFINITION
+          ? [definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'], { tenantId: 'ke' })]
+          : [shared],
+    );
+
+    await expect(removeSheetComplaints('ke')).rejects.toThrow(
+      'These complaint categories can’t be removed here: the cities in this workspace (ke.nairobi, ke.bomet) use them too, and complaints there would stop working.',
+    );
+    expect(setActive).not.toHaveBeenCalled();
+  });
+
+  it('removes at a sign-up workspace, a state root with no cities of its own', async () => {
+    const definition = definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE']);
+    const leaf = row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', department: 'SANIT' });
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === 'tenant.tenants'
+        ? [{ id: 'acme', tenantId: 'acme', schemaCode: schema, uniqueIdentifier: 'acme', isActive: true, data: { code: 'acme' } }]
+        : schema === DEFINITION
+          ? [definition]
+          : [leaf],
+    );
+
+    await removeSheetComplaints('acme');
+
+    expect(setActive.mock.calls).toEqual([
+      [leaf, false],
+      [definition, false],
+    ]);
+  });
+
+  it('opens the step for editing once removed, even with the state root still holding its copy', async () => {
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === DEFINITION
+        ? [
+            definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'], { tenantId: 'ke.nairobi', isActive: false }),
+            definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'], { tenantId: 'ke' }),
+          ]
+        : [row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', department: 'NA' }, { tenantId: 'ke.nairobi', isActive: false })],
+    );
+    const loaded = await loadComplaints('ke.nairobi');
+    expect(loaded.editable).toBe(true);
+    expect(loaded.editable && loaded.draft.types).toEqual([]);
+    expect(loaded.editable && loaded.hasDefinition).toBe(false);
+  });
+
+  it("opens a new city for editing, not on the sheet levels another city's upload left at the state root", async () => {
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === DEFINITION
+        ? [definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SECTOR', 'SUB_TYPE'], { tenantId: 'ke' })]
+        : [row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', department: 'SANIT' }, { tenantId: 'ke' })],
+    );
+    const loaded = await loadComplaints('ke.b');
+    expect(loaded.editable).toBe(true);
+    expect(loaded.editable && loaded.draft.types).toEqual([]);
+    expect(loaded.editable && loaded.hasDefinition).toBe(false);
+
+    // Built by hand, the city gets a two-level definition of its own.
+    if (loaded.editable) await saveComplaints('ke.b', loaded, draft);
+    expect(create).toHaveBeenCalledWith(
+      'ke.b',
+      DEFINITION,
+      'PGR',
+      expect.objectContaining({ levels: [expect.objectContaining({ levelCode: 'COMPLAINT_TYPE' }), expect.objectContaining({ levelCode: 'SUB_TYPE' })] }),
+    );
+  });
+
+  it("shows a city's own rows under the state root's sheet levels, so it can remove them", async () => {
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === DEFINITION
+        ? [definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'], { tenantId: 'ke' })]
+        : [row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', name: 'Uncollected waste', department: 'SANIT', slaHours: 24 }, { tenantId: 'ke.b' })],
+    );
+    const loaded = await loadComplaints('ke.b');
+    expect(loaded.editable).toBe(false);
+    expect(loaded.editable === false && loaded.levels).toEqual(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE']);
+  });
+
+  it('restores the removed definition with two levels when the categories are then added by hand', async () => {
+    const removed = definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'], { isActive: false });
+    search.mockImplementation(async (_tenant, schema) => (schema === DEFINITION ? [removed] : []));
+
+    await saveComplaints('acme', { editable: true, draft, records: [], hasDefinition: false }, draft);
+
+    expect(create).not.toHaveBeenCalledWith('acme', DEFINITION, expect.anything(), expect.anything());
+    expect(setActive).toHaveBeenCalledWith(
+      removed,
+      true,
+      expect.objectContaining({ levels: [expect.objectContaining({ levelCode: 'COMPLAINT_TYPE' }), expect.objectContaining({ levelCode: 'SUB_TYPE' })] }),
+    );
+  });
+
+  it('stops, creating nothing, when the definition search fails', async () => {
+    search.mockImplementation(async (_tenant, schema) => {
+      if (schema === DEFINITION) throw new Error('upstream timed out');
+      return [];
+    });
+    const definitionData = { hierarchyType: 'PGR', active: true, levels: [] };
+
+    await expect(writeSheetHierarchy('acme', 'PGR', definitionData, [{ code: 'A', data: { code: 'A' } }])).rejects.toThrow('upstream timed out');
+    await expect(saveComplaints('acme', { editable: true, draft, records: [], hasDefinition: false }, draft)).rejects.toThrow(
+      'upstream timed out',
+    );
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('a sheet uploaded again restores what was removed, creates what is new and leaves the same alone', async () => {
+    const removedDefinition = definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE'], { isActive: false });
+    const removedLeaf = row('GarbageUncollectedWaste', { levelCode: 'SUB_TYPE', department: 'NA' }, { isActive: false });
+    const same = row('Environment', { levelCode: 'SERVICE', name: 'Environment' });
+    const changed = row('Garbage', { levelCode: 'COMPLAINT_TYPE', name: 'Rubbish' });
+    search.mockImplementation(async (_tenant, schema) => (schema === DEFINITION ? [removedDefinition] : [removedLeaf, same, changed]));
+    const definitionData = { hierarchyType: 'PGR', active: true, levels: [{ levelCode: 'SERVICE' }, { levelCode: 'COMPLAINT_TYPE' }, { levelCode: 'SUB_TYPE' }] };
+    const leafData = { hierarchyType: 'PGR', code: 'GarbageUncollectedWaste', levelCode: 'SUB_TYPE', department: 'SANIT' };
+
+    await writeSheetHierarchy('acme', 'PGR', definitionData, [
+      { code: 'Environment', data: same.data },
+      { code: 'Garbage', data: { ...changed.data, name: 'Garbage' } },
+      { code: 'GarbageUncollectedWaste', data: leafData },
+      { code: 'GarbageOverflowingBin', data: { hierarchyType: 'PGR', code: 'GarbageOverflowingBin', department: 'SANIT' } },
+    ]);
+
+    expect(setActive.mock.calls).toEqual([
+      [removedDefinition, true, definitionData],
+      [removedLeaf, true, leafData],
+    ]);
+    expect(update.mock.calls).toEqual([[changed, expect.objectContaining({ name: 'Garbage' })]]);
+    expect(create.mock.calls).toEqual([
+      ['acme', 'RAINMAKER-PGR.ComplaintHierarchy', 'GarbageOverflowingBin', expect.objectContaining({ department: 'SANIT' })],
+    ]);
+  });
+});
+
+describe('a big sheet, written or removed (#2806)', () => {
+  const definition = definitionRecord(['SERVICE', 'COMPLAINT_TYPE', 'SUB_TYPE']);
+  const leaves = Array.from({ length: 30 }, (_, i) => row(`Leaf${i}`, { levelCode: 'SUB_TYPE', department: 'SANIT', slaHours: 24 }));
+  const acme: MdmsRecord = { id: 'acme', tenantId: 'acme', schemaCode: 'tenant.tenants', uniqueIdentifier: 'acme', isActive: true, data: { code: 'acme' } };
+
+  // Each MDMS write stays open for a moment, counting how many are open at once.
+  let open = 0;
+  let most = 0;
+  const slowWrite = async () => {
+    open += 1;
+    most = Math.max(most, open);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    open -= 1;
+    return {} as MdmsRecord;
+  };
+
+  beforeEach(() => {
+    open = 0;
+    most = 0;
+  });
+  afterEach(() => {
+    setActive.mockImplementation(async () => ({}) as MdmsRecord);
+    create.mockImplementation(async () => ({}) as MdmsRecord);
+  });
+
+  it('switches rows off several at a time, never more than the limit, and the definition last', async () => {
+    search.mockImplementation(async (_tenant, schema) => (schema === 'tenant.tenants' ? [acme] : schema === DEFINITION ? [definition] : leaves));
+    setActive.mockImplementation(slowWrite);
+
+    await removeSheetComplaints('acme');
+
+    expect(most).toBeGreaterThan(1);
+    expect(most).toBeLessThanOrEqual(MDMS_WRITES_IN_FLIGHT);
+    expect(setActive).toHaveBeenCalledTimes(31);
+    expect(setActive.mock.calls.at(-1)).toEqual([definition, false]);
+  });
+
+  it('keeps the definition when a row fails, so the remove can simply be retried', async () => {
+    search.mockImplementation(async (_tenant, schema) => (schema === 'tenant.tenants' ? [acme] : schema === DEFINITION ? [definition] : leaves));
+    setActive.mockImplementation(async (record) => {
+      if (record.id === 'Leaf3') throw new Error('mdms-v2 unavailable');
+      return slowWrite();
+    });
+
+    await expect(removeSheetComplaints('acme')).rejects.toThrow('mdms-v2 unavailable');
+    expect(setActive).not.toHaveBeenCalledWith(definition, false);
+    expect(open).toBe(0);
+  });
+
+  it('writes rows several at a time, never more than the limit', async () => {
+    search.mockResolvedValue([]);
+    create.mockImplementation(slowWrite);
+
+    await writeSheetHierarchy(
+      'acme',
+      'PGR',
+      { hierarchyType: 'PGR', active: true, levels: [] },
+      leaves.map((leaf) => ({ code: String(leaf.data.code), data: leaf.data })),
+    );
+
+    expect(most).toBeGreaterThan(1);
+    expect(most).toBeLessThanOrEqual(MDMS_WRITES_IN_FLIGHT);
+    expect(create).toHaveBeenCalledTimes(31);
+    expect(create.mock.calls[0][1]).toBe(DEFINITION);
   });
 });

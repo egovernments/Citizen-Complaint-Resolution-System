@@ -3,6 +3,7 @@ import { triggerDownload } from '@/admin/bulk/BulkImportPanel';
 import type { Boundary, Department, Designation } from '@/api/types';
 import { englishT, type OnboardingT } from '@/onboarding/i18n';
 import { allowedEmployeeRoles, pickerChoices } from '@/lib/systemRecords';
+import { COMPLAINT_DEPARTMENT_HEADER } from '@/utils/excelParser';
 
 type Row = Array<string | number>;
 
@@ -68,18 +69,24 @@ export function downloadCommonMastersTemplate() {
 /**
  * Dynamic complaint-hierarchy template. Columns are generated from the
  * operator-defined levels (one column per level, top→leaf) plus the leaf
- * attribute columns (Department Name*, Resolution Time (Hours)*, Search Words*,
- * which map to the leaf fields department / slaHours / keywords). Each row is
- * one leaf complaint type carrying its full ancestor path — the parser folds
- * the non-leaf cells (de-duped) and the leaf rows into the ONE ComplaintHierarchy
- * node array. The number/identity of columns reflects whatever hierarchy the
- * operator defined — fully dynamic.
+ * attribute columns (Department (code or name)*, Resolution Time (Hours)*,
+ * Search Words*, which map to the leaf fields department / slaHours / keywords).
+ * Each row is one leaf complaint type carrying its full ancestor path — the
+ * parser folds the non-leaf cells (de-duped) and the leaf rows into the ONE
+ * ComplaintHierarchy node array. The number/identity of columns reflects
+ * whatever hierarchy the operator defined — fully dynamic.
+ *
+ * The sample rows name the workspace's own departments, one by name and one by
+ * code, as the column takes either; a Departments sheet lists them all.
  */
-export function downloadComplaintHierarchyTemplate(hierarchyType: string, levelCodes: string[]) {
+export function buildComplaintHierarchyTemplate(levelCodes: string[], allDepts: { code: string; name?: string }[] = []): XLSX.WorkBook {
   const levels = levelCodes.filter((l) => l && l.trim());
   const safe = levels.length >= 2 ? levels : ['AUTHORITY_TYPE', 'MAIN_CATEGORY', 'SECTOR', 'SUB_TYPE'];
   const leafIdx = safe.length - 1;
-  const header = [...safe, 'Department Name*', 'Resolution Time (Hours)*', 'Search Words*'];
+  const header = [...safe, COMPLAINT_DEPARTMENT_HEADER, 'Resolution Time (Hours)*', 'Search Words*'];
+  const depts = pickerChoices(allDepts, (d) => d.code);
+  const first = depts[0] ?? { code: 'SANIT', name: 'Sanitation Services' };
+  const second = depts[1] ?? first;
 
   // Example rows: rows 1-2 share ancestors (two leaves under one sector),
   // row 3 varies the sector — shows the grouping the hierarchy produces.
@@ -99,14 +106,28 @@ export function downloadComplaintHierarchyTemplate(hierarchyType: string, levelC
     return [...path, dept, sla, kw];
   };
   const rows: Row[] = [
-    mkRow(null, 'Example Subcategory 1', 'DEPT_1', 24, 'keyword1, keyword2'),
-    mkRow(null, 'Example Subcategory 2', 'DEPT_1', 48, 'keyword3'),
-    mkRow(`Another ${safe[Math.max(0, leafIdx - 1)]}`, 'Example Subcategory 3', 'DEPT_2', 72, 'keyword4'),
+    mkRow(null, 'Example Subcategory 1', first.name || first.code, 24, 'keyword1, keyword2'),
+    mkRow(null, 'Example Subcategory 2', first.code, 48, 'keyword3'),
+    mkRow(`Another ${safe[Math.max(0, leafIdx - 1)]}`, 'Example Subcategory 3', second.name || second.code, 72, 'keyword4'),
   ];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, buildSheet(header, rows), 'ComplaintHierarchy');
-  triggerDownload(writeWorkbook(wb), `Complaint_Hierarchy_${hierarchyType || 'PGR'}.xlsx`);
+  if (depts.length > 0) {
+    XLSX.utils.book_append_sheet(
+      wb,
+      buildSheet(['Department code', 'Department name'], depts.map((d) => [d.code, d.name ?? ''])),
+      'Departments',
+    );
+  }
+  return wb;
+}
+
+export function downloadComplaintHierarchyTemplate(hierarchyType: string, levelCodes: string[], departments: { code: string; name?: string }[] = []) {
+  triggerDownload(
+    writeWorkbook(buildComplaintHierarchyTemplate(levelCodes, departments)),
+    `Complaint_Hierarchy_${hierarchyType || 'PGR'}.xlsx`,
+  );
 }
 
 const EMPLOYEE_TEMPLATE_COLUMNS = [
