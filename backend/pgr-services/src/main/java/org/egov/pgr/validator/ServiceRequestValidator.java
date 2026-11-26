@@ -9,6 +9,7 @@ import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.util.MDMSUtils;
+import org.egov.pgr.util.Principals;
 import org.egov.pgr.web.models.*;
 import org.egov.pgr.web.models.boundary.Boundary;
 import org.egov.pgr.web.models.boundary.BoundaryResponse;
@@ -29,6 +30,8 @@ public class ServiceRequestValidator {
 
     private PGRConfiguration config;
 
+    private Principals principals;
+
     private PGRRepository repository;
 
     private HRMSUtil hrmsUtil;
@@ -42,7 +45,8 @@ public class ServiceRequestValidator {
     @Autowired
     public ServiceRequestValidator(PGRConfiguration config, PGRRepository repository, HRMSUtil hrmsUtil,
                                    ServiceRequestRepository serviceRequestRepository, ObjectMapper objectMapper,
-                                   MDMSUtils mdmsUtils) {
+                                   MDMSUtils mdmsUtils, Principals principals) {
+        this.principals = principals;
         this.config = config;
         this.repository = repository;
         this.hrmsUtil = hrmsUtil;
@@ -366,10 +370,55 @@ public class ServiceRequestValidator {
     }
 
 
-    public void validatePlainSearch(RequestSearchCriteria criteria) {
+    /**
+     * Validates a plain search request. Plain search is not record-scoped, so the caller and the
+     * requested tenants are checked here:
+     * <ul>
+     *   <li>an authenticated principal is required;</li>
+     *   <li>citizens are not served by this endpoint (they use _search, which is scoped to their
+     *       own complaints);</li>
+     *   <li>when {@code pgr.plainsearch.allowed.roles} is configured, the caller must hold one of
+     *       those roles;</li>
+     *   <li>every requested tenant must be the caller's own tenant or lie under it — the same rule
+     *       {@code PolicyDrivenScopeResolver} applies to _search.</li>
+     * </ul>
+     */
+    public void validatePlainSearch(RequestInfo requestInfo, RequestSearchCriteria criteria) {
         if(CollectionUtils.isEmpty(criteria.getTenantIds())){
             throw new CustomException("TENANT_ID_LIST_EMPTY", "Tenant ids not provided for searching.");
         }
+
+        if(requestInfo == null || requestInfo.getUserInfo() == null)
+            throw new CustomException("INVALID_REQUESTINFO","RequestInfo.userInfo is required to search complaints");
+
+        if(principals.isPureCitizen(requestInfo))
+            throw new CustomException("INVALID_SEARCH","Plain search is not allowed for the given user");
+
+        Set<String> allowedRoles = parseCsv(config.getPlainSearchAllowedRoles());
+        if(!allowedRoles.isEmpty()){
+            boolean hasAllowedRole = requestInfo.getUserInfo().getRoles() != null
+                    && requestInfo.getUserInfo().getRoles().stream()
+                        .anyMatch(role -> role != null && role.getCode() != null
+                                && allowedRoles.contains(role.getCode().trim().toUpperCase()));
+            if(!hasAllowedRole)
+                throw new CustomException("INVALID_SEARCH","Plain search is not allowed for the given user");
+        }
+
+        String callerTenantId = requestInfo.getUserInfo().getTenantId();
+        for(String tenantId : criteria.getTenantIds()){
+            boolean withinCallerTenant = StringUtils.hasText(callerTenantId) && StringUtils.hasText(tenantId)
+                    && (tenantId.equals(callerTenantId) || tenantId.startsWith(callerTenantId + "."));
+            if(!withinCallerTenant)
+                throw new CustomException("INVALID_SEARCH","Plain search is not allowed for the given tenantIds");
+        }
+    }
+
+    private static Set<String> parseCsv(String csv){
+        if(!StringUtils.hasText(csv))
+            return Collections.emptySet();
+        return Arrays.stream(csv.split(","))
+                .map(String::trim).filter(StringUtils::hasText)
+                .map(String::toUpperCase).collect(Collectors.toSet());
     }
 
     public void validateBoundary(ServiceRequest request) {

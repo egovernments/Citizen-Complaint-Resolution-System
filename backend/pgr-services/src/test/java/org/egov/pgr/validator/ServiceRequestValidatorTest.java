@@ -6,6 +6,7 @@ import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.util.MDMSUtils;
+import org.egov.pgr.util.Principals;
 import org.egov.pgr.web.models.*;
 import org.egov.pgr.web.models.boundary.BoundaryResponse;
 import org.egov.tracer.model.CustomException;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -35,6 +37,7 @@ public class ServiceRequestValidatorTest {
     @Mock private ServiceRequestRepository serviceRequestRepository;
     @Mock private ObjectMapper objectMapper;
     @Mock private MDMSUtils mdmsUtils;
+    @Spy private Principals principals = new Principals();
 
     @InjectMocks
     private ServiceRequestValidator validator;
@@ -306,5 +309,72 @@ public class ServiceRequestValidatorTest {
 
     private void stubWindow(long millis) {
         when(mdmsUtils.getReopenWindowMillis(any(), any())).thenReturn(millis);
+    }
+
+    // ── validatePlainSearch ───────────────────────────────────────────────────
+
+    private static org.egov.common.contract.request.RequestInfo plainSearchCaller(String type, String tenantId, String... roleCodes) {
+        List<org.egov.common.contract.request.Role> roles = new ArrayList<>();
+        for (String code : roleCodes)
+            roles.add(org.egov.common.contract.request.Role.builder().code(code).tenantId(tenantId).build());
+        return org.egov.common.contract.request.RequestInfo.builder()
+                .userInfo(org.egov.common.contract.request.User.builder()
+                        .uuid("caller-uuid").type(type).tenantId(tenantId).roles(roles).build())
+                .build();
+    }
+
+    private static RequestSearchCriteria plainSearchCriteria(String... tenantIds) {
+        RequestSearchCriteria criteria = new RequestSearchCriteria();
+        criteria.setTenantIds(new HashSet<>(Arrays.asList(tenantIds)));
+        return criteria;
+    }
+
+    @Test
+    void plainSearch_employeeWithinOwnTenantSubtree_passes() {
+        assertDoesNotThrow(() -> validator.validatePlainSearch(
+                plainSearchCaller("EMPLOYEE", "pg", "EMPLOYEE", "GRO"), plainSearchCriteria("pg", "pg.citya")));
+    }
+
+    @Test
+    void plainSearch_missingTenantIds_rejected() {
+        CustomException ex = assertThrows(CustomException.class, () -> validator.validatePlainSearch(
+                plainSearchCaller("EMPLOYEE", "pg", "EMPLOYEE"), new RequestSearchCriteria()));
+        assertEquals("TENANT_ID_LIST_EMPTY", ex.getCode());
+    }
+
+    @Test
+    void plainSearch_missingUserInfo_rejected() {
+        CustomException ex = assertThrows(CustomException.class, () -> validator.validatePlainSearch(
+                new org.egov.common.contract.request.RequestInfo(), plainSearchCriteria("pg")));
+        assertEquals("INVALID_REQUESTINFO", ex.getCode());
+    }
+
+    @Test
+    void plainSearch_citizen_rejected() {
+        CustomException ex = assertThrows(CustomException.class, () -> validator.validatePlainSearch(
+                plainSearchCaller("CITIZEN", "pg", "CITIZEN"), plainSearchCriteria("pg")));
+        assertEquals("INVALID_SEARCH", ex.getCode());
+    }
+
+    @Test
+    void plainSearch_tenantOutsideCallerSubtree_rejected() {
+        // a sibling city, an unrelated root, and a root that merely shares the caller's prefix
+        for (String tenantId : Arrays.asList("pg.cityb", "ke", "pg.cityabc")) {
+            CustomException ex = assertThrows(CustomException.class, () -> validator.validatePlainSearch(
+                    plainSearchCaller("EMPLOYEE", "pg.citya", "EMPLOYEE", "GRO"), plainSearchCriteria("pg.citya", tenantId)));
+            assertEquals("INVALID_SEARCH", ex.getCode());
+        }
+    }
+
+    @Test
+    void plainSearch_allowedRolesConfigured_enforced() {
+        when(config.getPlainSearchAllowedRoles()).thenReturn("SUPERUSER, account_admin");
+
+        assertDoesNotThrow(() -> validator.validatePlainSearch(
+                plainSearchCaller("EMPLOYEE", "pg", "EMPLOYEE", "ACCOUNT_ADMIN"), plainSearchCriteria("pg")));
+
+        CustomException ex = assertThrows(CustomException.class, () -> validator.validatePlainSearch(
+                plainSearchCaller("EMPLOYEE", "pg", "EMPLOYEE", "PGR_LME"), plainSearchCriteria("pg")));
+        assertEquals("INVALID_SEARCH", ex.getCode());
     }
 }

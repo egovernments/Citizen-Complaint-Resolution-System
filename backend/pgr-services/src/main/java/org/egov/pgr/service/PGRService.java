@@ -411,7 +411,7 @@ public class PGRService {
     }
 
     public List<ServiceWrapper> plainSearch(RequestInfo requestInfo, RequestSearchCriteria criteria) {
-        validator.validatePlainSearch(criteria);
+        validator.validatePlainSearch(requestInfo, criteria);
 
         criteria.setIsPlainSearch(true);
 
