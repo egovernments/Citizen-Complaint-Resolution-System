@@ -1,0 +1,24 @@
+# Existing-install upgrade guard.
+#
+# Layered LAST, and only by the guarded upgrade (`digit-upgrade deploy`, see
+# docs/setup/local/UPGRADE.md, which sets upgrade_safe_mode). It keeps
+# PostgreSQL on the existing PGDATA volume while removing every
+# /docker-entrypoint-initdb.d bind from the fast-path overlay, and turns the
+# compose-level user seed into a no-op; API seed/bootstrap tasks are gated
+# separately in playbook-deploy.yml.
+#
+# The data path below is not assumed: before anything stops, the deployer
+# checks that the running database's data directory is the postgres_data named
+# volume at exactly this path, and that the new stack with this overlay mounts
+# it there. A box still on the image's anonymous volume is refused.
+services:
+  postgres-db:
+    volumes: !override
+      - postgres_data:/var/lib/postgresql/data
+
+  user-seed:
+    entrypoint:
+      - sh
+      - -c
+      - "echo 'upgrade-safe mode: user reseeding disabled'"
+    volumes: !override []

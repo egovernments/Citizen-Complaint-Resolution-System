@@ -115,6 +115,7 @@ COMPOSE_FILES = [
     LS / "docker-compose.monitoring.yml",
     LS / "docker-compose.matomo.yml",
     LS / "docker-compose.opensre.yml",
+    LS / "docker-compose.upgrade-safe.yml",
 ]
 K8S_DIR = LS / "k8s"
 GATUS_COMPOSE = LS / "gatus/config.yaml"
@@ -270,6 +271,23 @@ def _no_duplicate_keys(loader, node, deep=False):
 _StrictLoader.add_constructor(
     yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _no_duplicate_keys
 )
+
+
+def _compose_merge_tag(loader, node):
+    """Read Compose's `!override` / `!reset` merge tags as their plain value.
+
+    They only change how `docker compose` merges a value with an earlier file;
+    which services exist, the only thing this guard reads, is unaffected.
+    """
+    if isinstance(node, yaml.MappingNode):
+        return _no_duplicate_keys(loader, node)
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    return loader.construct_scalar(node)
+
+
+for _tag in ("!override", "!reset"):
+    _StrictLoader.add_constructor(_tag, _compose_merge_tag)
 
 
 def _rel(p: pathlib.Path) -> str:
