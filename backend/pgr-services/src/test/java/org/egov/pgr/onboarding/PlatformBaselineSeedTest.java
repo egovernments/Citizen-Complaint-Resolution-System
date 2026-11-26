@@ -33,10 +33,12 @@ public class PlatformBaselineSeedTest {
      * v15 every configurator-ui key in the fr_FR, hi_IN and pt_BR packs, and hi_IN rainmaker-common, -pgr and -hr packs;
      * v16 the dashboard catalog (dss.KpiDefinition and dss.DashboardPack schemas and records), so a workspace that turns
      * its public dashboard on serves its own curated public pack;
-     * v17 the employee working-context action for every employee role, which the Spring gateway needs (Kong exempts it).
+     * v17 the employee working-context action for every employee role, which the Spring gateway needs (Kong exempts it);
+     * v18 the signup country's postal-code rule (countryPostalRules, written as the common-masters.FormValidations
+     * postalCode row) and the founder's grants to change it in the management console (#2787).
      */
-    private static final String VERSION = "17";
-    private static final String SHA256 = "a319811ae18ca8f473e0989ff4f0ee8257902c9637a3b8370c7413750078a5ee";
+    private static final String VERSION = "18";
+    private static final String SHA256 = "0127646f3045dc2bd570c6d62ebe781f9ef54a28721aa81bbebcdb2a969a44eb";
     @Test public void contentChangesComeWithAVersionBump() throws Exception {
         byte[] bytes;
         try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }

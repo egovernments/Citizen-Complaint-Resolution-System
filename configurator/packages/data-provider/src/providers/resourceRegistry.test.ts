@@ -130,6 +130,19 @@ describe('resourceRegistry', () => {
     assert.strictEqual(getResourceConfig('mobile-validation'), undefined, 'mobile-validation alias must be removed');
   });
 
+  it('gives the postal-code rule an editable master, keyed on fieldType (#2787)', () => {
+    // Sign-up writes the workspace's postal rule as the FormValidations postalCode row; with no resource
+    // the management console had no screen to change it.
+    const cfg = getResourceConfig('form-validations');
+    assert.ok(cfg, 'Missing resource form-validations');
+    assert.strictEqual(cfg.schema, 'common-masters.FormValidations');
+    assert.strictEqual(cfg.idField, 'fieldType');
+    assert.strictEqual(getResourceBySchema('common-masters.FormValidations'), 'form-validations');
+    assert.ok('form-validations' in getGenericMdmsResources(), 'must get the generic list/show/edit/create screens');
+    assert.ok(!cfg.unlisted, 'must be listed in Advanced');
+    assert.strictEqual(isReadOnlyResource('form-validations'), false);
+  });
+
   it('never keys a master on a value operators edit (#1252)', () => {
     // pgr-ui-constants used to declare idField: 'REOPENSLA' — the record's only
     // value doubling as its key. mdms-v2 rejects updates that change an x-unique
