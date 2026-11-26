@@ -57,7 +57,10 @@ export function useAvailableLocales(): {
     queryKey: ['available-locales', tenantId],
     queryFn: async () => {
       if (!tenantId) return FALLBACK_LOCALES;
-      const records = await digitClient.mdmsSearch(tenantId, 'common-masters.StateInfo', { limit: 1 });
+      // Filter on the server: MDMS v2 returns newest first, so with limit 1 a
+      // newer deactivated StateInfo row hides the active one and the tenant's
+      // languages collapse to just `default`.
+      const records = await digitClient.mdmsSearch(tenantId, 'common-masters.StateInfo', { limit: 1, isActive: true });
       const stateInfo = records.find((r) => r.isActive)?.data as Record<string, unknown> | undefined;
       const langs = Array.isArray(stateInfo?.languages) ? stateInfo!.languages as Array<{ value?: string; label?: string }> : [];
       const fromStateInfo: LocaleOption[] = langs
