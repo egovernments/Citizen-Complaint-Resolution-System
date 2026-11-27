@@ -126,6 +126,8 @@ public class OnboardingServiceTest {
             CustomException error = assertThrows(slug, CustomException.class, () -> configured.submit(
                     principal, Collections.singletonMap("id", signupId.toString()), "submit-" + slug));
             assertEquals("ONBOARDING_IDENTIFIER_TAKEN", error.getCode());
+            // Which identifier, for the configurator to put under its field (#2775).
+            assertEquals("TENANT_ID", ((OnboardingIdentifierTaken) error).getIdentifierType());
         }
         verify(repository, never()).reserveIdentifier(any(), any(), any(), anyLong());
         verify(repository, never()).submit(any(), any(), anyLong());

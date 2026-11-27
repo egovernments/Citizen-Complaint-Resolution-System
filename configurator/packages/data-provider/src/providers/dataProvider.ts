@@ -4,6 +4,7 @@ import type { MdmsRecord } from '../client/types.js';
 import { getResourceConfig, type ResourceConfig } from './resourceRegistry.js';
 import { migrateThemeConfigToV3 } from './themeConfigMigration.js';
 import { buildNotificationLogQuery } from './notificationLogQuery.js';
+import { levelNamesError, normalizeLevelName, tooLongForLevel } from '../levelNames.js';
 
 /** Extended data provider type with DIGIT-specific custom methods */
 export type DigitDataProvider = DataProvider & {
@@ -1690,13 +1691,28 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           .map((lvl) => lvl as Record<string, unknown>)
           .filter((lvl) => typeof lvl?.boundaryType === 'string' && (lvl.boundaryType as string).trim())
           .map((lvl) => ({
-            boundaryType: String(lvl.boundaryType).trim(),
+            boundaryType: normalizeLevelName(String(lvl.boundaryType)),
             parentBoundaryType:
               typeof lvl.parentBoundaryType === 'string' && lvl.parentBoundaryType.trim()
-                ? lvl.parentBoundaryType.trim()
+                ? normalizeLevelName(lvl.parentBoundaryType)
                 : null,
           }));
         if (levels.length === 0) throw new Error('At least one hierarchy level is required');
+        // boundary-service takes names its persister can't store (#2803): refuse them here.
+        const typeTooLong = tooLongForLevel(hierarchyType);
+        if (typeTooLong) {
+          throw new Error(`The hierarchy type is ${typeTooLong.length} characters long. Use ${typeTooLong.max} characters or fewer.`);
+        }
+        // Checked row by row as the editor shows them, so "Level N" is the same row there: a blank
+        // row is left out of the save, but still counts.
+        const levelError = levelNamesError(
+          levelsInput.map((lvl) => {
+            const name = (lvl as Record<string, unknown> | null)?.boundaryType;
+            return typeof name === 'string' ? name : '';
+          }),
+          { skipBlank: true },
+        );
+        if (levelError) throw new Error(levelError);
         const created = await client.boundaryHierarchyCreate(
           targetTenantId,
           hierarchyType,

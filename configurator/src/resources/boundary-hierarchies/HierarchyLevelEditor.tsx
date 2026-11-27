@@ -4,6 +4,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { levelNameProblems, levelNameProblemText } from '@digit-mcp/data-provider';
 import {
   Select,
   SelectTrigger,
@@ -51,6 +52,13 @@ export function HierarchyLevelEditor({
       };
     });
   }, [field.value]);
+
+  // Names boundary-service would take but can't store, or repeated (#2803). A blank row is
+  // left out on save, so it isn't marked.
+  const names = rows.map((r) => r.boundaryType);
+  const messages = levelNameProblems(names).map((problem) =>
+    problem && problem.kind !== 'required' ? levelNameProblemText(problem, names) : null,
+  );
 
   const write = (next: Level[]) => field.onChange(next);
 
@@ -130,7 +138,9 @@ export function HierarchyLevelEditor({
                       value={row.boundaryType}
                       onChange={(e) => updateRow(index, { boundaryType: e.target.value })}
                       placeholder="e.g. County"
+                      aria-invalid={!!messages[index]}
                     />
+                    {messages[index] && <p className="mt-1 text-xs text-destructive">{messages[index]}</p>}
                   </div>
                   <div>
                     <Label className="mb-1.5 block text-xs font-medium text-foreground">

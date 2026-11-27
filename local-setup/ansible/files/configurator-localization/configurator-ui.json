@@ -8784,24 +8784,6 @@
     "locale": "pt_BR"
   },
   {
-    "code": "app.onboarding.common.row_problem",
-    "message": "पंक्ति %{row}: %{problem}",
-    "module": "configurator-ui",
-    "locale": "hi_IN"
-  },
-  {
-    "code": "app.onboarding.common.row_problem",
-    "message": "Ligne %{row} : %{problem}",
-    "module": "configurator-ui",
-    "locale": "fr_FR"
-  },
-  {
-    "code": "app.onboarding.common.row_problem",
-    "message": "Linha %{row}: %{problem}",
-    "module": "configurator-ui",
-    "locale": "pt_BR"
-  },
-  {
     "code": "app.onboarding.common.save_changes",
     "message": "बदलाव सहेजें",
     "module": "configurator-ui",
@@ -10098,16 +10080,70 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.departments.bulk.bad_department_code",
+    "message": "विभाग कोड “%{code}” में केवल बड़े अक्षर (A-Z), अंक और अंडरस्कोर हो सकते हैं।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.bad_designation_code",
+    "message": "पदनाम कोड “%{code}” में केवल बड़े अक्षर (A-Z), अंक और अंडरस्कोर हो सकते हैं।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.department_not_added",
+    "message": "%{codes} से जुड़ा है, जिसे जोड़ा नहीं जा सका।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.departments.bulk.found",
     "message": "%{file} में %{departments} और %{designations} हैं।",
     "module": "configurator-ui",
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.departments.bulk.bad_department_code",
+    "message": "le code de service « %{code} » ne peut contenir que des lettres majuscules, des chiffres et des traits de soulignement.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.bad_designation_code",
+    "message": "le code de fonction « %{code} » ne peut contenir que des lettres majuscules, des chiffres et des traits de soulignement.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.department_not_added",
+    "message": "Liée à %{codes}, dont l’ajout a échoué.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.departments.bulk.found",
     "message": "%{file} contient %{departments} et %{designations}.",
     "module": "configurator-ui",
     "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.bad_department_code",
+    "message": "o código de departamento “%{code}” só pode usar letras maiúsculas, dígitos e sublinhados.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.bad_designation_code",
+    "message": "o código de cargo “%{code}” só pode usar letras maiúsculas, dígitos e sublinhados.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.department_not_added",
+    "message": "Vinculado a %{codes}, que não pôde ser adicionado.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
   },
   {
     "code": "app.onboarding.departments.bulk.found",
@@ -10140,8 +10176,20 @@
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.departments.bulk.sheet_row_problem",
+    "message": "%{sheet} शीट, पंक्ति %{row}: %{problem}",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.departments.bulk.none_found",
     "message": "Aucun service ni aucune fonction trouvés. Utilisez les onglets Department et Designation du modèle.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.sheet_row_problem",
+    "message": "Feuille %{sheet}, ligne %{row} : %{problem}",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
@@ -10152,8 +10200,26 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.departments.bulk.sheet_row_problem",
+    "message": "Planilha %{sheet}, linha %{row}: %{problem}",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.departments.bulk.title",
     "message": "अपने विभाग और पदनाम अपलोड करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_one",
+    "message": "विभाग %{codes} मौजूद नहीं है। इसे Department शीट में जोड़ें, या पहले से मौजूद किसी विभाग का इस्तेमाल करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_other",
+    "message": "विभाग %{codes} मौजूद नहीं हैं। इन्हें Department शीट में जोड़ें, या पहले से मौजूद विभागों का इस्तेमाल करें।",
     "module": "configurator-ui",
     "locale": "hi_IN"
   },
@@ -10164,8 +10230,32 @@
     "locale": "fr_FR"
   },
   {
+    "code": "app.onboarding.departments.bulk.unknown_department_one",
+    "message": "le service %{codes} n’existe pas. Ajoutez-le à la feuille Department, ou utilisez un service que vous avez déjà.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_other",
+    "message": "les services %{codes} n’existent pas. Ajoutez-les à la feuille Department, ou utilisez des services que vous avez déjà.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.departments.bulk.title",
     "message": "Envie seus departamentos e cargos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_one",
+    "message": "o departamento %{codes} não existe. Adicione-o à planilha Department ou use um que você já tem.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_other",
+    "message": "os departamentos %{codes} não existem. Adicione-os à planilha Department ou use os que você já tem.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -15144,14 +15234,32 @@
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.geography.google.rejected",
+    "message": "Google ने इस API कुंजी को अस्वीकार कर दिया। जाँचें कि यह पूरी कॉपी हुई है, Google Cloud Console में इसके लिए Maps JavaScript API चालू करें, और इसकी HTTP-referrer पाबंदियों में इस साइट (%{site}) को अनुमति दें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.geography.google.osm_tiles",
     "message": "Tuiles OpenStreetMap",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
   {
+    "code": "app.onboarding.geography.google.rejected",
+    "message": "Google a rejeté cette clé d’API. Vérifiez qu’elle est copiée en entier, activez l’API Maps JavaScript pour cette clé dans Google Cloud Console et autorisez ce site (%{site}) dans ses restrictions de référents HTTP.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.geography.google.osm_tiles",
     "message": "Blocos do OpenStreetMap",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.google.rejected",
+    "message": "O Google rejeitou esta chave de API. Verifique se ela foi copiada por inteiro, ative a API Maps JavaScript para ela no Google Cloud Console e permita este site (%{site}) nas restrições de referenciador HTTP da chave.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -15756,14 +15864,230 @@
     "locale": "hi_IN"
   },
   {
+    "code": "app.onboarding.geography.excel.type_too_long",
+    "message": "पदानुक्रम प्रकार का नाम %{length} वर्णों का है। %{max} या उससे कम वर्णों का नाम रखें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_control_char",
+    "message": "इस नाम में एक छिपा हुआ नियंत्रण वर्ण है, जो अक्सर कॉपी और पेस्ट से आता है। नाम मिटाकर फिर से टाइप करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_too_long",
+    "message": "यह नाम %{length} वर्णों का है। %{max} या उससे कम वर्णों का नाम रखें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_duplicate",
+    "message": "%{other} का यह नाम पहले से है। हर स्तर को अलग नाम दें; बड़े-छोटे अक्षर और खाली जगह से नाम अलग नहीं होते।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.names_invalid",
+    "message": "कुछ स्तरों के नाम इस्तेमाल नहीं किए जा सकते। ऊपर चिह्नित नाम ठीक करें, फिर आगे बढ़ें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.required",
+    "message": "एक स्तर का कोई नाम नहीं है।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.control_char",
+    "message": "स्तर के नाम “%{name}” में एक छिपा हुआ नियंत्रण वर्ण है, जो अक्सर कॉपी और पेस्ट से आता है।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.too_long",
+    "message": "स्तर का नाम “%{name}” %{length} वर्णों का है। स्तर के नाम में अधिकतम %{max} वर्ण हो सकते हैं।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.duplicate",
+    "message": "दो स्तरों का नाम “%{name}” है। हर स्तर का नाम अलग होना चाहिए; बड़े-छोटे अक्षर और खाली जगह से नाम अलग नहीं होते।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.change_and_retry",
+    "message": "%{problem} स्तर का नाम बदलें, फिर पुनः प्रयास करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.nothing_saved",
+    "message": "%{problem} कुछ भी सहेजा नहीं गया। सूची में उस आइटम पर संपादित करें चुनें, स्तर का नाम बदलें, फिर दोबारा सहेजें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.saved_unusable",
+    "message": "%{problem} इस स्तर के अंतर्गत क्षेत्र सहेजे नहीं जा सकते, इसलिए कुछ भी सहेजा नहीं गया। सहेजे गए स्तर का नाम बदला नहीं जा सकता: अपने प्लेटफ़ॉर्म व्यवस्थापक से पदानुक्रम हटाने को कहें, फिर अपनी सीमाएं दोबारा जोड़ें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
     "code": "app.onboarding.geography.levels.unnamed",
     "message": "Nommez chaque niveau sélectionné (manquant : %{levels}).",
     "module": "configurator-ui",
     "locale": "fr_FR"
   },
   {
+    "code": "app.onboarding.geography.excel.type_too_long",
+    "message": "Le nom du type de hiérarchie compte %{length} caractères. Utilisez %{max} caractères au maximum.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_control_char",
+    "message": "Ce nom contient un caractère de contrôle invisible, souvent dû à un copier-coller. Effacez le nom et saisissez-le à nouveau.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_too_long",
+    "message": "Ce nom compte %{length} caractères. Utilisez %{max} caractères au maximum.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_duplicate",
+    "message": "%{other} porte déjà ce nom. Donnez un nom différent à chaque niveau ; les majuscules et les espaces ne suffisent pas à distinguer deux noms.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.levels.names_invalid",
+    "message": "Certains noms de niveau ne peuvent pas être utilisés. Corrigez les noms signalés ci-dessus, puis continuez.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.required",
+    "message": "L’un des niveaux n’a pas de nom.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.control_char",
+    "message": "Le nom de niveau « %{name} » contient un caractère de contrôle invisible, souvent dû à un copier-coller.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.too_long",
+    "message": "Le nom de niveau « %{name} » compte %{length} caractères. Un nom de niveau peut en compter %{max} au maximum.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.duplicate",
+    "message": "Deux niveaux s’appellent « %{name} ». Chaque niveau doit avoir un nom différent ; les majuscules et les espaces ne suffisent pas à distinguer deux noms.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.change_and_retry",
+    "message": "%{problem} Modifiez le nom du niveau, puis réessayez.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.nothing_saved",
+    "message": "%{problem} Rien n’a été enregistré. Sélectionnez Modifier sur l’élément de la liste, changez le nom du niveau, puis enregistrez à nouveau.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.saved_unusable",
+    "message": "%{problem} Aucune zone ne peut être enregistrée sous ce niveau, donc rien n’a été enregistré. Un nom de niveau enregistré ne peut pas être modifié : demandez à l’administrateur de votre plateforme de supprimer la hiérarchie, puis ajoutez à nouveau vos limites.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.onboarding.geography.levels.unnamed",
     "message": "Dê nome a todos os níveis selecionados (faltando: %{levels}).",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.excel.type_too_long",
+    "message": "O nome do tipo de hierarquia tem %{length} caracteres. Use no máximo %{max} caracteres.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_control_char",
+    "message": "Este nome contém um caractere de controle oculto, geralmente vindo de copiar e colar. Apague o nome e digite-o novamente.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_too_long",
+    "message": "Este nome tem %{length} caracteres. Use no máximo %{max} caracteres.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_duplicate",
+    "message": "%{other} já tem este nome. Dê um nome diferente a cada nível; letras maiúsculas e espaços não tornam os nomes diferentes.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.levels.names_invalid",
+    "message": "Alguns nomes de nível não podem ser usados. Corrija os nomes marcados acima e continue.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.required",
+    "message": "Um dos níveis não tem nome.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.control_char",
+    "message": "O nome de nível “%{name}” contém um caractere de controle oculto, geralmente vindo de copiar e colar.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.too_long",
+    "message": "O nome de nível “%{name}” tem %{length} caracteres. Um nome de nível pode ter no máximo %{max}.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.duplicate",
+    "message": "Dois níveis se chamam “%{name}”. Cada nível precisa de um nome diferente; letras maiúsculas e espaços não tornam os nomes diferentes.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.change_and_retry",
+    "message": "%{problem} Altere o nome do nível e tente novamente.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.nothing_saved",
+    "message": "%{problem} Nada foi salvo. Selecione Editar no item da lista, altere o nome do nível e salve novamente.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.saved_unusable",
+    "message": "%{problem} Nenhuma área pode ser salva sob ele, então nada foi salvo. Um nome de nível salvo não pode ser alterado: peça ao administrador da sua plataforma para remover a hierarquia e depois adicione seus limites novamente.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
@@ -20016,6 +20340,168 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.onboarding.signup.account_code_final",
+    "message": "आपका खाता कोड %{code} होगा।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.account_code_final",
+    "message": "Votre code de compte sera %{code}.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.account_code_final",
+    "message": "Seu código de conta será %{code}.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.signup.account_code_in_use",
+    "message": "वह खाता कोड पहले से लिया जा चुका है। कोई दूसरा चुनें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.account_code_in_use",
+    "message": "Ce code de compte est déjà pris. Choisissez-en un autre.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.account_code_in_use",
+    "message": "Esse código de conta já está em uso. Escolha outro.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.signup.account_code_rule",
+    "message": "खाता कोड 2 से 32 वर्णों का होना चाहिए, जिसमें A–Z, 0–9 और हाइफ़न का उपयोग हो, और यह किसी अक्षर या अंक से शुरू होना चाहिए।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.account_code_rule",
+    "message": "Le code du compte doit comporter entre 2 et 32 caractères, parmi A–Z, 0–9 et le trait d’union, et commencer par une lettre ou un chiffre.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.account_code_rule",
+    "message": "O código da conta deve ter de 2 a 32 caracteres, usando A–Z, 0–9 e hifens, e deve começar com uma letra ou um dígito.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.signup.account_name_taken",
+    "message": "“%{name}” नाम का वर्कस्पेस पहले से मौजूद है। कोई दूसरा नाम चुनें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.account_name_taken",
+    "message": "Un espace de travail nommé « %{name} » existe déjà. Choisissez un autre nom.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.account_name_taken",
+    "message": "Já existe um espaço de trabalho chamado “%{name}”. Escolha outro nome.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.signup.account_name_taken_any",
+    "message": "इस नाम का वर्कस्पेस पहले से मौजूद है। कोई दूसरा नाम चुनें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.account_name_taken_any",
+    "message": "Un espace de travail portant ce nom existe déjà. Choisissez un autre nom.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.account_name_taken_any",
+    "message": "Já existe um espaço de trabalho com este nome. Escolha outro nome.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.signup.error_generic",
+    "message": "हमारी ओर से कुछ गड़बड़ हो गई। पुनः प्रयास करें, और यदि ऐसा बार-बार हो, तो सहायता टीम से संपर्क करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.error_generic",
+    "message": "Un problème est survenu de notre côté. Réessayez et, si le problème persiste, contactez l’assistance.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.error_generic",
+    "message": "Algo deu errado do nosso lado. Tente novamente e, se continuar acontecendo, entre em contato com o suporte.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.signup.identifier_taken",
+    "message": "आपका कोई एक विवरण (खाते का नाम, खाता कोड या खाता URL) पहले से किसी दूसरे वर्कस्पेस द्वारा उपयोग किया जा रहा है। उसे बदलें और पुनः प्रयास करें।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.identifier_taken",
+    "message": "L’une de vos informations (nom du compte, code du compte ou URL du compte) est déjà utilisée par un autre espace de travail. Modifiez-la et réessayez.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.identifier_taken",
+    "message": "Um dos seus dados (nome da conta, código da conta ou URL da conta) já é usado por outro espaço de trabalho. Altere-o e tente novamente.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.signup.resume_taken_title",
+    "message": "आपका खाता अभी तक नहीं बना है",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.resume_taken_title",
+    "message": "Votre compte n’a pas encore été créé",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.resume_taken_title",
+    "message": "Sua conta ainda não foi criada",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.onboarding.signup.resume_taken",
+    "message": "आपके सहेजे गए कुछ विवरण पहले से किसी दूसरे वर्कस्पेस द्वारा उपयोग किए जा रहे हैं। जिन्हें लिया गया बताया गया है उन्हें बदलें, फिर अपना खाता बनाएं।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.onboarding.signup.resume_taken",
+    "message": "Un autre espace de travail utilise déjà certaines des informations que vous avez enregistrées. Modifiez celles marquées comme prises, puis créez votre compte.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.onboarding.signup.resume_taken",
+    "message": "Outro espaço de trabalho já usa alguns dos dados que você salvou. Altere os marcados como em uso e depois crie sua conta.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "app.onboarding.signup.almost_ready",
     "message": "आपका वर्कस्पेस लगभग तैयार है",
     "module": "configurator-ui",
@@ -21882,12 +22368,6 @@
     "locale": "en_IN"
   },
   {
-    "code": "app.onboarding.common.row_problem",
-    "message": "Row %{row}: %{problem}",
-    "module": "configurator-ui",
-    "locale": "en_IN"
-  },
-  {
     "code": "app.onboarding.common.save_changes",
     "message": "Save changes",
     "module": "configurator-ui",
@@ -22320,6 +22800,24 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.departments.bulk.bad_department_code",
+    "message": "department code “%{code}” can only use capital letters, digits and underscores.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.bad_designation_code",
+    "message": "designation code “%{code}” can only use capital letters, digits and underscores.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.department_not_added",
+    "message": "Linked to %{codes}, which couldn’t be added.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.departments.bulk.found",
     "message": "%{file} has %{departments} and %{designations}.",
     "module": "configurator-ui",
@@ -22338,8 +22836,26 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.departments.bulk.sheet_row_problem",
+    "message": "%{sheet} row %{row}: %{problem}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.departments.bulk.title",
     "message": "Upload your departments and designations",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_one",
+    "message": "department %{codes} doesn’t exist. Add it to the Department sheet, or use one you already have.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.departments.bulk.unknown_department_other",
+    "message": "departments %{codes} don’t exist. Add them to the Department sheet, or use ones you already have.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -23874,6 +24390,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.excel.type_too_long",
+    "message": "The hierarchy type name is %{length} characters long. Use %{max} characters or fewer.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.excel.unnamed",
     "message": "unnamed",
     "module": "configurator-ui",
@@ -24006,6 +24528,12 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.google.rejected",
+    "message": "Google rejected this API key. Check it is copied in full, enable the Maps JavaScript API for it in Google Cloud Console, and allow this site (%{site}) in its HTTP-referrer restrictions.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.google.replace_key",
     "message": "Replace the saved key",
     "module": "configurator-ui",
@@ -24080,6 +24608,48 @@
   {
     "code": "app.onboarding.geography.intro",
     "message": "The boundary hierarchies your complaint services work in. Bring them in from one of three sources.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.change_and_retry",
+    "message": "%{problem} Change the level name, then try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.control_char",
+    "message": "The level name \"%{name}\" contains a hidden control character, often from copy and paste.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.duplicate",
+    "message": "Two levels are called \"%{name}\". Each level needs a different name; capital letters and spaces don’t make names different.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.nothing_saved",
+    "message": "%{problem} Nothing was saved. Select Edit on the item in the list, change the level name, then save again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.required",
+    "message": "One of the levels has no name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.saved_unusable",
+    "message": "%{problem} Areas can’t be saved under it, so nothing was saved. A saved level name can’t be changed: ask your platform administrator to remove the hierarchy, then add your boundaries again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.level_name.too_long",
+    "message": "The level name \"%{name}\" is %{length} characters long. A level name can have at most %{max}.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -24168,6 +24738,18 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.onboarding.geography.levels.name_control_char",
+    "message": "This name contains a hidden control character, often from copy and paste. Delete the name and type it again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_duplicate",
+    "message": "%{other} already has this name. Give each level a different name; capital letters and spaces don’t make names different.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.onboarding.geography.levels.name_label",
     "message": "Hierarchy Name",
     "module": "configurator-ui",
@@ -24176,6 +24758,18 @@
   {
     "code": "app.onboarding.geography.levels.name_placeholder",
     "message": "e.g., District",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.name_too_long",
+    "message": "This name is %{length} characters long. Use %{max} characters or fewer.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.geography.levels.names_invalid",
+    "message": "Some level names can’t be used. Fix the names marked above, then continue.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
@@ -25622,6 +26216,60 @@
   {
     "code": "app.onboarding.signup.account_code_taken",
     "message": "That account code is already taken. Go back and choose a different one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.account_code_final",
+    "message": "Your account code will be %{code}.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.account_code_in_use",
+    "message": "That account code is already taken. Choose a different one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.account_code_rule",
+    "message": "The account code must be 2 to 32 characters, using A–Z, 0–9 and hyphens, and must start with a letter or digit.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.account_name_taken",
+    "message": "A workspace called “%{name}” already exists. Choose a different name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.account_name_taken_any",
+    "message": "A workspace with this name already exists. Choose a different name.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.error_generic",
+    "message": "Something went wrong on our side. Try again, and if it keeps happening, contact support.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.identifier_taken",
+    "message": "One of your details (account name, account code or account URL) is already used by another workspace. Change it and try again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.resume_taken_title",
+    "message": "Your account hasn’t been created yet",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.onboarding.signup.resume_taken",
+    "message": "Another workspace already uses some of the details you saved. Change the ones marked as taken, then create your account.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },

@@ -19,10 +19,10 @@ import {
   createPasswordSetupAttempt,
   getPasswordSetupAttempt,
 } from "../sessions/session-store.js";
-import { oidcClientForSurface } from "./oidc.js";
+import { oidcClientForSurface, type OidcClient } from "./oidc.js";
 import { returnDestination, withAuthResult } from "./redirects.js";
 import { result } from "./routes.js";
-import { isTenantBoundSurface, parseSurface, surfaceReturnPrefix } from "./surfaces.js";
+import { isTenantBoundSurface, parseSurface, surfaceReturnPrefix, type IdentitySurface } from "./surfaces.js";
 
 const ACCEPTED = {
   message: "If an eligible account exists, a password setup email has been sent.",
@@ -47,15 +47,29 @@ function completionRedirectUri(state: string, tenantSlug?: string): string {
   return callback.toString();
 }
 
-/** Records the attempt, then has Keycloak email the password (and, if needed, email) actions. */
-export async function sendPasswordSetup(input: {
-  userId: string;
-  hadPassword: boolean;
-  emailVerified: boolean;
+/** The Keycloak client a password email goes through, and where its link returns. */
+export interface PasswordSetupLanding {
   returnTo: string;
   clientId: string;
   /** Ends the redirect; only the digit-employee theme brands the emailed pages from it. */
   tenantSlug: string | undefined;
+}
+
+/**
+ * A tenant-bound surface's password email at a resolved route: through that surface's own client, so
+ * the pages use its theme; with the route's slug, which brands them (#2645); returning to the surface's
+ * app at that slug. Forgot-password and the workspace invite (#2801) both build it here, each from a
+ * route `resolvePublicTenantRoute` resolved.
+ */
+export function surfacePasswordLanding(surface: IdentitySurface, client: OidcClient, route: { urlSlug: string }): PasswordSetupLanding {
+  return { returnTo: surfaceReturnPrefix(surface, route.urlSlug), clientId: client.clientId, tenantSlug: route.urlSlug };
+}
+
+/** Records the attempt, then has Keycloak email the password (and, if needed, email) actions. */
+export async function sendPasswordSetup(input: PasswordSetupLanding & {
+  userId: string;
+  hadPassword: boolean;
+  emailVerified: boolean;
 }): Promise<void> {
   const state = await createPasswordSetupAttempt({
     returnTo: input.returnTo, userId: input.userId, hadPassword: input.hadPassword,
@@ -122,8 +136,9 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
     if (isTenantBoundSurface(surface)) {
       const tenant = await routeForSlug(request.body?.tenantSlug);
       if ("status" in tenant) return response.status(tenant.status).json(errorBody(tenant.code, tenant.error));
-      tenantSlug = tenant.urlSlug;
-      returnTo = returnDestination(request.body?.returnTo, surfaceReturnPrefix(surface, tenant.urlSlug));
+      const landing = surfacePasswordLanding(surface, client, tenant);
+      tenantSlug = landing.tenantSlug;
+      returnTo = returnDestination(request.body?.returnTo, landing.returnTo);
     } else {
       returnTo = returnDestination(request.body?.returnTo);
     }

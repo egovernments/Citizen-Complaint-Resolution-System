@@ -13,10 +13,34 @@ import { organizationAttribute } from "../onboarding/primitives.js";
 import { updateKeycloakUser } from "../sync/keycloak-writer.js";
 import { accountEntries } from "../sync/state.js";
 import { mirrorPerson } from "../sync/mirror.js";
-import { sendPasswordSetup } from "../authentication/password-setup.js";
+import { sendPasswordSetup, surfacePasswordLanding, type PasswordSetupLanding } from "../authentication/password-setup.js";
+import { oidcClientForSurface } from "../authentication/oidc.js";
+import { liveRouteForTenant } from "../access-context/tenant-route.js";
+import type { DigitRole } from "../managed-accounts/digit-user-client.js";
 import { audit } from "../citizen-otp/audit.js";
-import { mayManageRoles, readDigitAccount, requireAccountAdmin, requireWorkspace, validateBinding } from "./authority.js";
+import { holdsConfiguratorRole, mayManageRoles, readDigitAccount, requireAccountAdmin, requireWorkspace, validateBinding } from "./authority.js";
 import { revokeAccount } from "../revocation/index.js";
+
+/**
+ * Where an invitee's password link ends (#2801). A workspace admin (`holdsConfiguratorRole`, the rule
+ * context selection applies) returns to the Configurator. Everyone else returns to the workspace's
+ * employee app through the employee client, exactly as that app's own forgot-password does, instead
+ * of a Configurator "Choose a workspace" screen they can't use. Without an employee client or a live
+ * workspace route (`liveRouteForTenant`), and when the route lookup fails: the Configurator, as
+ * before, so a landing problem never stops the email.
+ */
+export async function passwordSetupLanding(tenantId: string, roles: DigitRole[]): Promise<PasswordSetupLanding> {
+  const configurator = { returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId, tenantSlug: undefined };
+  const employee = oidcClientForSurface("employee", "password");
+  if (!employee || holdsConfiguratorRole(roles, tenantId)) return configurator;
+  try {
+    const route = await liveRouteForTenant(tenantId);
+    return route ? surfacePasswordLanding("employee", employee, route) : configurator;
+  } catch (error) {
+    console.warn("Password setup landing unavailable; the link returns to the Configurator", { tenantId, error: (error as Error).message });
+    return configurator;
+  }
+}
 
 export function publicBinding(subject: string, binding: Binding) {
   const { uuid, email: _email, createdAt: _at, createdBy: _by, removedBy: _removedBy, ...rest } = binding;
@@ -92,7 +116,7 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
   return withPersonLease(subject, async (lease) => {
     const fresh = await readBindingUser(subject);
     if (normalizeLinkEmail(fresh.email || "") !== email) throw new BindingError("IDENTITY_EMAIL_CHANGED", "This identity now uses a different email");
-    await validateBinding({ subject, tenantId: input.tenantId, uuid: input.digitUuid, actor });
+    const target = await validateBinding({ subject, tenantId: input.tenantId, uuid: input.digitUuid, actor });
     const previous = (await readBindings(subject)).find((b) => b.tenantId === input.tenantId);
     const resumeNew = pendingMarker(fresh)?.requestId === requestId && previous?.state !== "pending" && !(previous?.state === "removed" && input.reinvite);
     if (!resumeNew) {
@@ -107,14 +131,16 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
     }
     if (previous?.state === "removed") throw new BindingError("BINDING_REMOVED", "This binding was removed");
     if (previous && previous.uuid !== input.digitUuid) throw new BindingConflictError();
+    // Before membership and activation, from the account validateBinding just read: nothing about
+    // the landing can leave an active binding without its email.
+    const landing = await passwordSetupLanding(input.tenantId, target.roles);
     const org = await requireWorkspace(input.tenantId);
     await lease.assertHeld();
     await ensureOrganizationMembership({ organizationId: org.id, userId: subject });
     const { binding } = await ensureActive({ subject, tenantId: input.tenantId, uuid: input.digitUuid, actor, email });
     await activate(binding, lease);
     await lease.assertHeld();
-    await sendPasswordSetup({ userId: subject, hadPassword: false, emailVerified: fresh.emailVerified === true,
-      returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId, tenantSlug: undefined });
+    await sendPasswordSetup({ userId: subject, hadPassword: false, emailVerified: fresh.emailVerified === true, ...landing });
     await mirrorPerson(subject);
     await updateKeycloakUser(subject, (current) => {
       if (pendingMarker(current)?.requestId !== requestId) return null;
@@ -136,9 +162,11 @@ export class ResendTooSoonError extends BindingError {
 async function resendActivation(input: { actor: string; tenantId: string; digitUuid: string; email: string }) {
   const email = normalizeLinkEmail(input.email);
   const actor = { kind: "browser" as const, subject: input.actor, requestId: linkRequestId(input.actor, input.tenantId, input.digitUuid, email) };
-  await validateBinding({ subject: "", tenantId: input.tenantId, uuid: input.digitUuid, actor });
+  const target = await validateBinding({ subject: "", tenantId: input.tenantId, uuid: input.digitUuid, actor });
   const subject = (await findPerson(email))?.id;
   if (!subject) throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "No binding matches the employee and email");
+  // Worked out before the person lease and the resend window, so its reads hold neither.
+  const landing = await passwordSetupLanding(input.tenantId, target.roles);
   return withPersonLease(subject, async (lease) => {
     const user = await readBindingUser(subject);
     const record = bindingsFromUser(user).find((b) => b.tenantId === input.tenantId);
@@ -157,8 +185,7 @@ async function resendActivation(input: { actor: string; tenantId: string; digitU
     if (!window) throw new ResendTooSoonError(Math.max(1, await getRedis().ttl(key)));
     try {
       await lease.assertHeld();
-      if (needsPassword) await sendPasswordSetup({ userId: subject, hadPassword: account.hasPassword, emailVerified: account.emailVerified,
-        returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId, tenantSlug: undefined });
+      if (needsPassword) await sendPasswordSetup({ userId: subject, hadPassword: account.hasPassword, emailVerified: account.emailVerified, ...landing });
       else await sendVerifyEmail(subject);
     } catch (error) { await window.release(); throw error; }
     return { binding: publicBinding(subject, binding), identityUserCreated: false, activationEmailSent: true,

@@ -9,6 +9,7 @@ import { PROVISIONING_STEP_LABELS } from '@/api/onboarding';
 import { PROVISIONING_ERRORS, SIGNUP_ERRORS, SIGNUP_FIELD_ERRORS, signupFieldKey } from './signup/signupErrors';
 import { CONFIDENCE_HINT, CONFIDENCE_LABEL, STATUS_LABEL } from '@/utils/officialBoundaries';
 import { TURBOPASS_UNAVAILABLE_MESSAGE } from '@/utils/turbopassSuggestions';
+import { GOOGLE_KEY_REJECTED_MESSAGE } from '@/utils/googleMaps';
 
 /**
  * Onboarding's English lives in the code, as each t(key, english) call's fallback. The two
@@ -67,6 +68,10 @@ function staticCalls(): Map<string, string> {
 const RETIRED: Record<string, string> = {
   'employees.signs_in_as': 'They sign in as %{username}.',
   'bulk_employees.got_account': 'User account (username: employee code)',
+  // #2775: the reference moved to small print under the message.
+  'signup.error_reference': 'Something went wrong on our side. Try again, and if it keeps happening, contact support with reference %{code}.',
+  // #2802: the rule now says the code must start with a letter or digit (signup.account_code_rule).
+  'signup_fields.account_code': 'The account code must be 2 to 32 characters, using A–Z, 0–9 and hyphens.',
 };
 
 /** The keys built at runtime, from the lists they come from. */
@@ -94,6 +99,8 @@ function dynamicKeys(): Map<string, string> {
   for (const [level, english] of Object.entries(CONFIDENCE_HINT)) keys.set(`geography.confidence_hint.${level}`, english);
   for (const [status, english] of Object.entries(STATUS_LABEL)) keys.set(`geography.level_status.${status}`, english);
   keys.set('geography.turbopass_unavailable', TURBOPASS_UNAVAILABLE_MESSAGE);
+  // ...and the Google Maps key check's refusal, from @/utils/googleMaps.
+  keys.set('geography.google.rejected', GOOGLE_KEY_REJECTED_MESSAGE);
   for (const [key, english] of Object.entries(RETIRED)) keys.set(key, english);
   return keys;
 }
