@@ -2290,7 +2290,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M   # largest real-world grower: chunks plus query working set
+          memory: 1G     # largest real-world grower: chunks plus query working set; 512M OOM-killed WAL checkpoints
     networks:
       - egov-network
 
