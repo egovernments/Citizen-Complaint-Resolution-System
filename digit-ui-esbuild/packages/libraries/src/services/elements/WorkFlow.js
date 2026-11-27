@@ -1,6 +1,7 @@
 import Urls from "../atoms/urls";
 import { Request } from "../atoms/Utils/Request";
 import cloneDeep from "lodash/cloneDeep";
+import { processSearchUrl } from "./workflowProcessSearchUrl";
 
 const getThumbnails = async (ids, tenantId, documents = []) => {
 
@@ -98,9 +99,9 @@ export const WorkflowService = {
     });
   },
 
-  getByBusinessId: (stateCode, businessIds, params = {}, history = true) => {
+  getByBusinessId: (stateCode, businessIds, params = {}, history = true, { url } = {}) => {
     return Request({
-      url: Urls.WorkFlowProcessSearch,
+      url: url || Urls.WorkFlowProcessSearch,
       useCache: false,
       method: "POST",
       params: { tenantId: stateCode, businessIds: businessIds, ...params, history },
@@ -210,7 +211,7 @@ export const WorkflowService = {
     return {};
   },
   getDetailsById: async ({ tenantId, id, moduleCode, role, getTripData }) => {
-    const workflow = await Digit.WorkflowService.getByBusinessId(tenantId, id);
+    const workflow = await Digit.WorkflowService.getByBusinessId(tenantId, id, {}, true, { url: processSearchUrl(moduleCode) });
     const applicationProcessInstance = cloneDeep(workflow?.ProcessInstances);
     const getLocationDetails = window.location.href.includes("/obps/") || window.location.href.includes("noc/inbox");
     const moduleCodeData = getLocationDetails ? applicationProcessInstance?.[0]?.businessService : moduleCode;
@@ -268,7 +269,9 @@ export const WorkflowService = {
             state: instance.state.state,
             assigner: getAssignerDetails(instance, TLEnrichedWithWorflowData[ind - 1], moduleCode),
             rating: instance?.rating,
-            wfComment: instance?.wfComments.map(e => e?.comment),
+            // A step whose comment the server withheld (citizen chronology) carries null — drop it
+            // rather than render an empty "Comments" block.
+            wfComment: instance?.wfComments?.map((e) => e?.comment).filter((c) => c != null && c !== ""),
             wfDocuments: instance?.documents,
             thumbnailsToShow: { thumbs: instance?.thumbnailsToShow?.thumbs, fullImage: instance?.thumbnailsToShow?.images },
             assignes: instance.assignes,
