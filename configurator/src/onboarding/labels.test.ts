@@ -68,6 +68,10 @@ function staticCalls(): Map<string, string> {
 const RETIRED: Record<string, string> = {
   'employees.signs_in_as': 'They sign in as %{username}.',
   'bulk_employees.got_account': 'User account (username: employee code)',
+  // Save and continue no longer tries them again: Retry does, and geography.not_saved_retry_* says so (#2795).
+  'geography.save_retry': 'They are still in the list below: Save and continue tries them again.',
+  // A count only; geography.not_saved_retry_* now names each area and the server's reason (#2795).
+  'geography.create_failures': '%{count} boundaries failed to create.',
   // #2775: the reference moved to small print under the message.
   'signup.error_reference': 'Something went wrong on our side. Try again, and if it keeps happening, contact support with reference %{code}.',
   // #2802: the rule now says the code must start with a letter or digit (signup.account_code_rule).

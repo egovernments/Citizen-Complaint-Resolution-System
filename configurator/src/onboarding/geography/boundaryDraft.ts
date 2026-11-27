@@ -5,11 +5,13 @@ import { labelLocales } from '../labelLocales';
 import { englishT, MessageError, type OnboardingT } from '../i18n';
 import { deriveMapPosition, widenMapPosition, type BoundingBox } from '@/utils/mapConfigFromBoundaries';
 import { MDMS_SCHEMAS } from '@/api/config';
+import { onSignOut } from '@/lib/signOutHooks';
 import type { OsmAdminLevel } from '@/utils/osmBoundaries';
 import type { ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
 import type { SuggestionFeature } from '@/utils/turbopassSuggestions';
 import type { OfficialSet } from '@/utils/officialBoundaries';
 import type { Boundary, BoundaryExcelRow, BoundaryHierarchy } from '@/api/types';
+import type { BoundaryCreateFailure } from '@/api/services/boundary';
 import type { BoundarySource } from './BoundaryImport';
 import { levelNamesProblem } from './levelNameMessages';
 import { levelNameIn, normalizeLevelName } from '@digit-mcp/data-provider';
@@ -86,8 +88,8 @@ export interface ListHierarchy {
   hierarchyExists: boolean;
 }
 
-// One unsaved list per workspace, held in this tab's memory only: a reload
-// drops it.
+// One unsaved list per workspace, held in this tab's memory: a reload drops it,
+// unless it's what a save left unsaved (see "Leftovers" below).
 const drafts = new Map<string, BoundaryDraft>();
 // A save in flight, as its progress (0–100), so the step shows it after leaving and coming back.
 const saves = new Map<string, number>();
@@ -107,11 +109,224 @@ function subscribe(listener: () => void) {
 export function setBoundaryDraft(tenantId: string, draft: BoundaryDraft | null) {
   if (draft?.selections.length) drafts.set(tenantId, draft);
   else drafts.delete(tenantId);
+  storeLeftovers(tenantId);
   listeners.forEach((listener) => listener());
 }
 
+/*
+ * Leftovers (#2795): the areas a save didn't write, with the reasons it gave,
+ * survive a reload. The areas that did land close the sources and can pass the
+ * step's check, so without the leftovers a reload would let the step complete
+ * with them missing and no way left to add them. Kept in this browser per
+ * workspace and hierarchy, following every change to the list, until they're
+ * all saved or removed. A list nothing has been saved from still lives in this
+ * tab only.
+ */
+type ExcelResume = Extract<ImportResume, { kind: 'excel' }>;
+/** A selection as storage keeps it: an upload's files by name only. */
+type StoredSelection = Omit<BoundarySelection, 'resume'> & {
+  resume:
+    | Extract<ImportResume, { kind: 'osm' }>
+    | (Omit<ExcelResume, 'file' | 'polygonFile'> & { file: string | null; polygonFile: string | null });
+};
+interface StoredLeftovers {
+  selections: StoredSelection[];
+  failed: BoundaryCreateFailure[];
+}
+
+/** Who is signed in: what one admin's save left out is theirs, not the next person's to sign in on this browser. */
+function signedInUser(): string {
+  try {
+    return apiClient.getAuth().user?.uuid ?? '';
+  } catch {
+    return '';
+  }
+}
+const leftoverKey = (tenantId: string, hierarchyType: string) => {
+  const user = signedInUser();
+  return `ccrs-geography-unsaved:${tenantId}:${hierarchyType}${user ? `:${user}` : ''}`;
+};
+// The workspaces whose list is a save's leftovers, by the hierarchy it goes into.
+const leftovers = new Map<string, string>();
+// Why the last save left out the areas still in that list.
+const leftoverFailures = new Map<string, BoundaryCreateFailure[]>();
+// How much of that list this browser could keep, as of the last write.
+const leftoversKept = new Map<string, LeftoversKept>();
+
+function storable(selection: BoundarySelection): StoredSelection {
+  if (selection.resume.kind !== 'excel') return selection as StoredSelection;
+  const { file, polygonFile, ...resume } = selection.resume;
+  return { ...selection, resume: { ...resume, file: file?.name ?? null, polygonFile: polygonFile?.name ?? null } };
+}
+
+/** A stored upload's file: only its name is read back (the list's title, Edit's "File:"); the rows are in `parsed`. */
+function namedFile(name: string | null): File | null {
+  if (!name) return null;
+  try {
+    return new File([], name);
+  } catch {
+    return null;
+  }
+}
+
+function revived(selection: StoredSelection): BoundarySelection {
+  const id = `selection-${++lastSelectionId}`;
+  if (selection.resume.kind !== 'excel') return { ...selection, id } as BoundarySelection;
+  const resume: ExcelResume = { ...selection.resume, file: namedFile(selection.resume.file), polygonFile: namedFile(selection.resume.polygonFile) };
+  return { ...selection, id, resume };
+}
+
+/**
+ * Without what only Edit reopens with (a fetch's every outline per level, an upload's rows and
+ * outlines file). Edit is off while the list is a save's leftovers, so storage never needs them.
+ */
+function lean(stored: StoredLeftovers): StoredLeftovers {
+  return {
+    ...stored,
+    selections: stored.selections.map((selection) => ({
+      ...selection,
+      resume:
+        selection.resume.kind === 'osm'
+          ? { ...selection.resume, adminLevels: [], pickedSuggestion: null }
+          : { ...selection.resume, parsed: [], valid: [], invalid: [], polygonFile: null, polygonSidecar: null },
+    })),
+  };
+}
+
+/** Without the areas' outlines as well, for a list still too big: Retry then saves them without map outlines. */
+function withoutOutlines(stored: StoredLeftovers): StoredLeftovers {
+  return {
+    ...stored,
+    selections: stored.selections.map((selection) => ({
+      ...selection,
+      boundaries: selection.boundaries.map((boundary) => ({ ...boundary, geometry: undefined })),
+    })),
+  };
+}
+
+/** Whether this browser holds a full copy of the leftovers ("whole"), one without their outlines, or none. */
+type LeftoversKept = 'whole' | 'without_outlines' | 'none';
+
+function writeLeftovers(key: string, stored: StoredLeftovers | null): LeftoversKept {
+  try {
+    if (!stored) {
+      window.localStorage.removeItem(key);
+      return 'whole';
+    }
+    const kept = lean(stored);
+    try {
+      window.localStorage.setItem(key, JSON.stringify(kept));
+      return 'whole';
+    } catch {
+      // Too big for what's left of this site's storage: keep the areas, without their outlines.
+    }
+    window.localStorage.setItem(key, JSON.stringify(withoutOutlines(kept)));
+    return 'without_outlines';
+  } catch {
+    // Storage unavailable or full: the list lives as long as the page, and the page says so.
+    return 'none';
+  }
+}
+
+function readLeftovers(key: string): StoredLeftovers | null {
+  try {
+    const raw = window.localStorage.getItem(key);
+    const stored = raw ? (JSON.parse(raw) as Partial<StoredLeftovers>) : null;
+    const usable =
+      Array.isArray(stored?.selections) &&
+      stored.selections.length > 0 &&
+      stored.selections.every((s) => Array.isArray(s?.boundaries) && !!s.resume) &&
+      Array.isArray(stored.failed);
+    return usable ? (stored as StoredLeftovers) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keeps the stored leftovers in step with the list; once the list is empty, they're gone. */
+function storeLeftovers(tenantId: string) {
+  const storedIn = leftovers.get(tenantId);
+  if (storedIn === undefined) return;
+  const draft = drafts.get(tenantId);
+  const hierarchyType = draft ? listHierarchy(draft)?.hierarchyType : undefined;
+  if (hierarchyType !== storedIn) writeLeftovers(leftoverKey(tenantId, storedIn), null);
+  if (!draft || !hierarchyType) {
+    leftovers.delete(tenantId);
+    leftoverFailures.delete(tenantId);
+    leftoversKept.delete(tenantId);
+    return;
+  }
+  const listed = new Set(draftBoundaries(draft).map((b) => b.code));
+  const failed = (leftoverFailures.get(tenantId) ?? []).filter((f) => listed.has(f.boundary.code));
+  leftovers.set(tenantId, hierarchyType);
+  leftoverFailures.set(tenantId, failed);
+  const kept = writeLeftovers(leftoverKey(tenantId, hierarchyType), {
+    selections: draft.selections.map(storable),
+    // The page shows only each area's name and code beside the reason; its outline is in the selection.
+    failed: failed.map(({ boundary, error, code, unconfirmed }) => ({ boundary: { ...boundary, geometry: undefined }, error, code, unconfirmed })),
+  });
+  leftoversKept.set(tenantId, kept);
+}
+
+/**
+ * After a reload: puts back what a save left unsaved in one of these hierarchies
+ * (the ones the server has), and returns why the save left each area out. Null
+ * when there's nothing to put back, or the list already holds something.
+ */
+export function restoreLeftovers(tenantId: string, hierarchyTypes: string[]): BoundaryCreateFailure[] | null {
+  if (drafts.has(tenantId) || saves.has(tenantId)) return null;
+  for (const hierarchyType of hierarchyTypes) {
+    const stored = readLeftovers(leftoverKey(tenantId, hierarchyType));
+    if (!stored) continue;
+    leftovers.set(tenantId, hierarchyType);
+    leftoverFailures.set(tenantId, stored.failed);
+    // Not through setBoundaryDraft: storage already holds exactly this, so it isn't written again.
+    drafts.set(tenantId, { selections: stored.selections.map(revived) });
+    notify();
+    return stored.failed;
+  }
+  return null;
+}
+
+/**
+ * On sign-out: this tab forgets every list, and what a save left out, so the next person to
+ * sign in here doesn't get them. Leftovers stay in storage under the admin they belong to.
+ */
+export function forgetBoundaryDrafts() {
+  drafts.clear();
+  leftovers.clear();
+  leftoverFailures.clear();
+  leftoversKept.clear();
+  notify();
+}
+onSignOut(forgetBoundaryDrafts);
+
 export function useBoundaryDraft(tenantId: string): BoundaryDraft | null {
   return useSyncExternalStore(subscribe, () => drafts.get(tenantId) ?? null);
+}
+
+const NO_FAILURES: BoundaryCreateFailure[] = [];
+
+/**
+ * Why the last save left out the areas in the list, while the list is what a save left out;
+ * null for a list nothing has been saved from. Its hierarchy is on the server now, with its
+ * level names fixed, so this list can't change: only Retry writes it.
+ */
+export function useSaveLeftovers(tenantId: string): BoundaryCreateFailure[] | null {
+  return useSyncExternalStore(subscribe, () =>
+    drafts.has(tenantId) && leftovers.has(tenantId) ? (leftoverFailures.get(tenantId) ?? NO_FAILURES) : null,
+  );
+}
+
+/**
+ * True while the list is a save's leftovers and this browser couldn't keep a full copy of it
+ * (storage blocked or full): a reload would lose it, or bring it back without its outlines.
+ */
+export function useLeftoversNotKept(tenantId: string): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => drafts.has(tenantId) && leftovers.has(tenantId) && (leftoversKept.get(tenantId) ?? 'whole') !== 'whole',
+  );
 }
 
 /** How far a running save has got (0–100), or null when none is running. */
@@ -310,6 +525,8 @@ export function addSelection(
   }
 
   const entry: BoundarySelection = { ...selection, boundaries, id: replaces ?? `selection-${++lastSelectionId}` };
+  // The page drops a save's reasons once the list changes this way, so a reload doesn't bring them back.
+  leftoverFailures.delete(tenantId);
   setBoundaryDraft(tenantId, {
     selections: replaced ? draft.selections.map((s) => (s.id === replaces ? entry : s)) : [...draft.selections, entry],
   });
@@ -317,27 +534,31 @@ export function addSelection(
 }
 
 /**
- * What's left after a save: the areas that didn't land, kept so Save and
- * continue can try them again. Read from the list as it is now (it may have
- * changed while the save ran). The save fixed the hierarchy on the server, so
- * they're marked as going into an existing one, with its levels. Names were
- * uploaded with it.
+ * What's left after a save: the areas that didn't land, kept for Retry to try
+ * again. Read from the list as it is now. The save fixed the hierarchy on the
+ * server, so they're marked as going into an existing one, with its levels, and
+ * the list can't change any more (useSaveLeftovers). Names were uploaded with
+ * it, unless the save stopped before (`namesUploaded`). They and the save's
+ * reasons (`failed`) survive a reload.
  */
-export function keepUnsaved(tenantId: string, created: Boundary[]) {
+export function keepUnsaved(tenantId: string, created: Boundary[], failed: BoundaryCreateFailure[] = [], namesUploaded = true) {
   const draft = drafts.get(tenantId);
   if (!draft) return;
-  const levels = listHierarchy(draft)?.levels;
+  const hierarchy = listHierarchy(draft);
+  const levels = hierarchy?.levels;
   const saved = new Set(created.map((b) => b.code));
+  if (hierarchy) leftovers.set(tenantId, hierarchy.hierarchyType);
+  leftoverFailures.set(tenantId, failed);
   setBoundaryDraft(tenantId, {
     selections: draft.selections
       .map((s) => ({
         ...s,
         hierarchyExists: true,
         levels: levels ?? s.levels,
-        unnamed: [],
+        unnamed: namesUploaded ? [] : s.unnamed,
         boundaries: s.boundaries.filter((b) => !saved.has(b.code)),
       }))
-      .filter((s) => s.boundaries.length > 0),
+      .filter((s) => s.boundaries.length > 0 || s.unnamed.length > 0),
   });
 }
 
@@ -508,15 +729,17 @@ async function runPostCreatePipeline(
 
 export interface DraftSaveResult {
   created: Boundary[];
-  failed: { boundary: Boundary; error: string }[];
+  failed: BoundaryCreateFailure[];
   /** Set when the areas landed but the hierarchy record didn't. */
   schemaError: string | null;
 }
 
 /**
  * Writes the list: the hierarchy, its areas, then what the rest of the platform
- * reads alongside them. Throws when nothing could be written (the list is still
- * good to edit and retry); a partial save comes back with its failures.
+ * reads alongside them. A partial save comes back with its failures. Throws when
+ * it stops partway: before the hierarchy is defined the list is still good to
+ * edit; after, the whole list waits for Retry (which skips areas already saved),
+ * since the hierarchy's level names can't change now (#2795).
  * While it runs, useBoundarySave has its progress (0–100); the areas' writes are most of it.
  */
 export async function saveBoundaryDraft(
@@ -551,6 +774,11 @@ export async function saveBoundaryDraft(
   progress(0);
   try {
     const levels = hierarchy.hierarchyExists ? hierarchy.levels : await ensureHierarchy(tenantId, hierarchy.hierarchyType, hierarchy.levels);
+    // The hierarchy is on the server now, its level names fixed, and the areas are next. From here the
+    // whole list is kept as what this save leaves out, in this browser too: a save that stops partway
+    // (an error, a closed tab) leaves it locked for Retry, never to be edited into other levels (#2795).
+    // The end of the save narrows it to the areas that didn't land.
+    keepUnsaved(tenantId, [], [], false);
     progress(2);
     const result = await boundaryService.createBoundaries(
       draftBoundaries(draft),

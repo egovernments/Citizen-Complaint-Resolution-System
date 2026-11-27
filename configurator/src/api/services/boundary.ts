@@ -8,6 +8,31 @@ import { levelNameIn, levelNamesError, normalizeLevelName, shortLevelName, tooLo
 /** Reserved by the platform baseline for the founder's root jurisdiction. */
 export const WORKSPACE_HIERARCHY_TYPE = 'WORKSPACE';
 
+/** An area a save didn't write: the server's message and, when it sent one, its error code. */
+export interface BoundaryCreateFailure {
+  boundary: Boundary;
+  error: string;
+  /** e.g. BOUNDARY_TYPE_ERROR; absent when the server never said why. */
+  code?: string;
+  /** Nothing refused it: it just wasn't there after the checks, so `error` is only an internal note. */
+  unconfirmed?: boolean;
+}
+
+/** The DIGIT error code on an ApiClientError (read by shape: tests mock the client module). */
+function serverErrorCode(error: unknown): string | undefined {
+  const code = (error as { errors?: { code?: unknown }[] } | null)?.errors?.[0]?.code;
+  return typeof code === 'string' && code ? code : undefined;
+}
+
+/**
+ * boundary-service's refusals of a relationship that no retry can change
+ * (BoundaryRelationshipValidator): its level isn't one of the hierarchy's, or
+ * isn't the one under its parent's. A hierarchy's levels and a saved parent's
+ * level never change. Parent, entity or hierarchy "not found" can be lag, so
+ * those are retried.
+ */
+const REFUSED_FOR_GOOD = new Set(['BOUNDARY_TYPE_ERROR', 'HIERARCHY_ERROR']);
+
 const HIERARCHY_PAGE_SIZE = 100;
 /** Still finding rows after this many pages means offset is ignored, not 20,000 hierarchies. */
 const HIERARCHY_MAX_PAGES = 200;
@@ -513,10 +538,10 @@ export const boundaryService = {
     levels: readonly string[] = [],
   ): Promise<{
     success: Boundary[];
-    failed: { boundary: Boundary; error: string }[];
+    failed: BoundaryCreateFailure[];
   }> {
     const success: Boundary[] = [];
-    const failed: { boundary: Boundary; error: string }[] = [];
+    const failed: BoundaryCreateFailure[] = [];
     const total = boundaries.length;
     if (total === 0) return { success, failed };
 
@@ -560,6 +585,7 @@ export const boundaryService = {
           failed.push({
             boundary: b,
             error: error instanceof Error ? error.message : 'Unknown error (entity)',
+            code: serverErrorCode(error),
           });
         }
         onProgress?.(++done, work);
@@ -581,6 +607,9 @@ export const boundaryService = {
       (b) => !failedEntities.has(b.code) && b.hierarchyType && b.boundaryType
     );
     const hierarchyType = boundaries.find((b) => b.hierarchyType)?.hierarchyType;
+    // The last refusal per area, so one that never lands says why (e.g.
+    // BOUNDARY_TYPE_ERROR) instead of only that it's absent (#2795).
+    const lastError = new Map<string, unknown>();
     for (const levelBoundaries of byLevel) {
       for (const b of levelBoundaries) {
         if (!failedEntities.has(b.code) && b.hierarchyType && b.boundaryType) {
@@ -588,8 +617,10 @@ export const boundaryService = {
             await this.createBoundaryRelationship(
               b.tenantId, b.hierarchyType, b.code, b.boundaryType, b.parent
             );
-          } catch {
+            lastError.delete(b.code);
+          } catch (error) {
             // deferred to verify — the next pass re-checks ACTUAL presence
+            lastError.set(b.code, error);
           }
         }
         onProgress?.(++done, work);
@@ -616,7 +647,10 @@ export const boundaryService = {
         } catch {
           // transient search failure — next round re-checks
         }
-        const missing = expectedRel.filter((b) => !present.has(b.code));
+        // An area the server refused for good is reported now, not retried every round.
+        const missing = expectedRel.filter(
+          (b) => !present.has(b.code) && !REFUSED_FOR_GOOD.has(serverErrorCode(lastError.get(b.code)) ?? ''),
+        );
         if (missing.length === 0) break;
         await new Promise((r) => setTimeout(r, 2000 * Math.min(round + 1, 4)));
         for (const levelBoundaries of this.groupByLevel(missing)) {
@@ -626,8 +660,11 @@ export const boundaryService = {
                 b.tenantId, b.hierarchyType as string, b.code,
                 b.boundaryType as string, b.parent
               );
-            } catch {
+              // Accepted this time: an earlier refusal no longer says why it's absent.
+              lastError.delete(b.code);
+            } catch (error) {
               // re-checked next round
+              lastError.set(b.code, error);
             }
           }
         }
@@ -637,13 +674,21 @@ export const boundaryService = {
     // Finalize from ACTUAL persistence, never from create() return values.
     for (const b of expectedRel) {
       if (present.has(b.code)) success.push(b);
-      else
-        failed.push({
-          boundary: b,
-          error:
-            'Relationship still absent after verify retries — boundary-service ' +
-            'persistence/visibility gap (parent may be missing).',
-        });
+      else {
+        const refusal = lastError.get(b.code);
+        failed.push(
+          refusal instanceof Error && refusal.message
+            ? { boundary: b, error: refusal.message, code: serverErrorCode(refusal) }
+            : {
+                boundary: b,
+                error:
+                  'Relationship still absent after verify retries — boundary-service ' +
+                  'persistence/visibility gap (parent may be missing).',
+                code: serverErrorCode(refusal),
+                unconfirmed: true,
+              },
+        );
+      }
     }
 
     return { success, failed };

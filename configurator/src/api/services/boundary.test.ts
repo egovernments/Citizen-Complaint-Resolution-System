@@ -236,6 +236,104 @@ describe('boundaryService.createBoundaries', () => {
       spies.forEach((spy) => spy.mockRestore());
     }
   });
+
+  it("says why an area never landed: the server's message and code, not only that it's absent (#2795)", async () => {
+    vi.useFakeTimers();
+    const row = (code: string, boundaryType: string, parent?: string): Boundary =>
+      ({ tenantId: 'ke', code, name: code, boundaryType, hierarchyType: 'ADMIN', parent }) as Boundary;
+    const rows = [row('C1', 'County'), row('W1', 'Village', 'C1')];
+    const refusal = Object.assign(new Error('Boundary type Village is not part of hierarchy ADMIN'), {
+      errors: [{ code: 'BOUNDARY_TYPE_ERROR', message: 'Boundary type Village is not part of hierarchy ADMIN' }],
+    });
+    const spies = [
+      vi.spyOn(boundaryService, 'createBoundaryEntity').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'waitForEntityVisibility').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'createBoundaryRelationship').mockImplementation(async (_t, _h, code) => {
+        if (code === 'W1') throw refusal;
+        return true;
+      }),
+      vi.spyOn(boundaryService, 'searchBoundaries').mockResolvedValue([rows[0]]),
+    ];
+    try {
+      const pending = boundaryService.createBoundaries(rows);
+      await vi.runAllTimersAsync();
+      const result = await pending;
+      expect(result.success.map((b) => b.code)).toEqual(['C1']);
+      expect(result.failed).toEqual([
+        { boundary: rows[1], error: 'Boundary type Village is not part of hierarchy ADMIN', code: 'BOUNDARY_TYPE_ERROR' },
+      ]);
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(['BOUNDARY_TYPE_ERROR', 'HIERARCHY_ERROR'])('reports a %s refusal straight away: no retry can change it', async (code) => {
+    vi.useFakeTimers();
+    const row = (c: string, boundaryType: string, parent?: string): Boundary =>
+      ({ tenantId: 'ke', code: c, name: c, boundaryType, hierarchyType: 'ADMIN', parent }) as Boundary;
+    const rows = [row('C1', 'County'), row('W1', 'Village', 'C1')];
+    const refusal = Object.assign(new Error('Refused'), { errors: [{ code, message: 'Refused' }] });
+    const writes: string[] = [];
+    const spies = [
+      vi.spyOn(boundaryService, 'createBoundaryEntity').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'waitForEntityVisibility').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'createBoundaryRelationship').mockImplementation(async (_t, _h, c) => {
+        writes.push(c);
+        if (c === 'W1') throw refusal;
+        return true;
+      }),
+      vi.spyOn(boundaryService, 'searchBoundaries').mockResolvedValue([rows[0]]),
+    ];
+    try {
+      const start = Date.now();
+      const pending = boundaryService.createBoundaries(rows);
+      await vi.runAllTimersAsync();
+      const result = await pending;
+      expect(writes.filter((c) => c === 'W1')).toHaveLength(1);
+      // No back-off waits before it's reported.
+      expect(Date.now() - start).toBe(0);
+      expect(result.failed).toEqual([{ boundary: rows[1], error: 'Refused', code }]);
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops an area's refusal once a retry is accepted, so a slow write isn't blamed on it", async () => {
+    vi.useFakeTimers();
+    const row = (code: string, boundaryType: string, parent?: string): Boundary =>
+      ({ tenantId: 'ke', code, name: code, boundaryType, hierarchyType: 'ADMIN', parent }) as Boundary;
+    const rows = [row('C1', 'County'), row('W1', 'Ward', 'C1')];
+    const notYet = Object.assign(new Error('Parent entity for current boundary relationship does not exist.'), {
+      errors: [{ code: 'PARENT_NOT_FOUND', message: 'Parent entity for current boundary relationship does not exist.' }],
+    });
+    let w1Tries = 0;
+    const spies = [
+      vi.spyOn(boundaryService, 'createBoundaryEntity').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'waitForEntityVisibility').mockResolvedValue(undefined as never),
+      // W1's first write comes before its parent is readable; every retry is accepted.
+      vi.spyOn(boundaryService, 'createBoundaryRelationship').mockImplementation(async (_t, _h, code) => {
+        if (code === 'W1' && ++w1Tries === 1) throw notYet;
+        return true;
+      }),
+      // ...but it never shows up before the checks end.
+      vi.spyOn(boundaryService, 'searchBoundaries').mockResolvedValue([rows[0]]),
+    ];
+    try {
+      const pending = boundaryService.createBoundaries(rows);
+      await vi.runAllTimersAsync();
+      const result = await pending;
+      expect(w1Tries).toBeGreaterThan(1);
+      expect(result.failed).toHaveLength(1);
+      expect(result.failed[0].error).not.toContain('Parent entity');
+      expect(result.failed[0].code).toBeUndefined();
+      expect(result.failed[0].unconfirmed).toBe(true);
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+      vi.useRealTimers();
+    }
+  });
 });
 
 // #2803: boundary-service answers 200 for a level name its persister can't store (varchar(64)), and

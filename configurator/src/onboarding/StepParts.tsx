@@ -76,10 +76,13 @@ export function StepActions({
   busy = false,
   disabled = false,
   hint,
+  secondary,
 }: {
   onBack?: () => void;
   onContinue: () => void | Promise<void>;
   continueLabel?: string;
+  /** Another action beside Continue, before it (e.g. Geography's Retry). */
+  secondary?: ReactNode;
   busy?: boolean;
   disabled?: boolean;
   hint?: string;
@@ -94,6 +97,7 @@ export function StepActions({
           {t('step.back', 'Back')}
         </Button>
       )}
+      {secondary}
       <Button onClick={async () => { setPending(true); try { await onContinue(); } finally { setPending(false); } }} disabled={busy || pending || disabled} className="h-10 gap-2 px-5">
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
         {continueLabel ?? t('step.save_continue', 'Save and continue')}
