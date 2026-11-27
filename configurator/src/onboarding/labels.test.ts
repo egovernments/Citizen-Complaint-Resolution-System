@@ -68,6 +68,13 @@ function staticCalls(): Map<string, string> {
 const RETIRED: Record<string, string> = {
   'employees.signs_in_as': 'They sign in as %{username}.',
   'bulk_employees.got_account': 'User account (username: employee code)',
+  // The employee upload's results list every row to fix by number now (#2799, #2800).
+  'bulk_employees.more_errors': '...and %{smart_count} more errors',
+  'bulk_employees.check_failures': 'Check the failure list below and retry the failed rows.',
+  'bulk_employees.failed_rows': 'Failed rows:',
+  // Its banner counts every row still to fix, refused or failed, as "%{created} created, %{smart_count} still to fix".
+  'bulk_employees.some_created': 'Created %{created}, %{failed} failed',
+  'bulk_employees.none_created': 'No employees created — %{failed} failed',
   // #2775: the reference moved to small print under the message.
   'signup.error_reference': 'Something went wrong on our side. Try again, and if it keeps happening, contact support with reference %{code}.',
   // #2802: the rule now says the code must start with a letter or digit (signup.account_code_rule).
