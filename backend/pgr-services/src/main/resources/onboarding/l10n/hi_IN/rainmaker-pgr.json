@@ -183,6 +183,7 @@
 {"code": "CS_LOCATION_NOT_FOUND", "message": "वह स्थान नहीं मिला। कुछ और खोजकर देखें।", "module": "rainmaker-pgr", "locale": "hi_IN"},
 {"code": "CS_MAP_CLICK_TO_SELECT_POINTS", "message": "बिंदु चुनने के लिए नक्शे पर क्लिक करें", "module": "rainmaker-pgr", "locale": "hi_IN"},
 {"code": "CS_MAP_SELECTED_LOCATIONS", "message": "चुने गए स्थान", "module": "rainmaker-pgr", "locale": "hi_IN"},
+{"code": "CS_MAP_TILES_FAILED", "message": "नक्शा लोड नहीं हो सका। आप पता या इलाका लिखकर भी स्थान चुन सकते हैं।", "module": "rainmaker-pgr", "locale": "hi_IN"},
 {"code": "CS_MYCOMPLAINTS_NO_COMPLAINTS", "message": "आपने अभी तक कोई शिकायत दर्ज नहीं की है। \nएक शिकायत से शुरुआत करें, बदलाव लाएं।", "module": "rainmaker-pgr", "locale": "hi_IN"},
 {"code": "CS_MYCOMPLAINTS_NO_COMPLAINTS_EMPLOYEE", "message": "कोई शिकायत नहीं", "module": "rainmaker-pgr", "locale": "hi_IN"},
 {"code": "CS_MY_COMPLAINTS_CLEAR_SEARCH", "message": "खोज मिटाएं", "module": "rainmaker-pgr", "locale": "hi_IN"},

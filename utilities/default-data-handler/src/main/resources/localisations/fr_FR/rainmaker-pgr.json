@@ -1104,6 +1104,12 @@
         "locale": "fr_FR"
     },
     {
+        "code": "CS_MAP_TILES_FAILED",
+        "message": "La carte n'a pas pu se charger. Vous pouvez quand même indiquer le lieu en saisissant l'adresse ou le quartier.",
+        "module": "rainmaker-pgr",
+        "locale": "fr_FR"
+    },
+    {
         "code": "CS_MYCOMPLAINTS_NO_COMPLAINTS",
         "message": "Vous n'avez encore déposé aucune réclamation. \nCommencez par une, faites la différence.",
         "module": "rainmaker-pgr",

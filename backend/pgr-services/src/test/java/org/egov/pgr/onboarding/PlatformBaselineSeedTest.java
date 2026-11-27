@@ -33,10 +33,12 @@ public class PlatformBaselineSeedTest {
      * v15 every configurator-ui key in the fr_FR, hi_IN and pt_BR packs, and hi_IN rainmaker-common, -pgr and -hr packs;
      * v16 the dashboard catalog (dss.KpiDefinition and dss.DashboardPack schemas and records), so a workspace that turns
      * its public dashboard on serves its own curated public pack;
-     * v17 the employee working-context action for every employee role, which the Spring gateway needs (Kong exempts it).
+     * v17 the employee working-context action for every employee role, which the Spring gateway needs (Kong exempts it);
+     * v18 OpenStreetMap as the new-workspace base map (MapConfig baseMapTheme osm) and the map-failed notice
+     * CS_MAP_TILES_FAILED in the en_IN, fr_FR, hi_IN and pt_BR rainmaker-pgr packs (#2804).
      */
-    private static final String VERSION = "17";
-    private static final String SHA256 = "a319811ae18ca8f473e0989ff4f0ee8257902c9637a3b8370c7413750078a5ee";
+    private static final String VERSION = "18";
+    private static final String SHA256 = "e09ad653cb8b1cf4e223dd0efd5350c9768fa62c71cba74f8b5204f2b7e66dcd";
     @Test public void contentChangesComeWithAVersionBump() throws Exception {
         byte[] bytes;
         try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }
