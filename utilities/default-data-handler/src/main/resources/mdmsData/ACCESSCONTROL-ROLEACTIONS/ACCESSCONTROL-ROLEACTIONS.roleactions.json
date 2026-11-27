@@ -1610,13 +1610,6 @@
     "actioncode": ""
   },
   {
-    "id": 229,
-    "actionid": 1730,
-    "rolecode": "CITIZEN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
     "id": 228,
     "actionid": 1730,
     "rolecode": "GRO",
@@ -3190,5 +3183,68 @@
     "actioncode": "",
     "tenantId": "{tenantid}",
     "id": 1851
+  },
+  {
+    "rolecode": "CITIZEN",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1852
+  },
+  {
+    "rolecode": "CMS_SCREENING_OFFICER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1853
+  },
+  {
+    "rolecode": "CSR",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1854
+  },
+  {
+    "rolecode": "EMPLOYEE",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1855
+  },
+  {
+    "rolecode": "GRO",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1856
+  },
+  {
+    "rolecode": "PGR_LME",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1857
+  },
+  {
+    "rolecode": "PGR_VIEWER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1858
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1859
+  },
+  {
+    "rolecode": "WORKFLOW_ADMIN",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1860
   }
 ]

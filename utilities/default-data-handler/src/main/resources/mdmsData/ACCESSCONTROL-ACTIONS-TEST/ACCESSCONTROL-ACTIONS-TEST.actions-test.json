@@ -2817,5 +2817,18 @@
     "serviceCode": "MDMS",
     "code": "null",
     "path": ""
+  },
+  {
+    "id": 2635,
+    "url": "/pgr-services/v2/request/_chronology",
+    "code": "null",
+    "name": "Chronology Filtered Search",
+    "path": "",
+    "enabled": false,
+    "displayName": "Chronology Filtered Search",
+    "orderNumber": 0,
+    "serviceCode": "pgr-services",
+    "parentModule": "",
+    "method": "POST"
   }
 ]
