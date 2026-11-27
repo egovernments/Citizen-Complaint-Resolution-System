@@ -30,6 +30,12 @@ schema_config:
         prefix: index_
         period: 24h
 
+# Replay the WAL in bounded memory: above this ceiling Loki flushes to chunks while it replays, so a
+# large WAL (e.g. after an OOM-killed checkpoint) cannot crash-loop it against its memory limit.
+ingester:
+  wal:
+    replay_memory_ceiling: 256MB
+
 limits_config:
   retention_period: 72h
   max_query_length: 721h
