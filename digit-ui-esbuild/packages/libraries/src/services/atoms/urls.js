@@ -9,6 +9,7 @@ const Urls = {
   MDMS_V2:`/${mdmsV2Path}/v1/_search`,
   pgr_search: `/pgr-services/v2/request/_search`,
   pgr_update: `/pgr-services/v2/request/_update`,
+  PGRChronology: `/pgr-services/v2/request/_chronology`,
   filter_data: `https://run.mocky.io/v3/597a50a0-90e5-4a45-b82e-8a2186b760bd`,
   FileStore: "/filestore/v1/files",
 
