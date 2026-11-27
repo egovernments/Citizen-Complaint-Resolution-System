@@ -124,8 +124,19 @@ export interface EmployeeList {
   codes: string[];
 }
 
+/** HRMS rows per search. Every page is read, so no employee past the first is missed (#2797). */
+export const EMPLOYEE_PAGE = 500;
+/** Stops an HRMS that ignores offset from looping: a full page this deep fails rather than reads as everyone. */
+const EMPLOYEE_MAX_PAGES = 200;
+
 export async function listEmployees(tenantId: string): Promise<EmployeeList> {
-  const employees = (await hrmsService.searchEmployees(tenantId, { limit: 500 })) as EmployeeRecord[];
+  const employees: EmployeeRecord[] = [];
+  for (let page = 0; ; page++) {
+    if (page === EMPLOYEE_MAX_PAGES) throw new Error(`HRMS search truncated after ${page} pages; refusing to report a partial list`);
+    const rows = (await hrmsService.searchEmployees(tenantId, { limit: EMPLOYEE_PAGE, offset: page * EMPLOYEE_PAGE })) as EmployeeRecord[];
+    employees.push(...rows);
+    if (rows.length < EMPLOYEE_PAGE) break;
+  }
   return {
     active: employees.filter((employee) => employee.isActive !== false),
     codes: employees.map((employee) => employee.code).filter((code): code is string => !!code),
