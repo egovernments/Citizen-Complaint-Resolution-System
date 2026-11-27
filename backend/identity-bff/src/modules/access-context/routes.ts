@@ -24,7 +24,7 @@ import { staffLogin, StaffLoginError } from "../accounts/credential-service.js";
 import { citizenAccess, staffAccess } from "../bindings/predicate.js";
 import { readBindingUser } from "../bindings/store.js";
 import { BindingError } from "../bindings/types.js";
-import { readDigitAccount } from "../workspace-members/authority.js";
+import { holdsConfiguratorRole, readDigitAccount } from "../workspace-members/authority.js";
 import { accountEntries } from "../sync/state.js";
 import { ensureCitizenEntry, mirrorPerson } from "../sync/mirror.js";
 import { cachedToken, recordToken, holdToken, runPendingRevocations } from "../revocation/index.js";
@@ -203,8 +203,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
           await cachedToken(lease, account); // Invalidates any already-issued inactive account token; never mints.
           throw new BindingError("DIGIT_ACCOUNT_INACTIVE", "This account is not active");
         }
-        if (surfaceContextKind(surface) === "configurator" &&
-            !account.roles.some((r) => r.tenantId === tenantId && config.digitConfiguratorRoles.includes(r.code))) {
+        if (surfaceContextKind(surface) === "configurator" && !holdsConfiguratorRole(account.roles, tenantId)) {
           throw new BindingError("CONFIGURATOR_ROLE_REQUIRED", "This account has no Configurator access in this workspace");
         }
         let minted: DigitLogin | null = null;

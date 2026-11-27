@@ -66,7 +66,7 @@ cd /root/code/Citizen-Complaint-Resolution-System/ansible
 
 ## Initial seeding
 
-The deploy playbook seeds `bootstrap_secrets:` from `inventory/host_vars/<tenant>.yml` **once** (with `cas=0`, so subsequent edits via `bao kv put` are not overwritten). To pre-fill values on first deploy, set:
+The deploy playbook seeds `bootstrap_secrets:` from `inventory/host_vars/<tenant>.yml` **additively**: every deploy adds the keys OpenBao does not hold yet (so a key added to host_vars later still lands), but a value already stored is never overwritten — a host_vars value that differs from OpenBao is reported as a warning and ignored. To pre-fill values on first deploy, set:
 
 ```yaml
 # host_vars/<tenant>.yml
@@ -75,7 +75,7 @@ bootstrap_secrets:
   keycloak_admin_password: "{{ vault_keycloak_admin_password }}"
 ```
 
-For ongoing operations, prefer the UI / `bao kv put` over editing host_vars (the cas=0 guard means a second edit won't take effect anyway).
+For ongoing operations, rotate with `bao kv patch <secrets_path> <key>=<value>` (or the UI) and redeploy; editing an existing value in host_vars does not take effect.
 
 ## OpenBao restart / unseal
 

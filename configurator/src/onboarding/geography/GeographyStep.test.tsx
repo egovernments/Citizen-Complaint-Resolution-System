@@ -157,7 +157,7 @@ describe('GeographyStep', () => {
     renderStep();
     await saveAndConfirm();
     await waitFor(() => expect(app.completePhase).toHaveBeenCalled());
-    expect(createBoundaries).toHaveBeenCalledWith(NAIROBI, expect.any(Function));
+    expect(createBoundaries).toHaveBeenCalledWith(NAIROBI, expect.any(Function), ['County', 'Ward']);
     expect(screen.queryByTestId('boundary-list-item')).toBeNull();
   });
 
@@ -229,7 +229,7 @@ describe('GeographyStep', () => {
     fireEvent.click(button('Retry'));
     await waitFor(() => expect(screen.queryByTestId('boundary-list-item')).toBeNull());
     expect(createBoundaries).toHaveBeenCalledTimes(2);
-    expect(createBoundaries).toHaveBeenLastCalledWith(NAIROBI, expect.any(Function));
+    expect(createBoundaries).toHaveBeenLastCalledWith(NAIROBI, expect.any(Function), ['County', 'Ward']);
     // The hierarchy is defined once; Retry doesn't try again (it would refuse other level names).
     expect(createHierarchy).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/weren’t saved/)).toBeNull();
@@ -399,7 +399,7 @@ describe('GeographyStep', () => {
 
       fireEvent.click(button('Retry'));
       await waitFor(() => expect(screen.queryByTestId('boundary-list-item')).toBeNull());
-      expect(createBoundaries).toHaveBeenLastCalledWith([expect.objectContaining({ code: 'PW2', parent: 'PC1' })], expect.any(Function));
+      expect(createBoundaries).toHaveBeenLastCalledWith([expect.objectContaining({ code: 'PW2', parent: 'PC1' })], expect.any(Function), ['County', 'Ward']);
       expect(screen.queryByText(NOT_SAVED)).toBeNull();
       // All saved: nothing is kept for the next reload.
       expect(window.localStorage.length).toBe(0);

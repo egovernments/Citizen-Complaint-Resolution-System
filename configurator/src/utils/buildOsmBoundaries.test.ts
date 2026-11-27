@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildOsmBoundaries, computeContainingParents, type OsmAdminLevel } from './osmBoundaries';
+import { boundaryPathRows, buildOsmBoundaries, computeContainingParents, type OsmAdminLevel } from './osmBoundaries';
 import { summarizeBoundaryQuality } from './boundaryQuality';
 
 const square = (x: number, y: number, s: number) => ({
@@ -44,6 +44,25 @@ describe('buildOsmBoundaries code suffixes', () => {
       'ADMIN',
     );
     expect(skipped[0]).toMatchObject({ name: 'p-9', reason: 'unnamed' });
+  });
+});
+
+// #2803: an area's level is spelled as the hierarchy's level names are saved (tidied), so it
+// matches the hierarchy, and lands in its own column of the downloaded list.
+describe('buildOsmBoundaries level names', () => {
+  it('tidies each area\'s level as the level names are saved, skipped areas included', () => {
+    const { boundaries, skipped } = buildOsmBoundaries(
+      [level(1, ' Sub  District ', district.features), level(2, 'Ward\tOne', [wardA, stray])],
+      'mz',
+      'ADMIN',
+    );
+    expect(boundaries.map((b) => b.boundaryType)).toEqual(['Sub District', 'Ward One']);
+    expect(skipped).toEqual([expect.objectContaining({ name: 'Faraway', levelName: 'Ward One', reason: 'no parent found' })]);
+    // The list's columns are the tidied names: an area with no parent sits in its level's column.
+    expect(boundaryPathRows(boundaries, skipped, ['Sub District', 'Ward One'])).toEqual([
+      ['', 'Faraway'],
+      ['Central', 'Riverside'],
+    ]);
   });
 });
 

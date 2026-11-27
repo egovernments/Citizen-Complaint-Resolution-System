@@ -180,7 +180,7 @@ public class OnboardingService {
         long now = System.currentTimeMillis();
         for (OnboardingIdentifierService.Identifier identifier : identifiers.forSignup(signup)) {
             if (reserved(identifier)) {
-                throw new CustomException("ONBOARDING_IDENTIFIER_TAKEN", identifier.type() + " is already in use");
+                throw new OnboardingIdentifierTaken(identifier.type(), "in use");
             }
         }
         for (OnboardingIdentifierService.Identifier identifier : identifiers.forSignup(signup)) {

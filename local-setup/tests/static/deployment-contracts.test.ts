@@ -221,17 +221,28 @@ describe('ansible playbook-deploy.yml', () => {
   // Parsing the one payload that mentions INTERNAL_USER checks the fields
   // together, and survives task renames, field reordering and whitespace.
   test('seeds INTERNAL_USER on state_root after bootstrap', () => {
-    // The Jinja expressions sit inside JSON string values, so the body is
-    // still valid JSON — `{{ state_root }}` parses as a plain string.
-    const payloads = [...playbook.matchAll(/body='(\{.*?\})'\s*$/gm)]
-      .map((m) => m[1])
-      .filter((b) => b.includes('INTERNAL_USER'));
+    // The body is a YAML mapping under `vars:` that the task hands to curl as
+    // `to_json` through the environment (a shell-quoted JSON string broke on a
+    // quote in the password — review of #2788). The Jinja expressions are
+    // quoted YAML scalars, so `{{ state_root }}` parses as a plain string.
+    const marker = '_internal_user_body:';
+    const starts = [...playbook.matchAll(new RegExp(`^( +)${marker}\\s*$`, 'gm'))];
+    // Exactly one definition — two would mean a duplicate seed path, and this
+    // test would silently only be covering whichever came first.
+    expect(starts).toHaveLength(1);
+    const indent = starts[0][1].length;
+    const after = playbook.slice(starts[0].index! + starts[0][0].length + 1);
+    // the mapping body: the lines that follow until one steps back to the key's indent
+    const body: string[] = [];
+    for (const line of after.split('\n')) {
+      if (line.trim() !== '' && line.search(/\S/) <= indent) break;
+      body.push(line);
+    }
+    const payload = yaml.safeLoad(body.join('\n')) as { User: Record<string, unknown> };
+    // and the task really sends THAT mapping
+    expect(playbook).toContain('SEED_BODY: "{{ _internal_user_body | to_json }}"');
 
-    // Exactly one — two would mean a duplicate seed path, and this test would
-    // silently only be covering whichever came first.
-    expect(payloads).toHaveLength(1);
-
-    const user = JSON.parse(payloads[0]).User;
+    const user = payload.User;
     expect(user.userName).toBe('INTERNAL_USER');
     expect(user.tenantId).toBe('{{ state_root }}');
     // SYSTEM is what makes HRMS's startup lookup accept it.

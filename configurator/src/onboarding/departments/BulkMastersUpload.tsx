@@ -8,6 +8,7 @@ import { describeSaveError } from '../errors';
 import { reportStepError, trackTemplateDownload, trackUploadRefused } from '../telemetry';
 import { useOnboardingT } from '../i18n';
 import { importMasters, type ImportResult, type MasterInput } from './mastersApi';
+import { checkSheet, holdBack } from './sheetCheck';
 
 interface Parsed {
   fileName: string;
@@ -30,12 +31,15 @@ export function BulkMastersUpload({
   tenantId,
   existingDepartments,
   existingDesignations,
+  linkableDepartments,
   onDone,
   onCancel,
 }: {
   tenantId: string;
   existingDepartments: Set<string>;
   existingDesignations: Set<string>;
+  /** Every department a designation on the sheet can be linked to, the inherited and system ones included. */
+  linkableDepartments: Set<string>;
   onDone: (summary: BulkImportSummary) => void;
   onCancel: () => void;
 }) {
@@ -61,16 +65,13 @@ export function BulkMastersUpload({
         trackUploadRefused('departments', 'department', 'NOTHING_FOUND');
         return;
       }
-      setParsed({
-        fileName: file.name,
-        departments: departments.data.filter((row) => row.active !== false).map(({ code, name }) => ({ code, name })),
-        designations: designations.data
-          .filter((row) => row.active !== false)
-          .map(({ code, name, department }) => ({ code, name, departments: department ?? [] })),
-        problems: [...departments.validation.errors, ...designations.validation.errors].map((problem) =>
-          problem.row ? t('common.row_problem', 'Row %{row}: %{problem}', { row: problem.row, problem: problem.message }) : problem.message,
-        ),
-      });
+      // Rows with a bad code, or a designation linked to a department that doesn't exist, are named and left out.
+      const checked = checkSheet(
+        { departments, designations },
+        { departments: existingDepartments, designations: existingDesignations, linkable: linkableDepartments },
+        t,
+      );
+      setParsed({ fileName: file.name, ...checked });
     } catch {
       setError(t('departments.bulk.unreadable', 'That file couldn’t be read. Upload the filled-in .xlsx template.'));
       trackUploadRefused('departments', 'department', 'UNREADABLE');
@@ -85,8 +86,10 @@ export function BulkMastersUpload({
     setError(null);
     try {
       const departments = await importMasters(tenantId, 'department', parsed.departments, existingDepartments);
-      const designations = await importMasters(tenantId, 'designation', parsed.designations, existingDesignations);
-      onDone({ departments, designations });
+      // Designations linked to a department that just failed to save wait for the next upload.
+      const { ready, held } = holdBack(parsed.designations, departments.failed, existingDesignations, t);
+      const designations = await importMasters(tenantId, 'designation', ready, existingDesignations);
+      onDone({ departments, designations: { ...designations, failed: [...held, ...designations.failed] } });
     } catch (err) {
       reportStepError('departments', 'import_bulk', err, tenantId);
       setError(describeSaveError(err, t('common.import_failed', 'Importing failed. Try again.'), t));
@@ -146,7 +149,7 @@ export function BulkMastersUpload({
             <Button variant="ghost" onClick={() => setParsed(null)} disabled={importing}>
               {t('common.choose_another_file', 'Choose another file')}
             </Button>
-            <Button onClick={bringIn} disabled={importing} className="gap-2">
+            <Button onClick={bringIn} disabled={importing || (!parsed.departments.length && !parsed.designations.length)} className="gap-2">
               {importing && <Loader2 className="w-4 h-4 animate-spin" />}
               {t('common.bring_them_in', 'Bring them in')}
             </Button>

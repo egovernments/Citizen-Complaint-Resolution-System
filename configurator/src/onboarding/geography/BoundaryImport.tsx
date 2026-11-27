@@ -56,7 +56,7 @@ import {
   type SuggestionFeature,
 } from '@/utils/turbopassSuggestions';
 import { summarizeBoundaryQuality } from '@/utils/boundaryQuality';
-import { validateGoogleMapsKey, type GoogleKeyCheck } from '@/utils/googleMaps';
+import { GOOGLE_KEY_REJECTED_MESSAGE, GoogleKeyRejectedError, validateGoogleMapsKey, type GoogleKeyCheck } from '@/utils/googleMaps';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMapProviderConfig } from '@/hooks/useMapProviderConfig';
 import { BoundaryMap } from '@/components/ui/BoundaryMap';
@@ -64,6 +64,8 @@ import { countryName, datasetName, fetchOfficialSet, statusDetail, type Official
 import { levelsMismatch, type ImportResume, type ListHierarchy, type NewSelection, type SavedArea } from './boundaryDraft';
 import { checkBoundaryRows } from './boundaryRows';
 import { LevelStatusBadge, OfficialSetSummary } from './OfficialConfidence';
+import { fixLevelNames, hierarchyTypeMessage, levelNameMessages } from './levelNameMessages';
+import { levelNameProblems, normalizeLevelName } from '@digit-mcp/data-provider';
 import { englishT, useOnboardingT, withNodes, type OnboardingT } from '../i18n';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
 
@@ -111,6 +113,10 @@ function validateLevelSelection(levels: OsmAdminLevel[], t: OnboardingT = englis
       valid: false,
       error: t('geography.levels.unnamed', 'Name every selected level (missing: %{levels}).', { levels: unnamed.map(levelName).join(', ') }),
     };
+  }
+  // Too long, repeated (case and spaces aside) or with a hidden character: each field says which (#2803).
+  if (levelNameProblems(selected.map(l => l.mappedName)).some(Boolean)) {
+    return { valid: false, error: fixLevelNames(t) };
   }
   return { valid: true, error: null };
 }
@@ -444,6 +450,9 @@ export default function BoundaryImport({
   // Excel path handlers (develop's original flow)
   // ============================================
 
+  // The hierarchy type as it is saved: trimmed, once, for every check and the save (#2803).
+  const typedHierarchyType = hierarchyType.trim();
+
   // Defines the hierarchy here only: it is created on the server with its
   // areas, when Geography's Save and continue saves them.
   const handleCreateHierarchy = () => {
@@ -454,11 +463,17 @@ export default function BoundaryImport({
       if (hierarchiesError) void fetchHierarchies();
       return;
     }
-    if (!hierarchyType.trim()) {
+    if (!typedHierarchyType) {
       setError(t('geography.excel.type_required', 'Hierarchy type name is required'));
       return;
     }
-    if (hierarchyType.trim().toUpperCase() === WORKSPACE_HIERARCHY_TYPE) {
+    // boundary-service stores the type in a 64-character column (#2803).
+    const typeTooLong = hierarchyTypeMessage(typedHierarchyType, t);
+    if (typeTooLong) {
+      setError(typeTooLong);
+      return;
+    }
+    if (typedHierarchyType.toUpperCase() === WORKSPACE_HIERARCHY_TYPE) {
       setError(
         t('geography.excel.type_reserved', '"%{type}" is reserved for the workspace root. Choose another hierarchy name.', {
           type: WORKSPACE_HIERARCHY_TYPE,
@@ -467,15 +482,20 @@ export default function BoundaryImport({
       return;
     }
 
-    const validLevels = hierarchyLevels.filter(l => l.trim());
+    const validLevels = hierarchyLevels.map(normalizeLevelName).filter(Boolean);
     if (validLevels.length < 2) {
       setError(t('geography.excel.levels_required', 'At least 2 hierarchy levels are required'));
       return;
     }
-    if (existingHierarchies.some(h => h.hierarchyType === hierarchyType)) {
+    // Too long, repeated (case and spaces aside) or with a hidden character: each field says which (#2803).
+    if (levelNameProblems(validLevels).some(Boolean)) {
+      setError(fixLevelNames(t));
+      return;
+    }
+    if (existingHierarchies.some(h => h.hierarchyType === typedHierarchyType)) {
       setError(
         t('geography.excel.type_exists', 'A "%{type}" hierarchy already exists. Choose it under "Use an existing hierarchy", or pick another name.', {
-          type: hierarchyType,
+          type: typedHierarchyType,
         }),
       );
       return;
@@ -484,7 +504,7 @@ export default function BoundaryImport({
     setError(null);
     const newHierarchy: BoundaryHierarchy = {
       tenantId: boundaryTenant,
-      hierarchyType,
+      hierarchyType: typedHierarchyType,
       boundaryHierarchy: validLevels.map((boundaryType, index) => ({
         boundaryType,
         parentBoundaryType: index > 0 ? validLevels[index - 1] : undefined,
@@ -496,6 +516,9 @@ export default function BoundaryImport({
     trackLevels(validLevels.length, 'new');
     setStep('template');
   };
+
+  // The message under each level field of Create Boundary Hierarchy (#2803).
+  const excelLevelMessages = levelNameMessages(hierarchyLevels, (i) => t('geography.levels.level_n', 'Level %{n}', { n: i + 1 }), t);
 
   const handleSelectHierarchy = () => {
     if (!selectedHierarchy) {
@@ -711,7 +734,7 @@ export default function BoundaryImport({
     const levels = selectedHierarchy
       ? getHierarchyLevels(selectedHierarchy)
       : hierarchyLevels;
-    const type = selectedHierarchy?.hierarchyType || hierarchyType || 'ADMIN';
+    const type = selectedHierarchy?.hierarchyType || typedHierarchyType || 'ADMIN';
     downloadBoundaryTemplate(type, levels);
     trackTemplateDownload('geography', 'boundary');
   };
@@ -876,7 +899,13 @@ export default function BoundaryImport({
       try {
         check = await validateGoogleMapsKey(key);
       } catch (e) {
-        setGoogleKeyStatus({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+        setGoogleKeyStatus({
+          kind: 'error',
+          text:
+            e instanceof GoogleKeyRejectedError
+              ? t('geography.google.rejected', GOOGLE_KEY_REJECTED_MESSAGE, { site: e.site })
+              : e instanceof Error ? e.message : String(e),
+        });
         return;
       }
       await mdmsService.upsertMapConfig(boundaryTenant, { mapProvider: 'google', googleMapsApiKey: key });
@@ -939,7 +968,7 @@ export default function BoundaryImport({
     }
     setError(null);
     const levels = getSelectedLevels(adminLevels);
-    const levelNames = levels.map((l) => l.mappedName.trim());
+    const levelNames = levels.map((l) => normalizeLevelName(l.mappedName));
     const { boundaries, skipped } = buildOsmBoundaries(levels, boundaryTenant, OSM_HIERARCHY_TYPE, containingParents);
     const place = (fetchedPlace?.name || searchTerm).normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     downloadBoundaryList(levelNames, boundaryPathRows(boundaries, skipped, levelNames), `${place || 'boundary'}-list.xlsx`);
@@ -983,7 +1012,7 @@ export default function BoundaryImport({
 
   const runOsmCreate = async (boundariesToCreate: Boundary[], skipped: number) => {
     const validLevels = getSelectedLevels(adminLevels);
-    const levelNames = validLevels.map(l => l.mappedName.trim());
+    const levelNames = validLevels.map(l => normalizeLevelName(l.mappedName));
 
     if (OSM_HIERARCHY_TYPE === WORKSPACE_HIERARCHY_TYPE) {
       setError(
@@ -1006,8 +1035,8 @@ export default function BoundaryImport({
     const existing = serverHierarchyTypes.has(OSM_HIERARCHY_TYPE)
       ? existingHierarchies.find(h => h.hierarchyType === OSM_HIERARCHY_TYPE)
       : undefined;
-    const mismatch = existing
-      && levelsMismatch(boundaryTenant, OSM_HIERARCHY_TYPE, (existing.boundaryHierarchy ?? []).map(l => l.boundaryType), levelNames);
+    const existingLevels = (existing?.boundaryHierarchy ?? []).map(l => l.boundaryType);
+    const mismatch = existing && levelsMismatch(boundaryTenant, OSM_HIERARCHY_TYPE, existingLevels, levelNames);
     if (mismatch) {
       setError(t(mismatch.key, mismatch.english, mismatch.params));
       setStep('map-levels');
@@ -1038,7 +1067,8 @@ export default function BoundaryImport({
       source: 'osm',
       method,
       hierarchyType: OSM_HIERARCHY_TYPE,
-      levels: levelNames,
+      // A saved hierarchy's names as it spells them: its areas must match them exactly (#2803).
+      levels: existing ? existingLevels : levelNames,
       hierarchyExists: !!existing,
       boundaries: boundariesToCreate,
       unnamed: [],
@@ -1181,7 +1211,8 @@ export default function BoundaryImport({
               <CardLabel className="mb-2" required>{t('geography.excel.define_levels', 'Define Levels (top to bottom)')}</CardLabel>
               <div className="border border-border rounded p-3 sm:p-4 mt-2 bg-muted/30">
                 {hierarchyLevels.map((level, idx) => (
-                  <div key={idx} className="flex items-center gap-2 sm:gap-3 mb-3 last:mb-0">
+                  <div key={idx} className="mb-3 last:mb-0">
+                  <div className="flex items-center gap-2 sm:gap-3">
                     <span className="text-xs sm:text-sm text-muted-foreground w-14 sm:w-16 flex-shrink-0 font-condensed">
                       {t('geography.excel.level_n', 'Level %{n}:', { n: idx + 1 })}
                     </span>
@@ -1192,6 +1223,7 @@ export default function BoundaryImport({
                         newLevels[idx] = e.target.value;
                         setHierarchyLevels(newLevels);
                       }}
+                      aria-invalid={!!excelLevelMessages[idx]}
                       className="flex-1 border-input-border focus:border-primary"
                     />
                     {idx === 0 && <span className="text-xs text-primary hidden sm:inline">{t('geography.excel.root', '[Root]')}</span>}
@@ -1208,6 +1240,8 @@ export default function BoundaryImport({
                         <X className="w-4 h-4" />
                       </Button>
                     )}
+                  </div>
+                  {excelLevelMessages[idx] && <p className="text-xs text-destructive mt-1">{excelLevelMessages[idx]}</p>}
                   </div>
                 ))}
                 <Button
@@ -1741,6 +1775,14 @@ export default function BoundaryImport({
       {/* OSM: map admin levels to hierarchy names */}
       {step === 'map-levels' && (() => {
         const levelSel = validateLevelSelection(adminLevels, t);
+        // The message under each ticked level's name (#2803).
+        const named = getSelectedLevels(adminLevels);
+        const nameMessages = levelNameMessages(
+          named.map((l) => l.mappedName),
+          (i) => t('geography.levels.level_n', 'Level %{n}', { n: named[i].level }),
+          t,
+        );
+        const nameMessage = (level: number) => nameMessages[named.findIndex((l) => l.level === level)] ?? null;
         // The official set's figures are country-wide; when the fetched place is
         // smaller than the country (its top level isn't ADM0), say so beside them.
         const top = adminLevels[0]?.adminLevel;
@@ -1895,8 +1937,10 @@ export default function BoundaryImport({
                           newLevels[index] = { ...newLevels[index], mappedName: e.target.value };
                           setAdminLevels(newLevels);
                         }}
+                        aria-invalid={!!nameMessage(lvl.level)}
                         disabled={loading}
                       />
+                      {nameMessage(lvl.level) && <p className="text-xs text-destructive mt-1">{nameMessage(lvl.level)}</p>}
                       {lvl.suggestedName && lvl.mappedName === lvl.suggestedName && (
                         <p className="text-xs text-muted-foreground mt-1">
                           {t('geography.levels.suggested', 'Suggested: what %{country} calls this level. Edit it if your tenant uses another name.', {

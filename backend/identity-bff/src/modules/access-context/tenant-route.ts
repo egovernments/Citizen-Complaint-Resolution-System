@@ -1,6 +1,7 @@
 import {
   IdentityAdminError,
   liveTenantMapping,
+  readTenantMappingForTenant,
   readTenantMappingForUrlSlug,
   type TenantMapping,
 } from "../organizations/organization-service.js";
@@ -80,6 +81,19 @@ export async function liveTenantRoute(
   const mapping = await readTenantMappingForUrlSlug(route.urlSlug);
   if (!mapping || mapping.tenantId !== route.tenantId) return null;
   return liveTenantMapping(mapping);
+}
+
+/**
+ * The public route of a tenant id, for a link the BFF emails (#2801). The directory's slug for the
+ * tenant is resolved as a request's slug is (`resolvePublicTenantRoute`: mapped, DIGIT tenant
+ * active), then re-read live from Keycloak (`liveTenantRoute`), so a slug renamed or an
+ * Organization disabled since this replica cached the directory is never emailed. Null otherwise;
+ * Admin and DIGIT failures propagate.
+ */
+export async function liveRouteForTenant(tenantId: string): Promise<PublicTenantRoute | null> {
+  const mapping = await readTenantMappingForTenant(tenantId);
+  const route = mapping && await resolvePublicTenantRoute(mapping.urlSlug);
+  return route?.tenantId === tenantId && await liveTenantRoute(route) ? route : null;
 }
 
 /** The tenant a sign-in is bound to, from its resolved route. */

@@ -6,12 +6,16 @@ on:
     paths:
       - 'digit-mcp/**'
       - 'backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json'
+      # test:level-names checks digit-mcp's copy of the level-name rules against this one (#2803).
+      - 'configurator/packages/data-provider/src/levelNames.ts'
       - '.github/workflows/digit-mcp-ci.yml'
   pull_request:
     branches: [master, develop, main]
     paths:
       - 'digit-mcp/**'
       - 'backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json'
+      # test:level-names checks digit-mcp's copy of the level-name rules against this one (#2803).
+      - 'configurator/packages/data-provider/src/levelNames.ts'
       - '.github/workflows/digit-mcp-ci.yml'
   workflow_dispatch:
 
@@ -52,6 +56,9 @@ jobs:
 
       - name: Boundary geometry sent to boundary-service
         run: npm run test:boundary-geometry
+
+      - name: Hierarchy level names refused before boundary-service (#2803)
+        run: npm run test:level-names
 
       # The security boundary (auth modes, tool access tiers, redaction,
       # artifact confinement, forwarded-for trust, request isolation). These are

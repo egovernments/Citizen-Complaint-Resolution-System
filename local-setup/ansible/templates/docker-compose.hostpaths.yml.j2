@@ -1,0 +1,14 @@
+# Rendered by the deploy from `data_volume_host_paths` in host_vars (issue #2783).
+# Layered with -f after the base compose files: each named volume below is
+# backed by a bind to the given host directory instead of Docker's data-root.
+# Docker never re-points a volume that already exists, so this only takes
+# effect for volumes this stack has not created yet.
+volumes:
+{% for name, path in (data_volume_host_paths | dictsort) %}
+  {{ name }}:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: {{ path }}
+{% endfor %}

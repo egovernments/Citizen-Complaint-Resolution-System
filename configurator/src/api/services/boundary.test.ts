@@ -336,6 +336,72 @@ describe('boundaryService.createBoundaries', () => {
   });
 });
 
+// #2803: boundary-service answers 200 for a level name its persister can't store (varchar(64)), and
+// the persister's retries then hold up every tenant. The client sends names tidied, spelled as the
+// hierarchy spells them, and checks the string it sends.
+describe('boundaryService level names, as sent', () => {
+  beforeEach(() => post.mockReset());
+  const row = (code: string, boundaryType: string, parent?: string): Boundary =>
+    ({ tenantId: 'ke', code, name: code, boundaryType, hierarchyType: 'ADMIN', parent }) as Boundary;
+
+  it('creates a hierarchy with its level names tidied, parents included', async () => {
+    post.mockResolvedValue({ BoundaryHierarchy: [{ hierarchyType: 'ADMIN' }] });
+    await boundaryService.createHierarchyFromLevels('ke', 'ADMIN', [' County ', 'Sub  county', 'Munici\u0301pio']);
+    expect(post.mock.calls[0][1].BoundaryHierarchy.boundaryHierarchy).toEqual([
+      { boundaryType: 'County', parentBoundaryType: undefined, active: true },
+      { boundaryType: 'Sub county', parentBoundaryType: 'County', active: true },
+      { boundaryType: 'Munic\u00edpio', parentBoundaryType: 'Sub county', active: true },
+    ]);
+  });
+
+  it('creates no hierarchy whose level names or type can\'t be stored, or whose levels repeat', async () => {
+    await expect(boundaryService.createHierarchyFromLevels('ke', 'ADMIN', ['County', 'w'.repeat(65)])).rejects.toThrow(
+      /^Level 2 \("w{40}…"\): This name is 65 characters long\. Use 64 characters or fewer\.$/,
+    );
+    await expect(boundaryService.createHierarchyFromLevels('ke', 'ADMIN', ['Ward', 'ward'])).rejects.toThrow(/already has this name/);
+    await expect(boundaryService.createHierarchyFromLevels('ke', 'H'.repeat(65), ['County', 'Ward'])).rejects.toThrow(
+      'The hierarchy type is 65 characters long. Use 64 characters or fewer.',
+    );
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('sends each area under its level as the hierarchy spells it, or tidied', async () => {
+    const rows = [row('C1', ' County'), row('S1', 'Sub County', 'C1'), row('W1', 'Ward  One', 'S1')];
+    const spies = [
+      vi.spyOn(boundaryService, 'createBoundaryEntity').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'waitForEntityVisibility').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'createBoundaryRelationship').mockResolvedValue(undefined as never),
+      vi.spyOn(boundaryService, 'searchBoundaries').mockResolvedValue(rows),
+    ];
+    try {
+      // Saved before names were tidied: "Sub  County", two spaces. boundary-service matches it exactly.
+      await boundaryService.createBoundaries(rows, undefined, ['County', 'Sub  County', 'Ward One']);
+      expect(vi.mocked(boundaryService.createBoundaryRelationship).mock.calls.map((call) => [call[2], call[3]])).toEqual([
+        ['C1', 'County'],
+        ['S1', 'Sub  County'],
+        ['W1', 'Ward One'],
+      ]);
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+    }
+  });
+
+  it('writes nothing under a level the database can\'t store, as sent', async () => {
+    const entity = vi.spyOn(boundaryService, 'createBoundaryEntity').mockResolvedValue(undefined as never);
+    try {
+      // Tidied, the saved level is 64 characters; as the hierarchy spells it (and as it is sent), 66.
+      const saved = `Sub   ${'x'.repeat(60)}`;
+      await expect(
+        boundaryService.createBoundaries([row('C1', 'County'), row('S1', `Sub ${'x'.repeat(60)}`, 'C1')], undefined, ['County', saved]),
+      ).rejects.toThrow(/^Nothing was saved\. S1 goes under the level "Sub x{36}…", which is 66 characters long; a level name can have at most 64\.$/);
+      expect(entity).not.toHaveBeenCalled();
+      expect(post).not.toHaveBeenCalled();
+    } finally {
+      entity.mockRestore();
+    }
+  });
+});
+
 describe('boundaryService.existingBoundaries', () => {
   // Braces: a function returned from beforeEach runs as cleanup, and mockReset returns the mock.
   beforeEach(() => {
