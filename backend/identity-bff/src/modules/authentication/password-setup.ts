@@ -2,7 +2,7 @@ import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
-import { privateRateKey, withinLimit as withinRateLimit } from "../../infrastructure/rate-limit.js";
+import { privateRateKey } from "../../infrastructure/rate-limit.js";
 import { errorBody } from "../../contract/error-codes.js";
 import { routeForSlug } from "../access-context/tenant-route.js";
 import {
@@ -12,6 +12,7 @@ import {
   sendPasswordSetupEmail,
 } from "../organizations/organization-service.js";
 import { currentSession } from "../sessions/current-session.js";
+import { refuseEmailRequest, reserveEmailRequest } from "./email-request-limits.js";
 import {
   consumePasswordSetupAttempt,
   createAuthResult,
@@ -44,10 +45,6 @@ function completionRedirectUri(state: string, tenantSlug?: string): string {
     tenantSlug ? `/${encodeURIComponent(tenantSlug)}` : ""}`;
   callback.search = "";
   return callback.toString();
-}
-
-function withinLimit(bucket: string): Promise<boolean> {
-  return withinRateLimit(bucket, config.identityPasswordSetupLimit, config.identityPasswordSetupTtlSeconds);
 }
 
 /** The Keycloak client a password email goes through, and where its link returns. */
@@ -155,13 +152,17 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
 
     const prefix = `${config.cachePrefix}:identity:password-setup-limit`;
     const accountRateKey = signedIn?.session.claims.sub || email!;
-    const [ipAllowed, accountAllowed] = await Promise.all([
-      withinLimit(`${prefix}:ip:${request.ip}`),
-      withinLimit(`${prefix}:account:${privateRateKey("password-setup", accountRateKey)}`),
-    ]);
-    if (!ipAllowed || !accountAllowed) {
-      console.info("Password setup request suppressed", { reason: "rate_limited" });
-      return response.status(202).json(ACCEPTED);
+    const allowance = await reserveEmailRequest({
+      addressKey: `${prefix}:account:${privateRateKey("password-setup", accountRateKey)}`,
+      networkKeyPrefix: `${prefix}:ip`,
+      ip: request.ip,
+      addressLimit: config.identityPasswordSetupLimit,
+      ipLimit: config.identityPasswordSetupIpLimit,
+      windowSeconds: config.identityPasswordSetupTtlSeconds,
+    });
+    if (!allowance.allowed) {
+      console.info("Password setup request refused", { reason: allowance.code });
+      return refuseEmailRequest(response, allowance);
     }
 
     response.status(202).json(ACCEPTED);

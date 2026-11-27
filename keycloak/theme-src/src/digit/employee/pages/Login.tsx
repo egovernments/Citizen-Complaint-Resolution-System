@@ -7,7 +7,7 @@ import type { LoginMessageKey } from "../../branding/strings";
 import { PasswordInput, TextField } from "../../components/Fields";
 import { PrivacyConsent, pickPrivacyPolicy, type PrivacyPolicy } from "../../components/Privacy";
 import type { DigitPageProps } from "../../shared/kc";
-import { employeeReturnTo, requestPasswordSetup } from "../../shared/passwordHelp";
+import { employeeReturnTo, requestPasswordSetup, type PasswordSetupOutcome } from "../../shared/passwordHelp";
 
 /**
  * login.js always renders PrivacyComponent and gates the submit on it; a
@@ -23,7 +23,14 @@ const CONFIRM_HEADINGS = new Map<string, LoginMessageKey>([
     ["UPDATE_EMAIL", "CORE_LOGIN_CONFIRM_UPDATE_EMAIL"]
 ]);
 
-type ResetState = "idle" | "sending" | "sent" | "failed";
+/** The reset request: idle, in flight, or the BFF's answer (a limit carries its wait). */
+type ResetState = { status: "idle" | "sending" } | PasswordSetupOutcome;
+
+/** The toast for a request over its limit (#2805): who asked too often, and how long to wait. */
+function limitedKey(limit: Extract<PasswordSetupOutcome, { status: "limited" }>): LoginMessageKey {
+    const base = limit.by === "email" ? "CORE_LOGIN_RESET_LINK_LIMITED_EMAIL" : "CORE_LOGIN_RESET_LINK_LIMITED_NETWORK";
+    return limit.minutes === 1 ? `${base}_ONE` : base;
+}
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -69,7 +76,7 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
     const [forgot, setForgot] = useState(false);
     // The sign-in messages belong to the attempt before the reset form opened; Go back must not raise them again.
     const [leftSignIn, setLeftSignIn] = useState(false);
-    const [resetState, setResetState] = useState<ResetState>("idle");
+    const [reset, setReset] = useState<ResetState>({ status: "idle" });
     // Bumped by each reset request and by Go back; a reply for an older value is dropped.
     const resetRequest = useRef(0);
     // Set as the request starts, so a second submit before the re-render sends nothing.
@@ -95,24 +102,29 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
         if (resetSending.current) return;
         resetSending.current = true;
         const request = ++resetRequest.current;
-        setResetState("sending");
+        setReset({ status: "sending" });
         void requestPasswordSetup({
             baseUrl: kcContext.properties.DIGIT_IDENTITY_BFF_BASE_URL,
             email,
             returnTo: employeeReturnTo(slug),
             surface: "employee",
             tenantSlug: slug
-        }).then(ok => {
+        }).then(outcome => {
             if (resetRequest.current !== request) return;
             resetSending.current = false;
-            setResetState(ok ? "sent" : "failed");
+            setReset(outcome);
         });
     };
 
     const view = forgot
         ? {
               header: digit.t("CORE_COMMON_FORGOT_PASSWORD"),
-              toast: resetState === "failed" ? digit.t("CORE_LOGIN_RESET_LINK_FAILED") : undefined,
+              toast:
+                  reset.status === "failed"
+                      ? digit.t("CORE_LOGIN_RESET_LINK_FAILED")
+                      : reset.status === "limited"
+                        ? digit.t(limitedKey(reset)).replace("{{minutes}}", String(reset.minutes))
+                        : undefined,
               displayMessage: false
           }
         : {
@@ -136,13 +148,13 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
             {forgot ? (
                 <ForgotPassword
                     email={EMAIL.test(username.trim()) ? username.trim() : ""}
-                    state={resetState}
+                    state={reset.status}
                     onSubmit={sendResetLink}
                     onBack={() => {
                         resetRequest.current++;
                         resetSending.current = false;
                         setForgot(false);
-                        setResetState("idle");
+                        setReset({ status: "idle" });
                     }}
                 />
             ) : (
@@ -240,7 +252,7 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
  */
 function ForgotPassword(props: {
     email: string;
-    state: ResetState;
+    state: ResetState["status"];
     onSubmit: (email: string) => void;
     onBack: () => void;
 }) {
