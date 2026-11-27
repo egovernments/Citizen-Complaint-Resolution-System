@@ -371,17 +371,19 @@ public class ServiceRequestValidator {
 
 
     /**
-     * Validates a plain search request. Plain search is not record-scoped, so the caller and the
-     * requested tenants are checked here:
+     * Validates a plain search request. Plain search applies no record-level scope and no field
+     * masking, so the caller and every tenant named in the request are checked here:
      * <ul>
      *   <li>an authenticated principal is required;</li>
      *   <li>citizens are not served by this endpoint (they use _search, which is scoped to their
      *       own complaints);</li>
-     *   <li>when {@code pgr.plainsearch.allowed.roles} is configured, the caller must hold one of
-     *       those roles;</li>
-     *   <li>every requested tenant must be the caller's own tenant or lie under it — the same rule
-     *       {@code PolicyDrivenScopeResolver} applies to _search.</li>
+     *   <li>the caller must hold one of the roles in {@code pgr.plainsearch.allowed.roles}. An
+     *       empty list disables the endpoint;</li>
+     *   <li>every requested tenant — each entry of {@code tenantIds}, and {@code tenantId} when it
+     *       is set, since it selects the MDMS configuration and schema used for the results — must
+     *       be a tenant in which the caller holds one of those roles, or lie under one.</li>
      * </ul>
+     * A role that carries no tenant of its own is treated as granted in the caller's home tenant.
      */
     public void validatePlainSearch(RequestInfo requestInfo, RequestSearchCriteria criteria) {
         if(CollectionUtils.isEmpty(criteria.getTenantIds())){
@@ -395,20 +397,27 @@ public class ServiceRequestValidator {
             throw new CustomException("INVALID_SEARCH","Plain search is not allowed for the given user");
 
         Set<String> allowedRoles = parseCsv(config.getPlainSearchAllowedRoles());
-        if(!allowedRoles.isEmpty()){
-            boolean hasAllowedRole = requestInfo.getUserInfo().getRoles() != null
-                    && requestInfo.getUserInfo().getRoles().stream()
-                        .anyMatch(role -> role != null && role.getCode() != null
-                                && allowedRoles.contains(role.getCode().trim().toUpperCase()));
-            if(!hasAllowedRole)
-                throw new CustomException("INVALID_SEARCH","Plain search is not allowed for the given user");
+        Set<String> grantedTenants = new HashSet<>();
+        if(requestInfo.getUserInfo().getRoles() != null){
+            String homeTenantId = requestInfo.getUserInfo().getTenantId();
+            requestInfo.getUserInfo().getRoles().stream()
+                    .filter(role -> role != null && role.getCode() != null
+                            && allowedRoles.contains(role.getCode().trim().toUpperCase()))
+                    .map(role -> StringUtils.hasText(role.getTenantId()) ? role.getTenantId() : homeTenantId)
+                    .filter(StringUtils::hasText)
+                    .forEach(grantedTenants::add);
         }
+        if(grantedTenants.isEmpty())
+            throw new CustomException("INVALID_SEARCH","Plain search is not allowed for the given user");
 
-        String callerTenantId = requestInfo.getUserInfo().getTenantId();
-        for(String tenantId : criteria.getTenantIds()){
-            boolean withinCallerTenant = StringUtils.hasText(callerTenantId) && StringUtils.hasText(tenantId)
-                    && (tenantId.equals(callerTenantId) || tenantId.startsWith(callerTenantId + "."));
-            if(!withinCallerTenant)
+        Set<String> requestedTenants = new HashSet<>(criteria.getTenantIds());
+        if(criteria.getTenantId() != null)
+            requestedTenants.add(criteria.getTenantId());
+
+        for(String tenantId : requestedTenants){
+            boolean withinGrantedTenant = StringUtils.hasText(tenantId) && grantedTenants.stream()
+                    .anyMatch(granted -> tenantId.equals(granted) || tenantId.startsWith(granted + "."));
+            if(!withinGrantedTenant)
                 throw new CustomException("INVALID_SEARCH","Plain search is not allowed for the given tenantIds");
         }
     }

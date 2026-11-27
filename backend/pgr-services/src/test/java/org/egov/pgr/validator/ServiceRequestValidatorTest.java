@@ -313,13 +313,18 @@ public class ServiceRequestValidatorTest {
 
     // ── validatePlainSearch ───────────────────────────────────────────────────
 
-    private static org.egov.common.contract.request.RequestInfo plainSearchCaller(String type, String tenantId, String... roleCodes) {
-        List<org.egov.common.contract.request.Role> roles = new ArrayList<>();
-        for (String code : roleCodes)
-            roles.add(org.egov.common.contract.request.Role.builder().code(code).tenantId(tenantId).build());
+    private static final String PLAIN_SEARCH_ROLES = "SUPERUSER, account_admin";
+
+    private static org.egov.common.contract.request.Role role(String code, String tenantId) {
+        return org.egov.common.contract.request.Role.builder().code(code).tenantId(tenantId).build();
+    }
+
+    private static org.egov.common.contract.request.RequestInfo plainSearchCaller(
+            String type, String homeTenantId, org.egov.common.contract.request.Role... roles) {
         return org.egov.common.contract.request.RequestInfo.builder()
                 .userInfo(org.egov.common.contract.request.User.builder()
-                        .uuid("caller-uuid").type(type).tenantId(tenantId).roles(roles).build())
+                        .uuid("caller-uuid").type(type).tenantId(homeTenantId)
+                        .roles(new ArrayList<>(Arrays.asList(roles))).build())
                 .build();
     }
 
@@ -329,52 +334,122 @@ public class ServiceRequestValidatorTest {
         return criteria;
     }
 
+    private void assertPlainSearchRejected(String expectedCode,
+                                           org.egov.common.contract.request.RequestInfo caller,
+                                           RequestSearchCriteria criteria) {
+        CustomException ex = assertThrows(CustomException.class, () -> validator.validatePlainSearch(caller, criteria));
+        assertEquals(expectedCode, ex.getCode());
+    }
+
     @Test
-    void plainSearch_employeeWithinOwnTenantSubtree_passes() {
+    void plainSearch_allowedRoleAtStateLevel_passesForStateAndItsCities() {
+        when(config.getPlainSearchAllowedRoles()).thenReturn(PLAIN_SEARCH_ROLES);
         assertDoesNotThrow(() -> validator.validatePlainSearch(
-                plainSearchCaller("EMPLOYEE", "pg", "EMPLOYEE", "GRO"), plainSearchCriteria("pg", "pg.citya")));
+                plainSearchCaller("EMPLOYEE", "pg", role("EMPLOYEE", "pg"), role("ACCOUNT_ADMIN", "pg")),
+                plainSearchCriteria("pg", "pg.citya")));
     }
 
     @Test
     void plainSearch_missingTenantIds_rejected() {
-        CustomException ex = assertThrows(CustomException.class, () -> validator.validatePlainSearch(
-                plainSearchCaller("EMPLOYEE", "pg", "EMPLOYEE"), new RequestSearchCriteria()));
-        assertEquals("TENANT_ID_LIST_EMPTY", ex.getCode());
+        when(config.getPlainSearchAllowedRoles()).thenReturn(PLAIN_SEARCH_ROLES);
+        assertPlainSearchRejected("TENANT_ID_LIST_EMPTY",
+                plainSearchCaller("EMPLOYEE", "pg", role("SUPERUSER", "pg")), new RequestSearchCriteria());
     }
 
     @Test
     void plainSearch_missingUserInfo_rejected() {
-        CustomException ex = assertThrows(CustomException.class, () -> validator.validatePlainSearch(
-                new org.egov.common.contract.request.RequestInfo(), plainSearchCriteria("pg")));
-        assertEquals("INVALID_REQUESTINFO", ex.getCode());
+        when(config.getPlainSearchAllowedRoles()).thenReturn(PLAIN_SEARCH_ROLES);
+        assertPlainSearchRejected("INVALID_REQUESTINFO",
+                new org.egov.common.contract.request.RequestInfo(), plainSearchCriteria("pg"));
     }
 
     @Test
-    void plainSearch_citizen_rejected() {
-        CustomException ex = assertThrows(CustomException.class, () -> validator.validatePlainSearch(
-                plainSearchCaller("CITIZEN", "pg", "CITIZEN"), plainSearchCriteria("pg")));
-        assertEquals("INVALID_SEARCH", ex.getCode());
+    void plainSearch_citizen_rejectedEvenWithAnAllowedRole() {
+        when(config.getPlainSearchAllowedRoles()).thenReturn("CITIZEN,SUPERUSER");
+        assertPlainSearchRejected("INVALID_SEARCH",
+                plainSearchCaller("CITIZEN", "pg", role("CITIZEN", "pg")), plainSearchCriteria("pg"));
     }
 
     @Test
-    void plainSearch_tenantOutsideCallerSubtree_rejected() {
-        // a sibling city, an unrelated root, and a root that merely shares the caller's prefix
-        for (String tenantId : Arrays.asList("pg.cityb", "ke", "pg.cityabc")) {
-            CustomException ex = assertThrows(CustomException.class, () -> validator.validatePlainSearch(
-                    plainSearchCaller("EMPLOYEE", "pg.citya", "EMPLOYEE", "GRO"), plainSearchCriteria("pg.citya", tenantId)));
-            assertEquals("INVALID_SEARCH", ex.getCode());
+    void plainSearch_callerWithoutAllowedRole_rejected() {
+        when(config.getPlainSearchAllowedRoles()).thenReturn(PLAIN_SEARCH_ROLES);
+        // a field employee, and role-less tokens of any user type
+        assertPlainSearchRejected("INVALID_SEARCH",
+                plainSearchCaller("EMPLOYEE", "pg", role("EMPLOYEE", "pg"), role("PGR_LME", "pg")), plainSearchCriteria("pg"));
+        assertPlainSearchRejected("INVALID_SEARCH", plainSearchCaller("SYSTEM", "pg"), plainSearchCriteria("pg"));
+        assertPlainSearchRejected("INVALID_SEARCH", plainSearchCaller(null, "pg"), plainSearchCriteria("pg"));
+    }
+
+    @Test
+    void plainSearch_noAllowedRolesConfigured_rejectsEveryone() {
+        for (String configured : Arrays.asList(null, "", " , ")) {
+            when(config.getPlainSearchAllowedRoles()).thenReturn(configured);
+            assertPlainSearchRejected("INVALID_SEARCH",
+                    plainSearchCaller("EMPLOYEE", "pg", role("SUPERUSER", "pg")), plainSearchCriteria("pg"));
         }
     }
 
     @Test
-    void plainSearch_allowedRolesConfigured_enforced() {
-        when(config.getPlainSearchAllowedRoles()).thenReturn("SUPERUSER, account_admin");
+    void plainSearch_tenantOutsideRoleTenant_rejected() {
+        when(config.getPlainSearchAllowedRoles()).thenReturn(PLAIN_SEARCH_ROLES);
+        // a sibling city, the parent, an unrelated root, and an id that merely shares the prefix
+        for (String tenantId : Arrays.asList("pg.cityb", "pg", "ke", "pg.cityabc")) {
+            assertPlainSearchRejected("INVALID_SEARCH",
+                    plainSearchCaller("EMPLOYEE", "pg.citya", role("SUPERUSER", "pg.citya")),
+                    plainSearchCriteria("pg.citya", tenantId));
+        }
+    }
 
+    @Test
+    void plainSearch_allowedRoleHeldOnlyInOneCity_doesNotCoverOtherCitiesOfHomeTenant() {
+        when(config.getPlainSearchAllowedRoles()).thenReturn(PLAIN_SEARCH_ROLES);
+        org.egov.common.contract.request.RequestInfo caller = plainSearchCaller("EMPLOYEE", "pg",
+                role("EMPLOYEE", "pg"), role("SUPERUSER", "pg.citya"));
+
+        assertDoesNotThrow(() -> validator.validatePlainSearch(caller, plainSearchCriteria("pg.citya")));
+        assertPlainSearchRejected("INVALID_SEARCH", caller, plainSearchCriteria("pg.cityb"));
+        assertPlainSearchRejected("INVALID_SEARCH", caller, plainSearchCriteria("pg.citya", "pg.cityb"));
+    }
+
+    @Test
+    void plainSearch_allowedRoleHeldInACityOtherThanHome_passesForThatCity() {
+        when(config.getPlainSearchAllowedRoles()).thenReturn(PLAIN_SEARCH_ROLES);
         assertDoesNotThrow(() -> validator.validatePlainSearch(
-                plainSearchCaller("EMPLOYEE", "pg", "EMPLOYEE", "ACCOUNT_ADMIN"), plainSearchCriteria("pg")));
+                plainSearchCaller("EMPLOYEE", "pg.citya", role("SUPERUSER", "pg.citya"), role("SUPERUSER", "pg.cityb")),
+                plainSearchCriteria("pg.citya", "pg.cityb")));
+    }
 
-        CustomException ex = assertThrows(CustomException.class, () -> validator.validatePlainSearch(
-                plainSearchCaller("EMPLOYEE", "pg", "EMPLOYEE", "PGR_LME"), plainSearchCriteria("pg")));
-        assertEquals("INVALID_SEARCH", ex.getCode());
+    @Test
+    void plainSearch_singleTenantIdParam_mustAlsoBeWithinRoleTenant() {
+        when(config.getPlainSearchAllowedRoles()).thenReturn(PLAIN_SEARCH_ROLES);
+        org.egov.common.contract.request.RequestInfo caller =
+                plainSearchCaller("EMPLOYEE", "pg", role("SUPERUSER", "pg"));
+
+        RequestSearchCriteria within = plainSearchCriteria("pg.citya");
+        within.setTenantId("pg.citya");
+        assertDoesNotThrow(() -> validator.validatePlainSearch(caller, within));
+
+        for (String tenantId : Arrays.asList("ke", "", " ")) {
+            RequestSearchCriteria outside = plainSearchCriteria("pg.citya");
+            outside.setTenantId(tenantId);
+            assertPlainSearchRejected("INVALID_SEARCH", caller, outside);
+        }
+    }
+
+    @Test
+    void plainSearch_roleWithoutTenant_isTreatedAsHeldInHomeTenant() {
+        when(config.getPlainSearchAllowedRoles()).thenReturn(PLAIN_SEARCH_ROLES);
+        org.egov.common.contract.request.RequestInfo caller =
+                plainSearchCaller("EMPLOYEE", "pg.citya", role("SUPERUSER", null));
+
+        assertDoesNotThrow(() -> validator.validatePlainSearch(caller, plainSearchCriteria("pg.citya")));
+        assertPlainSearchRejected("INVALID_SEARCH", caller, plainSearchCriteria("pg.cityb"));
+    }
+
+    @Test
+    void plainSearch_systemUserWithAllowedRole_passes() {
+        when(config.getPlainSearchAllowedRoles()).thenReturn("SUPERUSER,SYSTEM");
+        assertDoesNotThrow(() -> validator.validatePlainSearch(
+                plainSearchCaller("SYSTEM", "pg", role("SYSTEM", "pg")), plainSearchCriteria("pg", "pg.citya")));
     }
 }

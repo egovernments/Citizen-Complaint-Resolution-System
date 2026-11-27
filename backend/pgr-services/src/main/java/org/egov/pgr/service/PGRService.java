@@ -438,8 +438,11 @@ public class PGRService {
         Map<String, ComplaintTemplateTypeConfig> configCache = buildConfigCache(requestInfo, tenantIdForMdms, enrichedServiceWrappers);
         applyDecryptOrMask(enrichedServiceWrappers, requestInfo, configCache);
 
-        // plainSearch stays record-level unrestricted (see PGRRepository/PGRQueryBuilder — no scope
-        // threaded into the query) AND, deliberately, unrestricted at the field-visibility level too:
+        // Who may call plainSearch, and for which tenants, is decided up front by
+        // ServiceRequestValidator.validatePlainSearch (allowed roles + the tenants those roles are
+        // held in). Within the tenants it admits, plainSearch stays record-level unrestricted (see
+        // PGRRepository/PGRQueryBuilder — no scope threaded into the query) AND, deliberately,
+        // unrestricted at the field-visibility level too:
         // _plainsearch is a distinct endpoint from _search and must not reuse _search's
         // ACCESSCONTROL-ACTIONS-TEST action/policy (id 2008) for field masking here — that policy's
         // scope/attributes were authored for _search's semantics, not this endpoint's. If
