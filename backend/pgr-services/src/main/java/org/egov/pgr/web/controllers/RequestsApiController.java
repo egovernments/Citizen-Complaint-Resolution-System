@@ -4,6 +4,7 @@ package org.egov.pgr.web.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.response.ResponseInfo;
+import org.egov.pgr.service.ChronologyService;
 import org.egov.pgr.service.DashboardService;
 import org.egov.pgr.service.PGRService;
 import org.egov.pgr.service.VisibilityService;
@@ -41,15 +42,18 @@ public class RequestsApiController{
 
     private VisibilityService visibilityService;
 
+    private ChronologyService chronologyService;
+
     @Autowired
     public RequestsApiController(ObjectMapper objectMapper, PGRService pgrService,
                                  ResponseInfoFactory responseInfoFactory, DashboardService dashboardService,
-                                 VisibilityService visibilityService) {
+                                 VisibilityService visibilityService, ChronologyService chronologyService) {
         this.objectMapper = objectMapper;
         this.pgrService = pgrService;
         this.responseInfoFactory = responseInfoFactory;
         this.dashboardService = dashboardService;
         this.visibilityService = visibilityService;
+        this.chronologyService = chronologyService;
     }
 
     /**
@@ -103,6 +107,26 @@ public class RequestsApiController{
         ServiceResponse response = ServiceResponse.builder().responseInfo(responseInfo).serviceWrappers(serviceWrappers).build();
         return new ResponseEntity<>(response, HttpStatus.OK);
 
+    }
+
+    /**
+     * Requester-filtered complaint chronology: the egov-workflow-v2 process
+     * search, fetched server-side and reduced to what the CALLER may see (a
+     * citizen: their own complaints, internal content stripped; staff: full
+     * history, complainant masked on confidential complaints unless cleared).
+     * Same response shape as the raw search, so the UI swaps only the URL; the
+     * query params mirror the workflow API.
+     */
+    @RequestMapping(value = "/request/_chronology", method = RequestMethod.POST)
+    public ResponseEntity<Object> requestsChronologyPost(
+            @Valid @RequestBody RequestInfoWrapper requestInfoWrapper,
+            @RequestParam(value = "tenantId") String tenantId,
+            // Bound as a list (Spring splits the workflow API's comma form), so
+            // multi-id requests are first-class rather than string plumbing.
+            @RequestParam(value = "businessIds") List<String> businessIds,
+            @RequestParam(value = "history", required = false) Boolean history) {
+        Object response = chronologyService.search(requestInfoWrapper.getRequestInfo(), tenantId, businessIds, history);
+        return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
     @RequestMapping(value="/request/_update", method = RequestMethod.POST)
