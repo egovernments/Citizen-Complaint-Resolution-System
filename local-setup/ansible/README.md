@@ -31,7 +31,8 @@ ansible/
 │                              #   per-tenant; real files are gitignored.
 ├── templates/                 # Jinja2 — globalConfigs.js.j2, nginx-site.conf.j2, digit.env.j2
 ├── runbooks/
-│   └── 01-openbao.md          # OpenBao secrets backend
+│   ├── 01-openbao.md          # OpenBao secrets backend
+│   └── 04-playbook-change-checklist.md  # answer before proposing a playbook change
 └── inventory.ini              # Legacy — kept for backwards compat
 ```
 
@@ -483,7 +484,8 @@ Per-tenant secrets live in OpenBao on each target (`kv/digit/<tenant>`).
 The first deploy seeds OpenBao with `bootstrap_secrets` from
 `host_vars/<tenant>.yml`. Subsequent edits go through `bao kv put` (UI or
 CLI) — re-deploys do **not** overwrite OpenBao with the YAML defaults
-(seed runs with `cas=0`).
+(the seed adds keys OpenBao lacks and never overwrites a stored value; a
+changed host_vars value is reported as a warning — rotate with `bao kv patch`).
 
 To rotate a secret:
 ```bash
@@ -495,6 +497,28 @@ bao kv put kv/digit/<tenant> postgres_password='new-strong-value'
 ```
 
 Full details in [`runbooks/01-openbao.md`](runbooks/01-openbao.md).
+
+### Upgrading a box deployed before the password-policy checks (#2788)
+
+OpenBao stays authoritative on an existing box, but `preflight.py` reads
+host_vars, and two values master's `quickstart.yml.example` shipped now fail
+it: `identity_digit_admin_password: change-me-strong` (not a valid egov-user
+password) with the BFF signing in as `ADMIN` (whose password is
+`bootstrap_password`, not that one). Past preflight, the deploy also proves the
+BFF login and stops if it fails. To upgrade such a box:
+
+1. In host_vars set `identity_digit_admin_username: IDENTITY_BFF` and give
+   `bootstrap_secrets.identity_digit_admin_password` a value that satisfies
+   the rule (8-15 characters, a digit, lower, upper, one of `@#%`; no `$`,
+   quotes, backslash or backtick) — the account is created with it.
+2. Store the same value: `bao kv patch kv/digit/<tenant> identity_digit_admin_password=<value>`.
+3. Redeploy. The deploy creates `IDENTITY_BFF` on the BFF's tenant and
+   verifies the login; `ADMIN` is left alone.
+
+Other secrets host_vars still hold as placeholders are not applied to an
+existing box (the seed never overwrites a stored value, and it withholds a key
+whose data store already exists, such as `elasticsearch_master_password` or
+`keycloak_admin_password`); the deploy warns and names them.
 
 ## Domain & TLS — what the playbook does, what you do
 

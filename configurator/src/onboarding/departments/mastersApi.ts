@@ -45,6 +45,11 @@ export function recordDepartments(record: MdmsRecord): string[] {
   return Array.isArray(departments) ? departments.filter((code): code is string => typeof code === 'string') : [];
 }
 
+/** A record the workspace holds itself, not one it falls back to from the state root. */
+export function isOwnRecord(record: MdmsRecord, tenantId: string): boolean {
+  return record.tenantId === tenantId;
+}
+
 /**
  * The workspace's active records of one kind, oldest first. mdms-v2 falls back
  * to the state root's rows when a city has none. Those belong to the whole
@@ -59,7 +64,7 @@ export async function listMasters(
 ): Promise<MdmsRecord[]> {
   const records = await mdmsService.searchRecords(tenantId, SCHEMA[kind], { limit: 5000 });
   return records
-    .filter((record) => (!ownOnly || record.tenantId === tenantId) && (includeRemoved || record.isActive !== false))
+    .filter((record) => (!ownOnly || isOwnRecord(record, tenantId)) && (includeRemoved || record.isActive !== false))
     .sort((a, b) => (a.auditDetails?.createdTime ?? 0) - (b.auditDetails?.createdTime ?? 0));
 }
 

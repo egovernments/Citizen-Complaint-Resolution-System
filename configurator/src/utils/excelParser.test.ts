@@ -31,8 +31,8 @@ describe('Excel boolean coalescing (active column)', () => {
     const { data, validation } = parseDepartmentExcel(wb);
     expect(validation.errors).toEqual([]);
     expect(data).toEqual([
-      { code: 'DEPT_A', name: 'Active One', active: true },
-      { code: 'DEPT_B', name: 'Inactive One', active: false },
+      { code: 'DEPT_A', name: 'Active One', active: true, row: 2 },
+      { code: 'DEPT_B', name: 'Inactive One', active: false, row: 3 },
     ]);
   });
 
@@ -66,6 +66,27 @@ describe('Excel boolean coalescing (active column)', () => {
     ]);
     const { data } = parseComplaintTypeExcel(wb);
     expect(data[0]?.active).toBe(false);
+  });
+});
+
+describe('Department and designation sheet rows (#2807)', () => {
+  const withBlankRow = (sheetName: string) => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([['code', 'name'], ['ROADS', 'Roads'], [], ['WATER', 'Water'], ['', 'No code']]);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    return wb;
+  };
+
+  it('Department: numbers rows as the sheet does, blank rows included', () => {
+    const { data, validation } = parseDepartmentExcel(withBlankRow('Department'));
+    expect(data.map((r) => r.row)).toEqual([2, 4]);
+    expect(validation.errors.map((e) => e.row)).toEqual([5]);
+  });
+
+  it('Designation: numbers rows as the sheet does, blank rows included', () => {
+    const { data, validation } = parseDesignationExcel(withBlankRow('Designation'));
+    expect(data.map((r) => r.row)).toEqual([2, 4]);
+    expect(validation.errors.map((e) => e.row)).toEqual([5]);
   });
 });
 

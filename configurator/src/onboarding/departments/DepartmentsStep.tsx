@@ -23,6 +23,7 @@ import { isSystemRecordCode } from '@/lib/systemRecords';
 import { BulkMastersUpload, type BulkImportSummary } from './BulkMastersUpload';
 import { checkRemovable } from './departmentUsage';
 import {
+  isOwnRecord,
   listMasters,
   recordDepartments,
   recordName,
@@ -213,22 +214,26 @@ export default function DepartmentsStep() {
   const masters = useQuery({
     queryKey: stepKeys.departments(tenant),
     queryFn: async () => {
-      // Only the workspace's own records: this step edits and removes them.
-      const [loadedDepartments, loadedDesignations] = await Promise.all([
-        listMasters(tenant, 'department', { ownOnly: true }),
+      const [allDepartments, loadedDesignations] = await Promise.all([
+        listMasters(tenant, 'department'),
         listMasters(tenant, 'designation', { ownOnly: true }),
       ]);
-      // The founder's Administration department and designation are provisioned, not the
-      // workspace's own: the step check doesn't count them, so neither does the step.
+      // Only the workspace's own records are listed: this step edits and removes them. The founder's
+      // Administration department and designation are provisioned, not the workspace's own: the step
+      // check doesn't count them, so neither does the step.
       return {
-        departments: loadedDepartments.filter((record) => !isSystemRecordCode(record.uniqueIdentifier)),
+        departments: allDepartments.filter((record) => isOwnRecord(record, tenant) && !isSystemRecordCode(record.uniqueIdentifier)),
         designations: loadedDesignations.filter((record) => !isSystemRecordCode(record.uniqueIdentifier)),
+        // A designation can still be linked to any of them, the state's and the system ones included,
+        // as Employees and Complaints take them (#2807).
+        linkableDepartments: allDepartments.map((record) => record.uniqueIdentifier),
       };
     },
     ...STEP_QUERY_OPTIONS,
   });
   const departments = masters.data?.departments ?? null;
   const designations = masters.data?.designations ?? null;
+  const linkableDepartments = masters.data?.linkableDepartments;
   const loadError = blockingError(masters);
 
   // The table keeps showing while the fresh load comes in behind it. Employees reads these
@@ -318,6 +323,7 @@ export default function DepartmentsStep() {
           tenantId={tenant}
           existingDepartments={codes(departments)}
           existingDesignations={codes(designations)}
+          linkableDepartments={new Set(linkableDepartments)}
           onCancel={() => {
             setBulk(false);
             trackMethod('departments', 'bulk', true);

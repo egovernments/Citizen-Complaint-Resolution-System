@@ -13,3 +13,6 @@ core_mobile_configs:
   mobileNumberRegex: ^0?[17][0-9]{8}$
 bootstrap_secrets:
   elasticsearch_master_password: asd@#$@$!132123
+
+# OpenBao KV v2 path for this tenant's secrets (preflight secrets-path-format)
+secrets_path: kv/digit/ke.nairobi

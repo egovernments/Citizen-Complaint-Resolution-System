@@ -828,7 +828,7 @@ describe('a mobile number the rules refuse (#2353)', () => {
     expect(vi.mocked(api.createSignup).mock.calls[0][0].tenantMetadata?.tenantAdmin.mobileNumber).toBe('712345678');
   });
 
-  it('puts other refusals in words in the banner', async () => {
+  it('puts a taken URL under the URL field, in words (#2775)', async () => {
     vi.mocked(api.createSignup).mockRejectedValue(
       new api.OnboardingError(409, 'ONBOARDING_IDENTIFIER_TAKEN', 'URL_SLUG is already reserved'),
     );
@@ -836,8 +836,300 @@ describe('a mobile number the rules refuse (#2353)', () => {
 
     expect(await screen.findByText('That account URL is already taken. Choose a different one.')).toBeInTheDocument();
     expect(screen.queryByText(/URL_SLUG/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not continue/i)).not.toBeInTheDocument();
+    // Held until the URL changes.
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
   });
 
+  it('puts other refusals in words in the banner, the code only in small print (#2775)', async () => {
+    vi.mocked(api.createSignup).mockRejectedValue(
+      new api.OnboardingError(500, 'ONBOARDING_SERIALIZATION_ERROR', 'Could not store onboarding data'),
+    );
+    await preferencesWith('KE', 'Africa/Nairobi', '712345678');
+
+    expect(await screen.findByText(/could not continue/i)).toBeInTheDocument();
+    expect(screen.getByText('Something went wrong on our side. Try again, and if it keeps happening, contact support.')).toBeInTheDocument();
+    expect(screen.getByText('Reference: ONBOARDING_SERIALIZATION_ERROR')).toHaveClass('text-xs');
+    expect(screen.queryByText(/could not store/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/URL is already taken/i)).not.toBeInTheDocument();
+  });
+
+});
+
+describe('names, codes and URLs another workspace holds (#2775, #2802)', () => {
+  beforeEach(() => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+  });
+
+  /** checkIdentifier, with `taken` answering false for the identifiers it matches. */
+  const takenWhen = (taken: (type: string, value: string) => boolean) =>
+    vi.mocked(api.checkIdentifier).mockImplementation(async (type, value) => ({ type, value, available: !taken(type, value) }));
+
+  const draft = {
+    id: 'signup-1',
+    status: 'DRAFT',
+    accountName: 'Bomet County',
+    accountCode: 'KE-BOMET-COUNTY',
+    urlSlug: 'bomet-county',
+    countryCode: 'KE',
+    languages: ['en'],
+    timeZone: 'Africa/Nairobi',
+    financialYearPolicy: 'JUL_JUN',
+    tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '+254700000199' } },
+  };
+
+  /** A saved draft, walked through to Review. */
+  const toReview = async () => {
+    vi.mocked(api.findSignup).mockResolvedValue(draft as never);
+    vi.mocked(api.updateSignup).mockResolvedValue(draft as never);
+    render(<SignupPage />);
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    return screen.findByRole('button', { name: /create account/i });
+  };
+
+  it('checks the account name as it is typed, and holds Continue while it is taken', async () => {
+    takenWhen((type) => type === 'ORGANIZATION_NAME');
+    render(<SignupPage />);
+    fireEvent.change(await screen.findByLabelText(/account name/i), { target: { value: '  Bomet County ' } });
+
+    expect(await screen.findByText('A workspace called “Bomet County” already exists. Choose a different name.')).toBeInTheDocument();
+    expect(api.checkIdentifier).toHaveBeenCalledWith('ORGANIZATION_NAME', 'Bomet County', undefined);
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+  });
+
+  it('shows the code with its country prefix on Preferences, checks it, and holds Continue while it is taken', async () => {
+    // Free without the prefix, taken with it: the case from the issue.
+    takenWhen((type, value) => type === 'ACCOUNT_CODE' && value.startsWith('KE-'));
+    render(<SignupPage />);
+    await completeAccountStep();
+    await fillPreferences();
+
+    expect(await screen.findByText('Your account code will be KE-BOMET-COUNTY-GOVERNMENT.')).toBeInTheDocument();
+    expect(await screen.findByText('That account code is already taken. Go back and choose a different one.')).toBeInTheDocument();
+    expect(api.checkIdentifier).toHaveBeenCalledWith('ACCOUNT_CODE', 'KE-BOMET-COUNTY-GOVERNMENT', undefined);
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+  });
+
+  it('shows the account URL on Review', async () => {
+    await toReview();
+    expect(screen.getByText('Account URL').nextElementSibling).toHaveTextContent('bomet-county');
+    expect(screen.getByText('Account code').nextElementSibling).toHaveTextContent('KE-BOMET-COUNTY');
+  });
+
+  it('sends a name Create finds taken back to the name field, never to the URL', async () => {
+    vi.mocked(api.submitSignup).mockRejectedValue(
+      new api.OnboardingError(409, 'ONBOARDING_IDENTIFIER_TAKEN', 'ORGANIZATION_NAME is already in use'),
+    );
+    fireEvent.click(await toReview());
+
+    expect(await screen.findByText('A workspace called “Bomet County” already exists. Choose a different name.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County');
+    expect(screen.queryByText(/URL is already taken/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not continue/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+
+    // A new name is checked afresh and lets the founder on.
+    fireEvent.change(screen.getByLabelText(/account name/i), { target: { value: 'Bomet County Council' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+  });
+
+  it('sends a code Create finds taken back to the code field', async () => {
+    vi.mocked(api.submitSignup).mockRejectedValue(
+      new api.OnboardingError(409, 'ONBOARDING_IDENTIFIER_TAKEN', 'ACCOUNT_CODE is already reserved'),
+    );
+    fireEvent.click(await toReview());
+
+    expect(await screen.findByText('That account code is already taken. Choose a different one.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET-COUNTY');
+    expect(screen.queryByText(/URL is already taken/i)).not.toBeInTheDocument();
+  });
+
+  /** checkIdentifier, holding `type`'s answer until the returned function is called with it. */
+  const heldCheck = (type: string) => {
+    let answer!: (available: boolean) => void;
+    const held = new Promise<boolean>((resolve) => { answer = resolve; });
+    vi.mocked(api.checkIdentifier).mockImplementation(async (asked, value) => ({
+      type: asked, value, available: asked === type ? await held : true,
+    }));
+    return (available: boolean) => answer(available);
+  };
+
+  it('holds Create while Review shows a detail as taken', async () => {
+    const answerUrl = heldCheck('URL_SLUG');
+    const create = await toReview();
+    expect(create).toBeEnabled();
+
+    answerUrl(false);
+    expect(await screen.findByText('That account URL is already taken. Choose a different one.')).toBeInTheDocument();
+    expect(create).toBeDisabled();
+  });
+
+  it('keeps Create’s refusal over an older check of the same code that answers after it', async () => {
+    const answerCode = heldCheck('ACCOUNT_CODE');
+    vi.mocked(api.submitSignup).mockRejectedValue(
+      new api.OnboardingError(409, 'ONBOARDING_IDENTIFIER_TAKEN', 'ACCOUNT_CODE is already reserved'),
+    );
+    fireEvent.click(await toReview());
+    await screen.findByLabelText(/account code/i);
+
+    answerCode(true);
+    expect(await screen.findByText('That account code is already taken. Choose a different one.')).toBeInTheDocument();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(screen.getByText('That account code is already taken. Choose a different one.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+  });
+
+  it('tells a founder who comes back why their saved details can’t be used', async () => {
+    takenWhen((type) => type === 'ORGANIZATION_NAME');
+    vi.mocked(api.findSignup).mockResolvedValue(draft as never);
+    render(<SignupPage />);
+
+    expect(await screen.findByText('Your account hasn’t been created yet')).toBeInTheDocument();
+    expect(screen.getByText(/another workspace already uses some of the details you saved/i)).toBeInTheDocument();
+    expect(screen.getByText('A workspace called “Bomet County” already exists. Choose a different name.')).toBeInTheDocument();
+  });
+
+  it('says nothing of the kind when the saved details are all still free', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue(draft as never);
+    render(<SignupPage />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    expect(screen.queryByText('Your account hasn’t been created yet')).not.toBeInTheDocument();
+  });
+
+  it('refuses a code that starts with a hyphen on the Account step, saying why (#2802)', async () => {
+    render(<SignupPage />);
+    fireEvent.change(await screen.findByLabelText(/account name/i), { target: { value: 'Bomet County' } });
+    fireEvent.change(screen.getByLabelText(/account code/i), { target: { value: '-H123' } });
+
+    expect(await screen.findByText(/must start with a letter or digit/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+    expect(api.checkIdentifier).not.toHaveBeenCalledWith('ACCOUNT_CODE', '-H123', undefined);
+  });
+
+  // --- PR #2814 review ---------------------------------------------------------
+
+  /** Types a letter onto the code and takes it back at once, before the wait for a check is over. */
+  const retypeCode = () => {
+    const code = screen.getByLabelText(/account code/i) as HTMLInputElement;
+    const value = code.value;
+    fireEvent.change(code, { target: { value: `${value}X` } });
+    fireEvent.change(code, { target: { value } });
+  };
+
+  it('lets a newer check clear an older “taken” of the same code, retyped within the wait', async () => {
+    let held = true;
+    vi.mocked(api.checkIdentifier).mockImplementation(async (type, value) => ({ type, value, available: !(held && type === 'ACCOUNT_CODE') }));
+    render(<SignupPage />);
+    fireEvent.change(await screen.findByLabelText(/account name/i), { target: { value: 'Bomet County' } });
+    expect(await screen.findByText('That account code is already taken. Choose a different one.')).toBeInTheDocument();
+
+    // The workspace holding the code lets it go.
+    held = false;
+    retypeCode();
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    expect(screen.queryByText(/account code is already taken/)).not.toBeInTheDocument();
+  });
+
+  it('lets a check asked for after Create’s refusal clear it', async () => {
+    vi.mocked(api.submitSignup).mockRejectedValue(
+      new api.OnboardingError(409, 'ONBOARDING_IDENTIFIER_TAKEN', 'ACCOUNT_CODE is already reserved'),
+    );
+    fireEvent.click(await toReview());
+    expect(await screen.findByText('That account code is already taken. Choose a different one.')).toBeInTheDocument();
+
+    retypeCode();
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    expect(screen.queryByText(/account code is already taken/)).not.toBeInTheDocument();
+  });
+
+  /** Create's refusal as pgr-services words it now: which identifier, by type, and a message naming none. */
+  const takenAtCreate = (identifierType: string) => new api.OnboardingError(400, 'ONBOARDING_IDENTIFIER_TAKEN', 'Taken', {
+    Errors: [{ code: 'ONBOARDING_IDENTIFIER_TAKEN', message: 'Taken', identifierType }],
+  });
+
+  it('says a URL Create refuses for its tenant id clashes with that workspace, as the field’s own check does', async () => {
+    vi.mocked(api.submitSignup).mockRejectedValue(takenAtCreate('TENANT_ID'));
+    fireEvent.click(await toReview());
+
+    expect(await screen.findByText('This URL clashes with an existing workspace (“bometcounty”). Choose a different one.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/account url/i)).toHaveValue('bomet-county');
+    expect(screen.queryByText(/URL is already taken/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+  });
+
+  it('says the URL itself is taken when Create refuses its alias, which is the URL', async () => {
+    vi.mocked(api.submitSignup).mockRejectedValue(takenAtCreate('ORGANIZATION_ALIAS'));
+    fireEvent.click(await toReview());
+
+    expect(await screen.findByText('That account URL is already taken. Choose a different one.')).toBeInTheDocument();
+    expect(screen.queryByText(/clashes with an existing workspace/)).not.toBeInTheDocument();
+  });
+
+  it('says on Review when the URL clashes with a workspace by its tenant id', async () => {
+    let answer!: () => void;
+    const held = new Promise<void>((resolve) => { answer = resolve; });
+    vi.mocked(api.checkIdentifier).mockImplementation(async (type, value) => {
+      if (type !== 'URL_SLUG') return { type, value, available: true };
+      await held;
+      return { type, value, available: false, conflictingType: 'TENANT_ID', derivedTenantId: 'bometcounty' };
+    });
+    const create = await toReview();
+
+    answer();
+    expect(await screen.findByText('This URL clashes with an existing workspace (“bometcounty”). Choose a different one.')).toBeInTheDocument();
+    expect(screen.queryByText(/URL is already taken/)).not.toBeInTheDocument();
+    expect(create).toBeDisabled();
+  });
+
+  it('doesn’t blame the saved details for a clash the founder has just typed', async () => {
+    takenWhen((type, value) => type === 'ORGANIZATION_NAME' && value === 'Nairobi County');
+    vi.mocked(api.findSignup).mockResolvedValue(draft as never);
+    render(<SignupPage />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+
+    fireEvent.change(screen.getByLabelText(/account name/i), { target: { value: 'Nairobi County' } });
+    expect(await screen.findByText('A workspace called “Nairobi County” already exists. Choose a different name.')).toBeInTheDocument();
+    expect(screen.queryByText('Your account hasn’t been created yet')).not.toBeInTheDocument();
+  });
+
+  it('checks the name again once a new URL is saved, and shows it on Review if it is now taken', async () => {
+    // pgr-services counts a name as the draft's own by the tenant id of the draft's saved URL.
+    const saved = { ...draft, requestedTenantId: 'bometcounty' };
+    vi.mocked(api.findSignup).mockResolvedValue(saved as never);
+    vi.mocked(api.updateSignup).mockImplementation(async (_id, input) =>
+      ({ ...saved, ...input, requestedTenantId: api.tenantIdForSlug(input.urlSlug ?? '') }) as never);
+    takenWhen((type) => type === 'ORGANIZATION_NAME' && vi.mocked(api.updateSignup).mock.calls.length > 0);
+    const nameChecks = () => vi.mocked(api.checkIdentifier).mock.calls.filter(([type]) => type === 'ORGANIZATION_NAME').length;
+    render(<SignupPage />);
+    // The name is free under the saved URL.
+    await waitFor(() => expect(nameChecks()).toBe(1));
+    await waitFor(() => expect(screen.queryByText(/checking availability/i)).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+
+    fireEvent.change(await screen.findByLabelText(/account url/i), { target: { value: 'bomet-cc' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+
+    const create = await screen.findByRole('button', { name: /create account/i });
+    expect(await screen.findByText('A workspace called “Bomet County” already exists. Choose a different name.')).toBeInTheDocument();
+    expect(create).toBeDisabled();
+    expect(nameChecks()).toBe(2);
+  });
+
+  it('checks nothing while no form is on screen', async () => {
+    // A closed signup lands on a page with no fields, holding the saved name, code and URL.
+    vi.mocked(api.findSignup).mockResolvedValue({ ...draft, status: 'FAILED' } as never);
+    render(<SignupPage />);
+    await screen.findByText(/this signup is closed/i);
+
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 600)); });
+    expect(api.checkIdentifier).not.toHaveBeenCalled();
+  });
 });
 
 describe('workspace readiness gate', () => {

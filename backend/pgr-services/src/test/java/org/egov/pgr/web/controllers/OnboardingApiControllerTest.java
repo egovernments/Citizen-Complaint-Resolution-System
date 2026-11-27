@@ -160,6 +160,46 @@ public class OnboardingApiControllerTest {
                 .andExpect(jsonPath("$.Identifier.conflictingType").value("TENANT_ID"));
     }
 
+    /** #2775: a refused submit says which identifier is taken, by type, beside the code. */
+    @Test
+    public void aTakenIdentifierAtSubmitNamesItsType() throws Exception {
+        UUID signupId = UUID.randomUUID();
+        OnboardingSignup signup = OnboardingSignup.builder()
+                .id(signupId).accountName("Bomet County").accountCode("BOMET")
+                .requestedTenantId("bometcounty").organizationAlias("bomet-county")
+                .urlSlug("bomet-county").status("DRAFT").build();
+        when(service.search(eq(principal), any())).thenReturn(Collections.singletonList(signup));
+        when(service.replayOperation(eq(principal), any())).thenReturn(Optional.empty());
+        when(service.hasPriorAttempt(signupId)).thenReturn(false);
+        String body = "{\"Signup\":{\"id\":\"" + signupId + "\"}}";
+
+        // The identity side holds the name.
+        when(identitySessionClient.identifierAvailable(any(), any()))
+                .thenAnswer(call -> !"ORGANIZATION_NAME".equals(call.getArgument(0)));
+        submit(body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.Errors[0].code").value("ONBOARDING_IDENTIFIER_TAKEN"))
+                .andExpect(jsonPath("$.Errors[0].message").value("ORGANIZATION_NAME is already in use"))
+                .andExpect(jsonPath("$.Errors[0].identifierType").value("ORGANIZATION_NAME"));
+
+        // The reservation refuses the account code.
+        when(identitySessionClient.identifierAvailable(any(), any())).thenReturn(true);
+        when(service.submit(eq(principal), any(), eq("submit-1")))
+                .thenThrow(new org.egov.pgr.onboarding.OnboardingIdentifierTaken("ACCOUNT_CODE", "reserved"));
+        submit(body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.Errors[0].code").value("ONBOARDING_IDENTIFIER_TAKEN"))
+                .andExpect(jsonPath("$.Errors[0].identifierType").value("ACCOUNT_CODE"));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions submit(String body) throws Exception {
+        return mockMvc.perform(post("/v2/onboarding/signups/_submit")
+                .header("Cookie", "digit_identity_session=session-1")
+                .header("Idempotency-Key", "submit-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+    }
+
     private org.springframework.test.web.servlet.ResultActions request(String path, String body) throws Exception {
         return mockMvc.perform(post(path)
                 .header("Cookie", "digit_identity_session=session-1")
