@@ -196,6 +196,10 @@ public class PGRConfiguration {
     @Value("${employee.allowed.search.params}")
     private String allowedEmployeeSearchParameters;
 
+    // Comma-separated role codes allowed to call _plainsearch. Empty = endpoint disabled.
+    @Value("${pgr.plainsearch.allowed.roles:}")
+    private String plainSearchAllowedRoles;
+
     //Sources
     @Value("${allowed.source}")
     private String allowedSource;

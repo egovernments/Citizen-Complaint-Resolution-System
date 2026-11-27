@@ -9,6 +9,7 @@ import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.util.MDMSUtils;
+import org.egov.pgr.util.Principals;
 import org.egov.pgr.web.models.*;
 import org.egov.pgr.web.models.boundary.Boundary;
 import org.egov.pgr.web.models.boundary.BoundaryResponse;
@@ -29,6 +30,8 @@ public class ServiceRequestValidator {
 
     private PGRConfiguration config;
 
+    private Principals principals;
+
     private PGRRepository repository;
 
     private HRMSUtil hrmsUtil;
@@ -42,7 +45,8 @@ public class ServiceRequestValidator {
     @Autowired
     public ServiceRequestValidator(PGRConfiguration config, PGRRepository repository, HRMSUtil hrmsUtil,
                                    ServiceRequestRepository serviceRequestRepository, ObjectMapper objectMapper,
-                                   MDMSUtils mdmsUtils) {
+                                   MDMSUtils mdmsUtils, Principals principals) {
+        this.principals = principals;
         this.config = config;
         this.repository = repository;
         this.hrmsUtil = hrmsUtil;
@@ -366,10 +370,64 @@ public class ServiceRequestValidator {
     }
 
 
-    public void validatePlainSearch(RequestSearchCriteria criteria) {
+    /**
+     * Validates a plain search request. Plain search applies no record-level scope and no field
+     * masking, so the caller and every tenant named in the request are checked here:
+     * <ul>
+     *   <li>an authenticated principal is required;</li>
+     *   <li>citizens are not served by this endpoint (they use _search, which is scoped to their
+     *       own complaints);</li>
+     *   <li>the caller must hold one of the roles in {@code pgr.plainsearch.allowed.roles}. An
+     *       empty list disables the endpoint;</li>
+     *   <li>every requested tenant — each entry of {@code tenantIds}, and {@code tenantId} when it
+     *       is set, since it selects the MDMS configuration and schema used for the results — must
+     *       be a tenant in which the caller holds one of those roles, or lie under one.</li>
+     * </ul>
+     * A role that carries no tenant of its own is treated as granted in the caller's home tenant.
+     */
+    public void validatePlainSearch(RequestInfo requestInfo, RequestSearchCriteria criteria) {
         if(CollectionUtils.isEmpty(criteria.getTenantIds())){
             throw new CustomException("TENANT_ID_LIST_EMPTY", "Tenant ids not provided for searching.");
         }
+
+        if(requestInfo == null || requestInfo.getUserInfo() == null)
+            throw new CustomException("INVALID_REQUESTINFO","RequestInfo.userInfo is required to search complaints");
+
+        if(principals.isPureCitizen(requestInfo))
+            throw new CustomException("INVALID_SEARCH","Plain search is not allowed for the given user");
+
+        Set<String> allowedRoles = parseCsv(config.getPlainSearchAllowedRoles());
+        Set<String> grantedTenants = new HashSet<>();
+        if(requestInfo.getUserInfo().getRoles() != null){
+            String homeTenantId = requestInfo.getUserInfo().getTenantId();
+            requestInfo.getUserInfo().getRoles().stream()
+                    .filter(role -> role != null && role.getCode() != null
+                            && allowedRoles.contains(role.getCode().trim().toUpperCase()))
+                    .map(role -> StringUtils.hasText(role.getTenantId()) ? role.getTenantId() : homeTenantId)
+                    .filter(StringUtils::hasText)
+                    .forEach(grantedTenants::add);
+        }
+        if(grantedTenants.isEmpty())
+            throw new CustomException("INVALID_SEARCH","Plain search is not allowed for the given user");
+
+        Set<String> requestedTenants = new HashSet<>(criteria.getTenantIds());
+        if(criteria.getTenantId() != null)
+            requestedTenants.add(criteria.getTenantId());
+
+        for(String tenantId : requestedTenants){
+            boolean withinGrantedTenant = StringUtils.hasText(tenantId) && grantedTenants.stream()
+                    .anyMatch(granted -> tenantId.equals(granted) || tenantId.startsWith(granted + "."));
+            if(!withinGrantedTenant)
+                throw new CustomException("INVALID_SEARCH","Plain search is not allowed for the given tenantIds");
+        }
+    }
+
+    private static Set<String> parseCsv(String csv){
+        if(!StringUtils.hasText(csv))
+            return Collections.emptySet();
+        return Arrays.stream(csv.split(","))
+                .map(String::trim).filter(StringUtils::hasText)
+                .map(String::toUpperCase).collect(Collectors.toSet());
     }
 
     public void validateBoundary(ServiceRequest request) {

@@ -98,8 +98,9 @@ public class PGRRepository {
     /**
      * searches services based on search criteria, restricted to the given (server-derived, never
      * client-controlled) RBAC scope. {@link PgrSearchScope#UNRESTRICTED} applies no additional
-     * restriction — used by plainSearch (intentionally cross-tenant) and internal fetch-by-id
-     * callers (update-reconciliation), never by omission/null.
+     * restriction — used by plainSearch (whose caller and requested tenants are checked beforehand
+     * by {@code ServiceRequestValidator.validatePlainSearch}) and internal fetch-by-id callers
+     * (update-reconciliation), never by omission/null.
      * @param criteria
      * @param scope
      * @return

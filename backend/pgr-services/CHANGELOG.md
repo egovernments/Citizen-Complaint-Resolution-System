@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## Unreleased
+
+### Breaking changes
+- `/v2/request/_plainsearch` now validates the caller and the requested tenants:
+  - `RequestInfo.userInfo` is required (`INVALID_REQUESTINFO` otherwise). Service-to-service callers must send a system user.
+  - The caller must hold one of the roles in the new `pgr.plainsearch.allowed.roles` property (default `SUPERUSER,ACCOUNT_ADMIN,SYSTEM,INTERNAL_MICROSERVICE_ROLE`). Other callers, including citizens, get `INVALID_SEARCH`. An empty value disables the endpoint.
+  - Every entry of `tenantIds`, and `tenantId` when supplied, must be a tenant where the caller holds one of those roles, or lie under one.
+- Deployments whose integrations (indexer re-index, dashboards, reports) call `_plainsearch` with another role must add that role to `pgr.plainsearch.allowed.roles`.
+
 ## 3.0.0 - 2026-04-16
 
 ### Features

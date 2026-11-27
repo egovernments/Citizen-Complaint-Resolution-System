@@ -90,8 +90,10 @@ public final class PgrSearchScope {
      * The ONLY way a caller may skip RBAC scoping in {@code PGRQueryBuilder}. A {@code null}
      * scope on a scoped search/count path is a bug, not an authorization decision — it used to
      * silently mean "unrestricted," which is exactly the hole a missed scope-resolution call
-     * would fall into. Approved unrestricted callers (plainSearch, internal fetch-by-id/
-     * update-reconciliation) must pass this sentinel explicitly instead of {@code null}.
+     * would fall into. Approved unrestricted callers (plainSearch — only after
+     * {@code ServiceRequestValidator.validatePlainSearch} has checked the caller's roles and the
+     * requested tenants — and internal fetch-by-id/update-reconciliation) must pass this sentinel
+     * explicitly instead of {@code null}.
      */
     public static final PgrSearchScope UNRESTRICTED = new PgrSearchScope(null, false, null, null, null);
 
