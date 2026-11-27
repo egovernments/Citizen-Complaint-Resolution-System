@@ -146,7 +146,7 @@ describe('GeographyStep', () => {
     renderStep();
     await saveAndConfirm();
     await waitFor(() => expect(app.completePhase).toHaveBeenCalled());
-    expect(createBoundaries).toHaveBeenCalledWith(NAIROBI, expect.any(Function));
+    expect(createBoundaries).toHaveBeenCalledWith(NAIROBI, expect.any(Function), ['County', 'Ward']);
     expect(screen.queryByTestId('boundary-list-item')).toBeNull();
   });
 

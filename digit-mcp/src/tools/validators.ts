@@ -3,7 +3,10 @@ import { MDMS_SCHEMAS } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
 import { ensureAuthenticated } from '../services/auth.js';
-import { validateTenantId, validateResourceId } from '../utils/validation.js';
+import { validateTenantId, validateResourceId, ValidationError } from '../utils/validation.js';
+import {
+  firstLevelNameProblem, levelNameIn, levelNameProblemText, levelNamesError, normalizeLevelName, shortLevelName, tooLongForLevel,
+} from '../utils/level-names.js';
 
 /**
  * Build an ordered list of boundary types from a hierarchy definition.
@@ -680,12 +683,32 @@ export function registerValidatorTools(registry: ToolRegistry): void {
       for (const b of boundaries) {
         validateResourceId(b.code, 'boundary.code');
       }
-
-      await ensureAuthenticated();
-
       const tenantId = args.tenant_id as string;
       const hierarchyType = (args.hierarchy_type as string) || 'ADMIN';
-      const hierarchyDef = args.hierarchy_definition as string[] | undefined;
+      // Level names are sent as configurator saves them: tidied (#2803).
+      const hierarchyDef = Array.isArray(args.hierarchy_definition)
+        ? (args.hierarchy_definition as unknown[]).map((name) => normalizeLevelName(typeof name === 'string' ? name : ''))
+        : undefined;
+
+      // boundary-service answers 200 for any name, then its persister can't store one over 64
+      // characters (and holds up every tenant retrying it); repeated levels corrupt the hierarchy
+      // (#2803). What the database can't store is refused here, whatever the hierarchy; blank or
+      // repeated levels only when this call creates the hierarchy (below), as configurator does.
+      const typeTooLong = tooLongForLevel(hierarchyType);
+      if (typeTooLong) {
+        throw new ValidationError(
+          'hierarchy_type',
+          `hierarchy_type: The hierarchy type is ${typeTooLong.length} characters long. Use ${typeTooLong.max} characters or fewer.`,
+        );
+      }
+      const unstorable = hierarchyDef ? levelNamesError(hierarchyDef, { saved: true }) : null;
+      if (unstorable) throw new ValidationError('hierarchy_definition', `hierarchy_definition: ${unstorable}`);
+      for (const b of boundaries) {
+        const first = firstLevelNameProblem([b.type], { saved: true });
+        if (first) throw new ValidationError('boundary.type', `boundary "${b.code}" type: ${levelNameProblemText(first.problem, [b.type])}`);
+      }
+
+      await ensureAuthenticated();
 
       const results: {
         hierarchy: { action: string; detail?: unknown; error?: string };
@@ -706,7 +729,21 @@ export function registerValidatorTools(registry: ToolRegistry): void {
       // Step 1: Ensure hierarchy definition exists
       let hierarchyLevels: string[] = [];
 
-      if (hierarchyDef && hierarchyDef.length > 0) {
+      // A definition with blank or repeated levels can't make a new hierarchy, but it may name one
+      // already saved, which keeps its own names (configurator relaxes the rules the same way).
+      const definitionError = hierarchyDef && hierarchyDef.length > 0 ? levelNamesError(hierarchyDef) : null;
+      let savedLevels: string[] = [];
+      if (definitionError) {
+        const existing = await digitApi.boundaryHierarchySearch(tenantId, hierarchyType).catch(() => []);
+        const hier = existing[0] as { boundaryHierarchy?: { boundaryType: string; parentBoundaryType?: string }[] } | undefined;
+        savedLevels = hier?.boundaryHierarchy ? buildOrderedLevels(hier.boundaryHierarchy) : [];
+        if (savedLevels.length === 0) throw new ValidationError('hierarchy_definition', `hierarchy_definition: ${definitionError}`);
+      }
+
+      if (savedLevels.length > 0) {
+        results.hierarchy = { action: 'existing', detail: savedLevels };
+        hierarchyLevels = savedLevels;
+      } else if (hierarchyDef && hierarchyDef.length > 0) {
         // User provided hierarchy — create it
         const levels = hierarchyDef.map((type, i) => ({
           boundaryType: type,
@@ -763,6 +800,21 @@ export function registerValidatorTools(registry: ToolRegistry): void {
             error: `Failed to fetch hierarchy: ${error instanceof Error ? error.message : String(error)}`,
             hint: 'Provide hierarchy_definition parameter to create one.',
           }, null, 2);
+        }
+      }
+
+      // Each area goes under its level spelled as the hierarchy spells it (boundary-service matches
+      // it exactly; a hierarchy saved before names were tidied keeps its spelling), else tidied.
+      // Nothing is written under a level the database can't store, checked as it is sent (#2803).
+      const toSend = boundaries.map((b) => ({ ...b, type: levelNameIn(hierarchyLevels, b.type) }));
+      for (const name of [...hierarchyLevels, ...toSend.map((b) => b.type)]) {
+        const tooLong = tooLongForLevel(name);
+        if (tooLong) {
+          throw new ValidationError(
+            'boundary.type',
+            `The "${hierarchyType}" hierarchy has a level name ("${shortLevelName(name)}") ${tooLong.length} characters long; ` +
+              `the database can store at most ${tooLong.max}, so no boundaries were written.`,
+          );
         }
       }
 
@@ -874,7 +926,7 @@ export function registerValidatorTools(registry: ToolRegistry): void {
       // a bounded retry for any entity still not visible / parent not yet linked
       // (cascade) despite the gate.
       const levelOrder = new Map(hierarchyLevels.map((l, i) => [l, i]));
-      const sorted = [...boundaries].sort((a, b) => {
+      const sorted = [...toSend].sort((a, b) => {
         const aOrder = levelOrder.get(a.type) ?? 999;
         const bOrder = levelOrder.get(b.type) ?? 999;
         return aOrder - bOrder;

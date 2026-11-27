@@ -466,6 +466,8 @@ export function parseDepartmentExcel(workbook: XLSX.WorkBook): {
   const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
 
   jsonData.forEach((row, index) => {
+    // Blank rows aren't in jsonData, so the sheet's own row number comes from xlsx.
+    const sheetRow = ((row as { __rowNum__?: number }).__rowNum__ ?? index + 1) + 1;
     const code = String(row['code'] || row['Code'] || row['departmentCode'] || '').trim();
     const name = String(row['name'] || row['Name'] || row['departmentName'] || '').trim();
     // Use ?? not || — when LibreOffice / Google Sheets renders a `FALSE`
@@ -479,7 +481,7 @@ export function parseDepartmentExcel(workbook: XLSX.WorkBook): {
 
     if (!code) {
       errors.push({
-        row: index + 2,
+        row: sheetRow,
         field: 'code',
         message: 'Department code is required',
         code: 'REQUIRED_FIELD',
@@ -489,7 +491,7 @@ export function parseDepartmentExcel(workbook: XLSX.WorkBook): {
 
     if (!name) {
       errors.push({
-        row: index + 2,
+        row: sheetRow,
         field: 'name',
         message: 'Department name is required',
         code: 'REQUIRED_FIELD',
@@ -497,7 +499,7 @@ export function parseDepartmentExcel(workbook: XLSX.WorkBook): {
       return;
     }
 
-    departments.push({ code, name, active });
+    departments.push({ code, name, active, row: sheetRow });
   });
 
   return {
@@ -544,6 +546,8 @@ export function parseDesignationExcel(workbook: XLSX.WorkBook): {
   const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
 
   jsonData.forEach((row, index) => {
+    // Blank rows aren't in jsonData, so the sheet's own row number comes from xlsx.
+    const sheetRow = ((row as { __rowNum__?: number }).__rowNum__ ?? index + 1) + 1;
     const code = String(row['code'] || row['Code'] || row['designationCode'] || '').trim();
     const name = String(row['name'] || row['Name'] || row['designationName'] || '').trim();
     const description = String(row['description'] || row['Description'] || '').trim() || name;
@@ -556,7 +560,7 @@ export function parseDesignationExcel(workbook: XLSX.WorkBook): {
 
     if (!code) {
       errors.push({
-        row: index + 2,
+        row: sheetRow,
         field: 'code',
         message: 'Designation code is required',
         code: 'REQUIRED_FIELD',
@@ -566,7 +570,7 @@ export function parseDesignationExcel(workbook: XLSX.WorkBook): {
 
     if (!name) {
       errors.push({
-        row: index + 2,
+        row: sheetRow,
         field: 'name',
         message: 'Designation name is required',
         code: 'REQUIRED_FIELD',
@@ -574,7 +578,7 @@ export function parseDesignationExcel(workbook: XLSX.WorkBook): {
       return;
     }
 
-    designations.push({ code, name, description, department, active });
+    designations.push({ code, name, description, department, active, row: sheetRow });
   });
 
   return {

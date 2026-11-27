@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/input';
 import { WorkspaceTrialDialog } from '@/components/WorkspaceTrialDialog';
 import { SESSION_EXPIRED_KEY, clearSignOutIncomplete, signOutIncomplete, signOutThisDevice } from '@/lib/session';
 import { useAuthResult } from '@/hooks/useAuthResult';
-import { describeSignupError } from '@/onboarding/signup/signupErrors';
+import { describeSignupError, problemText } from '@/onboarding/signup/signupErrors';
 
 type Phase = 'loading' | 'methods' | 'tenants' | 'noAccess' | 'invitations' | 'entering';
 
@@ -134,7 +134,7 @@ export default function LoginPage() {
       if (caught instanceof OnboardingError && caught.code === 'CONFIGURATOR_ROLE_REQUIRED') {
         setEmployeeAppUrl(complaintDeskUrl(API_ORIGIN || window.location.origin, option.organizationAlias.toLowerCase()));
       }
-      setError(describeSignupError(caught).message);
+      setError(problemText(describeSignupError(caught)));
       setPhase('tenants');
     }
   };

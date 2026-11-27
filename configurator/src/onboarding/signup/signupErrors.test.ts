@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { OnboardingError } from '@/api/onboarding';
 import { ApiClientError } from '@/api';
-import { describeProvisioningFailure, describeSignupError } from './signupErrors';
+import { describeProvisioningFailure, describeSignupError, problemText } from './signupErrors';
 
 const refused = (message: string, code = 'ONBOARDING_VALIDATION_ERROR', status = 400) => new OnboardingError(status, code, message);
 
@@ -25,8 +25,60 @@ describe('describeSignupError', () => {
   });
 
   it('tells a taken account code from a taken URL', () => {
-    expect(describeSignupError(refused('ACCOUNT_CODE is already in use', 'ONBOARDING_IDENTIFIER_TAKEN', 409)).message).toMatch(/account code is already taken/);
-    expect(describeSignupError(refused('URL_SLUG is already reserved', 'ONBOARDING_IDENTIFIER_TAKEN', 409)).message).toMatch(/account URL is already taken/);
+    expect(describeSignupError(refused('ACCOUNT_CODE is already in use', 'ONBOARDING_IDENTIFIER_TAKEN', 409))).toEqual({
+      field: 'accountCode',
+      identifier: 'ACCOUNT_CODE',
+      message: 'That account code is already taken. Choose a different one.',
+    });
+    expect(describeSignupError(refused('URL_SLUG is already reserved', 'ONBOARDING_IDENTIFIER_TAKEN', 409))).toEqual({
+      field: 'urlSlug',
+      identifier: 'URL_SLUG',
+      message: 'That account URL is already taken. Choose a different one.',
+    });
+  });
+
+  it('puts every taken identifier under its own field, the name never under the URL (#2775)', () => {
+    const taken = (message: string) => describeSignupError(refused(message, 'ONBOARDING_IDENTIFIER_TAKEN', 409), undefined, { accountName: ' Bomet County ' });
+    // The submit check and the reservation word a taken name differently.
+    for (const message of ['ORGANIZATION_NAME is already in use', 'Organization name is already reserved']) {
+      expect(taken(message)).toEqual({
+        field: 'accountName',
+        identifier: 'ORGANIZATION_NAME',
+        message: 'A workspace called “Bomet County” already exists. Choose a different name.',
+      });
+    }
+    // The tenant id and alias are both made from the URL, and say which they are.
+    expect(taken('TENANT_ID is already in use')).toMatchObject({ field: 'urlSlug', identifier: 'TENANT_ID' });
+    expect(taken('ORGANIZATION_ALIAS is already reserved')).toMatchObject({ field: 'urlSlug', identifier: 'ORGANIZATION_ALIAS' });
+    expect(describeSignupError(refused('Organization name is already reserved', 'ONBOARDING_IDENTIFIER_TAKEN', 409)).message)
+      .toBe('A workspace with this name already exists. Choose a different name.');
+  });
+
+  it('reads which identifier is taken from the refusal’s identifierType, before its message (#2775)', () => {
+    // pgr-services' envelope, as call() keeps it in details.
+    const typed = (identifierType: unknown, message = 'Already taken by another workspace') =>
+      new OnboardingError(400, 'ONBOARDING_IDENTIFIER_TAKEN', message, {
+        Errors: [{ code: 'ONBOARDING_IDENTIFIER_TAKEN', message, identifierType }],
+      });
+    // A message that names nothing, or names another identifier, doesn't change it.
+    expect(describeSignupError(typed('ACCOUNT_CODE'))).toMatchObject({ field: 'accountCode', identifier: 'ACCOUNT_CODE' });
+    expect(describeSignupError(typed('TENANT_ID', 'URL_SLUG is already in use'))).toMatchObject({ field: 'urlSlug', identifier: 'TENANT_ID' });
+    expect(describeSignupError(typed('ORGANIZATION_NAME', 'URL_SLUG is already in use'), undefined, { accountName: 'Bomet' }))
+      .toEqual({ field: 'accountName', identifier: 'ORGANIZATION_NAME', message: 'A workspace called “Bomet” already exists. Choose a different name.' });
+    // A type it doesn't know falls back to the message.
+    expect(describeSignupError(typed('SOMETHING_NEW', 'ACCOUNT_CODE is already reserved'))).toMatchObject({ identifier: 'ACCOUNT_CODE' });
+  });
+
+  it('never blames the URL for a taken identifier it can’t name, and keeps the code as a reference (#2775)', () => {
+    const problem = describeSignupError(refused('Something is already in use', 'ONBOARDING_IDENTIFIER_TAKEN', 409));
+    expect(problem.field).toBeUndefined();
+    expect(problem.message).not.toMatch(/URL is already taken/);
+    expect(problem.message).toMatch(/account name, account code or account URL/);
+    expect(problem.reference).toBe('ONBOARDING_IDENTIFIER_TAKEN');
+  });
+
+  it('says what an account code must be, starting with a letter or digit (#2802)', () => {
+    expect(describeSignupError(refused('Signup.accountCode is invalid')).message).toMatch(/must start with a letter or digit/);
   });
 
   it('reads the identity BFF by code, not its display text', () => {
@@ -41,9 +93,13 @@ describe('describeSignupError', () => {
   });
 
   it('keeps an unknown code as a reference instead of showing its text', () => {
-    const { message } = describeSignupError(refused('Could not store onboarding data', 'ONBOARDING_SERIALIZATION_ERROR', 500));
-    expect(message).toMatch(/contact support with reference ONBOARDING_SERIALIZATION_ERROR/);
-    expect(message).not.toMatch(/Could not store/);
+    const problem = describeSignupError(refused('Could not store onboarding data', 'ONBOARDING_SERIALIZATION_ERROR', 500));
+    expect(problem).toEqual({
+      message: 'Something went wrong on our side. Try again, and if it keeps happening, contact support.',
+      reference: 'ONBOARDING_SERIALIZATION_ERROR',
+    });
+    // A page with no small print of its own still shows the reference, after the message.
+    expect(problemText(problem)).toBe(`${problem.message} Reference: ONBOARDING_SERIALIZATION_ERROR`);
   });
 
   it('explains a dropped connection, and a workspace call by its own catalogue', () => {

@@ -76,4 +76,21 @@ public class OnboardingRepositoryTest {
         assertEquals(true, sql.contains("lease_expires_at > ?"));
         assertEquals(true, sql.contains("lifecycle_restart_no"));
     }
+
+    /** #2775: a refused reservation names its identifier by type, the name included, never in prose. */
+    @Test
+    public void aRefusedReservationNamesItsIdentifierType() {
+        // Every statement changes no row: the name, or the identifier, belongs to another signup.
+        JdbcTemplate refusing = org.mockito.Mockito.mock(JdbcTemplate.class,
+                invocation -> invocation.getMethod().getReturnType() == int.class ? 0 : null);
+        OnboardingRepository repository = new OnboardingRepository(refusing, new ObjectMapper());
+        UUID signupId = UUID.randomUUID();
+        for (String type : Arrays.asList("ORGANIZATION_NAME", "ACCOUNT_CODE", "TENANT_ID")) {
+            OnboardingIdentifierTaken taken = org.junit.Assert.assertThrows(type, OnboardingIdentifierTaken.class,
+                    () -> repository.reserveIdentifier(type, "bomet", signupId, 1L));
+            assertEquals("ONBOARDING_IDENTIFIER_TAKEN", taken.getCode());
+            assertEquals(type, taken.getIdentifierType());
+            assertEquals(type + " is already reserved", taken.getMessage());
+        }
+    }
 }

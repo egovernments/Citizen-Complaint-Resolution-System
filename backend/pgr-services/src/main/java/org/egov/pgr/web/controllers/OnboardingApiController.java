@@ -3,6 +3,7 @@ package org.egov.pgr.web.controllers;
 import jakarta.servlet.http.HttpServletRequest;
 import org.egov.pgr.onboarding.IdentitySessionClient;
 import org.egov.pgr.onboarding.OnboardingIdentifierService;
+import org.egov.pgr.onboarding.OnboardingIdentifierTaken;
 import org.egov.pgr.onboarding.OnboardingOperation;
 import org.egov.pgr.onboarding.OnboardingPrincipal;
 import org.egov.pgr.onboarding.OnboardingService;
@@ -103,8 +104,7 @@ public class OnboardingApiController {
         for (OnboardingIdentifierService.Identifier identifier : service.hasPriorAttempt(signup.getId())
                 ? Collections.<OnboardingIdentifierService.Identifier>emptyList() : identifiers.forSignup(signup)) {
             if (!identitySessionClient.identifierAvailable(identifier.type(), identifier.value())) {
-                throw new CustomException("ONBOARDING_IDENTIFIER_TAKEN",
-                        identifier.type() + " is already in use");
+                throw new OnboardingIdentifierTaken(identifier.type(), "in use");
             }
         }
         OnboardingOperation operation = service.submit(principal, signupRequest, idempotencyKey);
@@ -123,6 +123,19 @@ public class OnboardingApiController {
             @RequestBody Map<String, Object> request) {
         return ResponseEntity.accepted().body(single("Operation",
                 service.retry(principal(httpRequest), nested(request, "Operation"))));
+    }
+
+    // A taken identifier says which one, as identifierType beside the code, so the configurator puts
+    // the refusal under that field without reading the message (#2775). Otherwise the tracer's answer
+    // to a CustomException: 400 and the same Errors envelope.
+    @ExceptionHandler(OnboardingIdentifierTaken.class)
+    public ResponseEntity<Map<String, Object>> identifierTaken(OnboardingIdentifierTaken exception) {
+        Map<String, Object> error = new LinkedHashMap<>();
+        error.put("code", exception.getCode());
+        error.put("message", exception.getMessage());
+        error.put("identifierType", exception.getIdentifierType());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(single("Errors", Collections.singletonList(error)));
     }
 
     // Identity failures keep their HTTP status (401/503). Without this, the tracer's

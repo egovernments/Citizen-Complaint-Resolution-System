@@ -4,6 +4,7 @@ import { AlertCircle, Check, Loader2, Mail, RefreshCw } from 'lucide-react';
 import {
   type AuthMethod,
   type AvailabilityResult,
+  type IdentifierType,
   type Operation,
   type Signup,
   type SignupDraftInput,
@@ -31,6 +32,7 @@ import {
   slugifyAccountName,
   startSignIn,
   submitSignup,
+  tenantIdForSlug,
   tenants,
   updateSignup,
 } from '@/api/onboarding';
@@ -47,9 +49,14 @@ import { WorkspaceTrialDialog } from '@/components/WorkspaceTrialDialog';
 import { useAuthResult } from '@/hooks/useAuthResult';
 import { clearSignOutIncomplete, signOutIncomplete, signOutThisDevice } from '@/lib/session';
 import { track } from '@/lib/analytics';
-import { useOnboardingT } from '@/onboarding/i18n';
+import { type OnboardingT, useOnboardingT } from '@/onboarding/i18n';
 import { MOBILE_RULES, mobileHint, nationalMobile } from '@/onboarding/signup/mobileRules';
 import {
+  accountCodeInUse,
+  accountCodeRule,
+  accountCodeTaken,
+  accountNameTaken,
+  accountUrlTaken,
   describeProvisioningFailure,
   describeSignupError,
   mobileInvalid,
@@ -192,6 +199,22 @@ type Phase =
 const isExpiredSession = (error: unknown) =>
   error instanceof OnboardingError && error.isUnauthenticated;
 
+/**
+ * A field's availability. `refusal` is set when Create refused the value, to its place in the order
+ * the page numbers checks and refusals in: a check asked for before the refusal can't undo it, and
+ * one asked for after it is the newer answer (#2775).
+ */
+type Verdict = AvailabilityResult & { refusal?: number };
+
+/** What a taken value says: a clash on the tenant id made from a URL names that workspace. */
+function takenText(state: AvailabilityResult, taken: string, t: OnboardingT): string {
+  return state.conflictingType === 'TENANT_ID' && state.derivedTenantId
+    ? t('signup.slug_clashes', 'This URL clashes with an existing workspace (“%{tenant}”). Choose a different one.', {
+        tenant: state.derivedTenantId,
+      })
+    : taken;
+}
+
 
 /** Uppercase caption plus helper text, the field chrome the reference uses. */
 function Field({
@@ -226,15 +249,18 @@ function Field({
   );
 }
 
-/** Availability line under the code and URL fields. */
+/** Availability line under the name, code and URL fields. */
 function AvailabilityNote({
   state,
   checking,
   invalidReason,
+  taken,
 }: {
   state: AvailabilityResult | null;
   checking: boolean;
   invalidReason?: string;
+  /** What to say when it is taken, in place of "Already taken.". */
+  taken?: string;
 }) {
   const t = useOnboardingT();
   if (invalidReason) {
@@ -258,13 +284,41 @@ function AvailabilityNote({
     </p>
   ) : (
     <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
-      <AlertCircle className="h-3 w-3" />{' '}
-      {state.conflictingType === 'TENANT_ID' && state.derivedTenantId
-        ? t('signup.slug_clashes', 'This URL clashes with an existing workspace (“%{tenant}”). Choose a different one.', {
-            tenant: state.derivedTenantId,
-          })
-        : 'Already taken.'}
+      <AlertCircle className="h-3 w-3" /> {takenText(state, taken ?? 'Already taken.', t)}
     </p>
+  );
+}
+
+/**
+ * The account code as the account will get it, country prefix and all, on Preferences (where the
+ * country adds the prefix) and checked like the field itself. The field is on the Account step, so a
+ * taken or invalid code says to go back there (#2775).
+ */
+function FinalAccountCode({
+  code,
+  valid,
+  state,
+  checking,
+}: {
+  code: string;
+  valid: boolean;
+  state: AvailabilityResult | null;
+  checking: boolean;
+}) {
+  const t = useOnboardingT();
+  if (!code) return null;
+  return (
+    <>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {t('signup.account_code_final', 'Your account code will be %{code}.', { code })}
+      </p>
+      <AvailabilityNote
+        state={state}
+        checking={checking}
+        invalidReason={valid ? undefined : accountCodeRule(t)}
+        taken={accountCodeTaken(t)}
+      />
+    </>
   );
 }
 
@@ -306,7 +360,8 @@ function SignupFlow() {
   const t = useOnboardingT();
   const authResult = useAuthResult();
   const [phase, setPhase] = useState<Phase>('loading');
-  const [error, setError] = useState<string | null>(null);
+  /** What the banner says, with the code behind it in small print when nothing here explains it. */
+  const [problem, setProblem] = useState<SignupProblem | null>(null);
   const [methods, setMethods] = useState<AuthMethod[]>([]);
   const [signupFirstName, setSignupFirstName] = useState('');
   const [signupLastName, setSignupLastName] = useState('');
@@ -344,10 +399,19 @@ function SignupFlow() {
   // read answers, neither "Change my details" nor "contact support" is shown.
   const [reopenCheck, setReopenCheck] = useState<'pending' | 'failed' | 'done'>('pending');
 
-  const [codeState, setCodeState] = useState<AvailabilityResult | null>(null);
+  const [nameState, setNameState] = useState<Verdict | null>(null);
+  const [nameChecking, setNameChecking] = useState(false);
+  /**
+   * The name, code and URL of a draft saved earlier and picked up here. One of them found taken now
+   * may have been free when it was saved.
+   */
+  const [saved, setSaved] = useState<{ accountName: string; accountCode: string; urlSlug: string } | null>(null);
+  const [codeState, setCodeState] = useState<Verdict | null>(null);
   const [codeChecking, setCodeChecking] = useState(false);
-  const [slugState, setSlugState] = useState<AvailabilityResult | null>(null);
+  const [slugState, setSlugState] = useState<Verdict | null>(null);
   const [slugChecking, setSlugChecking] = useState(false);
+  /** Numbers each identifier check as it is asked for and each refusal from Create as it arrives (Verdict). */
+  const answerOrder = useRef(0);
 
   // Fields the operator has edited by hand stop being derived from the name.
   const codeTouched = useRef(false);
@@ -358,9 +422,22 @@ function SignupFlow() {
   const mobileRule = MOBILE_RULES[countryCode];
   /** The number as egov-user will check it, or null when it fails the country's rule. */
   const mobileNational = mobileRule ? nationalMobile(tenantAdminMobile, mobileRule) : null;
+  /**
+   * The identifiers as they are now, for a refusal to name and mark. Read through a ref so that
+   * describe and handleFailure keep their identity while they are typed: the run's poll restarts
+   * whenever handleFailure changes.
+   */
+  const identifiersNow = useRef({ accountName, accountCode, urlSlug });
+  useEffect(() => {
+    identifiersNow.current = { accountName, accountCode, urlSlug };
+  }, [accountName, accountCode, urlSlug]);
   const describe = useCallback(
     (caught: unknown, magicLink = false): SignupProblem =>
-      describeSignupError(caught, t, { countryName: selectedCountry?.name, magicLink }),
+      describeSignupError(caught, t, {
+        countryName: selectedCountry?.name,
+        accountName: identifiersNow.current.accountName,
+        magicLink,
+      }),
     [t, selectedCountry?.name],
   );
   // Reused when retrying the *same* action after a network failure, which is
@@ -401,7 +478,7 @@ function SignupFlow() {
     } catch {
       /* The gate still renders; it just may list nothing. */
     }
-    setError(t('signup.session_expired', 'Your sign-in expired. Sign in again to pick up where you left off.'));
+    setProblem({ message: t('signup.session_expired', 'Your sign-in expired. Sign in again to pick up where you left off.') });
     setPhase('signedOut');
   }, [t]);
 
@@ -509,11 +586,18 @@ function SignupFlow() {
             setPhase('provisioning');
             return;
           }
+          if (existing) {
+            setSaved({
+              accountName: (existing.accountName || '').trim(),
+              accountCode: existing.accountCode || '',
+              urlSlug: existing.urlSlug || '',
+            });
+          }
           setPhase('wizard');
         }
       }
     } catch (caught) {
-      setError(describeSignupError(caught, t).message);
+      setProblem(describeSignupError(caught, t));
       setPhase('failed');
     }
   }, [seedFrom, t, restartSignIn, offerTenants]);
@@ -529,7 +613,7 @@ function SignupFlow() {
   /** Back to the top with the spinner showing, for retry and for resume. */
   const restart = useCallback(() => {
     setPhase('loading');
-    setError(null);
+    setProblem(null);
     return bootstrap();
   }, [bootstrap]);
 
@@ -543,14 +627,16 @@ function SignupFlow() {
 
   /**
    * Debounced, with a trailing-call guard: a slow early response must not
-   * overwrite the verdict for what is in the field now.
+   * overwrite the verdict for what is in the field now. `recheck` asks again
+   * for the same value when something else the answer depends on changes.
    */
   const useAvailability = (
-    type: 'ACCOUNT_CODE' | 'URL_SLUG',
+    type: Extract<IdentifierType, 'ORGANIZATION_NAME' | 'ACCOUNT_CODE' | 'URL_SLUG'>,
     value: string,
     valid: boolean,
-    setState: (v: AvailabilityResult | null) => void,
-    setChecking: (v: boolean) => void
+    setState: React.Dispatch<React.SetStateAction<Verdict | null>>,
+    setChecking: (v: boolean) => void,
+    recheck?: string
   ) => {
     useEffect(() => {
       if (!valid) {
@@ -560,12 +646,19 @@ function SignupFlow() {
       }
       let current = true;
       setChecking(true);
+      // The newest answer wins (Verdict). A check is numbered when it is asked for, as the value is
+      // entered: Create's refusal of this value stands against a check asked for before it arrived,
+      // and against one that got no answer. A check asked for after it, typing the value again
+      // included, replaces it, "available" too (#2775).
+      const asked = ++answerOrder.current;
+      const settle = (next: Verdict | null) =>
+        setState((prev) => (prev?.refusal !== undefined && prev.value === value && (next === null || prev.refusal > asked) ? prev : next));
       const timer = setTimeout(async () => {
         try {
           const result = await checkIdentifier(type, value, signup?.id);
-          if (current) setState(result);
+          if (current) settle(result);
         } catch {
-          if (current) setState(null);
+          if (current) settle(null);
         } finally {
           if (current) setChecking(false);
         }
@@ -574,13 +667,20 @@ function SignupFlow() {
         current = false;
         clearTimeout(timer);
       };
-    }, [type, value, valid, setState, setChecking]);
+    }, [type, value, valid, setState, setChecking, recheck]);
   };
 
+  // Only while the form is on screen: nothing shows the answers in any other phase.
+  const formShown = phase === 'wizard';
+  // Names are unique across workspaces too, so the name is checked as it is typed, like the code (#2775).
+  // pgr-services counts a name as the draft's own by the tenant id its saved URL makes, so the name is
+  // checked again once a new URL is saved.
+  const trimmedName = accountName.trim();
+  useAvailability('ORGANIZATION_NAME', trimmedName, formShown && trimmedName.length > 0, setNameState, setNameChecking, signup?.requestedTenantId);
   const codeValid = isValidAccountCode(accountCode);
   const slugValid = isValidUrlSlug(urlSlug);
-  useAvailability('ACCOUNT_CODE', accountCode, codeValid, setCodeState, setCodeChecking);
-  useAvailability('URL_SLUG', urlSlug, slugValid, setSlugState, setSlugChecking);
+  useAvailability('ACCOUNT_CODE', accountCode, formShown && codeValid, setCodeState, setCodeChecking);
+  useAvailability('URL_SLUG', urlSlug, formShown && slugValid, setSlugState, setSlugChecking);
 
   /**
    * Only what has actually been filled in. The validator rejects a blank value
@@ -636,12 +736,36 @@ function SignupFlow() {
   const handleFailure = useCallback(async (caught: unknown) => {
     if (!isExpiredSession(caught)) {
       const problem = describe(caught);
-      if (problem.field === 'mobile') {
-        // Under the field it is about, on the step that has it.
-        setMobileError(problem.message);
-        setStep('preferences');
-      } else {
-        setError(problem.message);
+      // Under the field it is about, on the step that has it. A taken name, code or URL is marked
+      // taken there, as the field's own check would, which also holds Continue and Create until it
+      // changes or a newer check finds it free (#2775).
+      const refused = (type: Verdict['type'], value: string, clash: Partial<Verdict> = {}): Verdict =>
+        ({ type, value, available: false, ...clash, refusal: ++answerOrder.current });
+      const now = identifiersNow.current;
+      switch (problem.field) {
+        case 'mobile':
+          setMobileError(problem.message);
+          setStep('preferences');
+          break;
+        case 'accountName':
+          setNameState(refused('ORGANIZATION_NAME', now.accountName.trim()));
+          setStep('account');
+          break;
+        case 'accountCode':
+          setCodeState(refused('ACCOUNT_CODE', now.accountCode));
+          setStep('account');
+          break;
+        case 'urlSlug':
+          // The tenant id and alias are made from the URL. A tenant id clash names the workspace it
+          // clashes with, as the field's own check does: `bomet-2` is refused for `bomet` too.
+          setSlugState(refused('URL_SLUG', now.urlSlug,
+            problem.identifier === 'TENANT_ID' || problem.identifier === 'ORGANIZATION_ALIAS'
+              ? { conflictingType: problem.identifier, derivedTenantId: tenantIdForSlug(now.urlSlug) }
+              : {}));
+          setStep('preferences');
+          break;
+        default:
+          setProblem(problem);
       }
       return;
     }
@@ -658,7 +782,7 @@ function SignupFlow() {
   const advance = async (next: string) => {
     if (step === 'preferences' && !checkMobile()) return;
     setSaving(true);
-    setError(null);
+    setProblem(null);
     try {
       await persist();
       track('signup:step_complete', step === 'preferences' ? { step, ...preferenceChoices } : { step });
@@ -672,7 +796,7 @@ function SignupFlow() {
 
   const submit = async () => {
     setSaving(true);
-    setError(null);
+    setProblem(null);
     try {
       const record = await persist();
       const started = await submitSignup(record.id, submitKey.current);
@@ -690,7 +814,7 @@ function SignupFlow() {
     event.preventDefault();
     authResult.clear();
     setSaving(true);
-    setError(null);
+    setProblem(null);
     track('signup:method_select', { method: 'magic_link' });
     try {
       clearSignOutIncomplete();
@@ -702,7 +826,7 @@ function SignupFlow() {
       track('signup:link_send');
       setPhase('checkEmail');
     } catch (caught) {
-      setError(describe(caught, true).message);
+      setProblem(describe(caught, true));
     } finally {
       setSaving(false);
     }
@@ -759,7 +883,7 @@ function SignupFlow() {
         failures = 0;
         if (shownError) {
           shownError = false;
-          setError(null);
+          setProblem(null);
         }
         if (latest) setOperation(latest);
       } catch (caught) {
@@ -814,7 +938,7 @@ function SignupFlow() {
   }, [phase, seedFrom, restart]);
 
   const enter = useCallback(async (option: TenantOption): Promise<boolean> => {
-    setError(null);
+    setProblem(null);
     if (option.code === 'WORKSPACE_TRIAL_EXPIRED') {
       // The dialog renders only with a notice. `enter` doesn't read it, so a new
       // notice per tenant read never re-creates `enter` or re-runs the effect below.
@@ -833,7 +957,7 @@ function SignupFlow() {
         setTrialNotice(notice);
         setTrialOpen(true);
       } else {
-        setError(describe(caught).message);
+        setProblem(describe(caught));
       }
       setSaving(false);
       return false;
@@ -860,7 +984,7 @@ function SignupFlow() {
         }
         setPhase('chooseTenant');
       } catch (caught) {
-        if (live) setError(describe(caught).message);
+        if (live) setProblem(describe(caught));
       }
     })();
     return () => {
@@ -895,7 +1019,7 @@ function SignupFlow() {
   /** Back into the wizard on the reopened draft, at the step with the mobile number. */
   const correctDetails = async () => {
     setSaving(true);
-    setError(null);
+    setProblem(null);
     try {
       const latest = await findSignup();
       if (latest) seedFrom(latest);
@@ -945,7 +1069,7 @@ function SignupFlow() {
   }, [ready]);
 
   const accountReady =
-    accountName.trim().length > 0 && codeValid && codeState?.available !== false;
+    trimmedName.length > 0 && nameState?.available !== false && codeValid && codeState?.available !== false;
   // The draft is created at the end of this step rather than the last one,
   // because the server needs countryCode and urlSlug to create at all.
   const preferencesReady =
@@ -955,15 +1079,34 @@ function SignupFlow() {
     financialYearPolicy.length > 0 &&
     slugValid &&
     slugState?.available !== false &&
+    // The code as the country prefixed it, checked again here (#2775).
+    codeValid &&
+    codeState?.available !== false &&
     tenantAdminMobile.trim().length > 0;
+  // What Create would be refused for: the name, code or URL another workspace holds.
+  const takenOnReview = [nameState, codeState, slugState].some((state) => state?.available === false);
+  const reviewReady = !takenOnReview && codeValid;
+  // Taken now and still as the draft saved them: another workspace took them since, or they are why the
+  // last Create failed. One the founder has typed since is not "details you saved" (#2775).
+  const savedTaken = !!saved && (
+    (nameState?.available === false && trimmedName === saved.accountName) ||
+    (codeState?.available === false && accountCode === saved.accountCode) ||
+    (slugState?.available === false && urlSlug === saved.urlSlug));
 
   const callbackError = authResult.error ||
     (authResult.result?.status === 'failed' ? authResult.result.message : null);
-  const banner = (callbackError || error) ? (
+  const banner = (callbackError || problem) ? (
     <Alert variant="destructive" className="mb-4">
       <AlertCircle className="h-4 w-4" />
       <AlertTitle>Could not continue</AlertTitle>
-      <AlertDescription>{callbackError || error}</AlertDescription>
+      <AlertDescription>
+        {callbackError || problem?.message}
+        {!callbackError && problem?.reference && (
+          <span className="mt-1 block text-xs opacity-80">
+            {t('signup.setup_reference', 'Reference: %{code}', { code: problem.reference })}
+          </span>
+        )}
+      </AlertDescription>
     </Alert>
   ) : null;
 
@@ -1242,7 +1385,7 @@ function SignupFlow() {
                   latest = await searchOperation({ id: operation.id }).catch(() => null);
                 }
                 if (latest) setOperation(latest);
-                else setError(describe(caught).message);
+                else setProblem(describe(caught));
               } finally {
                 setSaving(false);
               }
@@ -1266,7 +1409,7 @@ function SignupFlow() {
             className="mt-4"
             variant="outline"
             onClick={() => {
-              setError(null);
+              setProblem(null);
               setReopenCheck('pending');
             }}
           >
@@ -1330,6 +1473,17 @@ function SignupFlow() {
     <>
       <Stepper steps={STEPS} current={step} />
       {banner}
+      {/* A draft picked up later holds nothing until Create, so another workspace may have taken
+          some of it meanwhile, or did and that is why the last Create failed (#2775). */}
+      {savedTaken && (
+        <Alert className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>{t('signup.resume_taken_title', 'Your account hasn’t been created yet')}</AlertTitle>
+          <AlertDescription>
+            {t('signup.resume_taken', 'Another workspace already uses some of the details you saved. Change the ones marked as taken, then create your account.')}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {step === 'account' ? (
         <section className="space-y-4">
@@ -1355,6 +1509,13 @@ function SignupFlow() {
             label="Account name"
             required
             help="The name of your account. It could be a government organisation, agency, department, institution, or programme."
+            status={
+              <AvailabilityNote
+                state={nameState}
+                checking={nameChecking}
+                taken={accountNameTaken(accountName, t)}
+              />
+            }
           >
             <Input
               id="accountName"
@@ -1373,11 +1534,8 @@ function SignupFlow() {
               <AvailabilityNote
                 state={codeState}
                 checking={codeChecking}
-                invalidReason={
-                  accountCode && !codeValid
-                    ? '2 to 32 characters, using A-Z, 0-9 and hyphens.'
-                    : undefined
-                }
+                invalidReason={accountCode && !codeValid ? accountCodeRule(t) : undefined}
+                taken={accountCodeInUse(t)}
               />
             }
           >
@@ -1417,6 +1575,7 @@ function SignupFlow() {
             label="Base country of operations"
             required
             help="Used to suggest locale, timezone, and account code defaults."
+            status={<FinalAccountCode code={accountCode} valid={codeValid} state={codeState} checking={codeChecking} />}
           >
             <select
               id="countryCode"
@@ -1530,6 +1689,7 @@ function SignupFlow() {
               <AvailabilityNote
                 state={slugState}
                 checking={slugChecking}
+                taken={accountUrlTaken(t)}
                 invalidReason={
                   urlSlug && !slugValid
                     ? '2 to 63 characters, lowercase letters, digits and hyphens, starting with a letter or digit, with at least two letters, and not a reserved word.'
@@ -1612,9 +1772,15 @@ function SignupFlow() {
           </div>
 
           <dl className="overflow-hidden rounded-md border">
-            {[
-              ['Account name', accountName],
-              ['Account code', accountCode],
+            {([
+              // Each with what Create would be refused for, so the refusal is never a surprise (#2775).
+              ['Account name', accountName, nameState?.available === false ? accountNameTaken(accountName, t) : null],
+              [
+                'Account code',
+                accountCode,
+                codeState?.available === false ? accountCodeTaken(t) : codeValid ? null : accountCodeRule(t),
+              ],
+              ['Account URL', urlSlug, slugState?.available === false ? takenText(slugState, accountUrlTaken(t), t) : null],
               ['Base country', COUNTRIES.find((c) => c.code === countryCode)?.name || countryCode],
               ['Languages', languages.map((c) => LANGUAGES.find((l) => l.code === c)?.label || c).join(', ')],
               ['Timezone', timeZone],
@@ -1626,7 +1792,7 @@ function SignupFlow() {
                 'Mobile number',
                 mobileRule ? `${mobileRule.dialCode} ${mobileNational ?? tenantAdminMobile}` : tenantAdminMobile,
               ],
-            ].map(([label, value], i) => (
+            ] as [string, string, (string | null)?][]).map(([label, value, problem], i) => (
               <div
                 key={label}
                 className={
@@ -1634,7 +1800,14 @@ function SignupFlow() {
                 }
               >
                 <dt className="text-muted-foreground">{label}</dt>
-                <dd className="text-right font-medium">{value}</dd>
+                <dd className="text-right font-medium">
+                  {value}
+                  {problem && (
+                    <span className="mt-1 flex items-center justify-end gap-1 text-xs font-normal text-destructive">
+                      <AlertCircle className="h-3 w-3 shrink-0" /> {problem}
+                    </span>
+                  )}
+                </dd>
               </div>
             ))}
           </dl>
@@ -1643,7 +1816,7 @@ function SignupFlow() {
             <Button variant="outline" onClick={() => setStep('preferences')}>
               Back
             </Button>
-            <Button className="flex-1" disabled={saving} onClick={submit}>
+            <Button className="flex-1" disabled={saving || !reviewReady} onClick={submit}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Create account
             </Button>
           </div>
